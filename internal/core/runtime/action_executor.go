@@ -444,7 +444,7 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 		if !isAccept || accept.Trigger != nil {
 			continue
 		}
-		matches, failed := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(token.frame, accept, usage)
 		for _, msg := range e.ctx.PendingMessages() {
 			// A port that fails to resolve counts as pending: the step this
 			// provokes surfaces the failure.
@@ -458,11 +458,12 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets. The signal is tested first, so only a message of the accept's own
-// signal resolves the `via` port; if that fails the predicate matches nothing
-// and the failure is left in the returned error slot.
-func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
+// subsets, read over the performance's data. The signal is tested first, so only a
+// message of the accept's own signal resolves the `via` port; if that fails the
+// predicate matches nothing and the failure is left in the returned error slot.
+func (e *ActionExecutor) acceptMatch(frame *actionFrame, accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
 	var failed error
+	ec := e.evalContextFor(frame, accept.Scope)
 	return func(m Message) bool {
 		if failed != nil {
 			return false
@@ -471,7 +472,7 @@ func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (fun
 			if !e.ctx.messageMatches(m, accept.SignalType, accept.Scope) {
 				return false
 			}
-		} else if !m.carriesSignal(accept.SubsetsEvent) {
+		} else if !ec.carriesEvent(m, accept.SubsetsEvent) {
 			return false
 		}
 		reaches, err := e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self)
@@ -1275,9 +1276,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		// the type it was typed with, or of the event it subsets.
 		want := ast.QualifiedText(accept.SignalType)
 		if want == "" {
-			want = accept.SubsetsEvent
+			want = lower.FeaturePath(accept.SubsetsEvent)
 		}
-		matches, failed := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(token.frame, accept, usage)
 		msg, taken := e.ctx.TakeMessage(matches)
 		if *failed != nil {
 			return *failed
@@ -1297,7 +1298,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		}
 		token.Wait = nil
 		if accept.ParamName != "" {
-			value, err := e.ctx.acceptedValue(msg)
+			value, err := e.ctx.acceptedValue(&msg)
 			if err != nil {
 				return fmt.Errorf("accept %s: %w", accept.ParamName, err)
 			}

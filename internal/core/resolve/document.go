@@ -37,15 +37,6 @@ func (r *Resolver) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	}
 }
 
-// walkBody walks the members of a body decl owns in the scope built for it, or in
-// scope itself when the builder made none (an empty body).
-func (r *Resolver) walkBody(scope *symbols.Scope, decl ast.Node, members []ast.Node) {
-	if child := r.childScope(scope, decl); child != nil {
-		scope = child
-	}
-	r.walkMembers(scope, members)
-}
-
 // unwrapForResolve mirrors the builder's unwrapMember: it strips *ast.Membership
 // wrappers so we resolve against the inner declaration.
 func unwrapForResolve(m ast.Node) (ast.Node, ast.Visibility) {
@@ -256,11 +247,11 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.resolveInitial(scope, d)
 		r.resolveEdgeEnd(scope, d.Successor, nil, false)
 		r.resolveExpr(scope, d.Guard)
-		r.walkBody(scope, d, d.Members)
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
-		r.walkBody(scope, d, d.Members)
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.ControlFlowEdge:
 		r.resolveControlFlowEdge(scope, d)
@@ -269,13 +260,8 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// Final nodes have no references
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// The node's own name is a label; its action body resolves in the scope
-		// the body declares into (see symbols.buildControlNode).
-		body := scope
-		if child := r.childScope(scope, d); child != nil {
-			body = child
-		}
-		r.walkMembers(body, ast.NodeBodyMembers(d))
+		// The node's name is a label; its body declares features of the node.
+		r.walkMembers(r.bodyScope(scope, d), ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
@@ -349,8 +335,8 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		// Source and target name vertices of the enclosing machine: resolved here,
 		// so a misspelled endpoint reports with the other name diagnostics rather
 		// than at lowering, which consumes what this resolved.
-		// The guard and effect resolve against the parameters the transition's
-		// call trigger declares, which live in a scope of their own.
+		// The guard, effect and body resolve against the parameters the
+		// transition's call trigger declares, which live in a scope of their own.
 		r.ResolveEndpoint(scope, d.Source)
 		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
@@ -365,6 +351,8 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
 		r.resolveExpr(scope, d.Target)
+		r.resolveExpr(scope, d.Receiver)
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.TerminateStatement:
 		r.resolveExpr(scope, d.Target)
@@ -516,6 +504,15 @@ func ParameterizedByName(sym *symbols.Symbol) bool {
 // childScope finds the child scope whose node is decl.
 func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
 	return scope.ChildFor(decl)
+}
+
+// bodyScope is the scope the body of an action node resolves against: its own
+// where the builder gave it one, and the enclosing scope otherwise.
+func (r *Resolver) bodyScope(scope *symbols.Scope, node ast.Node) *symbols.Scope {
+	if child := r.childScope(scope, node); child != nil {
+		return child
+	}
+	return scope
 }
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
@@ -1171,11 +1168,24 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		r.resolveExpr(scope, v.Operand)
 		r.resolveExpr(scope, v.Body)
 	case *ast.ConstructorExpr:
+		var typ *symbols.Symbol
 		if v.Type != nil {
-			r.ResolveQualified(scope, v.Type)
+			typ, _ = r.ResolveQualified(scope, v.Type)
 		}
 		for _, a := range v.Args {
 			r.resolveExpr(scope, a)
+		}
+		for _, na := range v.NamedArgs {
+			// A simple label is a feature of the instantiated type; a qualified
+			// one is resolved in scope.
+			switch {
+			case na.Name == nil:
+			case len(na.Name.Parts) > 1:
+				r.ResolveQualified(scope, na.Name)
+			case typ != nil:
+				r.resolveMemberChain(typ, na.Name)
+			}
+			r.resolveExpr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
 		for i := range v.Params {

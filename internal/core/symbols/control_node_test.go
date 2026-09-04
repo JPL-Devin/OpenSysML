@@ -70,7 +70,7 @@ func TestUnnamedControlNodesRegisterNothing(t *testing.T) {
 }
 
 // TestSuccessionBodyScope covers the body an action target succession carries:
-// its declarations are members of a body-local scope, not of the action.
+// its declarations are members of the anonymous succession usage, not of the action.
 func TestSuccessionBodyScope(t *testing.T) {
 	scope := actionBodyScope(t, `package P {
 	action def F {
@@ -94,8 +94,8 @@ func TestSuccessionBodyScope(t *testing.T) {
 		t.Fatalf("succession body scopes = %d, want 1 (a bodiless succession owns none)", len(bodies))
 	}
 	body := bodies[0]
-	if !body.BodyLocal() {
-		t.Error("succession body scope is not body-local")
+	if owner := body.Owner(); owner == nil || owner.Kind != SymbolSuccessionUsage || owner.OwnerScope != scope {
+		t.Errorf("succession body scope owner = %v, want an anonymous succession usage of the action", owner)
 	}
 	sym, ok := body.LookupLocal("wait")
 	if !ok || sym.OwnerScope != body || sym.Kind != SymbolAttributeUsage {

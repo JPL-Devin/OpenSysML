@@ -74,7 +74,9 @@ top-level one is. `instantiate` names an instance case's type the same way.
 
 - `events`: ordered list of events to inject into the machine. Each entry names
   either a signal (`{"signal": "sigB", "args": {...}}`, driving
-  `AcceptEvent`-triggered transitions) or an operation invocation
+  `AcceptEvent`-triggered transitions; `args` bind the signal's features by name,
+  or `"value": {"type": "Integer", "value": 3}` carries one bare value as
+  `send 3` would) or an operation invocation
   (`{"call": "setSpeed", "args": {"value": {"type": "Integer", "value": 55}}}`,
   driving `CallEvent`-triggered transitions), with `args` optional. Events are
   delivered in order. Optional; omit for autonomous (time/completion-driven)

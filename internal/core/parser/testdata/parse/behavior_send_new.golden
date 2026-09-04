@@ -1,0 +1,29 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Transmitter"
+      (Membership visibility="default"
+        (Usage kind="port" name="antenna" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Antenna
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="ground" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Station
+            (*ast.QualifiedName))))
+      (Usage kind="action" name="begin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (InitialNode name="begin" successor="")
+      (SendStatement via=true
+        (ConstructorExpr type="Telemetry"
+          (NamedArg name="frames"
+            (LiteralReal value="3.0")))
+        (FeatureReference name="antenna"))
+      (SuccessionEdge source="begin" target="@send")
+      (SendStatement via=false
+        (ConstructorExpr type="Command"
+          (LiteralInteger value="7"))
+        (FeatureReference name="ground"))
+      (SuccessionEdge source="@send" target="@send")
+      (SendStatement via=true
+        (ConstructorExpr type="Ping")
+        (FeatureReference name="antenna")
+        (FeatureReference name="ground"))
+      (SuccessionEdge source="@send" target="@send"))))

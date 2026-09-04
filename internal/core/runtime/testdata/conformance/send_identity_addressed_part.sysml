@@ -10,7 +10,7 @@ package SendIdentityPart {
 			state start;
 
 			state waiting {
-				entry send Ping() to worker;
+				entry send new Ping() to worker;
 			}
 			state heard;
 
