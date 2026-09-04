@@ -369,15 +369,15 @@ func checkCardinality(graph *rdf.Graph) error {
 	return nil
 }
 
-// checkValueFlags refuses sysml:isDefault or sysml:isInitial on a subject with
-// no sysml:value, since the flags spell a feature value's operator.
+// checkValueFlags refuses sysml:isDefault or sysml:isInitial, whatever its value,
+// on a subject with no sysml:value, since the flags spell a feature value's operator.
 func checkValueFlags(graph *rdf.Graph) error {
 	for _, triple := range graph.Triples() {
 		predicate := triple.Predicate.Value
 		if predicate != rdf.SysML+pIsDefault && predicate != rdf.SysML+pIsInitial {
 			continue
 		}
-		if !graph.BoolValue(triple.Subject, predicate) || graph.HasProperty(triple.Subject, rdf.SysML+pValue) {
+		if graph.HasProperty(triple.Subject, rdf.SysML+pValue) {
 			continue
 		}
 		return &UnsupportedError{

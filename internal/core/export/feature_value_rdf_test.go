@@ -100,17 +100,13 @@ func TestFeatureValueFlagsWithoutAValueOrStatedTwiceAreReported(t *testing.T) {
 		}
 	}
 	for _, property := range []string{"sysml:isDefault", "sysml:isInitial"} {
-		orphan := strings.Replace(structural, `sysml:declaredName "b" ;`, `sysml:declaredName "b" ;`+"\n    "+property+` "true"^^xsd:boolean ;`, 1)
-		refused(property+" without a value", orphan, "the subject <urn:sysmlv2:element:P__V__b>", "states "+property+" without a sysml:value")
+		for _, value := range []string{"true", "false"} {
+			orphan := strings.Replace(structural, `sysml:declaredName "b" ;`, `sysml:declaredName "b" ;`+"\n    "+property+` "`+value+`"^^xsd:boolean ;`, 1)
+			refused(property+" "+value+" without a value", orphan, "the subject <urn:sysmlv2:element:P__V__b>", "states "+property+" without a sysml:value")
+		}
 		for _, values := range []string{`"true"^^xsd:boolean, "false"^^xsd:boolean`, `"false"^^xsd:boolean, "true"^^xsd:boolean`} {
 			twice := strings.Replace(structural, flag, property+" "+values+" ;", 1)
 			refused(property+" as "+values, twice, "the subject <urn:sysmlv2:element:P__V__a>", "states "+property+" twice", "one of them would be dropped")
 		}
-	}
-	// A flag stated false on a feature without a value asks for nothing the
-	// notation lacks, so it is read as the absence it is.
-	unflagged := strings.Replace(structural, `sysml:declaredName "b" ;`, `sysml:declaredName "b" ;`+"\n    "+`sysml:isDefault "false"^^xsd:boolean ;`, 1)
-	if back, want := toNotation(t, []byte(unflagged)), toNotation(t, []byte(structural)); back != want {
-		t.Errorf("a false flag changed the notation:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }

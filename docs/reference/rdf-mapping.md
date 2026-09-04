@@ -1090,10 +1090,12 @@ would be refused as a duplicate.
   the graph is refused naming both rather than the first being kept. Every
   `sysx:` property is single-valued but the members and parameters of a body,
   `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
-  the `sysml:` properties, the boolean `is…` flags are
-- a `sysml:isDefault` or `sysml:isInitial` of true on a subject with no
-  `sysml:value`: the flags spell the operator a feature value is written with
-  (`default =`, `:=`), so without a value there is nothing to write them on
+  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
+  is one triple to the graph, so only differing objects are a conflict
+- a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
+  with no `sysml:value`: the flags spell the operator a feature value is
+  written with (`default =`, `:=`), so without a value there is nothing to
+  write them on
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first
