@@ -2328,6 +2328,37 @@ fetches. Together they bound how long a stale figure can survive to about a day.
 
 ---
 
+### Multiplicity bound result types round
+
+`validateMultiplicityRangeResultTypes` (KerML 1.1 8.3.3.6) is now a constraint-tier rule of ours
+(`passes/w8c_multiplicity_bounds.go`): a bound that is not evaluated at model level must still
+have an Integer-conforming result, read from the referenced feature's declared type or, for
+arithmetic, from its operands. The rule moves no row of the reference corpora — the only
+non-literal bounds in the four OMG roots (`Simple Tests/MultiplicityTest.sysml`,
+`Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`) name Integer- or Natural-typed
+sibling features, which both sides accept — and moves
+`semantic/k37-multiplicity-bound-not-natural.kerml` to both-reject. Two points where
+`KerMLValidator.checkMultiplicityRange` (`KerMLValidator.xtend:1333`) and our rule part are
+adjudicated toward the specification rather than the referee:
+
+- **A bound naming a package-level feature is judged by that feature's type.** The pilot treats
+  a reference to a feature with no featuring type and no value as model-level evaluable, evaluates
+  it to the feature itself rather than a literal, and reports the `-2` null result, so
+  `feature k : Natural; feature d [k];` at package level draws `Must have a Natural value` from
+  the pilot and nothing from us; the same pair inside a class is judged by `k`'s type on both
+  sides. The specification asks for the result's type, which for a feature reference is the
+  referent's wherever it is owned;
+  [omg-issues.md](omg-issues.md#a-bound-naming-a-package-level-feature-is-rejected-whatever-its-type-pilot-2026-07)
+  drafts the question.
+- **`**` and `^` keep an Integer whole only under a Natural exponent.** The pilot's
+  `isIntegerOperator` lists both alongside `+`, `-`, `*` and `%`, so `2 ** n` with `n : Integer`
+  passes its check. `IntegerFunctions::'**'` is declared `in y : Natural`, and an Integer
+  exponent resolves to `RationalFunctions::'**'`, whose result is Rational; we accept the
+  exponentiation only when the exponent is Natural-conforming (`k : Natural`, `p : Positive`, a
+  literal, or `+`/`*`/`%` over such). The pilot's grammar admits only a literal or a feature
+  reference as a bound (`MultiplicityExpressionMember`), so no arithmetic bound reaches its
+  validator and the difference has no referee row; it is a reading of the library.
+
 ## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,

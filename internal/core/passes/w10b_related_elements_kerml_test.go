@@ -110,6 +110,27 @@ func TestW10BKerMLConnectorRelatedFeatures(t *testing.T) {
 	}
 }
 
+// One referenced end inherited through two abstract intermediates relates one
+// feature, not one per path; a diamond over a two-ended base stays silent.
+func TestW10BKerMLDiamondInheritance(t *testing.T) {
+	const src = `package P {
+	classifier K {
+		feature x; feature y;
+		abstract connector one { end feature e references x; }
+		abstract connector mid1 :> one;
+		abstract connector mid2 :> one;
+		connector leaf :> mid1, mid2;
+		connector two from x to y;
+		connector mid3 :> two;
+		connector mid4 :> two;
+		connector leaf2 :> mid3, mid4;
+	}
+}`
+	if got, want := relatedElementsLines(t, src, true), []int{7}; !sameLines(got, want) {
+		t.Fatalf("related-elements on lines %v, want %v", got, want)
+	}
+}
+
 // SysML: a definition or usage that relates fewer than two features is
 // reported; a message or flow with no ends is abstract in the reference, and a
 // usage typed by a definition with two ends inherits them.

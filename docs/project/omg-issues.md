@@ -115,6 +115,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
+| `org.omg.kerml.xtext` — `KerMLValidator.checkMultiplicityRange`, the `validateMultiplicityRangeResultTypes` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a multiplicity bound naming a package-level feature typed by `ScalarValues::Natural` or `Integer` (`feature k : Natural; feature d [k];`, both owned by a package) reports `Must have a Natural value`; the same bound inside a type (`class T { feature k : Natural; feature d [k]; }`) is accepted | established from the pinned `KerMLValidator.xtend` lines 1333–1339, `FeatureReferenceExpression_modelLevelEvaluable_InvocationDelegate` and `MultiplicityRange_valueOf_InvocationDelegate`: a reference to a feature with no featuring type and no value is deemed model-level evaluable, its evaluation yields the feature rather than a `LiteralInteger`, `valueOf` returns the `-2` null marker and the check reports it; a reference to a type's member is not evaluable and is judged by its type through `isInteger`. The method carries `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Reproduced with the model below through `validate-kerml`; [pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round) records how OpenSysML judges both spellings by the referent's type | **not filed** — drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -447,6 +448,48 @@ multiplicity constraints would reject the specification's own examples. Treating
 unwritten end multiplicity as the required one, and checking only written ones, is what a
 second implementation has to assume; a note in the release on the intended reading would
 help.
+````
+
+---
+
+### A bound naming a package-level feature is rejected whatever its type (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML reads the referenced feature's declared type
+(`internal/core/passes/w8c_multiplicity_bounds.go`) wherever the feature is
+owned and rejects only a bound whose type does not conform to `Integer`; the
+adjudication is in
+[pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round).
+
+````markdown
+### `validateMultiplicityRangeResultTypes` rejects a bound that names a package-level feature
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    private import ScalarValues::*;
+    feature k : Natural;
+    feature d [k];
+    class T {
+        feature k : Natural;
+        feature d [k];
+    }
+}
+```
+
+reports `Must have a Natural value` at line 4 (`feature d [k];` in the package) and nothing at
+line 7 (the same declaration inside `T`). Both `k` are typed by `Natural`, so under KerML 1.1
+8.3.3.6 both bounds have a Natural-conforming result. The difference is where the bound is sent
+by `KerMLValidator.checkMultiplicityRange`: `k` inside `T` has a featuring type, so the reference
+is not model-level evaluable and `isInteger` judges it by its type; the package-level `k` has no
+featuring type and no value, so `FeatureReferenceExpression.modelLevelEvaluable` answers true,
+`evaluate` yields the feature itself rather than a `LiteralInteger`, `MultiplicityRange.valueOf`
+returns its `-2` null marker, and the result-types error fires. The method is annotated
+`// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Is a package-level
+feature meant to be a valid bound (judged by its type like a member), or is a bound that cannot
+be evaluated to a literal meant to be rejected?
 ````
 
 ---

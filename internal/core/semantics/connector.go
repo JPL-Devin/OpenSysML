@@ -72,9 +72,42 @@ func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
-// endsOf returns the effective ends of the connector sym: its owned ends in
-// declaration order, then the unredefined ends of each general. Memoized.
+// connectorEnd is one effective end of a connector: the end feature, or, for
+// an end with no symbol (`connect a to b`), the connector and position declaring it.
+type connectorEnd struct {
+	feature *symbols.Symbol
+	owner   *symbols.Symbol
+	index   int
+}
+
+// identity keys an end so one declaration inherited along several paths is one end.
+func (e connectorEnd) identity() connectorEnd {
+	if e.feature != nil {
+		return connectorEnd{feature: e.feature}
+	}
+	return e
+}
+
+// endsOf returns the effective ends of the connector sym as features, nil for
+// an end that has none, in the order of effectiveEnds.
 func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return endFeatures(m.effectiveEnds(sym))
+}
+
+func endFeatures(ends []connectorEnd) []*symbols.Symbol {
+	if len(ends) == 0 {
+		return nil
+	}
+	out := make([]*symbols.Symbol, len(ends))
+	for i, end := range ends {
+		out[i] = end.feature
+	}
+	return out
+}
+
+// effectiveEnds returns sym's owned ends in declaration order, then the unredefined
+// ends of its generals, each once however many paths inherit it. Memoized.
+func (m *Model) effectiveEnds(sym *symbols.Symbol) []connectorEnd {
 	if cached, ok := m.ends[sym]; ok {
 		return cached
 	}
@@ -82,65 +115,61 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	m.ends[sym] = nil
 
 	if sym != nil && sym.Decl == nil && m.IsBinaryConnector(sym) {
-		var out []*symbols.Symbol
-		for _, name := range binaryConnectorEndNames {
+		var out []connectorEnd
+		for i, name := range binaryConnectorEndNames {
 			end, ok := m.LookupMember(sym, name)
 			if !ok {
 				m.ends[sym] = nil
 				return nil
 			}
-			out = append(out, end)
+			out = append(out, connectorEnd{feature: end, owner: sym, index: i})
 		}
 		m.ends[sym] = out
 		return out
 	}
 
 	owned := ownedEnds(sym)
-	out := owned
+	out := make([]connectorEnd, 0, len(owned))
+	for i, end := range owned {
+		out = append(out, connectorEnd{feature: end, owner: sym, index: i})
+	}
 
-	var inherited []*symbols.Symbol
-	contributing := 0
+	var inherited []connectorEnd
 	for _, sup := range m.DirectSupertypes(sym) {
 		if !m.isConnectorLike(sup) {
 			continue
 		}
-		general := m.endsOf(sup)
-		if len(general) == 0 {
-			continue
-		}
-		contributing++
-		claimed := claimedEnds(owned, general)
+		general := m.effectiveEnds(sup)
+		claimed := claimedEnds(owned, endFeatures(general))
 		for i, end := range general {
-			if !endClaimed(end, i, owned, claimed) {
+			if !endClaimed(end.feature, i, owned, claimed) {
 				inherited = append(inherited, end)
 			}
 		}
 	}
-	if contributing > 1 {
-		inherited = m.unmaskedEnds(inherited)
-	}
-	out = append(out, inherited...)
+	out = append(out, m.unmaskedEnds(inherited)...)
 
 	m.ends[sym] = out
 	return out
 }
 
-// unmaskedEnds drops duplicates and ends redefined by another end in the list,
-// so one feature inherited through several generals counts once.
-func (m *Model) unmaskedEnds(ends []*symbols.Symbol) []*symbols.Symbol {
+// unmaskedEnds drops ends already listed and ends another listed end redefines,
+// so a feature inherited through several generals counts once.
+func (m *Model) unmaskedEnds(ends []connectorEnd) []connectorEnd {
 	masked := make(map[*symbols.Symbol]bool)
 	for _, end := range ends {
-		for _, redefined := range m.AllRedefinedFeatures(end) {
+		for _, redefined := range m.AllRedefinedFeatures(end.feature) {
 			masked[redefined] = true
 		}
 	}
-	seen := make(map[*symbols.Symbol]bool)
-	out := make([]*symbols.Symbol, 0, len(ends))
+	seen := make(map[connectorEnd]bool)
+	out := make([]connectorEnd, 0, len(ends))
 	for _, end := range ends {
-		if end != nil && (masked[end] || seen[end]) {
+		id := end.identity()
+		if masked[end.feature] || seen[id] {
 			continue
 		}
-		seen[end] = true
+		seen[id] = true
 		out = append(out, end)
 	}
 	return out
@@ -355,42 +384,41 @@ func (m *Model) BinaryConnectorExcessEnds(sym *symbols.Symbol) ([]ast.Node, int)
 // `from`/`to` and binding clauses, its owned end features with a reference
 // clause, and the inherited ends it does not redefine that reference one.
 func (m *Model) RelatedFeatureCount(sym *symbols.Symbol) int {
-	return m.relatedFeatureCount(sym, make(map[*symbols.Symbol]bool))
-}
-
-func (m *Model) relatedFeatureCount(sym *symbols.Symbol, visited map[*symbols.Symbol]bool) int {
-	if sym == nil || visited[sym] {
-		return 0
-	}
-	visited[sym] = true
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || !connectorLike(sym) {
 		return 0
 	}
 	count := ownedRelatedFeatureCount(usage)
-	for _, member := range declMembers(sym) {
-		if end, ok := unwrapUsage(member); ok && end.IsEnd && referencesFeature(end.Relationships) {
+	for _, end := range m.effectiveEnds(sym) {
+		if end.owner == sym {
+			// Clause ends are counted above; only body ends with a reference remain.
+			if end.feature == nil {
+				continue
+			}
+			if d, ok := end.feature.Decl.(*ast.Usage); ok && referencesFeature(d.Relationships) {
+				count++
+			}
+		} else if endReferencesFeature(end) {
 			count++
 		}
 	}
-	owned := ownedEnds(sym)
+	if len(ownedEnds(sym)) == 0 {
+		count += m.clauseRelatedFeatureCount(sym, make(map[*symbols.Symbol]bool))
+	}
+	return count
+}
+
+// clauseRelatedFeatureCount counts the related features of generals whose ends occupy
+// no position of their own (`flow f from a to b`), inherited whole by an endless sym.
+func (m *Model) clauseRelatedFeatureCount(sym *symbols.Symbol, visited map[*symbols.Symbol]bool) int {
+	visited[sym] = true
+	count := 0
 	for _, sup := range m.DirectSupertypes(sym) {
-		if !m.isConnectorLike(sup) {
+		usage, ok := sup.Decl.(*ast.Usage)
+		if !ok || visited[sup] || !connectorLike(sup) || len(ownedEnds(sup)) > 0 {
 			continue
 		}
-		// A general connector whose ends occupy no position of their own (`flow
-		// f from a to b`, `binding of a = b`) passes its related features on whole.
-		if _, isUsage := sup.Decl.(*ast.Usage); isUsage && len(owned) == 0 && len(ownedEnds(sup)) == 0 {
-			count += m.relatedFeatureCount(sup, visited)
-			continue
-		}
-		general := m.endsOf(sup)
-		claimed := claimedEnds(owned, general)
-		for i := range general {
-			if !endClaimed(general[i], i, owned, claimed) && m.endReferencesFeature(sup, general, i) {
-				count++
-			}
-		}
+		count += ownedRelatedFeatureCount(usage) + m.clauseRelatedFeatureCount(sup, visited)
 	}
 	return count
 }
@@ -429,12 +457,11 @@ func ownedRelatedFeatureCount(usage *ast.Usage) int {
 	return count
 }
 
-// endReferencesFeature reports whether the end at position i of the effective
-// ends of the connector owner references a feature: through its own reference
-// clause, or as an end of owner's `connect` clause when it has no symbol.
-func (m *Model) endReferencesFeature(owner *symbols.Symbol, ends []*symbols.Symbol, i int) bool {
-	if end := ends[i]; end != nil {
-		switch d := end.Decl.(type) {
+// endReferencesFeature reports whether an effective end references a feature, through
+// its own reference clause or its owner's `connect` clause when it has no symbol.
+func endReferencesFeature(end connectorEnd) bool {
+	if end.feature != nil {
+		switch d := end.feature.Decl.(type) {
 		case *ast.Usage:
 			return referencesFeature(d.Relationships)
 		case *ast.ConnectorEnd:
@@ -442,8 +469,8 @@ func (m *Model) endReferencesFeature(owner *symbols.Symbol, ends []*symbols.Symb
 		}
 		return false
 	}
-	usage, ok := owner.Decl.(*ast.Usage)
-	return ok && i < len(usage.ConnectorEnds) && usage.ConnectorEnds[i].AttachedTarget() != nil
+	usage, ok := end.owner.Decl.(*ast.Usage)
+	return ok && end.index < len(usage.ConnectorEnds) && usage.ConnectorEnds[end.index].AttachedTarget() != nil
 }
 
 // referencesFeature reports whether rels carry a reference-subsetting clause.

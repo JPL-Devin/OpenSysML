@@ -446,3 +446,36 @@ func TestEndsInheritedThroughSeveralGenerals(t *testing.T) {
 		t.Fatalf("ConnectorEndAttachments = %+v, want ends named a2 and b2", atts)
 	}
 }
+
+// An unnamed `from`/`to` end inherited along two paths of a diamond is one
+// effective end, so the leaf has two ends, not four; a leaf restating the pair
+// redefines both by position.
+func TestEndsInheritedThroughDiamondCountOnce(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		feature x;
+		feature y;
+		connector base : Links::BinaryLink from x to y;
+		connector mid1 :> base;
+		connector mid2 :> base;
+		connector leaf :> mid1, mid2;
+		connector leaf2 :> mid1, mid2 from x to y;
+	}`)
+	p := sym(t, root, "P")
+	for _, name := range []string{"leaf", "leaf2"} {
+		if n := m.ConnectorEndCount(nested(t, p.Scope, name)); n != 2 {
+			t.Errorf("ConnectorEndCount(%s) = %d, want 2", name, n)
+		}
+	}
+	// One referenced end reached through two abstract intermediates relates one feature.
+	m, root = buildModel(t, `package Q {
+		feature x;
+		abstract connector base { end feature e references x; }
+		abstract connector mid1 :> base;
+		abstract connector mid2 :> base;
+		connector leaf :> mid1, mid2;
+	}`)
+	q := sym(t, root, "Q")
+	if n := m.RelatedFeatureCount(nested(t, q.Scope, "leaf")); n != 1 {
+		t.Errorf("RelatedFeatureCount(leaf) = %d, want 1", n)
+	}
+}

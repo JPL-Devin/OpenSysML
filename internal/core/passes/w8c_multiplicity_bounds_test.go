@@ -64,6 +64,9 @@ func TestW8CMultiplicityBoundResultTypeNotNatural(t *testing.T) {
 		"boolean typed":      "class C { feature b : ScalarValues::Boolean; feature f [b]; }",
 		"real valued":        "class C { feature r = 3.5; feature f [r]; }",
 		"class typed nested": "class C { feature n : C; feature f : C [n + 1]; }",
+		"integer exponent":   "class C { feature i : ScalarValues::Integer; feature f [2 ** i]; }",
+		"negated exponent":   "class C { feature n : ScalarValues::Natural; feature f [2 ** -n]; }",
+		"real exponent":      "class C { feature r : ScalarValues::Real; feature f [2 ^ r]; }",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -85,6 +88,9 @@ func TestW8CMultiplicityBoundResultTypeSilent(t *testing.T) {
 		"natural valued":     "class C { feature n : ScalarValues::Natural = 3; feature f [n]; }",
 		"integer valued":     "class C { feature i = 3; feature f [i]; }",
 		"integer arithmetic": "class C { feature n : ScalarValues::Natural; feature f [n + 1]; }",
+		"natural exponent":   "class C { feature n : ScalarValues::Natural; feature f [2 ** n]; }",
+		"positive exponent":  "class C { feature i : ScalarValues::Integer; feature p : ScalarValues::Positive; feature f [i ^ (p + 1)]; }",
+		"literal exponent":   "class C { feature i : ScalarValues::Integer; feature f [i ** 2]; }",
 		"untyped":            "class C { feature u; feature f [u]; }",
 		"unresolved type":    "class C { feature q : Undeclared; feature f [q]; }",
 		"unresolved bound":   "class C { feature f [nothere]; }",

@@ -70,13 +70,22 @@ func (c *multiplicityBoundsChecker) checkBound(scope *symbols.Scope, bound ast.N
 // result type must conform to Integer (a class-typed feature does not), while
 // an unresolved or untyped bound is left to the tiers that own those gaps.
 func (c *multiplicityBoundsChecker) boundIsInteger(scope *symbols.Scope, bound ast.Node) bool {
+	return c.boundConforms(scope, bound, semantics.PrimInteger)
+}
+
+// boundConforms reports whether a bound's result may conform to want (Integer or
+// Natural); `**` and `^` keep an Integer base whole only under a Natural exponent.
+func (c *multiplicityBoundsChecker) boundConforms(scope *symbols.Scope, bound ast.Node, want semantics.PrimType) bool {
 	switch e := bound.(type) {
 	case *ast.LiteralInteger, *ast.LiteralInfinity:
 		return true
 	case *ast.OperatorExpr:
-		if w8cIntegerOperator(e.Operator) {
+		if e.Operator == ast.OpPow && len(e.Operands) == 2 {
+			return c.boundConforms(scope, e.Operands[0], want) && c.boundConforms(scope, e.Operands[1], semantics.PrimNatural)
+		}
+		if w8cWholeOperator(e.Operator, want) {
 			for _, arg := range e.Operands {
-				if !c.boundIsInteger(scope, arg) {
+				if !c.boundConforms(scope, arg, want) {
 					return false
 				}
 			}
@@ -86,24 +95,26 @@ func (c *multiplicityBoundsChecker) boundIsInteger(scope *symbols.Scope, bound a
 	silent := &exprChecker{resolver: c.resolver, model: c.model}
 	if !w8cIsReference(bound) {
 		prim := silent.infer(scope, bound)
-		return prim == semantics.PrimUnknown || semantics.PrimConforms(prim, semantics.PrimInteger)
+		return prim == semantics.PrimUnknown || semantics.PrimConforms(prim, want)
 	}
 	sym, ok := c.resolver.ResolveTarget(scope, bound)
 	if !ok || sym == nil {
 		return true
 	}
 	if prim := silent.featurePrimType(sym); prim != semantics.PrimUnknown {
-		return semantics.PrimConforms(prim, semantics.PrimInteger)
+		return semantics.PrimConforms(prim, want)
 	}
 	return !c.model.DeclaresResolvedType(sym)
 }
 
-// w8cIntegerOperator reports the arithmetic operators whose result is an
-// Integer whenever every operand is one; division may yield a Rational.
-func w8cIntegerOperator(op ast.OperatorKind) bool {
+// w8cWholeOperator reports the operators closed over want: division may yield a
+// Rational, and subtraction or negation may leave the Naturals.
+func w8cWholeOperator(op ast.OperatorKind, want semantics.PrimType) bool {
 	switch op {
-	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpMod, ast.OpPow, ast.OpNeg, ast.OpPos:
+	case ast.OpAdd, ast.OpMul, ast.OpMod, ast.OpPos:
 		return true
+	case ast.OpSub, ast.OpNeg:
+		return want != semantics.PrimNatural
 	}
 	return false
 }

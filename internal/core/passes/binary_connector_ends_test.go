@@ -74,6 +74,26 @@ func TestBinaryConnectorDeclaredAndInheritedEnds(t *testing.T) {
 	}
 }
 
+// A binary pair inherited along both paths of a diamond is still one pair; only
+// a leaf adding a third end of its own is reported.
+func TestBinaryConnectorDiamondInheritance(t *testing.T) {
+	const src = `package P {
+	class T { feature x : T; feature y : T; feature z : T; }
+	classifier K {
+		feature x : T; feature y : T; feature z : T;
+		connector base : Links::BinaryLink from x to y;
+		connector mid1 :> base;
+		connector mid2 :> base;
+		connector leaf :> mid1, mid2;
+		connector leaf2 :> mid1, mid2 from x to y;
+		connector leaf3 :> mid1, mid2 (x, y, z);
+	}
+}`
+	if got, want := binaryEndLines(t, src, true), []int{10}; !sameLines(got, want) {
+		t.Fatalf("binary link diagnostics on lines %v, want %v", got, want)
+	}
+}
+
 // SysML spellings of a binary connector: a binding, a succession, a flow and a
 // connection typed by a binary definition are all binary; only a genuine third
 // end is reported.

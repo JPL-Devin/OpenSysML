@@ -39,7 +39,7 @@ type Model struct {
 	invocations     map[invocationKey]*InvocationSelection
 	arguments       ArgumentTyper // the checker's argument typing, nil when no checker runs
 	unioning        map[*symbols.Symbol][]*symbols.Symbol
-	ends            map[*symbols.Symbol][]*symbols.Symbol
+	ends            map[*symbols.Symbol][]connectorEnd
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -102,7 +102,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
-		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
+		ends:              make(map[*symbols.Symbol][]connectorEnd),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
