@@ -187,7 +187,7 @@ part counter : Counter;`).Diagnostics); len(errs) > 0 {
 	got := run(t, s, "%features counter")
 	wantsInOrder(t, got, "Features:\n  count = 10\n", "\nBehaviors:\n  modes: exhibited state machine, current state running\n    count = 1\n")
 	wants(t, got,
-		"  tick: performed action, not started\n    total = 7\n",
+		"  tick: performed action, completed\n    total = 7\n",
 		"  idle: action, not running",
 	)
 	rejects(t, got, "<unknown>", "running = ", "step = ", "bump = ", "n = ", "modes = Instance", "tick = Instance")
@@ -198,7 +198,7 @@ part counter : Counter;`).Diagnostics); len(errs) > 0 {
 	got = run(t, s, "%features counter depth 0")
 	wants(t, got,
 		"  modes: exhibited state machine, current state running (not expanded: depth 0)",
-		"  tick: performed action, not started (not expanded: depth 0)",
+		"  tick: performed action, completed (not expanded: depth 0)",
 	)
 	rejects(t, got, "count = 1\n", "total = 7")
 }

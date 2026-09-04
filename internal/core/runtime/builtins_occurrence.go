@@ -148,10 +148,14 @@ func builtinOccurrenceAddNew(ec *EvalContext, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
+	group, err := builtinSequenceUnion(ec, []Value{args[0], args[1]})
+	if err != nil {
+		return Value{}, err
+	}
 	if err := ec.ctx.createDuring(op, inst, ec.entered); err != nil {
 		return Value{}, err
 	}
-	return builtinSequenceUnion(ec, []Value{args[0], args[1]})
+	return group, nil
 }
 
 // builtinOccurrenceAddNewAt is `addNewAt(group, occ, index)`: occ, created

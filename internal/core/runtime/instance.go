@@ -380,12 +380,12 @@ func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) 
 // so a caller can tell it from any other failure to evaluate, whatever the
 // expression it surfaced through.
 func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue, error) {
+	if err := ctx.checkNotDestroyed(inst); err != nil {
+		return nil, err
+	}
 	if _, ok := inst.FeatureValues[name]; !ok {
 		// Naming no feature value of the object is no materialization of one.
 		return nil, fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
-	}
-	if err := ctx.checkNotDestroyed(inst); err != nil {
-		return nil, err
 	}
 	fv, err := inst.materializeFeatureValue(ctx, name)
 	if err != nil {
@@ -399,12 +399,12 @@ func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue,
 // conform to the multiplicity governing the feature; a feature the object does
 // not have is reported rather than added.
 func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) error {
+	if err := ctx.checkNotDestroyed(inst); err != nil {
+		return err
+	}
 	fv, ok := inst.FeatureValues[name]
 	if !ok {
 		return fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
-	}
-	if err := ctx.checkNotDestroyed(inst); err != nil {
-		return err
 	}
 	// Checked before the write, so a value the feature does not admit leaves it
 	// holding what it held.

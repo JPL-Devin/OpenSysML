@@ -714,6 +714,14 @@ func (e *ActionExecutor) hasFlow() bool {
 	return e.graph != nil && e.graph.Initial != nil
 }
 
+// completeWithoutFlow completes an action stating no flow: it performs no step,
+// so its performance begins and ends at once.
+func (e *ActionExecutor) completeWithoutFlow() {
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
+	e.state = StateCompleted
+	e.ctx.endPerformanceLife(e.occurrence)
+}
+
 // parameterDirection reports the direction of the parameter of this name, and
 // whether the action declares one.
 func (e *ActionExecutor) parameterDirection(name string) (ast.FeatureDirection, bool) {

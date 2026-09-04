@@ -47,6 +47,7 @@ const lifetimeModel = `
 		calc def Create { in b : Bench; return : Bench = create(b); }
 		calc def CreateSpare { in b : Bench; return : Widget = create(b.spare); }
 		calc def AddAt { in g : Widget[0..*] ordered nonunique; in w : Widget; in i : Positive; return : Widget[0..*] = addNewAt(g, w, i); }
+		calc def AddSpare { in b : Bench; in g : Widget[0..*] ordered nonunique; return : Widget[0..*] = addNew(g, b.spare); }
 	}
 `
 
@@ -108,6 +109,12 @@ func TestDestroyEndsPortionsAndRefusesReads(t *testing.T) {
 	if err := part.SetFeatureValue(ctx, "n", constInt(2)); !errors.Is(err, ErrOccurrenceDestroyed) {
 		t.Errorf("write to a destroyed portion: %v, want %v", err, ErrOccurrenceDestroyed)
 	}
+	if _, err := part.GetFeatureValue(ctx, "nowhere"); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("read of no feature of a destroyed object: %v, want %v", err, ErrOccurrenceDestroyed)
+	}
+	if err := part.SetFeatureValue(ctx, "nowhere", constInt(2)); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("write to no feature of a destroyed object: %v, want %v", err, ErrOccurrenceDestroyed)
+	}
 	if got, err := invoke("WidgetDuring", objectValue(part)); err != nil || got.Const.Bool {
 		t.Errorf("isDuring(destroyed part) = %s, %v; want false", FormatValue(got), err)
 	}
@@ -130,6 +137,44 @@ func TestDestroyRefusedWhilePerforming(t *testing.T) {
 	}
 	if l, _ := ctx.OccurrenceLife(rover.ID); !l.Alive() {
 		t.Errorf("OccurrenceLife(rover) = %v after the refusal; want alive", l)
+	}
+}
+
+const noFlowModel = `
+	package test {
+		private import ScalarValues::*;
+		private import OccurrenceFunctions::*;
+		action def Report;
+		part def Camera { perform action report : Report; }
+		calc def ReportDuring { in c : Camera; return : Boolean = isDuring(c.report); }
+		calc def DestroyCamera { in c : Camera; return : Camera = destroy(c); }
+	}
+`
+
+// TestPerformedActionWithoutAFlowCompletes: an action stating no flow is
+// performed at once, so nothing happens during it and its performer can end.
+func TestPerformedActionWithoutAFlowCompletes(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, noFlowModel)
+	camera := instantiate("Camera")
+	behavior, ok := camera.Behavior("report")
+	if !ok || behavior.Action == nil || behavior.Action.State() != StateCompleted {
+		t.Fatalf("report = %v, %v; want a completed action", behavior, ok)
+	}
+	report := behavior.Action.occurrence
+	if report == nil {
+		t.Fatal("the performed action stands for no occurrence")
+	}
+	if l, ok := ctx.OccurrenceLife(report.ID); !ok || l.Alive() || l.Destroyed || l.Began > l.Ended {
+		t.Errorf("OccurrenceLife(report) = %v, %v; want ended after it began, not destroyed", l, ok)
+	}
+	if got, err := invoke("ReportDuring", objectValue(camera)); err != nil || got.Const.Bool {
+		t.Errorf("isDuring(camera.report) = %s, %v; want false", FormatValue(got), err)
+	}
+	if _, err := invoke("DestroyCamera", objectValue(camera)); err != nil {
+		t.Errorf("destroy(camera) = %v; want the performer to end", err)
+	}
+	if l, _ := ctx.OccurrenceLife(camera.ID); !l.Destroyed {
+		t.Errorf("OccurrenceLife(camera) = %v; want destroyed", l)
 	}
 }
 
@@ -164,6 +209,46 @@ func TestCreateOnlyWhatTheCallReaches(t *testing.T) {
 	}
 	if after, _ := ctx.OccurrenceLife(widget.ID); after != before {
 		t.Errorf("OccurrenceLife(w) = %v after the refusal; want %v unchanged", after, before)
+	}
+}
+
+// TestAddNewCreatesNothingWhenTheGroupCannotGrow: an `addNew` the element budget
+// refuses leaves the occurrence it would have created as it was.
+func TestAddNewCreatesNothingWhenTheGroupCannotGrow(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, lifetimeModel)
+	spareOf := func(bench *Instance) OccurrenceLife {
+		fv, err := bench.GetFeatureValue(ctx, "spare")
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := fv.HeldValue().Object()
+		l, _ := ctx.OccurrenceLife(id)
+		return l
+	}
+	// The call first reaches the spare, so within budget it creates it.
+	bench := instantiate("Bench")
+	whole, _ := ctx.OccurrenceLife(bench.ID)
+	if _, err := invoke("AddSpare", objectValue(bench), nullValue()); err != nil {
+		t.Fatalf("addNew((), spare) within budget: %v", err)
+	}
+	if l := spareOf(bench); !l.Alive() || l.Began <= whole.Began {
+		t.Errorf("OccurrenceLife(spare) = %v; want begun after the bench at %d", l, whole.Began)
+	}
+
+	// A group already holding one cannot grow to two under a budget of one.
+	held := objectValue(instantiate("Widget"))
+	tight := DefaultBudgets()
+	tight.MaxElements = 1
+	if err := ctx.SetBudgets(tight); err != nil {
+		t.Fatal(err)
+	}
+	other := instantiate("Bench")
+	whole, _ = ctx.OccurrenceLife(other.ID)
+	if _, err := invoke("AddSpare", objectValue(other), held); !errors.Is(err, ErrElementLimitExceeded) {
+		t.Fatalf("addNew((w), spare) over budget = %v; want %v", err, ErrElementLimitExceeded)
+	}
+	if l := spareOf(other); !l.Alive() || l.Began != whole.Began {
+		t.Errorf("OccurrenceLife(spare) = %v after the refusal; want begun with the bench at %d", l, whole.Began)
 	}
 }
 

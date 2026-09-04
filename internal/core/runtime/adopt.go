@@ -618,11 +618,32 @@ func (a *adoption) commit() {
 		// under the identities they had, which name the same connectors.
 		plan.obj.keepAnonymous(a.ctx, a.prev, prevType)
 		a.ctx.registerInstance(plan.obj)
-		a.ctx.beginLife(plan.obj)
-		a.ctx.carryLife(a.prev, plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}
+	a.beginLives()
 	a.carryDerived(adopted)
+}
+
+// beginLives gives the carried objects their lifetimes here, in identity order
+// and each whole before its parts, so a part begins with its whole.
+func (a *adoption) beginLives() {
+	for _, id := range a.plannedIDs() {
+		a.beginLifeOf(a.plans[id].obj)
+	}
+}
+
+// beginLifeOf begins obj's lifetime after the carried whole that holds it.
+func (a *adoption) beginLifeOf(obj *Instance) {
+	if _, begun := a.ctx.lives[obj.ID]; begun {
+		return
+	}
+	if owner := obj.owner; owner != nil {
+		if plan, carried := a.plans[owner.ID]; carried && plan.obj == owner {
+			a.beginLifeOf(owner)
+		}
+	}
+	a.ctx.beginLife(obj)
+	a.ctx.carryLife(a.prev, obj)
 }
 
 // restartBehaviors runs the carried objects' behaviors again in this context, from
@@ -636,6 +657,11 @@ func (a *adoption) restartBehaviors() ([]string, error) {
 		obj := a.plans[id].obj
 		carried = append(carried, obj)
 		if len(obj.behaviors) == 0 {
+			continue
+		}
+		// A destroyed object performs nothing any more: its behaviors are dropped, not restarted.
+		if a.ctx.lives[obj.ID].destroyed {
+			obj.behaviors = nil
 			continue
 		}
 		for _, behavior := range obj.behaviors {
