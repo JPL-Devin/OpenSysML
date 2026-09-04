@@ -1,4 +1,4 @@
-// Invalid: A view may have at most one view rendering (SysML 7.23 validateViewUsageRendering; pilot ViewRendering_invalid.sysml.xt:31).
+// Invalid: A view may have at most one view rendering (SysML 7.23 validateViewUsageOnlyOneRendering; pilot ViewRendering_invalid.sysml.xt:31).
 package P30TwoViewRenderings {
     rendering r;
     view v {
