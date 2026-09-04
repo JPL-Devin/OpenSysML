@@ -699,8 +699,8 @@ func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	normV, normW := euclideanNorm(v), euclideanNorm(w)
-	if normV == 0 || normW == 0 {
+	unitV, unitW := unitVector(v), unitVector(w)
+	if unitV == nil || unitW == nil {
 		return Value{}, fmt.Errorf(
 			"%w: function %s has no angle to a zero vector",
 			semantics.ErrArithmeticDomain, name,
@@ -709,13 +709,34 @@ func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
 	// The cosine is the inner product of the unit vectors, so components whose
 	// product would leave the Real range still give a finite cosine.
 	cosine := 0.0
-	for i := range v {
-		cosine += (v[i] / normV) * (w[i] / normW)
+	for i := range unitV {
+		cosine += unitV[i] * unitW[i]
 	}
 	// Rounding can carry the cosine of two parallel vectors just outside
 	// [-1.0, 1.0], where the arc cosine has no value; the angle there is 0 or pi.
 	cosine = math.Max(-1, math.Min(1, cosine))
 	return checkedReal(math.Acos(cosine))
+}
+
+// unitVector is the direction of a vector, nil for the zero vector. It is scaled
+// by its largest component first, so a vector whose norm overflows still has one.
+func unitVector(v []float64) []float64 {
+	scale := 0.0
+	for _, x := range v {
+		scale = math.Max(scale, math.Abs(x))
+	}
+	if scale == 0 {
+		return nil
+	}
+	out := make([]float64, len(v))
+	for i, x := range v {
+		out[i] = x / scale
+	}
+	norm := euclideanNorm(out)
+	for i := range out {
+		out[i] /= norm
+	}
+	return out
 }
 
 // isVectorKind reports whether a value is a vector or a vector quantity.

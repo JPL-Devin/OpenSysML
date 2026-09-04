@@ -583,7 +583,8 @@ func TestVectorFunctionScalarValues(t *testing.T) {
 }
 
 // A norm is finite whenever it is in the Real range, even where the squares of
-// the components are not, and the angle between such vectors is defined.
+// the components are not, and the angle is defined for any two non-zero vectors
+// of finite components, even ones whose norms leave the Real range.
 func TestVectorNormAndAngleOfLargeComponents(t *testing.T) {
 	norm, err := applyLibrary(t, "VectorFunctions::norm", realVec(3e200, 4e200))
 	if err != nil {
@@ -600,6 +601,10 @@ func TestVectorNormAndAngleOfLargeComponents(t *testing.T) {
 		{"orthogonal", realVec(1e200, 0), realVec(0, 1e200), math.Pi / 2},
 		{"parallel", realVec(1e200, 2e200), realVec(2e200, 4e200), 0},
 		{"opposite", realVec(1e200, 0), realVec(-1e200, 0), math.Pi},
+		{"parallel, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1e308, 1e308), 0},
+		{"orthogonal, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1.5e308, -1.5e308), math.Pi / 2},
+		{"opposite, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(-1.5e308, -1.5e308), math.Pi},
+		{"one norm beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1, 1), 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
