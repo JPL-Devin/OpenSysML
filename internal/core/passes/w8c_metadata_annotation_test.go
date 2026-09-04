@@ -13,14 +13,21 @@ import (
 // the findings about metadata annotations, with the source text each covers.
 func metadataDiags(t *testing.T, src string) []metadataFinding {
 	t.Helper()
+	return metadataDiagsNamed(t, "<t>.kerml", src)
+}
+
+// metadataDiagsNamed is metadataDiags over a document of the given name, whose
+// extension decides the language it is analyzed as.
+func metadataDiagsNamed(t *testing.T, name, src string) []metadataFinding {
+	t.Helper()
 
 	idx := newTestIndex()
-	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx.AddDocument("<t>.kerml", root)
+	root := parser.New(source.New(name, []byte(src))).ParseFile()
+	idx.AddDocument(name, root)
 	idx.ExpandWildcardImports()
 
 	var out []metadataFinding
-	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
+	for _, d := range Analyze(name, root, nil, idx) {
 		out = append(out, metadataFinding{
 			Code: d.Code,
 			Text: src[d.Span.Offset:d.Span.End()],
@@ -131,6 +138,48 @@ func TestMetadataAnnotatedElementMustConform(t *testing.T) {
 	}
 	if want := msgCannotAnnotate + "Class"; found[0].Msg != want {
 		t.Errorf("message %q, want %q", found[0].Msg, want)
+	}
+}
+
+// A subject, assume or require member annotated by a prefix is checked against
+// the annotatedElement of the metadata definition the way a part is: a usage-
+// only definition accepts all four, a definition-only one rejects all four.
+func TestMetadataAnnotatedElementOnRequirementMembers(t *testing.T) {
+	const body = `package P {
+	metadata def OnUsage { :>> annotatedElement : SysML::Usage; }
+	metadata def OnDef { :>> annotatedElement : SysML::Definition; }
+	part def Vehicle;
+	constraint def C;
+	requirement def R {
+		subject #%[1]s v : Vehicle;
+		assume #%[1]s constraint a : C;
+		require #%[1]s constraint r : C;
+		#%[1]s part p : Vehicle;
+		assume #%[1]s constraint { true }
+		require #%[1]s constraint : C { true }
+	}
+}`
+	ok := metadataDiagsNamed(t, "<t>.sysml", fmt.Sprintf(body, "OnUsage"))
+	if found := findingsWithCode(ok, "metadata-annotated-element"); len(found) != 0 {
+		t.Errorf("usage-only metadata on usages: unexpected findings %v", found)
+	}
+
+	bad := findingsWithCode(metadataDiagsNamed(t, "<t>.sysml", fmt.Sprintf(body, "OnDef")), "metadata-annotated-element")
+	want := []string{
+		msgCannotAnnotate + "PartUsage",
+		msgCannotAnnotate + "ConstraintUsage",
+		msgCannotAnnotate + "ConstraintUsage",
+		msgCannotAnnotate + "PartUsage",
+		msgCannotAnnotate + "ConstraintUsage",
+		msgCannotAnnotate + "ConstraintUsage",
+	}
+	if len(bad) != len(want) {
+		t.Fatalf("definition-only metadata on usages: findings %v, want %d", bad, len(want))
+	}
+	for i, f := range bad {
+		if f.Msg != want[i] || strings.TrimSpace(f.Text) != "#OnDef" {
+			t.Errorf("finding %d = %q on %q, want %q on #OnDef", i, f.Msg, f.Text, want[i])
+		}
 	}
 }
 

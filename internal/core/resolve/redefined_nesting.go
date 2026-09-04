@@ -118,6 +118,8 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 			rels = d.Relationships
 		case *ast.Definition:
 			rels = d.Relationships
+		case *ast.SubjectMember:
+			rels = d.Relationships
 		default:
 			return nil
 		}
@@ -136,6 +138,9 @@ func isFeatureDecl(decl ast.Node) bool {
 	if _, ok := ast.OwnedConstraintOf(decl); ok {
 		return true
 	}
-	_, ok := decl.(*ast.Usage)
-	return ok
+	switch decl.(type) {
+	case *ast.Usage, *ast.SubjectMember:
+		return true
+	}
+	return false
 }

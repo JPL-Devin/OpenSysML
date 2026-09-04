@@ -292,7 +292,7 @@
     {
       "name": "validateDefinitionVariationSpecialization",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateElementFilterMembershipIsBoolean",

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -104,6 +105,193 @@ func TestF61KeywordlessMembers(t *testing.T) {
 			u := usageAt(t, def.Members, i)
 			if u.Ident.Name != want {
 				t.Errorf("member %d name = %q, want %q", i, u.Ident.Name, want)
+			}
+		}
+	})
+
+	t.Run("typed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def L :> ScalarValues::Natural { uncl : L = 0; private conf :> uncl; x [1]; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 3 {
+			t.Fatalf("members = %d, want 3", len(def.Members))
+		}
+		for i, want := range []string{"uncl", "conf", "x"} {
+			u := usageAt(t, def.Members, i)
+			if u.Ident.Name != want || u.Kind != ast.UsageEnumeration {
+				t.Errorf("member %d = %q kind %v, want enumerated value %q", i, u.Ident.Name, u.Kind, want)
+			}
+		}
+		if u := usageAt(t, def.Members, 0); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping || u.Value == nil {
+			t.Errorf("uncl = %#v, want a typing and a value", u)
+		}
+		if u := usageAt(t, def.Members, 1); u.Visibility != ast.VisibilityPrivate || len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("conf = %#v, want a private subsetting", u)
+		}
+	})
+
+	t.Run("named_enum_values_with_default_or_initial_values", func(t *testing.T) {
+		src := "package B { enum def S { a := 1; b default = 2; c default := 3; d default 4; enum e default = 5; } }"
+		pkg := parsePkg(t, src)
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 5 {
+			t.Fatalf("members = %d, want 5", len(def.Members))
+		}
+		for i, want := range []struct{ name, op string }{
+			{"a", ":="}, {"b", "default ="}, {"c", "default :="}, {"d", "default"}, {"e", "default ="},
+		} {
+			u := usageAt(t, def.Members, i)
+			op := src[u.ValueOperatorSpan.Offset:u.ValueOperatorSpan.End()]
+			if u.Kind != ast.UsageEnumeration || u.Ident.Name != want.name || u.Value == nil || op != want.op {
+				t.Errorf("member %d = kind %v %q op %q value %v, want enumerated value %q with %q", i, u.Kind, u.Ident.Name, op, u.Value != nil, want.name, want.op)
+			}
+		}
+	})
+
+	t.Run("short_named_and_nameless_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { attribute def D { attribute n; } enum def S :> D { <s1> a : S; <s2>; <s3> = 1; : S; :>> n = 3; [1]; public <s4> c; private : S; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 8 {
+			t.Fatalf("members = %d, want 8", len(def.Members))
+		}
+		for i, want := range []struct{ short, name string }{{"s1", "a"}, {"s2", ""}, {"s3", ""}, {"", ""}, {"", ""}, {"", ""}, {"s4", "c"}, {"", ""}} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.ShortName != want.short || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v <%q> %q, want enumerated value <%q> %q", i, u.Kind, u.Ident.ShortName, u.Ident.Name, want.short, want.name)
+			}
+		}
+		if u := usageAt(t, def.Members, 2); u.Value == nil {
+			t.Errorf("<s3> = 1 has no value")
+		}
+		if u := usageAt(t, def.Members, 3); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf(": S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 4); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelRedefines || u.Value == nil {
+			t.Errorf(":>> n = 3 = %#v, want a redefinition and a value", u)
+		}
+		if u := usageAt(t, def.Members, 5); u.Multiplicity == nil {
+			t.Errorf("[1] has no multiplicity")
+		}
+		if u := usageAt(t, def.Members, 7); u.Visibility != ast.VisibilityPrivate {
+			t.Errorf("private : S visibility = %v, want private", u.Visibility)
+		}
+	})
+
+	t.Run("metadata_prefixed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { metadata def M; enum def S { #M a; #M b : S; #M enum c; private #M e; #M <f> ff; #M g [1]; #M h :> a; #M = 1; #M enum := 2; #M; #B::M { doc /* d */ } #M k default = 3; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 12 {
+			t.Fatalf("members = %d, want 12", len(def.Members))
+		}
+		for i, want := range []struct{ short, name string }{{"", "a"}, {"", "b"}, {"", "c"}, {"", "e"}, {"f", "ff"}, {"", "g"}, {"", "h"}, {"", ""}, {"", ""}, {"", ""}, {"", ""}, {"", "k"}} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.ShortName != want.short || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v <%q> %q, want enumerated value <%q> %q", i, u.Kind, u.Ident.ShortName, u.Ident.Name, want.short, want.name)
+			}
+			if len(u.Prefixes) != 1 || ast.SimpleName(u.Prefixes[0].Type) != "M" {
+				t.Errorf("member %d prefixes = %#v, want one #M", i, u.Prefixes)
+			}
+		}
+		if u := usageAt(t, def.Members, 1); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf("#M b : S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 2); u.Keyword != "enum" {
+			t.Errorf("#M enum c keyword = %q, want enum", u.Keyword)
+		}
+		if u := usageAt(t, def.Members, 3); u.Visibility != ast.VisibilityPrivate {
+			t.Errorf("private #M e visibility = %v, want private", u.Visibility)
+		}
+		if u := usageAt(t, def.Members, 5); u.Multiplicity == nil {
+			t.Errorf("#M g [1] has no multiplicity")
+		}
+		if u := usageAt(t, def.Members, 6); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("#M h :> a = %#v, want a subsetting", u)
+		}
+		for _, i := range []int{7, 8, 11} {
+			if u := usageAt(t, def.Members, i); u.Value == nil {
+				t.Errorf("member %d has no value", i)
+			}
+		}
+		if u := usageAt(t, def.Members, 10); !u.HasBody || ast.QualifiedText(u.Prefixes[0].Type) != "B::M" {
+			t.Errorf("#B::M { doc } = %#v, want a body and a qualified prefix", u)
+		}
+	})
+
+	t.Run("globally_qualified_metadata_prefixed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { metadata def M; enum def S { #$::B::M a; #$::B::M = 1; #$::B::M #M b; #M #$::B::M c; #$::B::M d : S = 2; #$::B::M; private #$::B::M enum := 3; #$::B::M k default = 4; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 8 {
+			t.Fatalf("members = %d, want 8", len(def.Members))
+		}
+		for i, want := range []struct {
+			name     string
+			prefixes []string
+		}{
+			{"a", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"b", []string{"$::B::M", "M"}}, {"c", []string{"M", "$::B::M"}},
+			{"d", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"k", []string{"$::B::M"}},
+		} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v %q, want enumerated value %q", i, u.Kind, u.Ident.Name, want.name)
+			}
+			var got []string
+			for _, pre := range u.Prefixes {
+				got = append(got, ast.QualifiedText(pre.Type))
+			}
+			if strings.Join(got, " ") != strings.Join(want.prefixes, " ") {
+				t.Errorf("member %d prefixes = %v, want %v", i, got, want.prefixes)
+			}
+			if u.Prefixes[0].Type.Global != (want.prefixes[0] == "$::B::M") {
+				t.Errorf("member %d first prefix global = %v", i, u.Prefixes[0].Type.Global)
+			}
+		}
+		if u := usageAt(t, def.Members, 4); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping || u.Value == nil {
+			t.Errorf("#$::B::M d : S = 2 = %#v, want a typing and a value", u)
+		}
+		if u := usageAt(t, def.Members, 6); u.Visibility != ast.VisibilityPrivate || u.Keyword != "enum" || u.Value == nil {
+			t.Errorf("private #$::B::M enum := 3 = %#v, want private enum with a value", u)
+		}
+	})
+
+	t.Run("kerml_keyword_named_and_globally_typed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { chains; type : S; namespace default = 1; class :> chains; a : $::B::S; b : $::B::S = 2; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 6 {
+			t.Fatalf("members = %d, want 6", len(def.Members))
+		}
+		for i, want := range []string{"chains", "type", "namespace", "class", "a", "b"} {
+			if u := usageAt(t, def.Members, i); u.Kind != ast.UsageEnumeration || u.Ident.Name != want {
+				t.Errorf("member %d = %s %q, want enumerated value %q", i, u.Kind, u.Ident.Name, want)
+			}
+		}
+		if u := usageAt(t, def.Members, 1); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf("type : S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 2); u.Value == nil {
+			t.Errorf("namespace default = 1 = %#v, want a value", u)
+		}
+		if u := usageAt(t, def.Members, 3); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("class :> chains = %#v, want a subsetting", u)
+		}
+		for _, i := range []int{4, 5} {
+			u := usageAt(t, def.Members, i)
+			if len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+				t.Fatalf("member %d = %#v, want a typing", i, u)
+			}
+			if qn, ok := u.Relationships[0].Target.(*ast.QualifiedName); !ok || !qn.Global {
+				t.Errorf("member %d typing target = %#v, want a globally qualified name", i, u.Relationships[0].Target)
+			}
+		}
+		if u := usageAt(t, def.Members, 5); u.Value == nil {
+			t.Errorf("b : $::B::S = 2 = %#v, want a value", u)
+		}
+	})
+
+	t.Run("enum_value_trivia_stays_with_the_next_member", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { a; /* c */ b; /* d */ doc /* e */ } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		for i, want := range []int{0, 1, 1} {
+			if got := len(def.Members[i].(*ast.Membership).LeadingTrivia()); got != want {
+				t.Errorf("member %d has %d leading trivia, want %d", i, got, want)
 			}
 		}
 	})
