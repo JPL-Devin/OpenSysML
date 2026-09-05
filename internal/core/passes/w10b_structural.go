@@ -78,7 +78,7 @@ func (c *w10bStructuralChecker) check(decl ast.Node) {
 	if msg, ok := portOwnerMessage(decl); ok {
 		for _, m := range members {
 			u, ok := unwrapUsageMember(m)
-			if !ok {
+			if !ok || u.IsVariant {
 				continue
 			}
 			c.checkVariantPorts(u)
@@ -91,6 +91,7 @@ func (c *w10bStructuralChecker) check(decl ast.Node) {
 
 // checkVariantPorts reports composite port variants under a port owner: a variant
 // has no owning type, so it is no subport and must be referential (validatePortUsageIsReference).
+// Variants are not nested usages, so the port owner's check reaches them only through here.
 func (c *w10bStructuralChecker) checkVariantPorts(variation *ast.Usage) {
 	if !variation.IsVariation {
 		return
