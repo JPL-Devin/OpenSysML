@@ -1367,7 +1367,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		return nil
 	}
 	r.Enter()
-	cur, ok := r.walkMemberChain(parentSym, qn)
+	cur, ok := r.walkMemberChain(parentSym, qn, chain)
 	if r.Leave() && ok {
 		r.memoize(qn, resolution{cur, true})
 	}
@@ -1376,7 +1376,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 
 // walkMemberChain reads the members qn names, one per part, from parentSym,
 // reporting the first part that names none.
-func (r *Resolver) walkMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+func (r *Resolver) walkMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) (*symbols.Symbol, bool) {
 	// Resolve first part using model.LookupMember if available, else
 	// scope.LookupLocal. A chained feature names a member of what precedes it,
 	// so it reaches only the visible ones (KerML 8.2.3.5).
