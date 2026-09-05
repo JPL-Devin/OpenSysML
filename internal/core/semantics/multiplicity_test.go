@@ -130,6 +130,52 @@ func TestEffectiveMultiplicityAssumesOne(t *testing.T) {
 	}
 }
 
+// The `[m]` an end writes ahead of its kind keyword is its cross feature's
+// multiplicity, not the end's own; the end's own follows its type.
+func TestMultiplicityOfEndIsNotItsCrossFeatures(t *testing.T) {
+	m, root := buildModel(t, `part def A;
+connection def C {
+    end [0..*] item x : A;
+    end [0..1] item cart : A [1];
+    end x1 [2] item y : A;
+}`)
+	c := sym(t, root, "C")
+	known := func(v int64) Bound { return Bound{Value: v, Known: true} }
+	many := Range{known(0), Bound{Infinite: true, Known: true}}
+
+	x, _ := c.Scope.LookupLocal("x")
+	if _, ok := m.MultiplicityOf(x); ok {
+		t.Error("MultiplicityOf(x) ok, want the crossing [0..*] left to the cross feature")
+	}
+	if r := m.EffectiveMultiplicityOf(x); r != AssumedRange() {
+		t.Errorf("EffectiveMultiplicityOf(x) = %+v, want the assumed %+v", r, AssumedRange())
+	}
+	cross := m.OwnedCrossFeature(x)
+	if cross == nil {
+		t.Fatal("OwnedCrossFeature(x) = nil, want the anonymous [0..*] feature")
+	}
+	if r, ok := m.MultiplicityOf(cross); !ok || r != many {
+		t.Errorf("MultiplicityOf(cross of x) = %+v, %v, want %+v", r, ok, many)
+	}
+
+	cart, _ := c.Scope.LookupLocal("cart")
+	if r, ok := m.MultiplicityOf(cart); !ok || r != (Range{known(1), known(1)}) {
+		t.Errorf("MultiplicityOf(cart) = %+v, %v, want its own [1]", r, ok)
+	}
+	if r, ok := m.MultiplicityOf(m.OwnedCrossFeature(cart)); !ok || r != (Range{known(0), known(1)}) {
+		t.Errorf("MultiplicityOf(cross of cart) = %+v, %v, want [0..1]", r, ok)
+	}
+
+	y, _ := c.Scope.LookupLocal("y")
+	if _, ok := m.MultiplicityOf(y); ok {
+		t.Error("MultiplicityOf(y) ok, want the [2] left to the named cross feature x1")
+	}
+	x1, _ := y.Scope.LookupLocal("x1")
+	if r, ok := m.MultiplicityOf(x1); !ok || r != (Range{known(2), known(2)}) {
+		t.Errorf("MultiplicityOf(x1) = %+v, %v, want [2]", r, ok)
+	}
+}
+
 // CountViolation is the shared wording for a count against a multiplicity: an
 // unbounded or unknown bound admits any count, either side of a stated one does
 // not.

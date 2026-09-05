@@ -95,9 +95,8 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// UsageMultiplicityOf returns the multiplicity a usage symbol declares, a subject
-// or the constraint an assume/require member owns included, or nil. An end
-// that declares none states its cross feature's (`end [0..*] item x`).
+// UsageMultiplicityOf returns the multiplicity a usage, subject, cross feature or
+// owned constraint symbol declares as its own, or nil; an end's `end [m]` is its cross feature's.
 func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	if sym == nil {
 		return nil
@@ -107,25 +106,13 @@ func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
-		return StatedMultiplicityOf(decl)
+		return decl.Multiplicity
 	case *ast.SubjectMember:
 		return decl.Multiplicity
 	case *ast.CrossFeatureMember:
 		return decl.Multiplicity
 	}
 	return nil
-}
-
-// StatedMultiplicityOf returns the multiplicity a usage node states: its own,
-// else the crossing one an end writes ahead of its kind keyword.
-func StatedMultiplicityOf(u *ast.Usage) *ast.Multiplicity {
-	if u == nil {
-		return nil
-	}
-	if u.Multiplicity != nil || u.CrossFeature == nil {
-		return u.Multiplicity
-	}
-	return u.CrossFeature.Multiplicity
 }
 
 // AssumedRange is the multiplicity of a feature that declares none: a feature

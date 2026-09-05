@@ -250,6 +250,14 @@ triples come); a set of classes with no such member is refused, naming the subje
   in the grammar's position: ahead of the kind keyword and of `assert`/`perform`
   (`#Safety assert not constraint c;`), after `subject`, `actor`, `stakeholder`,
   `objective`, `variant`, `assume`, `require` and `var` (`assume #Safety constraint c;`).
+- The cross feature an end declares ahead of its kind keyword —
+  `end [0..*] item x : A;`, `end x1 [1] typed by Sub1 item y : B;` — is a
+  `sysml:Feature` (in SysML, a `sysml:ReferenceUsage`) owned by the end through
+  an `OwningMembership`, indexed after the end's body members and prefix
+  annotations, carrying its name, its `sysml:lowerBound`/`sysml:upperBound` and
+  its specializations. Its bounds are never the end's:
+  `end [0..*] item x : A[1];` states `[0..*]` on the cross feature and `[1]` on
+  the end, and the decoder writes each back where it was declared.
 
 The `sysx:` properties:
 

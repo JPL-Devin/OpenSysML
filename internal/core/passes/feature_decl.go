@@ -2,7 +2,6 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -24,7 +23,7 @@ func usageDecl(u *ast.Usage) featureDecl {
 		kind:          u.Kind,
 		keyword:       u.Keyword,
 		relationships: u.Relationships,
-		multiplicity:  semantics.StatedMultiplicityOf(u),
+		multiplicity:  u.Multiplicity,
 		value:         u.Value,
 		span:          u.Span(),
 	}
