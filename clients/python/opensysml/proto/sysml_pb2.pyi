@@ -832,13 +832,14 @@ class DocumentQueryBinding(_message.Message):
     def __init__(self, parameter: _Optional[str] = ..., values: _Optional[_Iterable[_Union[DocumentValue, _Mapping]]] = ...) -> None: ...
 
 class DocumentValue(_message.Message):
-    __slots__ = ("element_id", "string_value", "int_value", "real_value", "bool_value", "infinity", "element_type")
+    __slots__ = ("element_id", "string_value", "int_value", "real_value", "bool_value", "infinity", "quantity", "element_type")
     ELEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
     INFINITY_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
     ELEMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     element_id: str
     string_value: str
@@ -846,8 +847,9 @@ class DocumentValue(_message.Message):
     real_value: float
     bool_value: bool
     infinity: bool
+    quantity: Quantity
     element_type: str
-    def __init__(self, element_id: _Optional[str] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., infinity: _Optional[bool] = ..., element_type: _Optional[str] = ...) -> None: ...
+    def __init__(self, element_id: _Optional[str] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., infinity: _Optional[bool] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., element_type: _Optional[str] = ...) -> None: ...
 
 class DocumentQueryColumn(_message.Message):
     __slots__ = ("name",)

@@ -849,6 +849,7 @@ message DocumentValue {
     double real_value = 4;
     bool bool_value = 5;
     bool infinity = 6;
+    Quantity quantity = 8;   // magnitude in a unit, `2290000 [kg]`
   }
   // Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
   string element_type = 7;

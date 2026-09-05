@@ -53,7 +53,7 @@ func complexOf(v Value) (complex128, bool) {
 // finite number as the Real functions report one.
 func complexResult(z complex128) (Value, error) {
 	for _, part := range [2]float64{real(z), imag(z)} {
-		if _, err := realResult(part); err != nil {
+		if _, err := semantics.RealResult(part); err != nil {
 			return Value{}, err
 		}
 	}
