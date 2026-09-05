@@ -173,6 +173,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
 	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
+	t.Run("no_flow_performed_action_refuses_return_parameter", testNoFlowPerformedActionRefusesReturnParameter)
 	t.Run("binding_end_of_a_destroyed_object", testBindingEndOfADestroyedObject)
 	t.Run("operation_of_a_destroyed_object", testOperationOfADestroyedObject)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
@@ -215,6 +216,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 	t.Run("time_trigger_of_a_non_time_dimension", testTimeTriggerOfANonTimeDimension)
 	t.Run("time_trigger_of_the_type_validation_refuses", testTimeTriggerOfTheTypeValidationRefuses)
+	t.Run("action_return_parameter_validation_refuses", testActionReturnParameterValidationRefuses)
 	t.Run("change_condition_that_never_holds", testChangeConditionThatNeverHolds)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
@@ -4155,6 +4157,57 @@ func testTimeTriggerOfTheTypeValidationRefuses(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "`"+tc.trigger+"`") {
 				t.Errorf("err = %v; want it to quote the trigger as written", err)
+			}
+		})
+	}
+}
+
+// testActionReturnParameterValidationRefuses: an action declaring a `return`
+// parameter — which validation refuses, only a function or expression owning
+// one — is refused at initialize with a typed error naming the parameter,
+// whether the action, an action it specializes, or a node of its flow declares it.
+func testActionReturnParameterValidationRefuses(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"own", `
+			action def Run {
+				return total : Integer;
+				first start;
+				then action go { assign total := 1; }
+				then done;
+			}`, "action Run declares `return total`; write `out total`"},
+		{"inherited", `
+			action def Base { return total : Integer; }
+			action def Run :> Base {
+				first start;
+				then action go { assign total := 1; }
+				then done;
+			}`, "action Run declares `return total`; write `out total`"},
+		{"node", `
+			action def Run {
+				out total : Integer;
+				first start;
+				then action go { return partial : Integer; assign total := 1; }
+				then done;
+			}`, "action node go declares `return partial`; write `out partial`"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+				package test {
+					private import ScalarValues::*;
+					`+tc.src+`
+				}
+			`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Run", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action Run not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if !errors.Is(err, ErrActionResultParameter) {
+				t.Fatalf("err = %v; want ErrActionResultParameter", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v; want it to contain %q", err, tc.want)
 			}
 		})
 	}
@@ -8448,6 +8501,26 @@ func testNoFlowPerformedActionChecksItsInputs(t *testing.T) {
 		if !errors.Is(err, tc.want) {
 			t.Errorf("%s: Instantiate(Camera) = %v; want %v", name, err, tc.want)
 		}
+	}
+}
+
+// testNoFlowPerformedActionRefusesReturnParameter: an action stating no flow is
+// refused for a `return` parameter as a flowed one is, so its performer fails.
+func testNoFlowPerformedActionRefusesReturnParameter(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			action def Report { return r : Integer; }
+			part def Camera { perform action report : Report; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.Instantiate(idx.LookupQualified("test::Camera")[0])
+	if !errors.Is(err, ErrActionResultParameter) {
+		t.Fatalf("Instantiate(Camera) = %v; want ErrActionResultParameter", err)
+	}
+	if !strings.Contains(err.Error(), "declares `return r`; write `out r`") {
+		t.Errorf("err = %v; want it to name the parameter and the fix", err)
 	}
 }
 

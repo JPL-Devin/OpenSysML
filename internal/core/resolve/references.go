@@ -222,8 +222,11 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.Usage:
 		c.prefixes(scope, d, d.Prefixes)
-		c.relationships(scope, d, d.Relationships)
+		c.relationships(scope, d, ast.OwnRelationships(d))
 		c.multiplicity(scope, d.Multiplicity)
+		if d.CrossFeature != nil {
+			c.crossFeature(scope, d)
+		}
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
 			c.trigger(scope, d.Value)
@@ -533,6 +536,16 @@ func (c *refCollector) prefixes(scope *symbols.Scope, decl ast.Node, prefixes []
 			c.metadataPrefix(names, scope, p)
 		}
 	}
+}
+
+// crossFeature collects the references the cross feature an end declares ahead
+// of itself writes, as that feature's; they resolve where the end's do.
+func (c *refCollector) crossFeature(scope *symbols.Scope, u *ast.Usage) {
+	prev := c.member
+	c.member = u.CrossFeature
+	defer func() { c.member = prev }()
+	c.relationships(scope, u, u.CrossFeature.Relationships)
+	c.multiplicity(scope, u.CrossFeature.Multiplicity)
 }
 
 // metadataPrefix collects an annotation's metaclass name and the elements it is

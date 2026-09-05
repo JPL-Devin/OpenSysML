@@ -107,6 +107,9 @@ func (w ExprWalker) Decl(scope *Scope, decl ast.Node) {
 	case *ast.Usage:
 		w.relationships(scope, d.Relationships)
 		w.multiplicity(scope, d.Multiplicity)
+		if d.CrossFeature != nil {
+			w.multiplicity(scope, d.CrossFeature.Multiplicity)
+		}
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
 			w.Trigger(scope, d.Value)
