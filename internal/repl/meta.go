@@ -2535,7 +2535,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	}
 	return append(lines,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel+runtime.FormatReal(exec.CurrentTime()),
+		timeLabel+semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	), nil
 }
@@ -2591,7 +2591,7 @@ func (s *Session) attachExhibitedMachine(
 	return []string{
 		fmt.Sprintf("✓ Debugging state machine %q exhibited by %s", behavior.Name, objectMention(inst, label)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
-		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
+		timeLabel + semantics.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}
 }
@@ -2778,7 +2778,7 @@ func (s *Session) stepState() ([]string, bool, error) {
 	return []string{
 		"✓ " + step,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, false, nil
 }
@@ -2976,8 +2976,8 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 
 	out := []string{
 		fmt.Sprintf("Current state: %s", currentStateName(exec)),
-		"Time: " + runtime.FormatReal(s.stateExec.now),
-		"Last event at: " + runtime.FormatReal(exec.CurrentTime()),
+		"Time: " + semantics.FormatReal(s.stateExec.now),
+		"Last event at: " + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
@@ -3124,7 +3124,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	// A machine that took no step and has nowhere to go says why; one whose work
 	// is only due past the deadline still reports the drain and what is left.
 	if processed == 0 && doActions == 0 && !exec.HasPendingWork() {
-		out := []string{"No pending work - simulation time is now " + runtime.FormatReal(s.stateExec.now)}
+		out := []string{"No pending work - simulation time is now " + semantics.FormatReal(s.stateExec.now)}
 		if reason := exec.SuspendReason(); reason != "" {
 			out = append(out, fmt.Sprintf("  %s", reason))
 		}
@@ -3132,9 +3132,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	}
 
 	out := []string{
-		fmt.Sprintf("✓ Advanced to %s (%d event(s) processed)", runtime.FormatReal(s.stateExec.now), processed),
+		fmt.Sprintf("✓ Advanced to %s (%d event(s) processed)", semantics.FormatReal(s.stateExec.now), processed),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		"  Last event at: " + runtime.FormatReal(exec.CurrentTime()),
+		"  Last event at: " + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
 	}
 
@@ -3155,7 +3155,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		// of untriggered (completion) transitions, which no budget can drain.
 		if exec.State() == runtime.StateRunning && exec.CurrentTime() == startTime {
 			out = append(out, fmt.Sprintf("  All %d event(s) were processed at simulation time %s without advancing it; if the machine cycles through untriggered (completion) transitions, which re-fire immediately, no budget is large enough",
-				processed, runtime.FormatReal(startTime)))
+				processed, semantics.FormatReal(startTime)))
 		}
 	case doActions >= maxDoActions:
 		out = append(out, fmt.Sprintf("  Stopped at the do action budget (%d steps; raise %s to allow more)",

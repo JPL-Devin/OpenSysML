@@ -36,6 +36,8 @@ const (
 	ErrorColumnOperand         ErrorKind = "column-operand"
 	ErrorColumnOperandType     ErrorKind = "column-operand-type"
 	ErrorColumnDivisionByZero  ErrorKind = "column-division-by-zero"
+	ErrorColumnIncommensurable ErrorKind = "column-incommensurable"
+	ErrorColumnArithmetic      ErrorKind = "column-arithmetic"
 	ErrorColumnAbsent          ErrorKind = "column-absent"
 	ErrorColumnCardinality     ErrorKind = "column-cardinality"
 )
@@ -75,6 +77,9 @@ func (e *Error) Error() string {
 	case ErrorInvalidOperator:
 		return fmt.Sprintf("query %s operation %s does not support %q", e.Query, e.Operation, e.Actual)
 	case ErrorInvalidOrder:
+		if e.Expected != "" || e.Actual != "" {
+			return fmt.Sprintf("query %s cannot order property %s across incommensurable units %s and %s", e.Query, e.Property, e.Expected, e.Actual)
+		}
 		return fmt.Sprintf("query %s cannot order incomparable values of property %s", e.Query, e.Property)
 	case ErrorUnknownProperty:
 		return fmt.Sprintf("query %s references unknown property %s", e.Query, e.Property)
@@ -83,6 +88,9 @@ func (e *Error) Error() string {
 	case ErrorUnknownRelationship:
 		return fmt.Sprintf("query %s does not support relationship kind %q", e.Query, e.Actual)
 	case ErrorUnevaluableFeature:
+		if e.Target != "" {
+			return fmt.Sprintf("query %s cannot evaluate feature %s of %s", e.Query, e.Property, e.Target)
+		}
 		return fmt.Sprintf("query %s cannot evaluate feature %s", e.Query, e.Property)
 	case ErrorUnknownInvocation:
 		return fmt.Sprintf("query %s invokes %s, which is not compiled into the plan", e.Query, e.Target)
@@ -133,6 +141,17 @@ func (e *Error) Error() string {
 		)
 	case ErrorColumnDivisionByZero:
 		return fmt.Sprintf("query %s column %s divides by zero for %s", e.Query, e.Property, e.Target)
+	case ErrorColumnIncommensurable:
+		return fmt.Sprintf(
+			"query %s column %s cannot apply %q to quantities in incommensurable units %s for %s",
+			e.Query,
+			e.Property,
+			e.Parameter,
+			e.Actual,
+			e.Target,
+		)
+	case ErrorColumnArithmetic:
+		return fmt.Sprintf("query %s column %s cannot compute %q for %s: %s", e.Query, e.Property, e.Parameter, e.Target, e.Actual)
 	default:
 		return fmt.Sprintf("query execution failed for %s", e.Query)
 	}
