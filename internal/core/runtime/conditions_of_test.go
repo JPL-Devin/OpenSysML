@@ -139,6 +139,37 @@ func TestConditionsOfCarryScopeAndOwner(t *testing.T) {
 	}
 }
 
+// A bodiless constraint referencing another (constraint kept ::> c) checks the
+// referenced conditions, once even when a diamond reaches the same constraint twice.
+func TestConditionsOfReferencedConstraint(t *testing.T) {
+	ctx, scope := conditionFixture(t, `
+		package test {
+			constraint def Pos {
+				attribute y : Integer = 3;
+				y > 0
+			}
+			constraint c : Pos;
+			constraint kept ::> c;
+			requirement def R { require constraint d ::> c; }
+			constraint diamond :> kept ::> c;
+		}
+	`)
+	for _, name := range []string{"c", "kept", "diamond"} {
+		sym := requirementNamed(t, scope, name)
+		if got, want := labelsOf(ctx.ConditionsOf(sym, sym.OwnerScope)), "required y > 0"; got != want {
+			t.Errorf("%s: conditions are [%s], want [%s]", name, got, want)
+		}
+		holds, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+		if err != nil || !holds {
+			t.Errorf("%s: holds=%v, err=%v; want the inherited condition to hold", name, holds, err)
+		}
+	}
+	req := requirementNamed(t, scope, "R")
+	if got, want := labelsOf(ctx.ConditionsOf(req, req.OwnerScope)), "required y > 0"; got != want {
+		t.Errorf("R: conditions are [%s], want [%s]", got, want)
+	}
+}
+
 // A symbol stating no condition, and no symbol at all, collect nothing.
 func TestConditionsOfWithoutConditions(t *testing.T) {
 	ctx, scope := conditionFixture(t, `

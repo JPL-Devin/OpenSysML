@@ -2473,8 +2473,9 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 		case "then":
 			// Standalone implicit-source succession and inline statement forms.
 			return p.parseSuccessionEdge(p.advance(), allowBody)
-		case "accept":
-			// Accept transition: accept <signal> then <state>;
+		case "accept", "if":
+			// A target transition stated by its trigger or guard alone:
+			// `accept <signal> then <state>;`, `if <guard> then <state>;`.
 			return p.parseAcceptTransition(start)
 		}
 	}
@@ -2786,10 +2787,11 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 	return evt
 }
 
-// parseAcceptTransition parses a transition stated by its trigger alone, whose
-// source is the state containing it (SysML.xtext `TargetTransitionUsage`):
+// parseAcceptTransition parses a transition stated without a source, which is
+// the state containing it (SysML.xtext `TargetTransitionUsage`):
 //
 //	accept <trigger> [via <port>] [if <guard>] [do <effect>] then <target>;
+//	if <guard> [do <effect>] then <target>;
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	return p.parseTransitionTail(start, ast.NameSegment{}, nil)
 }
@@ -3027,6 +3029,9 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	case p.atKeyword("first"):
 		p.advance() // consume 'first'
 		source = p.parseChainedName()
+	case p.atTransitionClause():
+		// `transition [accept …] [if …] [do …] then <target>;` names no source:
+		// a TargetTransitionUsage whose source is the enclosing state.
 	case p.atName() || p.at(lexer.Keyword):
 		// `first` is optional in `TransitionUsage`, so a bare source may be followed
 		// straight by its clauses: `transition idle then off;`.

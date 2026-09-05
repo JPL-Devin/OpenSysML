@@ -21,6 +21,8 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate", testCalcCallFitsNoVisibleCandidate)
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
+	t.Run("calc_call_omitting_an_input_runs_the_fitting_candidate", testCalcCallOmittingAnInputRunsTheFittingCandidate)
+	t.Run("calc_call_omitting_every_input_is_ambiguous", testCalcCallOmittingEveryInputIsAmbiguous)
 	t.Run("calc_call_selects_a_feature_typed_by_a_calc", testCalcCallSelectsAFeatureTypedByACalc)
 	t.Run("calc_call_applies_the_library_function_a_feature_is_typed_by", testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy)
 	t.Run("calc_call_binds_a_library_function_through_redeclared_inputs", testCalcCallBindsALibraryFunctionThroughRedeclaredInputs)
@@ -675,6 +677,76 @@ func testCalcCallSelectsByArgumentType(t *testing.T) {
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
 		}
+	}
+}
+
+// A call leaving a default-less input of the only candidate its argument fits dispatches
+// to that candidate, as the checker binds it, and fails there on the unbound parameter;
+// a candidate the argument binds completely is run instead when there is one.
+func testCalcCallOmittingAnInputRunsTheFittingCandidate(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in s : String; in y : Real; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc choose { in v : String; pick(v) }
+			calc complete { in v : Integer; pick(v) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	choose := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if choose == nil {
+		t.Fatal("choose calc not found")
+	}
+	result, err := ctx.InvokeCalc(choose, []Value{NewStringValue("x")}, rootScope)
+	if err == nil {
+		t.Fatalf("pick(v) with y unbound: expected a refusal, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) || errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("pick(v) with y unbound: error = %v, want ErrUnboundParameter", err)
+	}
+	complete := findSymbolByName(rootScope, "complete", ast.DefCalc)
+	if complete == nil {
+		t.Fatal("complete calc not found")
+	}
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err = ctx.InvokeCalc(complete, []Value{arg}, rootScope)
+	if err != nil {
+		t.Fatalf("pick(3): %v", err)
+	}
+	if result.Kind != ValConst || result.Const.Int != 1 {
+		t.Fatalf("pick(3) = %+v, want 1", result)
+	}
+}
+
+// A call writing no argument tells two candidates apart by nothing, so it is ambiguous
+// rather than dispatched to whichever is found first.
+func testCalcCallOmittingEveryInputIsAmbiguous(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in s : String; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc choose { pick() }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("choose calc not found")
+	}
+	result, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if err == nil {
+		t.Fatalf("pick(): expected an ambiguity error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrAmbiguousInvocation) {
+		t.Fatalf("pick(): expected ErrAmbiguousInvocation, got: %v", err)
 	}
 }
 

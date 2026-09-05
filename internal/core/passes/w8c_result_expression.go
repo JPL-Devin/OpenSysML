@@ -2,7 +2,6 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -12,12 +11,17 @@ import (
 const msgResultExpressionAtMostOne = "Only one (owned or inherited) result expression is allowed"
 
 // ResultExpressionPass checks that a function or expression has at most one
-// result expression, owned or inherited (KerML 8.3.4.5.2). A function that
-// inherits a result expression from a supertype cannot add its own, and one
+// result expression, owned or inherited (KerML 8.3.4.6 Expression::result,
+// 8.3.4.8 Function::result). A calculation body states at most one; a type
+// that inherits a result expression cannot state its own — a specialization or
+// redefinition keeps the inherited body or adds constraints beside it — and one
 // that inherits two along different specializations is invalid on its own.
 type ResultExpressionPass struct{}
 
 func (ResultExpressionPass) Level() PassLevel { return LevelConstraint }
+
+// ElementScoped: each type gates on the head naming its supertypes.
+func (ResultExpressionPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (ResultExpressionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
@@ -27,93 +31,27 @@ func (ResultExpressionPass) Run(ctx *Context, name string, root *ast.RootNamespa
 	if rootScope == nil {
 		return nil
 	}
-	c := &resultExpressionChecker{resolver: ctx.Resolver()}
+	model := ctx.Model()
+	var diags []Diagnostic
 	w := &w8cWalker{ctx: ctx}
-	w.walk(rootScope, c.check)
-	return c.diags
-}
-
-type resultExpressionChecker struct {
-	resolver *resolve.Resolver
-	diags    []Diagnostic
-}
-
-func (c *resultExpressionChecker) check(sym *symbols.Symbol) {
-	u, ok := w8cUsageOf(sym)
-	if !ok || (u.Kind != ast.UsageCalc && u.Kind != ast.UsageExpr) {
-		return
-	}
-	owned := w8cResultExpressions(u)
-	inherited := c.inheritedResultExpressions(sym, map[*symbols.Symbol]bool{})
-	if len(owned)+inherited < 2 {
-		return
-	}
-	span := u.Span()
-	if len(owned) > 0 {
-		span = owned[0].Span()
-	}
-	c.diags = append(c.diags, Diagnostic{
-		Severity: SeverityError,
-		Span:     span,
-		Message:  msgResultExpressionAtMostOne,
-		Code:     "result-expression-at-most-one",
-		Source:   "constraint",
+	w.walk(rootScope, func(sym *symbols.Symbol) {
+		if !semantics.FunctionLike(sym) {
+			return
+		}
+		if head, typed := w8cOwnerHead(sym.Decl); typed && ctx.downstreamSpan(head) {
+			return
+		}
+		conflict := model.ResultExpressionConflict(sym)
+		if conflict == nil {
+			return
+		}
+		diags = append(diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     conflict.Node.Span(),
+			Message:  msgResultExpressionAtMostOne,
+			Code:     "result-expression-at-most-one",
+			Source:   "constraint",
+		})
 	})
-}
-
-// inheritedResultExpressions counts the result expressions sym inherits along
-// its typings and specializations, transitively.
-func (c *resultExpressionChecker) inheritedResultExpressions(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) int {
-	if sym == nil || seen[sym] {
-		return 0
-	}
-	seen[sym] = true
-	count := 0
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil {
-			continue
-		}
-		switch rel.Kind {
-		case ast.RelTyping, ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
-		default:
-			continue
-		}
-		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), rel.Target)
-		if !ok || target == nil || target == sym {
-			continue
-		}
-		// An ancestor reached along two paths contributes its result once.
-		if seen[target] {
-			continue
-		}
-		if u, ok := w8cUsageOf(target); ok {
-			count += len(w8cResultExpressions(u))
-		}
-		count += c.inheritedResultExpressions(target, seen)
-	}
-	return count
-}
-
-// w8cResultExpressions returns the body expressions of a function or expression
-// that act as its result: bare expression members, not nested declarations.
-func w8cResultExpressions(u *ast.Usage) []ast.Node {
-	var out []ast.Node
-	for _, m := range u.Members {
-		n := unwrapType(m)
-		if w8cIsResultExpressionNode(n) {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
-func w8cIsResultExpressionNode(n ast.Node) bool {
-	switch n.(type) {
-	case *ast.Usage, *ast.Definition, *ast.Package, *ast.Namespace, *ast.Import,
-		*ast.Membership, *ast.Comment, *ast.Documentation,
-		*ast.ErrorNode, nil:
-		return false
-	default:
-		return true
-	}
+	return diags
 }

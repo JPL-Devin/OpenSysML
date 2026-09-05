@@ -8,6 +8,7 @@ import subprocess
 import time
 from unittest.mock import Mock, patch
 from opensysml.connection import (
+    CHANNEL_OPTIONS,
     Connection,
     _private_services,
 )
@@ -22,7 +23,9 @@ def test_connection_init():
             conn = Connection(port=50051, auto_start=False)
             
             assert conn.port == 50051
-            mock_channel.assert_called_once_with('localhost:50051')
+            mock_channel.assert_called_once_with(
+                'localhost:50051', options=CHANNEL_OPTIONS
+            )
 
 
 def test_connection_custom_host():
@@ -30,7 +33,9 @@ def test_connection_custom_host():
         with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(host='example.com', port=9000, auto_start=False)
             
-            mock_channel.assert_called_once_with('example.com:9000')
+            mock_channel.assert_called_once_with(
+                'example.com:9000', options=CHANNEL_OPTIONS
+            )
 
 
 def test_connection_load():

@@ -3,7 +3,9 @@ package repl
 import "testing"
 
 // ownedConstraintFixture declares named require/assume constraints with a body,
-// typed by a constraint definition, and redefined by a specialization.
+// typed by a constraint definition, and redefined by a specialization. A
+// redefinition keeps the inherited condition (KerML 8.3.4.8): one tightening it
+// nests an assertion beside it rather than stating a body of its own.
 const ownedConstraintFixture = `package Power {
     constraint def Positive { 600.0 > 0.0 }
     constraint def Shortfall { 300.0 >= 450.0 }
@@ -14,15 +16,11 @@ const ownedConstraintFixture = `package Power {
         require constraint typed : Shortfall;
     }
     requirement def Tight :> Margin {
-        require constraint :>> enough { 600.0 >= 650.0 }
+        require constraint :>> enough { assert constraint { 600.0 >= 650.0 } }
     }
     requirement def Ample {
         require constraint enough { 600.0 >= 450.0 }
         assume constraint supplied : Positive;
-    }
-    requirement def Fixed :> Margin {
-        require constraint :>> tooLittle { 600.0 >= 450.0 }
-        require constraint :>> typed { 600.0 >= 450.0 }
     }
     requirement def Kept :> Margin {
         require constraint :>> tooLittle;
@@ -68,15 +66,11 @@ func TestCheckNamedOwnedConstraint(t *testing.T) {
 	wantVerdict(t, s.CheckConstraint("Power::Margin"), VerdictUnresolved, "not a constraint")
 }
 
-// TestCheckRedefinedNamedOwnedConstraint checks that a redefinition stating a
-// condition replaces the redefined one's; one stating none (`;`, `{ }`) inherits it.
+// TestCheckRedefinedNamedOwnedConstraint checks that a redefinition stating no
+// condition (`;`, `{ }`, a doc-only body) inherits the redefined one's.
 func TestCheckRedefinedNamedOwnedConstraint(t *testing.T) {
 	s := loadSource(t, ownedConstraintFixture)
 
-	wantVerdict(t, s.CheckConstraint("Power::Fixed::tooLittle"), VerdictHolds,
-		"✓ Constraint Power::Fixed::tooLittle passed")
-	wantVerdict(t, s.CheckConstraint("Power::Fixed::typed"), VerdictHolds,
-		"✓ Constraint Power::Fixed::typed passed")
 	wantVerdict(t, s.CheckConstraint("Power::Kept::tooLittle"), VerdictFails,
 		"✗ Constraint Power::Kept::tooLittle failed",
 		"Assertion evaluated to false: 300.0 >= 450.0")
@@ -136,14 +130,12 @@ func TestCheckRequirementWithNamedOwnedConstraints(t *testing.T) {
 }
 
 // TestCheckRequirementMasksRedefinedNamedConstraints checks that a requirement
-// requires what its redefining constraints state, not the inherited bodies
-// they replace — and still the inherited body a redefinition stating no
-// condition (`;`, `{ }`, a doc-only body) keeps.
+// requires each redefined constraint once, through the redefinition: the
+// inherited body a redefinition stating no condition (`;`, `{ }`, a doc-only
+// body) keeps, and not the redefined usage a second time.
 func TestCheckRequirementMasksRedefinedNamedConstraints(t *testing.T) {
 	s := loadSource(t, ownedConstraintFixture)
 
-	wantVerdict(t, s.CheckRequirement("Power::Fixed"), VerdictHolds,
-		"✓ Requirement Power::Fixed satisfied")
 	wantVerdict(t, s.CheckRequirement("Power::Kept"), VerdictFails,
 		"✗ Requirement Power::Kept failed",
 		"Required condition evaluated to false: 300.0 >= 450.0")

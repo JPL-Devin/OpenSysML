@@ -2381,14 +2381,13 @@ elmt:Results__rover__twice
     sysml:owningRelationship elmt:Results__rover__twice_om ;
     sysml:owningMembership elmt:Results__rover__twice_om ;
     sysml:declaredName "twice" ;
-    sysml:type elmt:Results__Double ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__rover__twice__x, elmt:Results__rover__twice___401 ;
     sysml:ownedMembership elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
     sysml:ownedRelationship elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
     sysml:ownedFeature elmt:Results__rover__twice__x, elmt:Results__rover__twice___401 ;
     sysml:ownedFeatureMembership elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
-    sysx:sourceText "        calc twice : Double {\n" ;
+    sysx:sourceText "        calc twice {\n" ;
     sysx:sourceTail "        }\n" ;
     json:ownedMember "[{\"@id\":\"Results__rover__twice__x\"},{\"@id\":\"Results__rover__twice___401\"}]" ;
     json:ownedMembership "[{\"@id\":\"Results__rover__twice__x_om\"},{\"@id\":\"Results__rover__twice___401_om\"}]" ;
