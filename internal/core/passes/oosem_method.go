@@ -114,7 +114,11 @@ var oosemDerivesFrom = map[oosemKind]oosemKind{
 	oosemComponentRequirement: oosemSystemRequirement,
 }
 
-const derivedRequirementMetadataFQN = "RequirementDerivation::DerivedRequirementMetadata"
+const (
+	derivationMetadataFQN          = "RequirementDerivation::DerivationMetadata"
+	originalRequirementMetadataFQN = "RequirementDerivation::OriginalRequirementMetadata"
+	derivedRequirementMetadataFQN  = "RequirementDerivation::DerivedRequirementMetadata"
+)
 
 type oosemAudit struct {
 	ctx   *Context
@@ -123,11 +127,12 @@ type oosemAudit struct {
 	definitions map[oosemKind][]*symbols.Symbol
 	// present records the kinds the workspace declares at all.
 	present map[oosemKind]bool
-	// derived, satisfied and allocated hold the requirements at a `#derive`
-	// end, the requirements a `satisfy` names, and the sources of allocations.
-	derived   map[symbols.ElementKey]bool
-	satisfied map[symbols.ElementKey]bool
-	allocated map[symbols.ElementKey]bool
+	// derivedFrom holds, per requirement at a `#derive` end, the kinds of the
+	// `#original` ends of the same `#derivation`; satisfied holds the requirements
+	// a `satisfy` names; allocated the sources allocated to a node or physical component.
+	derivedFrom map[symbols.ElementKey]map[oosemKind]bool
+	satisfied   map[symbols.ElementKey]bool
+	allocated   map[symbols.ElementKey]bool
 	// statesSatisfaction reports whether the workspace states any satisfy.
 	statesSatisfaction bool
 	kinds              map[*symbols.Symbol]oosemKind
@@ -142,7 +147,7 @@ func newOOSEMAudit(ctx *Context) *oosemAudit {
 		model:       ctx.Model(),
 		definitions: map[oosemKind][]*symbols.Symbol{},
 		present:     map[oosemKind]bool{},
-		derived:     map[symbols.ElementKey]bool{},
+		derivedFrom: map[symbols.ElementKey]map[oosemKind]bool{},
 		satisfied:   map[symbols.ElementKey]bool{},
 		allocated:   map[symbols.ElementKey]bool{},
 		kinds:       map[*symbols.Symbol]oosemKind{},
@@ -212,8 +217,8 @@ func (a *oosemAudit) gather(root *symbols.Scope) {
 			return
 		}
 		switch {
-		case usage.IsEnd:
-			a.gatherDerivationEnd(sym, usage)
+		case usage.Kind == ast.UsageConnection:
+			a.gatherDerivation(sym)
 		case usage.Kind == ast.UsageAllocation:
 			a.gatherAllocation(sym, usage)
 		case usage.Kind == ast.UsageSatisfy && usage.Keyword != "verify":
@@ -222,31 +227,86 @@ func (a *oosemAudit) gather(root *symbols.Scope) {
 	})
 }
 
-// gatherDerivationEnd records the requirement a `#derive` end refers to.
-func (a *oosemAudit) gatherDerivationEnd(sym *symbols.Symbol, usage *ast.Usage) {
-	if !a.annotatedWith(sym, derivedRequirementMetadataFQN) {
+// gatherDerivation records, for each requirement at a `#derive` end of a
+// `#derivation` connection, the kinds of the requirements at its `#original` ends.
+func (a *oosemAudit) gatherDerivation(sym *symbols.Symbol) {
+	if !a.annotatedWith(sym, derivationMetadataFQN) {
 		return
 	}
-	for _, target := range a.referents(sym, usage) {
-		a.derived[symbols.KeyOf(target)] = true
+	var originals, derived []*symbols.Symbol
+	for _, end := range a.bodyEnds(sym) {
+		u, ok := end.Decl.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		switch {
+		case a.annotatedWith(end, originalRequirementMetadataFQN):
+			originals = append(originals, a.referents(end, u)...)
+		case a.annotatedWith(end, derivedRequirementMetadataFQN):
+			derived = append(derived, a.referents(end, u)...)
+		}
+	}
+	for _, d := range derived {
+		key := symbols.KeyOf(d)
+		if a.derivedFrom[key] == nil {
+			a.derivedFrom[key] = map[oosemKind]bool{}
+		}
+		for _, o := range originals {
+			a.derivedFrom[key][a.kindOf(o)] = true
+		}
 	}
 }
 
-// gatherAllocation records the source of an allocation: the first end of its
-// `allocate x to y` clause, else the first `end` its body declares.
+// gatherAllocation records the source of an allocation whose destination is a
+// node or physical component: the ends of its `allocate x to y` clause, else
+// the first two `end`s its body declares.
 func (a *oosemAudit) gatherAllocation(sym *symbols.Symbol, usage *ast.Usage) {
+	var source, destination []*symbols.Symbol
 	if len(usage.ConnectorEnds) > 0 {
 		attachments := a.model.ConnectorEndAttachments(sym)
-		if len(attachments) < 2 || attachments[0].Attachment == nil {
+		if len(attachments) < 2 || attachments[0].Attachment == nil || attachments[1].Attachment == nil {
 			return
 		}
-		if source, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, attachments[0].Attachment); ok && source != nil {
-			a.allocated[symbols.KeyOf(source)] = true
+		if s, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, attachments[0].Attachment); ok && s != nil {
+			source = append(source, s)
 		}
+		if d, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, attachments[1].Attachment); ok && d != nil {
+			destination = append(destination, d)
+		}
+	} else {
+		ends := a.bodyEnds(sym)
+		if len(ends) < 2 {
+			return
+		}
+		if u, ok := ends[0].Decl.(*ast.Usage); ok {
+			source = a.referents(ends[0], u)
+		}
+		if u, ok := ends[1].Decl.(*ast.Usage); ok {
+			destination = a.referents(ends[1], u)
+		}
+	}
+	if !a.realises(destination) {
 		return
 	}
+	for _, s := range source {
+		a.allocated[symbols.KeyOf(s)] = true
+	}
+}
+
+// realises reports whether any of the symbols is a node or physical component.
+func (a *oosemAudit) realises(syms []*symbols.Symbol) bool {
+	for _, s := range syms {
+		if k := a.kindOf(s); k == oosemNode || k == oosemPhysicalComponent {
+			return true
+		}
+	}
+	return false
+}
+
+// bodyEnds lists the `end` members a connector declares, in declaration order.
+func (a *oosemAudit) bodyEnds(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym.Scope == nil {
-		return
+		return nil
 	}
 	var ends []*symbols.Symbol
 	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
@@ -255,14 +315,7 @@ func (a *oosemAudit) gatherAllocation(sym *symbols.Symbol, usage *ast.Usage) {
 		}
 		return true
 	})
-	if len(ends) < 2 {
-		return
-	}
-	if u, ok := ends[0].Decl.(*ast.Usage); ok {
-		for _, target := range a.referents(ends[0], u) {
-			a.allocated[symbols.KeyOf(target)] = true
-		}
-	}
+	return ends
 }
 
 // gatherSatisfaction records the requirement a `satisfy` names, or the
@@ -339,10 +392,10 @@ func (a *oosemAudit) checkRequirement(sym *symbols.Symbol) {
 		return
 	}
 	key := symbols.KeyOf(sym)
-	if a.present[from] && !a.derived[key] {
+	if a.present[from] && !a.derivedFrom[key][from] {
 		a.report(sym, CodeOOSEMRequirementNotDerived, fmt.Sprintf(
-			"This %s derives from no %s: the model declares %ss, so OOSEM expects a #derivation connection naming it at a #derive end.",
-			oosemKindNames[kind], oosemKindNames[from], oosemKindNames[from]))
+			"This %s derives from no %s: the model declares %ss, so OOSEM expects a #derivation connection naming it at a #derive end and a %s at an #original end.",
+			oosemKindNames[kind], oosemKindNames[from], oosemKindNames[from], oosemKindNames[from]))
 	}
 	if kind != oosemMissionRequirement && a.statesSatisfaction && !a.satisfied[key] {
 		a.report(sym, CodeOOSEMRequirementNotSatisfied, fmt.Sprintf(

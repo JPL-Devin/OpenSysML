@@ -34,6 +34,24 @@ func TestOOSEMRequirementDerivationWaitsForTheLevelAbove(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMRequirementNotDerived)
 }
 
+// A derivation counts only from the level above: one from the same level, one
+// from an unclassified requirement, and a plain connection with the same ends
+// leave the requirement underived.
+func TestOOSEMRequirementDerivedFromTheWrongLevel(t *testing.T) {
+	src := oosemModel(`
+		#missionRequirement requirement mission;
+		#systemRequirement requirement sysA;
+		#systemRequirement requirement sysB;
+		#systemRequirement requirement sysC;
+		#systemRequirement requirement sysD;
+		requirement plain;
+		#derivation connection { end #original ::> mission; end #derive ::> sysA; }
+		#derivation connection { end #original ::> sysA; end #derive ::> sysB; }
+		#derivation connection { end #original ::> plain; end #derive ::> sysC; }
+		connection { end #original ::> mission; end #derive ::> sysD; }`)
+	w8dWantLines(t, src, CodeOOSEMRequirementNotDerived, 5, 6, 7)
+}
+
 // Classification follows typing as well as the keyword: a usage typed by a
 // definition annotated `#systemRequirement` is a system requirement.
 func TestOOSEMRequirementKindByTyping(t *testing.T) {
@@ -102,6 +120,24 @@ func TestOOSEMLogicalComponentAllocatedByBodyEnds(t *testing.T) {
 		#node part space : Space;
 		allocation a { end ::> sensing; end ::> space; }`)
 	w8dWantLines(t, src, CodeOOSEMLogicalNotAllocated)
+}
+
+// An allocation to something other than a node or physical component does not
+// realise a logical component, in either allocation form.
+func TestOOSEMLogicalComponentAllocatedToTheWrongThing(t *testing.T) {
+	src := oosemModel(`
+		#logical part def Sensing;
+		#node part def Space;
+		#logical part sensing : Sensing;
+		#logical part detection : Sensing;
+		#logical part downlink : Sensing;
+		#node part space : Space;
+		part plain;
+		item data;
+		allocate sensing to plain;
+		allocation a { end ::> detection; end ::> data; }
+		allocate downlink to space;`)
+	w8dWantLines(t, src, CodeOOSEMLogicalNotAllocated, 5, 6)
 }
 
 // With no node or physical component yet, a logical architecture is complete
