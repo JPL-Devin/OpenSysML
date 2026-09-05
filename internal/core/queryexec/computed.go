@@ -111,7 +111,7 @@ func (e *executor) evaluateColumnExpression(
 		if declaringIsElement(declaring) {
 			values, present, err := e.propertyValues(sym, property)
 			if err != nil {
-				return nil, e.featureError(expression, property, sym)
+				return nil, e.unevaluable(expression, property, sym, err)
 			}
 			tracker.record(property, present)
 			return values, nil
@@ -129,7 +129,7 @@ func (e *executor) evaluateColumnExpression(
 		}
 		values, _, err := e.declaredFeatureValues(sym, property)
 		if err != nil {
-			return nil, e.featureError(expression, property, sym)
+			return nil, e.unevaluable(expression, property, sym, err)
 		}
 		return values, nil
 	case queryplan.OperationLiteral:

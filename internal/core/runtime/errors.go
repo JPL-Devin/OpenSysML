@@ -7,6 +7,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var (
@@ -396,6 +397,8 @@ type NoValueError struct {
 	// Ref is the written name whose read found no value, so a caller can tell a
 	// read of its own expression from one made while evaluating a default.
 	Ref *ast.QualifiedName
+	// Symbol is the feature declaration the read reached, when it is known.
+	Symbol *symbols.Symbol
 }
 
 func (e *NoValueError) Error() string {

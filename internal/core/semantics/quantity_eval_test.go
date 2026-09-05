@@ -40,6 +40,9 @@ package Q {
 		attribute dryMass :> ISQ::mass;
 		attribute propellantMass :> ISQ::mass;
 		attribute total = dryMass + propellantMass;
+		attribute alias = dryMass;
+		attribute unit = SI::kg;
+		attribute chained = Stage::mass;
 	}
 }`
 
@@ -167,6 +170,22 @@ func TestUnfoldableQuantityValuesStayUnknown(t *testing.T) {
 		if value.Kind != symbols.FilterValueUnknown {
 			t.Errorf("%s folded to %v, want unknown", property, value.Kind)
 		}
+	}
+}
+
+// TestDeclaredReferenceToAFeatureIsNotAConstant: a value that names an attribute
+// of a type reads that attribute as seen from the carrier, so it does not fold;
+// a value naming a package-level element (a unit) is that element.
+func TestDeclaredReferenceToAFeatureIsNotAConstant(t *testing.T) {
+	m, idx := quantityFixture(t)
+	for _, property := range []string{"alias", "chained"} {
+		if value := declaredValue(t, m, idx, "Q::Folds", property); value.Kind != symbols.FilterValueUnknown {
+			t.Errorf("%s folded to %v, want unknown", property, value.Kind)
+		}
+	}
+	unit := declaredValue(t, m, idx, "Q::Folds", "unit")
+	if unit.Kind != symbols.FilterValueRef || unit.RefFQN != "SI::kilogram" {
+		t.Errorf("unit = %+v, want a reference to SI::kilogram", unit)
 	}
 }
 

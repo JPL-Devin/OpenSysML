@@ -496,14 +496,50 @@ func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.
 			if _, empty := element.(*ast.NullExpr); empty {
 				continue
 			}
-			values = append(values, m.annotationValue(member.OwnerScope, element))
+			values = append(values, m.declaredValue(member.OwnerScope, element))
 		}
 		return values, true
 	}
 	if _, empty := usage.Value.(*ast.NullExpr); empty {
 		return nil, true
 	}
-	return []symbols.FilterValue{m.annotationValue(member.OwnerScope, usage.Value)}, true
+	return []symbols.FilterValue{m.declaredValue(member.OwnerScope, usage.Value)}, true
+}
+
+// declaredValue is annotationValue for a feature's own value, where a reference
+// to an attribute of a type reads that attribute as seen from the carrier: not a
+// constant. A package-level attribute (a unit, an enumeration literal) stays the
+// element it names.
+func (m *Model) declaredValue(scope *symbols.Scope, value ast.Node) symbols.FilterValue {
+	result := m.annotationValue(scope, value)
+	ref, ok := value.(*ast.FeatureReference)
+	if result.Kind != symbols.FilterValueRef || !ok {
+		return result
+	}
+	if sym, ok := m.resolver.ResolveQualified(scope, ref.Name); ok && readsFeatureOfType(sym) {
+		return symbols.FilterValue{}
+	}
+	return result
+}
+
+// readsFeatureOfType reports whether a reference to sym denotes a value read of
+// a feature some instance carries, rather than the element sym itself.
+func readsFeatureOfType(sym *symbols.Symbol) bool {
+	if !IsValueType(sym) || sym.Kind == symbols.SymbolAttributeDef || sym.Kind == symbols.SymbolEnumerationDef {
+		return false
+	}
+	if sym.OwnerScope == nil || EnumerationOwning(sym) != nil {
+		return false
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return false
+	}
+	switch owner.Kind {
+	case symbols.SymbolPackage, symbols.SymbolNamespace:
+		return false
+	}
+	return true
 }
 
 // metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML

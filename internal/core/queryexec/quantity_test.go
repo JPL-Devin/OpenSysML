@@ -3,9 +3,11 @@ package queryexec
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -33,6 +35,10 @@ part def Probe :> Stage {
 	attribute :>> length = 1 [m];
 }
 part def Payload :> Stage {
+	action weigh { in reading : Real; }
+	attribute :>> mass = weigh.reading [kg];
+}
+part def Cargo :> Stage {
 	attribute dryMass :> ISQ::mass;
 	attribute propellantMass :> ISQ::mass;
 	attribute :>> mass = dryMass + propellantMass;
@@ -48,6 +54,10 @@ part fleet {
 part manifest {
 	part s1 : FirstStage;
 	part payload : Payload;
+}
+part hold {
+	part s1 : FirstStage;
+	part cargo : Cargo;
 }
 `
 
@@ -434,17 +444,34 @@ calc def Nonsense :> Query {
 	}
 }
 
-// TestExecuteNamesTheRowOfAnUnevaluableQuantity: a mass declared over unbound
-// features is a typed error naming the query, the feature and the row.
+// TestExecuteNamesTheRowOfAnUnevaluableQuantity: a mass that depends on an
+// action's `in` parameter is a typed error naming the query, the feature, the
+// row and the parameter no declaration binds.
 func TestExecuteNamesTheRowOfAnUnevaluableQuantity(t *testing.T) {
 	fixture := quantityFixture(t, massesQuery)
 	_, err := fixture.execute(t, "Masses", Bindings{
 		"root": {ElementValue(fixture.symbol(t, "manifest"))},
 	}, Options{})
 	executionErr := executionError(t, err, ErrorUnevaluableFeature)
-	want := "query Observatory::Masses cannot evaluate feature mass of Observatory::manifest::payload"
-	if executionErr.Error() != want {
-		t.Fatalf("message = %q, want %q", executionErr.Error(), want)
+	want := "query Observatory::Masses cannot evaluate feature mass of Observatory::manifest::payload: "
+	if !strings.HasPrefix(executionErr.Error(), want) || !strings.Contains(executionErr.Error(), "reading") {
+		t.Fatalf("message = %q, want prefix %q naming reading", executionErr.Error(), want)
+	}
+	if !errors.Is(err, runtime.ErrNoValue) {
+		t.Fatalf("error = %v, want the runtime's no-value cause", err)
+	}
+}
+
+// TestExecuteReadsAMassOverUnboundFeaturesAsAbsent: a mass declared over
+// features nothing binds is an empty cell, as a value-less feature is.
+func TestExecuteReadsAMassOverUnboundFeaturesAsAbsent(t *testing.T) {
+	fixture := quantityFixture(t, massesQuery)
+	result := quantityRows(t, fixture, "Masses", "hold")
+	if got := cellTexts(t, result, 0); !slices.Equal(got, []string{"s1", "cargo"}) {
+		t.Fatalf("names = %v", got)
+	}
+	if values := result.Rows()[1].Cells()[1].Values(); len(values) != 0 {
+		t.Fatalf("cargo mass = %v, want absent", values)
 	}
 }
 

@@ -371,6 +371,11 @@ $ sysml units.sysml -run-query "UnitsRepro::HeavyStages root=UnitsRepro::rocket"
   Row 1: UnitsRepro::rocket::s1
 ```
 
+The attribute compared need not be a literal: a mass declared as `dryMass +
+propellantMass` is evaluated for each element before the comparison, as
+[derived values](#derived-values) describes. Filtering and sorting then follow
+the same commensurability rules as literal quantities.
+
 ## Sorting
 
 `OrderBy` sorts by a property with every policy explicit — there are no
@@ -523,16 +528,92 @@ $ sysml units.sysml -run-query "UnitsRepro::Masses root=UnitsRepro::rocket"
     mass = 119000 [kg]
 ```
 
-The value read is the attribute's *constant* value: a literal, a quantity, or
-an expression over those that folds without evaluating the model —
-`2 [kg] * 3` is `6 [kg]`, `1 [km] + 500 [m]` is `1.5 [km]`. An attribute
-whose value depends on other features (`mass = dryMass + propellantMass`) has
-no constant value; projecting it is a typed `unevaluable-feature` error naming
-the query, the property and the row element, so a table never shows a wrong
-number or a silently empty cell for a value the model does declare. A `??`
-default does not cover it either — the feature is present, not absent. Narrow
-the source to the elements whose value is constant, or bind the value in the
-model, to render the table.
+### Derived values
+
+A value that is a literal, a quantity, or an expression over those alone
+(`2 [kg] * 3` is `6 [kg]`, `1 [km] + 500 [m]` is `1.5 [km]`) is folded once,
+statically, when the model is analysed. A value written over *other features*
+— the common shape in a mass or power budget — is instead evaluated by the
+runtime **as seen from the row's element**: each leaf is read through the
+redefinition chain of that concrete carrier, so a type-level `:>>` and a
+usage-level `:>>` both win over the definition's own value, a `default` applies
+where nothing binds the feature, and a feature chain (`s1.mass`) reads the
+owned part's value. Arithmetic, comparisons, conditionals and the library
+functions the runtime provides (`sum`, `size`, indexing with `#`, `->collect`)
+all apply, with the runtime's rules: units are kept and converted, `Integer`
+stays `Integer`, and a collection-valued attribute projects as one value per
+element.
+
+```sysml
+part def Stage {
+	attribute dryMass :> ISQ::mass;
+	attribute propellantMass :> ISQ::mass;
+	attribute mass :> ISQ::mass = dryMass + propellantMass;
+}
+part def FirstStage :> Stage {
+	attribute :>> dryMass default = 130000 [kg];
+	attribute :>> propellantMass = 2160000 [kg];
+}
+part def Vehicle {
+	part s1 : FirstStage;
+	part s2 : FirstStage {
+		attribute :>> dryMass = 120000 [kg];
+	}
+	attribute liftoffMass :> ISQ::mass = s1.mass + s2.mass;
+}
+part rocket : Vehicle;
+```
+
+```console
+$ sysml derived.sysml -run-query "DerivedRepro::Masses root=DerivedRepro::Vehicle"
+✓ Query DerivedRepro::Masses returned 2 rows
+  Columns: name, dryMass, mass
+  Row 1: DerivedRepro::Vehicle::s1
+    name = "s1"
+    dryMass = 130000 [kg]
+    mass = 2290000 [kg]
+  Row 2: DerivedRepro::Vehicle::s2
+    name = "s2"
+    dryMass = 120000 [kg]
+    mass = 2280000 [kg]
+$ sysml derived.sysml -run-query "DerivedRepro::Vehicles root=DerivedRepro"
+✓ Query DerivedRepro::Vehicles returned 1 row
+  Columns: name, liftoffMass
+  Row 1: DerivedRepro::rocket
+    name = "rocket"
+    liftoffMass = 4570000 [kg]
+```
+
+The query and the REPL agree: `rocket.s1.mass` prints `= 2290000 [kg]` too.
+Note that `s2`'s `dryMass` overrides a `default =`; a value written with a
+plain `=` is fixed for every redefinition, and the analyser refuses the
+override before any query runs.
+
+What the runtime cannot turn into a value is reported, never guessed:
+
+- A leaf **unbound** anywhere in the carrier's chain (an abstract
+  `attribute mass :> ISQ::mass;` that nothing ever binds) makes the derived
+  value *absent* — an empty cell, as for a value-less feature — and
+  `WhereFeature` does not match it, `OrderBy` places it by its `missing`
+  policy.
+- A value that genuinely depends on the model running — an `in` parameter of
+  a calculation, an action's state, a non-constant function — or that the
+  runtime rejects — a cycle (`a = b; b = a;`), operands of different
+  dimensions (`mass + length`), a result no cell can hold such as a part
+  (`attribute heart = engine.core;`) — is a typed `unevaluable-feature`
+  error naming the query, the property, the row element and the runtime's
+  reason. A table never shows a wrong number or a silently empty cell for a
+  value the model does declare, and a `??` default does not cover it — the
+  feature is present, not absent.
+
+One shape the runtime does not evaluate yet, in the query or in the REPL: a
+quantity summed with the total of an **empty** collection. `sum` over no
+elements is the dimensionless `0.0`, so `mass + sum(subcomponents.totalMass)`
+on a component whose `subcomponents : MassedComponent [*] default null` holds
+nothing is an `incommensurable units` error rather than `mass` — the typed
+error above, reported for that row. Bind at least one element, or write the
+leaf's total without the sum, until `sum` learns the unit of an empty
+quantity collection.
 
 ## Computed columns
 

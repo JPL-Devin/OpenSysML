@@ -143,6 +143,10 @@ type Context struct {
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
 
+	// declarative makes the context read declared values only: no classifier
+	// behavior starts when an object is materialized (see DeclaredReader).
+	declarative bool
+
 	// heldBehaviors are the behaviors already holding work when the outermost
 	// start under way began: a driver put it in flight, and dispatches it.
 	heldBehaviors map[*ObjectBehavior]bool
