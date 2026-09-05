@@ -426,7 +426,8 @@ func TestAnalysisWithPins(t *testing.T) {
 
 // TestAnalysisRefusesConflictingResultExpressions: an analysis stating a result
 // expression over an inherited one, or inheriting two, is refused where validation
-// rejects it, whether or not it states an objective.
+// rejects it, whether or not it states an objective; a goalless case whose
+// condition is merely untranslatable still lacks an objective first.
 func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 	ctx, idx := fixtureDocuments(t,
 		document{"base.sysml", `
@@ -452,11 +453,19 @@ func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 				analysis def Inherited :> Base, Other;
 				analysis def Kept :> Base;
 				analysis def GoallessStated :> Goalless { size <= 4 }
+				analysis def GoallessFlowed {
+					attribute size : Integer;
+					require constraint { action a; size <= 3 }
+				}
 			}
 		`})
 	sym := symbolNamed(t, idx, "sub::Kept")
 	if _, err := Analysis(ctx, sym, sym.OwnerScope); err != nil {
 		t.Fatalf("translating sub::Kept: %v", err)
+	}
+	sym = symbolNamed(t, idx, "sub::GoallessFlowed")
+	if _, err := Analysis(ctx, sym, sym.OwnerScope); !errors.Is(err, ErrNoObjective) {
+		t.Errorf("translating sub::GoallessFlowed: %v, want no objective", err)
 	}
 	for _, tc := range []struct{ name, location string }{
 		{"sub::Stated", "sub.sysml:4:35"},

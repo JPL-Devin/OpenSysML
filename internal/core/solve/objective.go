@@ -32,19 +32,19 @@ func AnalysisWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scop
 	if err := runtime.RequireAnalysis(sym); err != nil {
 		return nil, err
 	}
-	subject := Subject{Kind: "analysis", Name: sym.Name, Symbol: sym}
-	// The case's conditions are refused before its objectives are counted, so a
-	// shape validation rejects is reported as such rather than as lacking a goal.
-	t := newTranslator(ctx, subject)
-	if err := t.translate(ctx.CaseConditionsOf(sym, scope)); err != nil {
-		return nil, err
-	}
+	conds := ctx.CaseConditionsOf(sym, scope)
 	objectives := ctx.ObjectivesOf(sym, scope)
-	if len(objectives) == 0 {
+	// A shape validation rejects is refused as such even when no goal is stated.
+	if len(objectives) == 0 && !conflictsResult(conds) {
 		return nil, &NoObjectiveError{Element: sym.Name}
 	}
+	subject := Subject{Kind: "analysis", Name: sym.Name, Symbol: sym}
 	// An objective's own conditions bound it as the case's do, so they are part
 	// of what is feasible; a case stating none is unbounded rather than refused.
+	t := newTranslator(ctx, subject)
+	if err := t.translate(conds); err != nil {
+		return nil, err
+	}
 	for _, obj := range objectives {
 		t.within = obj.Symbol
 		err := t.translate(obj.Conditions)
@@ -60,6 +60,17 @@ func AnalysisWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scop
 		return nil, err
 	}
 	return t.query(), nil
+}
+
+// conflictsResult reports whether any condition, nested or not, records a second
+// owned or inherited result expression.
+func conflictsResult(conds []runtime.Condition) bool {
+	for _, cond := range conds {
+		if cond.Conflict != nil || conflictsResult(cond.Group) {
+			return true
+		}
+	}
+	return false
 }
 
 // optimize translates the objectives in declaration order, which is the order
