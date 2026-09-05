@@ -380,7 +380,7 @@ package mine {
 // built-in of the same name does not answer in its place.
 func TestLibraryFunctionDoesNotHijackAnOutputAssignedInABody(t *testing.T) {
 	ctx, idx := contextForSource(t, `package RealFunctions {
-	calc sqrt { in x : Real; out r : Real; r = 42.0; }
+	calc sqrt { in x : Real; out r : Real; assign r := 42.0; }
 }`)
 
 	sym := lookupOne(t, idx, "RealFunctions::sqrt")

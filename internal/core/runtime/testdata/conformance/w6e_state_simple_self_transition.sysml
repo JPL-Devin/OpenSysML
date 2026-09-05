@@ -7,8 +7,8 @@ package Test {
 
 		entry; then s;
 		state s {
-			entry { log = log * 10 + 1; }
-			exit { log = log * 10 + 2; }
+			entry { assign log := log * 10 + 1; }
+			exit { assign log := log * 10 + 2; }
 		}
 
 		transition first s accept again do assign log := log * 10 + 9 then s;

@@ -8,16 +8,16 @@ package Test {
 		entry; then start;
 		state start;
 		state Working {
-			exit { log = log * 10 + 2; }
+			exit { assign log := log * 10 + 2; }
 			state Step1 {
-				exit { log = log * 10 + 1; }
+				exit { assign log := log * 10 + 1; }
 			}
 			state Step2;
 
 			transition first Step1 when Next then Step2;
 		}
 		state Done {
-			entry { log = log * 10 + 4; }
+			entry { assign log := log * 10 + 4; }
 		}
 
 		succession first start then Step1;

@@ -15,7 +15,7 @@ package Test {
 			state left {
 				entry; then ls;
 				state ls;
-				state lidle { exit { lidleExits = lidleExits + 1; } }
+				state lidle { exit { assign lidleExits := lidleExits + 1; } }
 
 				succession first ls then lidle;
 			}
@@ -23,15 +23,15 @@ package Test {
 				entry; then rs;
 				state rs;
 				state wrapper {
-					exit { wrapperExits = wrapperExits + 1; }
+					exit { assign wrapperExits := wrapperExits + 1; }
 
 					state mid parallel {
-						exit { midExits = midExits + 1; }
+						exit { assign midExits := midExits + 1; }
 
 						state inner {
 							entry; then is;
 							state is;
-							state ideep { exit { deepExits = deepExits + 1; } }
+							state ideep { exit { assign deepExits := deepExits + 1; } }
 
 							succession first is then ideep;
 							transition first ideep if midExits == 0 then outside;

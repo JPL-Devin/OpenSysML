@@ -6,7 +6,7 @@ package test {
 		attribute weights : Integer[*] = xs.{in x; x * 10};
 		attribute total : Integer = 0;
 		for i in (1, 2, 3) {
-			total = total + weights#(i) + xs#(i);
+			assign total := total + weights#(i) + xs#(i);
 		}
 		return : Integer = total;
 	}

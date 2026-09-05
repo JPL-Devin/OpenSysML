@@ -808,8 +808,8 @@ func TestCalcRunsAStatementBody(t *testing.T) {
 			attribute acc = 1;
 			attribute i = 1;
 			while i <= n {
-				acc = acc * i;
-				i = i + 1;
+				assign acc := acc * i;
+				assign i := i + 1;
 			}
 			return : Integer = acc;
 		}

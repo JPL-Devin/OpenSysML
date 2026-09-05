@@ -30,23 +30,23 @@ package Test {
 						entry; then istart;
 						state istart;
 						state deepState {
-							entry { deepEntries = deepEntries + 1; }
+							entry { assign deepEntries := deepEntries + 1; }
 						}
 
 						succession first istart then deepState;
 						transition out_deep
 							first deepState
 							accept after 3
-							do { trips = trips + 1; }
+							do { assign trips := trips + 1; }
 							then away;
 					}
 				}
 
-				transition to_wrapper first rstart do { restarts = restarts + 1; } then wrapper;
+				transition to_wrapper first rstart do { assign restarts := restarts + 1; } then wrapper;
 			}
 		}
 		state away {
-			entry { startEntries = startEntries + 1; }
+			entry { assign startEntries := startEntries + 1; }
 		}
 
 		succession first start then running;

@@ -7,19 +7,19 @@ package Test {
 		entry; then start;
 		state start;
 		state Outer parallel {
-			exit { log = log * 10 + 1; }
+			exit { assign log := log * 10 + 1; }
 
 			state left {
 				entry; then lstart;
 				state lstart;
 				state Grouping parallel {
-					exit { log = log * 10 + 2; }
+					exit { assign log := log * 10 + 2; }
 
 					state inner {
 						entry; then gstart;
 						state gstart;
 						state g1 {
-							exit { log = log * 10 + 3; }
+							exit { assign log := log * 10 + 3; }
 						}
 
 						succession first gstart then g1;
@@ -32,7 +32,7 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state Watching {
-					exit { log = log * 10 + 4; }
+					exit { assign log := log * 10 + 4; }
 				}
 
 				succession first rstart then Watching;
