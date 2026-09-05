@@ -45,7 +45,8 @@ func loadExecutionSource(t *testing.T, content string) executionFixture {
 	t.Helper()
 	index := libs.NewModelIndex()
 	name := "query-execution.sysml"
-	p := parser.New(source.New(name, []byte(content)))
+	sf := source.New(name, []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
@@ -53,9 +54,16 @@ func loadExecutionSource(t *testing.T, content string) executionFixture {
 	index.AddDocument(name, root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
+	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != name {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	return executionFixture{
 		index:    index,
-		model:    semantics.NewModel(resolver),
+		model:    model,
 		resolver: resolver,
 	}
 }

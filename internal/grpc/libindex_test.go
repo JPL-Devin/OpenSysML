@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -74,6 +75,12 @@ func diagLines(diags []*pb.Diagnostic) []string {
 		out = append(out, fmt.Sprintf("%s %d:%d %s", d.Severity, line, col, d.Message))
 	}
 	return out
+}
+
+// sharedBase is a fresh overlay over the service's library base.
+func sharedBase(svc *Service) *symbols.Index {
+	idx, _ := svc.libIndexes.get()
+	return idx
 }
 
 // lookupLines renders every name an index knows with the kinds it resolves to,
@@ -406,14 +413,14 @@ func TestIndexPrewarmLegacyEnvName(t *testing.T) {
 func TestLibraryBaseBuildsOnceUnderConcurrentDemand(t *testing.T) {
 	var mu sync.Mutex
 	built := 0
-	base := newLibraryBase(func() *symbols.Index {
+	base := newLibraryBase(func() (*symbols.Index, libs.Source) {
 		mu.Lock()
 		built++
 		mu.Unlock()
 		time.Sleep(5 * time.Millisecond)
 		idx := symbols.NewIndex()
 		idx.Freeze()
-		return idx
+		return idx, nil
 	})
 	defer base.close()
 
@@ -424,7 +431,7 @@ func TestLibraryBaseBuildsOnceUnderConcurrentDemand(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			indexes[i] = base.get()
+			indexes[i], _ = base.get()
 		}(i)
 	}
 	wg.Wait()
@@ -452,14 +459,14 @@ func TestLibraryBaseBuildsOnceUnderConcurrentDemand(t *testing.T) {
 func TestLibraryBasePrewarmsOnce(t *testing.T) {
 	var mu sync.Mutex
 	built := 0
-	base := newLibraryBase(func() *symbols.Index {
+	base := newLibraryBase(func() (*symbols.Index, libs.Source) {
 		mu.Lock()
 		built++
 		mu.Unlock()
 		time.Sleep(5 * time.Millisecond)
 		idx := symbols.NewIndex()
 		idx.Freeze()
-		return idx
+		return idx, nil
 	})
 
 	var wg sync.WaitGroup
