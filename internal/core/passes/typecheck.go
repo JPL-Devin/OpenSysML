@@ -1189,6 +1189,12 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
 	}
 
+	// A constraint is typed by a Predicate (SysML v2 §8.3.19.3): a requirement,
+	// concern or viewpoint definition is a constraint definition, so it qualifies.
+	if useKind == ast.UsageConstraint {
+		return defKindSpecializes(defKind, symbols.SymbolConstraintDef)
+	}
+
 	// Successions and bindings type through a plain UsageDeclaration
 	// (SysML.xtext:1033, :1020), so any definition types them.
 	if useKind == ast.UsageSuccession || useKind == ast.UsageBinding {
