@@ -146,16 +146,19 @@ func attributedTo(base *Baseline, c corpusCase, name string) bool {
 	return false
 }
 
-// checkCaseEvidence verifies one listed negative case against the corpus: a
-// case whose header names a constraint, by its pilot token or its
-// specification citation, is attributed to the row's constraint, and the bucket the referee
-// recorded agrees with the row's status — a faithful row's case is one we
-// reject, a not-implemented row's case is one only the pilot rejects, an
-// approximate row may list either (a pilot-only case is the gap it records),
-// and an unknown row has no case.
+// checkCaseEvidence verifies one listed negative case against the corpus: its
+// header names a constraint, by pilot token or specification citation, that
+// resolves to the row's constraint, and the bucket the referee recorded agrees
+// with the row's status — a faithful row's case is one we reject, a
+// not-implemented row's case is one only the pilot rejects, an approximate row
+// may list either (a pilot-only case is the gap it records), and an unknown
+// row has no case.
 func checkCaseEvidence(base *Baseline, r row, name, status string, c corpusCase) []string {
 	var problems []string
-	if attributed := c.attribution(); attributed != "" && !attributedTo(base, c, name) {
+	switch attributed := c.attribution(); {
+	case attributed == "":
+		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s names no constraint in its header (`<clause> validate…; pilot …` or `pilot validate…`)", r.Line, name, c.Path))
+	case !attributedTo(base, c, name):
 		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is attributed to %s, not to this constraint", r.Line, name, c.Path, attributed))
 	}
 	switch {
@@ -196,7 +199,10 @@ func checkAttributions(base *Baseline, cases map[string]corpusCase, listed map[s
 // implementationRef is a `<file>.go:<func>` or `<file>.go:<Type>.<method>` citation;
 // group 3 captures any continuation past the symbol other than the punctuation
 // that ends a cell, list item or sentence, which is malformed.
-var implementationRef = regexp.MustCompile(`\b(internal/[\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)((?:\.\w+)+|[^\s,;.)\]` + "`" + `]+)?`)
+var implementationRef = regexp.MustCompile(`\b([\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)((?:\.\w+)+|[^\s,;.)\]` + "`" + `]+)?`)
+
+// implementationRoot is the directory every cited Go file must be given relative to.
+const implementationRoot = "internal/"
 
 // declarations caches the function and method names each cited Go file declares.
 type declarations struct {
@@ -271,6 +277,10 @@ func checkImplementation(decls *declarations, r row, name, status string) []stri
 	}
 	for _, m := range refs {
 		file, symbol := m[1], m[2]
+		if !strings.HasPrefix(file, implementationRoot) {
+			problems = append(problems, fmt.Sprintf("line %d: %s implementation %s:%s is not a repository-relative %s<file>.go location", r.Line, name, file, symbol, implementationRoot))
+			continue
+		}
 		if m[3] != "" {
 			problems = append(problems, fmt.Sprintf("line %d: %s implementation %s:%s%s is not a <function> or <Type>.<method> location", r.Line, name, file, symbol, m[3]))
 			continue

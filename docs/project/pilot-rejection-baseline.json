@@ -28,7 +28,7 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 236,
-        "digest": "sha256:139b12927746bf3b62c942cfed9c6bb242d19048cbc3e5cf9cfa8488f0b648bc"
+        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
       }
     ],
     "recorded": "2026-09-05"
@@ -222,7 +222,7 @@
     {
       "path": "grammar/g07-entry-outside-state-body.sysml",
       "source": "grammar",
-      "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry' (SysML.xtext StateBodyItem).",
+      "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry' (SysML.xtext StateBodyItem; pilot validateStateSubactionMembershioOwningType).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -231,7 +231,7 @@
     {
       "path": "grammar/g08-do-outside-state-body.sysml",
       "source": "grammar",
-      "rule": "DoActionMember is a StateBodyItem; a part def body admits no 'do' (SysML.xtext StateBodyItem).",
+      "rule": "DoActionMember is a StateBodyItem; a part def body admits no 'do' (SysML.xtext StateBodyItem; pilot validateStateSubactionMembershioOwningType).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1938,7 +1938,7 @@
     {
       "path": "xpect/p02-association-end-two-types.kerml",
       "source": "xpect",
-      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
+      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot validateAssociationEndTypes, AssociationTest_EndTypes_invalid.kerml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2118,7 +2118,7 @@
     {
       "path": "xpect/p21-filter-constructor-condition.sysml",
       "source": "xpect",
-      "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:74).",
+      "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot validateElementFilterMembershipIsBoolean, MetadataUsage_Invalid.sysml.xt:74).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2127,7 +2127,7 @@
     {
       "path": "xpect/p22-filter-not-model-level-evaluable.sysml",
       "source": "xpect",
-      "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:68).",
+      "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot validateElementFilterMembershipIsModelLevelEvaluable, MetadataUsage_Invalid.sysml.xt:68).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2145,7 +2145,7 @@
     {
       "path": "xpect/p24-metadata-abstract-type.sysml",
       "source": "xpect",
-      "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot MetadataUsage_Invalid.sysml.xt:104).",
+      "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot validateMetadataFeatureMetadataNotAbstract, MetadataUsage_Invalid.sysml.xt:104).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,

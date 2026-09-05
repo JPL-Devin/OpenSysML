@@ -315,14 +315,16 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		negativeCorpusDir + "/kerml/other.kerml": "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
 		negativeCorpusDir + "/kerml/prose.kerml": "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
 		negativeCorpusDir + "/kerml/spec.kerml":  "// Invalid: a (KerML 7.1 validateA; pilot Fixture_invalid.kerml.xt).\npackage P;\n",
-		negativeCorpusDir + "/xpect/x.kerml":     "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
+		negativeCorpusDir + "/xpect/x.kerml":     "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/xpect/bare.kerml":  "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
 		rejectionBaselinePath: `{"cases": [
 			{"path": "kerml/a.kerml", "bucket": "both-reject"},
 			{"path": "kerml/b.kerml", "bucket": "pilot-only-rejects"},
 			{"path": "kerml/other.kerml", "bucket": "both-reject"},
 			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
 			{"path": "kerml/spec.kerml", "bucket": "both-reject"},
-			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"}]}`,
+			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"},
+			{"path": "xpect/bare.kerml", "bucket": "both-reject"}]}`,
 		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n\ntype Arena[T any] struct{}\n\nfunc (a *Arena[T]) Take() {}\n",
 	})
 	base := testBaseline(
@@ -456,6 +458,18 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			},
 			want: "validateA implementation \"internal/core/passes/a.go (APass)\" cites no internal/<file>.go:<function> location",
 		},
+		"implementation cites a file by name only": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:helper,", "a.go:helper,", 1)
+			},
+			want: "validateA implementation a.go:helper is not a repository-relative internal/<file>.go location",
+		},
+		"implementation cites a missing symbol in a file by name only": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:helper,", "a.go:renamed,", 1)
+			},
+			want: "validateA implementation a.go:renamed is not a repository-relative internal/<file>.go location",
+		},
 		"implementation continues past the method": {
 			mutate: func(s string) string { return strings.Replace(s, "a.go:APass.Run ", "a.go:APass.Run.extra ", 1) },
 			want:   "internal/core/passes/a.go:APass.Run.extra is not a <function> or <Type>.<method> location",
@@ -496,6 +510,12 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/spec.kerml` | ❌", 1)
 			},
 			want: "validateB negative case kerml/spec.kerml is attributed to validateA, not to this constraint",
+		},
+		"negative case names no constraint in its header": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`xpect/x.kerml` | ✅", "`xpect/x.kerml`, `xpect/bare.kerml` | ✅", 1)
+			},
+			want: "validateA negative case xpect/bare.kerml names no constraint in its header",
 		},
 		"faithful row lists a pilot-only case": {
 			mutate: func(s string) string {
