@@ -6921,7 +6921,7 @@ func testCalcNonTerminatingLoop(t *testing.T) {
 				in n: Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				return : Integer = i;
 			}
@@ -6942,7 +6942,7 @@ func testCalcBodyNeverReturns(t *testing.T) {
 				in n: Integer;
 				attribute total : Integer = 0;
 				if n > 0 {
-					total = n;
+					assign total := n;
 				}
 				if n < 0 {
 					return : Integer = total;
@@ -7002,7 +7002,7 @@ func testCalcAssignmentOutsideTheCalc(t *testing.T) {
 			attribute shared : Integer = 0;
 			calc leaky {
 				in n: Integer;
-				shared = n;
+				assign shared := n;
 				return : Integer = n;
 			}
 		}
@@ -7161,7 +7161,7 @@ func testCalcUsageStepBudget(t *testing.T) {
 				in n : Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				out reached = i;
 			}
@@ -7203,7 +7203,7 @@ func testCalcOutputNeverAssignedByTheBody(t *testing.T) {
 				in n : Integer;
 				out a : Integer;
 				out b : Integer;
-				a = n + 1;
+				assign a := n + 1;
 			}
 			calc c : Two { in n = 5; }
 		}
@@ -7226,7 +7226,7 @@ func testCalcOutputAssignedInABranchNotTaken(t *testing.T) {
 				in n : Integer;
 				out a : Integer;
 				if n > 10 {
-					a = n;
+					assign a := n;
 				}
 			}
 			calc c : Branch { in n = 5; }
@@ -7246,7 +7246,7 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 			calc def Both {
 				in n : Integer;
 				out a : Integer = n;
-				a = n + 1;
+				assign a := n + 1;
 			}
 			calc c : Both { in n = 5; }
 		}
@@ -7291,8 +7291,8 @@ func testCalcOutputAssignedTwice(t *testing.T) {
 			calc def Twice {
 				in n : Integer;
 				out a : Integer;
-				a = n + 1;
-				a = a + 1;
+				assign a := n + 1;
+				assign a := a + 1;
 			}
 			calc c : Twice { in n = 5; }
 		}
@@ -7451,7 +7451,7 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 				in n : Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				out reached = i;
 			}
@@ -8839,7 +8839,7 @@ func testCalcOutputWriteOfAWrongTypedValue(t *testing.T) {
 		private import ScalarValues::*;
 		calc def Label {
 			out tag : String;
-			tag := 7;
+			assign tag := 7;
 		}
 	}`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
@@ -9827,7 +9827,7 @@ func testBlockNodePinBoundWhereNodesAreNotPerformed(t *testing.T) {
 				if x > 0 {
 					action p { out v : Integer; assign v := x * 2; }
 					bind p.v = x;
-					seen = 1;
+					assign seen := 1;
 				}
 				return : Integer = seen;
 			}

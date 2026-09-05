@@ -13,8 +13,8 @@ func TestSimpleSelfTransitionExitsAndReEntersItsState(t *testing.T) {
 			entry; then start;
 			state start;
 			state s {
-				entry { log = log * 10 + 1; }
-				exit { log = log * 10 + 2; }
+				entry { assign log := log * 10 + 1; }
+				exit { assign log := log * 10 + 2; }
 			}
 
 			succession first start then s;
@@ -47,8 +47,8 @@ func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
 				entry; then lstart;
 				state lstart;
 				state l1 {
-					entry { log = log * 10 + 1; }
-					exit { log = log * 10 + 2; }
+					entry { assign log := log * 10 + 1; }
+					exit { assign log := log * 10 + 2; }
 				}
 				succession first lstart then l1;
 				transition first l1 accept again do assign log := log * 10 + 9 then l1;
@@ -58,8 +58,8 @@ func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
 				entry; then rstart;
 				state rstart;
 				state r1 {
-					entry { other = other * 10 + 1; }
-					exit { other = other * 10 + 2; }
+					entry { assign other := other * 10 + 1; }
+					exit { assign other := other * 10 + 2; }
 				}
 				succession first rstart then r1;
 			}

@@ -6,7 +6,7 @@ package test {
 		attribute xs : Integer[*] = (2, 3, 4);
 		attribute sum : Integer = bias;
 		for x in xs {
-			sum = sum + x;
+			assign sum := sum + x;
 		}
 		return : Integer = sum;
 	}

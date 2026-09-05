@@ -5,7 +5,7 @@ package test {
 		in n: Integer;
 		attribute i : Rational = n;
 		loop {
-			i = i / 2;
+			assign i := i / 2;
 		} until i <= 1;
 		return : Rational = i;
 	}

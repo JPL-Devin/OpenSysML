@@ -22,7 +22,7 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state ridle;
-				state rtarget { entry { crossed = 1; } }
+				state rtarget { entry { assign crossed := 1; } }
 
 				succession first rstart then ridle;
 			}
@@ -30,8 +30,8 @@ package Test {
 				entry; then tstart;
 				state tstart;
 				state tidle {
-					entry { thirdEntries = thirdEntries + 1; }
-					exit { thirdExits = thirdExits + 1; }
+					entry { assign thirdEntries := thirdEntries + 1; }
+					exit { assign thirdExits := thirdExits + 1; }
 				}
 
 				succession first tstart then tidle;

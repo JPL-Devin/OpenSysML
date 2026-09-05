@@ -711,7 +711,7 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 			entry; then init;
 			state init;
 			state working {
-				do { count = count + 1; }
+				do { assign count := count + 1; }
 				accept after 100 then done;
 			}
 			succession first init then working;
