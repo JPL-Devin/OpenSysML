@@ -64,7 +64,9 @@ func AnalysisWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scop
 // they are optimized in.
 func (t *translator) optimize(objectives []runtime.Objective) error {
 	for _, obj := range objectives {
+		t.within = obj.Symbol
 		translated, err := t.objective(obj)
+		t.within = nil
 		if err != nil {
 			return err
 		}

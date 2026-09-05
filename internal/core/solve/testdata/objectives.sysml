@@ -305,4 +305,21 @@ package test {
 			}
 		}
 	}
+
+	// The evaluation reads the objective's own `weight`, not the case's.
+	analysis def OwnWeight {
+		attribute mass : Integer;
+		attribute weight : Integer;
+		require constraint {
+			mass >= 1 and mass <= 9 and weight == 100
+		}
+		objective lightest : MinimizeObjective {
+			subject :>> selectedAlternative;
+			attribute weight : Integer;
+			require constraint {
+				weight == mass + 1
+			}
+			in calc :>> eval { weight }
+		}
+	}
 }

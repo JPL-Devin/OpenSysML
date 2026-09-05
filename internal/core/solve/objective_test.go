@@ -152,6 +152,23 @@ func TestObjectiveConditionLocalIsNotShadowed(t *testing.T) {
 	}
 }
 
+// TestObjectiveEvalReadsTheObjectivesOwnMember: the evaluation's `weight` is the
+// objective's own attribute, which shadows the case's of the same name.
+func TestObjectiveEvalReadsTheObjectivesOwnMember(t *testing.T) {
+	q := analysisQuery(t, "OwnWeight")
+	script := Script(q)
+	own := "|test::OwnWeight::lightest.weight|"
+	if want := "(minimize " + own + ")"; !strings.Contains(script, want) {
+		t.Errorf("script does not %s:\n%s", want, script)
+	}
+	if wrong := "(minimize |test::OwnWeight::weight|)"; strings.Contains(script, wrong) {
+		t.Errorf("the objective improves the case's weight %s:\n%s", wrong, script)
+	}
+	if want := "(assert (= " + own + " (+ |test::OwnWeight::mass| 1)))"; !strings.Contains(script, want) {
+		t.Errorf("script does not assert %s:\n%s", want, script)
+	}
+}
+
 // TestObjectivesInDeclarationOrder: objectives are optimized in the order
 // declared, which is what makes them lexicographic.
 func TestObjectivesInDeclarationOrder(t *testing.T) {
