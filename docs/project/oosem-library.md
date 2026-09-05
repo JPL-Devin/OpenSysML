@@ -45,7 +45,8 @@ definition implicitly specialises its type). Every base usage is a subset of the
 document queries reach OOSEM artefacts by method role without any OOSEM-specific tooling.
 
 **Reuse before invention.** Nothing is redeclared that the OMG domain libraries already hold;
-the library re-exports them instead so that `import OOSEM::*` is the whole method:
+the four domain libraries below are re-exported so that `import OOSEM::*` brings their keywords
+along with the method's own:
 
 | OOSEM concept | Comes from |
 | --- | --- |
@@ -53,9 +54,13 @@ the library re-exports them instead so that `import OOSEM::*` is the whole metho
 | trade study, objective, evaluation function | `TradeStudies` |
 | requirement derivation (`#derivation`, `#original`, `#derive`) | `RequirementDerivation` |
 | causal analysis chains (`#cause`, `#effect`) | `CauseAndEffect` |
-| requirement text, subject, actors, stakeholders, categories | `Requirements` |
-| use cases, actors, subjects, included use cases | `UseCases` |
-| verification, analysis | `VerificationCases`, `AnalysisCases` |
+
+The systems-library vocabulary the method also leans on — requirement text, subjects, actors and
+stakeholders (`Requirements`), included use cases (`UseCases`), verification and analysis cases
+(`VerificationCases`, `AnalysisCases`) — is not re-exported: the `requirement`, `use case`,
+`verification` and `analysis` keywords reach it implicitly, and a model that names one of those
+libraries' members directly imports it as it would without OOSEM (the example does exactly this
+for `ScalarValues`, `ISQ` and `SI`).
 
 The DesertKite stub's `'OOSEM Measures'::MOE` and `MoP` survive as aliases of the standard base
 usages, so a model written against the stub resolves the same features.
