@@ -22,17 +22,17 @@ package Test {
 			state right {
 				entry; then rs;
 				state rs;
-				state ridle { exit { ridleExits = ridleExits + 1; } }
+				state ridle { exit { assign ridleExits := ridleExits + 1; } }
 				state wrapper parallel {
-					entry { wrapperEntries = wrapperEntries + 1; }
+					entry { assign wrapperEntries := wrapperEntries + 1; }
 
 					state inner {
 						entry; then is;
 						state is;
 						state istart;
 						state rtarget {
-							entry { crossed = 1; }
-							exit { rtargetExits = rtargetExits + 1; }
+							entry { assign crossed := 1; }
+							exit { assign rtargetExits := rtargetExits + 1; }
 						}
 
 						succession first is then istart;

@@ -8,9 +8,9 @@ package Debug {
 		state init;
 		state busy {
 			do {
-				count = count + 1;
-				count = count + 1;
-				count = count + 1;
+				assign count := count + 1;
+				assign count := count + 1;
+				assign count := count + 1;
 			}
 		}
 

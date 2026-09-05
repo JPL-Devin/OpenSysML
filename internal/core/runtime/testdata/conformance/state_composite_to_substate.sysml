@@ -7,16 +7,16 @@ package Test {
 		entry; then start;
 		state start;
 		state Working {
-			entry { log = log * 10 + 1; }
-			exit { log = log * 10 + 2; }
+			entry { assign log := log * 10 + 1; }
+			exit { assign log := log * 10 + 2; }
 
 			state Step1 {
-				entry { log = log * 10 + 3; }
-				exit { log = log * 10 + 4; }
+				entry { assign log := log * 10 + 3; }
+				exit { assign log := log * 10 + 4; }
 			}
 
 			state Step2 {
-				entry { log = log * 10 + 5; }
+				entry { assign log := log * 10 + 5; }
 			}
 		}
 

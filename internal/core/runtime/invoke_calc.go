@@ -55,7 +55,7 @@ func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) e
 	if msg := ctx.writeCountRefusal(d.Target, value); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what(), ErrMultiplicityViolation, msg)
 	}
-	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value); refused {
+	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value, admitWritten); refused {
 		return fmt.Errorf("%s: %w: %s", what(), ErrTypeMismatch, refusal)
 	}
 	return nil
@@ -729,9 +729,7 @@ func (ec *EvalContext) bindCalcParameter(
 	}
 	value, err := ec.Eval(param.Default)
 	if err != nil {
-		return Value{}, "", fmt.Errorf(
-			"calc %s: default for parameter %q: %w", shape.Name, param.Name, err,
-		)
+		return Value{}, "", calcDefaultError(shape.Name, param.Name, err)
 	}
 	return value, "default", nil
 }

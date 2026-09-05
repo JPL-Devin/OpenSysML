@@ -425,6 +425,7 @@ elmt:ThenAfterMembers__AfterBind___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind___403_om ;
     sysml:references elmt:ThenAfterMembers__AfterBind__k ;
     sysml:value expr:ThenAfterMembers__AfterBind___403_pvalue ;
+    sysx:relatedFeature expr:ThenAfterMembers__AfterBind___403_pend0, expr:ThenAfterMembers__AfterBind___403_pvalue ;
     sysx:endForm "equals" ;
     sysx:declaredKeyword "bind" ;
     sysx:hasBody "false"^^xsd:boolean ;
@@ -446,7 +447,15 @@ expr:ThenAfterMembers__AfterBind___403_pvalue
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "m" ;
     sysml:elementId "ThenAfterMembers__AfterBind___403_pvalue" ;
-    sysml:referent elmt:ThenAfterMembers__AfterBind__m .
+    sysml:referent elmt:ThenAfterMembers__AfterBind__m ;
+    sysx:endIndex "1"^^xsd:integer .
+
+expr:ThenAfterMembers__AfterBind___403_pend0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "k" ;
+    sysml:elementId "ThenAfterMembers__AfterBind___403_pend0" ;
+    sysml:referent elmt:ThenAfterMembers__AfterBind__k ;
+    sysx:endIndex "0"^^xsd:integer .
 
 elmt:ThenAfterMembers__AfterBind__b
     a sysml:ActionUsage ;

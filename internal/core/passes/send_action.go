@@ -10,6 +10,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+const sendActionSource = "send-action"
+
 // Diagnostic codes of the send-action rules.
 const (
 	CodeSendPayloadMissing        = "send-payload-missing"
@@ -163,7 +165,7 @@ func (c *sendActionChecker) checkPayload(send *ast.SendStatement) {
 		Message: "a send action written as a state subaction or a transition effect must have a payload: " +
 			"name the message it sends, as in `send new Msg() to receiver`",
 		Code:   CodeSendPayloadMissing,
-		Source: "send-action",
+		Source: sendActionSource,
 	})
 }
 
@@ -243,7 +245,7 @@ func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Nod
 			Message: fmt.Sprintf("the receiver of a send must be an occurrence: this expression yields a %s, which is not one; "+
 				"name a part, item or other occurrence after 'to'", arg.valueType),
 			Code:   CodeSendReceiverNotOccurrence,
-			Source: "send-action",
+			Source: sendActionSource,
 		})
 		return
 	}
@@ -255,7 +257,7 @@ func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Nod
 			Message: fmt.Sprintf("sending to the port %s should use 'via' rather than 'to': "+
 				"'via' routes the message through a port of the sender, while 'to' names the receiver", sym.Name),
 			Code:   CodeSendToPort,
-			Source: "send-action",
+			Source: sendActionSource,
 		})
 		return
 	}
@@ -266,7 +268,7 @@ func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Nod
 			Message: fmt.Sprintf("the receiver of a send must be an occurrence: %s is typed by %s, which is not one; "+
 				"name a part, item or other occurrence after 'to'", sym.Name, types),
 			Code:   CodeSendReceiverNotOccurrence,
-			Source: "send-action",
+			Source: sendActionSource,
 		})
 	}
 }
@@ -284,7 +286,7 @@ func (c *sendActionChecker) checkSender(scope *symbols.Scope, sender ast.Node) {
 			Message: fmt.Sprintf("a send is routed through an occurrence of the sender: this expression yields a %s, which is not one; "+
 				"name a port after 'via'", arg.valueType),
 			Code:   CodeSendSenderNotOccurrence,
-			Source: "send-action",
+			Source: sendActionSource,
 		})
 		return
 	}
@@ -295,7 +297,7 @@ func (c *sendActionChecker) checkSender(scope *symbols.Scope, sender ast.Node) {
 			Message: fmt.Sprintf("a send is routed through an occurrence of the sender: %s is typed by %s, which is not one; "+
 				"name a port after 'via'", arg.feature.Name, types),
 			Code:   CodeSendSenderNotOccurrence,
-			Source: "send-action",
+			Source: sendActionSource,
 		})
 	}
 }

@@ -42,6 +42,19 @@ func TestNegative(t *testing.T) {
 		{"state_member_then", "state s { state start; state finish; start then finish; }"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
+		// A specialization after `return` names what the result subsets.
+		{"calc_return_subsets_no_target", "calc def C { return :> = 1; }"},
+		{"calc_return_named_subsets_no_target", "calc def C { return r :> = 1; }"},
+		{"calc_return_short_name_unclosed", "calc def C { return <r result : Real = 1; }"},
+		{"calc_return_short_name_empty", "calc def C { return <> = 1; }"},
+		// A result declares something: a value or a body alone is no FeatureDeclaration.
+		{"calc_return_value_only", "calc def C { in n : Real; return = n; }"},
+		{"calc_return_body_only", "calc def C { return { doc /* r */ } }"},
+		{"calc_return_multiplicity_unclosed", "calc def C { in xs : Real[*]; return [* = xs; }"},
+		// A short name must be closed before the member's declaration tail.
+		{"calc_short_name_unclosed", "calc def C { <s x = 1; }"},
+		{"calc_short_name_empty", "calc def C { <> x = 1; }"},
+		{"part_short_name_unclosed", "part def P { <s :> x = 1; }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
 		{"calc_while_unclosed_body", "calc def C { while i < 2 { i = i + 1; }"},
 		{"calc_for_no_variable", "calc def C { for in xs { } }"},

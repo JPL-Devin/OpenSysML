@@ -577,22 +577,23 @@ type heldObject struct {
 
 // nestedObjects returns the objects the object-valued features of inst hold,
 // materializing a lazy one as reading its feature value does. A feature value that cannot be read
-// yields no object: one that is not there is no subject either.
+// yields no object: one that is not there is no subject either. The names a redefinition
+// chain gives one feature value hold its objects once, under the first.
 func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
-	features := ctx.FeaturesOf(inst.Type)
 	var out []heldObject
-	for i := range features {
-		feat := &features[i]
-		if feat.Name == "" || !holdsObjects(feat) {
+	read := map[*FeatureValue]bool{}
+	for _, of := range ctx.FeaturesOfObject(inst) {
+		if of.Name == "" || !holdsObjects(of.Feature) {
 			continue
 		}
-		fv, err := inst.GetFeatureValue(ctx, feat.Name)
-		if err != nil || fv == nil {
+		fv, err := inst.GetFeatureValue(ctx, of.Name)
+		if err != nil || fv == nil || read[fv] {
 			continue
 		}
+		read[fv] = true
 		for _, id := range heldObjects(fv.HeldValue()) {
 			if child, ok := ctx.instances[id]; ok {
-				out = append(out, heldObject{feature: feat.Name, instance: child})
+				out = append(out, heldObject{feature: of.Name, instance: child})
 			}
 		}
 	}

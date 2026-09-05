@@ -8,12 +8,12 @@ package Debug {
 		state init;
 		state a {
 			do {
-				n = n + 1;
+				assign n := n + 1;
 			}
 		}
 		state b {
 			do {
-				n = n + 1;
+				assign n := n + 1;
 			}
 		}
 

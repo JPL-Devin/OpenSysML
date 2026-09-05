@@ -481,6 +481,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.Target != nil {
 			kids = append(kids, v.Target)
 		}
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
 		writeChildren(b, depth, kids)
 		return true
 	case *Multiplicity:
@@ -914,6 +917,9 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)
+	}
+	if v.ValueMultiplicity != nil {
+		kids = append(kids, v.ValueMultiplicity)
 	}
 	for _, ce := range v.ConnectorEnds {
 		kids = append(kids, ce)

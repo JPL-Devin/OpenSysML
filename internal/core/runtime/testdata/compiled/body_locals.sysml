@@ -136,7 +136,7 @@ package test {
 	calc def Assigns {
 		in k : Integer;
 		attribute a : Integer = k;
-		a = a + 1;
+		assign a := a + 1;
 		return : Integer = a;
 	}
 }

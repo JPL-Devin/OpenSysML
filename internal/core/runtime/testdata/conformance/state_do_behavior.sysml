@@ -7,7 +7,7 @@ package test {
         state init;
         state processing {
             do {
-                result = result + 10;
+                assign result := result + 10;
             }
         }
         

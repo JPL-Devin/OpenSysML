@@ -15,7 +15,7 @@ package Test {
 				accept after 4 then waiting;
 			}
 			state late {
-				entry { log = log * 10 + 1; }
+				entry { assign log := log * 10 + 1; }
 			}
 
 			transition first wstart then waiting;
@@ -28,7 +28,7 @@ package Test {
 				accept after 12 then c1;
 			}
 			state c1 {
-				entry { log = log * 10 + 2; }
+				entry { assign log := log * 10 + 2; }
 			}
 
 			transition first cstart then c0;

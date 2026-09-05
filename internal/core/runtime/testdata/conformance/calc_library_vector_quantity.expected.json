@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "result": {"type": "VectorQuantity", "elements": [
+    {"type": "Quantity", "value": 0.5, "unit": "m/s"},
+    {"type": "Quantity", "value": 1.0, "unit": "m/s"},
+    {"type": "Quantity", "value": 1.5, "unit": "m/s"}
+  ]}
+}

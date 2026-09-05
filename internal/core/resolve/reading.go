@@ -19,6 +19,7 @@ type Reading struct {
 	sym       *symbols.Symbol
 	ok        bool
 	parts     []*symbols.Symbol
+	aliases   []*symbols.Symbol
 	ambiguity int
 }
 
@@ -33,6 +34,14 @@ func (rd Reading) Part(i int) (*symbols.Symbol, bool) {
 		return nil, false
 	}
 	return rd.parts[i], true
+}
+
+// Alias returns the alias membership segment i was written as, as PartAlias does.
+func (rd Reading) Alias(i int) (*symbols.Symbol, bool) {
+	if i < 0 || i >= len(rd.aliases) || rd.aliases[i] == nil {
+		return nil, false
+	}
+	return rd.aliases[i], true
 }
 
 // Ambiguity returns how many elements the name named when it failed for naming
@@ -64,7 +73,7 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 	r.clearSegments(qn)
 	var res resolution
 	r.aside(func() { res = r.walkQualified(scope, qn, (*refFilter)(nil).hiding(qn)) })
-	rd := Reading{sym: res.sym, ok: res.ok, parts: r.parts[qn], ambiguity: r.ambiguities[qn]}
+	rd := r.segmentReading(qn, res.sym, res.ok)
 	r.restoreSegments(qn, saved)
 	delete(r.resolving, qn)
 	if r.inCondition == 0 && r.allVisible == 0 {
@@ -72,4 +81,29 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 		r.readings[key] = rd
 	}
 	return rd
+}
+
+// ProbeReading is ProbeReference with what each segment of ref.QN reached, a
+// failed reading's segments included. ref.QN should be a fresh node (see
+// Reference.Spelled): its segment records are read off and left cleared.
+func (r *Resolver) ProbeReading(ref Reference) Reading {
+	if ref.QN == nil {
+		return Reading{}
+	}
+	saved := r.saveSegments(ref.QN)
+	r.clearSegments(ref.QN)
+	outer := r.trial
+	r.trial = ref.QN
+	sym, ok := r.ProbeReference(ref)
+	r.trial = outer
+	rd := r.segmentReading(ref.QN, sym, ok)
+	r.restoreSegments(ref.QN, saved)
+	return rd
+}
+
+// segmentReading is the Reading of qn from the records its walk just left.
+func (r *Resolver) segmentReading(qn *ast.QualifiedName, sym *symbols.Symbol, ok bool) Reading {
+	return Reading{
+		sym: sym, ok: ok, parts: r.parts[qn], aliases: r.aliasNames[qn], ambiguity: r.ambiguities[qn],
+	}
 }

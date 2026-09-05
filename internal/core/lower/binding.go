@@ -14,10 +14,12 @@ type Binding struct {
 }
 
 // BindingEnd is one binding endpoint. Path is the runtime lvalue path; Expr
-// retains the lossless expression for diagnostics and calc evaluation.
+// retains the lossless expression for diagnostics and calc evaluation;
+// Multiplicity is the end multiplicity as written (`bind [0..1] a = b`), nil when none.
 type BindingEnd struct {
-	Path string
-	Expr ast.Node
+	Path         string
+	Expr         ast.Node
+	Multiplicity *ast.Multiplicity
 }
 
 // ToBindings lowers binding connectors directly declared by a type or usage.
@@ -52,22 +54,22 @@ func lowerBinding(u *ast.Usage, scope *symbols.Scope) (Binding, bool) {
 		return Binding{}, false
 	}
 
-	var first ast.Node
+	var first *ast.Relationship
 	for _, rel := range u.Relationships {
 		if rel != nil && rel.Kind == ast.RelReferences {
-			first = rel.Target
+			first = rel
 			break
 		}
 	}
-	if first == nil {
+	if first == nil || first.Target == nil {
 		return Binding{}, false
 	}
 	if u.Value == nil {
 		return Binding{}, false
 	}
 	ends := [2]BindingEnd{
-		{Path: FeaturePath(first), Expr: first},
-		{Path: FeaturePath(u.Value), Expr: u.Value},
+		{Path: FeaturePath(first.Target), Expr: first.Target, Multiplicity: first.Multiplicity},
+		{Path: FeaturePath(u.Value), Expr: u.Value, Multiplicity: u.ValueMultiplicity},
 	}
 	return Binding{Ends: ends, Scope: scope, Decl: u}, true
 }

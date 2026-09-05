@@ -127,13 +127,12 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
+	mark := len(ctx.created)
 	commit, rollback := ctx.beginJournal()
 	endBoundary := ctx.beginRunBoundary()
 	abandon := func() {
 		endBoundary()
 		rollback()
-		ctx.abandonCreationSince(mark, attached)
 	}
 	inst, err := ctx.materialize(base, id, nil, "")
 	if err != nil {
@@ -264,7 +263,7 @@ func participants(n int) semantics.Range {
 // declaration order. A named connector is reached through its feature value instead.
 func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	defer ctx.beginRun()()
-	members := ctx.anonymousConnectors(inst.Type)
+	members := ctx.anonymousConnectorsOf(inst.types())
 	keys := anonymousKeys(members)
 	inst.holdAnonymous(ctx, len(members))
 	for i, member := range members {
@@ -379,7 +378,7 @@ func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error
 // they are; nil when the declarations as they are now have no such one.
 func (inst *Instance) restoreAnonymousConnector(ctx *Context, key anonymousKey) (*Instance, error) {
 	defer ctx.beginRun()()
-	members := ctx.anonymousConnectors(inst.Type)
+	members := ctx.anonymousConnectorsOf(inst.types())
 	i := slices.Index(anonymousKeys(members), key)
 	if i < 0 {
 		return nil, nil
@@ -400,20 +399,20 @@ func (inst *Instance) holdAnonymous(ctx *Context, n int) {
 	copy(inst.anonymous, prior)
 }
 
-// keepAnonymous sets aside, for a carry-over from prev where the instance was of prevType,
+// keepAnonymous sets aside, for a carry-over from prev where the instance was of prevTypes,
 // the anonymous connector identities by declaration; one whose declaration is gone is dropped.
-func (inst *Instance) keepAnonymous(ctx, prev *Context, prevType *symbols.Symbol) {
+func (inst *Instance) keepAnonymous(ctx, prev *Context, prevTypes []*symbols.Symbol) {
 	if inst.anonymous == nil && len(inst.keptAnonymous) == 0 {
 		return
 	}
-	prevKeys := anonymousKeys(prev.anonymousConnectors(prevType))
+	prevKeys := anonymousKeys(prev.anonymousConnectorsOf(prevTypes))
 	for i, id := range inst.anonymous {
 		if id != 0 && i < len(prevKeys) {
 			inst.keepAnonymousIdentity(prevKeys[i], id)
 		}
 	}
 	inst.anonymous = nil
-	now := anonymousKeys(ctx.anonymousConnectors(inst.Type))
+	now := anonymousKeys(ctx.anonymousConnectorsOf(inst.types()))
 	inst.keptAnonymous = slices.DeleteFunc(inst.keptAnonymous, func(kept keptAnonymous) bool {
 		return !slices.Contains(now, kept.key)
 	})

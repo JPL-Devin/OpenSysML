@@ -151,16 +151,16 @@ func (e *encoder) subjectClause(n *ast.Usage) string {
 
 // endShape reads the form a head writes its ends in, with the end texts the
 // graph carries beside it, or "" for a head whose ends the graph cannot state:
-// an end with a multiplicity or a `references` clause, an inline payload
-// declaration, or a transition's trigger, guard and effect.
+// an end with a `references` clause, an inline payload declaration, or a
+// transition's trigger, guard and effect.
 func (e *encoder) endShape(n *ast.Usage) (form string, ends []string, payload string) {
 	switch {
 	case len(n.ConnectorEnds) > 0:
 		for _, end := range n.ConnectorEnds {
-			if end == nil || end.Target == nil || end.Multiplicity != nil || end.ReferencedTarget() != nil {
+			if end == nil || end.Target == nil || end.ReferencedTarget() != nil {
 				return "", nil, ""
 			}
-			ends = append(ends, e.text(end.Target))
+			ends = append(ends, e.endText(end.Multiplicity, end.Target))
 		}
 		switch {
 		case n.Kind == ast.UsageSuccession:
@@ -184,16 +184,32 @@ func (e *encoder) endShape(n *ast.Usage) (form string, ends []string, payload st
 			return formFromTo, ends, e.text(flow.Payload)
 		}
 		return formFlowTo, ends, e.text(flow.Payload)
-	case n.Kind == ast.UsageBinding && n.Value != nil:
-		// `bind a = b` states its ends as the feature it references and the
-		// value bound to it, not as connector ends.
-		bound := relationshipTarget(n, ast.RelReferences)
-		if bound == nil {
+	case n.Kind == ast.UsageBinding:
+		// `bind [m] a = [n] b` states its ends as the features it references and
+		// the value bound to them, not as connector ends.
+		for _, rel := range n.Relationships {
+			if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+				ends = append(ends, e.endText(rel.Multiplicity, rel.Target))
+			}
+		}
+		if n.Value != nil {
+			ends = append(ends, e.endText(n.ValueMultiplicity, n.Value))
+		}
+		if len(ends) != 2 {
 			return "", nil, ""
 		}
-		return formEquals, []string{e.text(bound), e.text(n.Value)}, ""
+		return formEquals, ends, ""
 	}
 	return "", nil, ""
+}
+
+// endText is one end as its notation writes it: the multiplicity ahead of the
+// feature it names, when the end states one.
+func (e *encoder) endText(mult *ast.Multiplicity, target ast.Node) string {
+	if mult == nil {
+		return e.text(target)
+	}
+	return e.text(mult) + " " + e.text(target)
 }
 
 // endVerb returns the verb written ahead of the ends and the offset the ends
@@ -244,10 +260,14 @@ func (e *encoder) endVerb(n *ast.Usage, form string) (string, int) {
 	return "", at
 }
 
-// firstEnd returns the node the ends notation begins with.
+// firstEnd returns the node the ends notation begins with: the first end's
+// multiplicity when it states one, else the feature it names.
 func (e *encoder) firstEnd(n *ast.Usage) ast.Node {
 	switch {
 	case len(n.ConnectorEnds) > 0 && n.ConnectorEnds[0] != nil:
+		if n.ConnectorEnds[0].Multiplicity != nil {
+			return n.ConnectorEnds[0].Multiplicity
+		}
 		return n.ConnectorEnds[0].Target
 	case n.FlowEnds != nil:
 		if n.FlowEnds.Payload != nil {
@@ -255,7 +275,15 @@ func (e *encoder) firstEnd(n *ast.Usage) ast.Node {
 		}
 		return n.FlowEnds.From
 	case n.Kind == ast.UsageBinding:
-		return relationshipTarget(n, ast.RelReferences)
+		for _, rel := range n.Relationships {
+			if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+				continue
+			}
+			if rel.Multiplicity != nil {
+				return rel.Multiplicity
+			}
+			return rel.Target
+		}
 	}
 	return nil
 }
@@ -320,9 +348,9 @@ func (d *decoder) endWords(el *element, form string) (string, error) {
 		return "", err
 	}
 	verb, _ := d.stringOf(el, rdf.OpenSysML+xEndVerb)
-	if form == formEquals {
-		// The bound feature and the value it is bound to are the ends of a
-		// binding; the value is written by this notation, not after it.
+	if form == formEquals && len(ends) == 0 {
+		// A binding that relates no end nodes binds the feature it references to
+		// its value; the value is written by this notation, not after it.
 		reference, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences])
 		if err != nil {
 			return "", err
@@ -340,8 +368,9 @@ func (d *decoder) endWords(el *element, form string) (string, error) {
 	return endNotation{form: form, keyword: verb, ends: ends, payload: payload}.text()
 }
 
-// relatedEnds reads the ends of a head in the order they are written, with the
-// payload of a flow kept apart: it is written ahead of them, after `of`.
+// relatedEnds reads the ends of a head in the order they are written, each
+// behind the multiplicity it states, with the payload of a flow kept apart: it
+// is written ahead of them, after `of`.
 func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err error) {
 	type end struct {
 		index int
@@ -357,6 +386,13 @@ func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err e
 			payload = text
 			continue
 		}
+		mult, err := d.endMultiplicity(term, el)
+		if err != nil {
+			return nil, "", err
+		}
+		if mult != "" {
+			text = mult + " " + text
+		}
 		ordered = append(ordered, end{index: intOf(d.graph, term, rdf.OpenSysML+xEndIndex), text: text})
 	}
 	slices.SortStableFunc(ordered, func(a, b end) int { return a.index - b.index })
@@ -364,6 +400,20 @@ func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err e
 		ends = append(ends, end.text)
 	}
 	return ends, payload, nil
+}
+
+// endMultiplicity writes the bounds an end node states (`connect [1] a to b`),
+// or "" for an end written bare.
+func (d *decoder) endMultiplicity(end rdf.Term, in *element) (string, error) {
+	lower, hasLower, err := d.boundText(end, rdf.SysML+pLowerBound, in)
+	if err != nil {
+		return "", err
+	}
+	upper, hasUpper, err := d.boundText(end, rdf.SysML+pUpperBound, in)
+	if err != nil {
+		return "", err
+	}
+	return multiplicityNotation(lower, upper, hasLower, hasUpper), nil
 }
 
 // statesEnds reports whether an element relates ends of its own, the shape that

@@ -2095,6 +2095,12 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 		"connect (left, right);",
 		"connection c connect left to right;",
 		"bind a = b;",
+		"bind [0..1] a = [0..1] b;",
+		"bind a = [1] b;",
+		"binding ab bind [2] a = b;",
+		"binding ab of [0..1] a = [1..*] b;",
+		"connect [1] left to [0..1] right;",
+		"connect ([1] left, [2] right);",
 		"allocate a to b;",
 		"flow left to right;",
 		"flow of Bus from left to right;",
@@ -2124,6 +2130,44 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
 			}
 		})
+	}
+}
+
+// A binding end's multiplicity is graph structure — bounds on the end node —
+// so `bind [0..1] a = [0..1] b` keeps both ends' bounds without its source text.
+func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
+	src := "package P {\n    part def Car {\n        attribute a : Integer;\n        attribute b : Integer;\n        bind [0..1] a = [0..1] b;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, triple := range []string{
+		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pvalue ;",
+		"expr:P__Car___402_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"a\" ;",
+		"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend0_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend0_pupperBound .",
+		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pvalue_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pvalue_pupperBound .",
+		"expr:P__Car___402_pend0_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
+		"expr:P__Car___402_pvalue_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+	} {
+		if !strings.Contains(graph, triple) {
+			t.Errorf("the graph should state %q:\n%s", triple, graph)
+		}
+	}
+	if strings.Contains(graph, "expr:P__Car___402_pend1") {
+		t.Errorf("the value end is the value node itself, not a second copy of it:\n%s", graph)
+	}
+	// Without the bounds the ends come back bare: the notation reads the graph.
+	stripped := withoutTriples(t, turtle, "sysx:sourceText")
+	for _, property := range []string{"sysml:lowerBound", "sysml:upperBound"} {
+		stripped = withoutTriples(t, stripped, property)
+	}
+	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "bind a = b;") {
+		t.Fatalf("ends without bounds should be written bare:\n%s", back)
 	}
 }
 

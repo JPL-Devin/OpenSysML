@@ -8,9 +8,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
-// Repository is the write side of one live repository branch as an apply sees
+// Committer is the write side of one live repository branch as an apply sees
 // it: a fake in tests, the Flexo adapter for real.
-type Repository interface {
+type Committer interface {
 	// Commit writes one batch as a single commit and returns the id the
 	// repository gave it. A refused batch must leave the branch as it was.
 	Commit(ctx context.Context, changes []ElementChange, message string) (string, error)
@@ -99,7 +99,7 @@ func (e *UnsupportedKindError) Error() string {
 
 // Apply pushes a change set to the repository. An unappliable set is refused
 // before any write; a rejected batch is reported as an *ApplyError.
-func Apply(ctx context.Context, repo Repository, set *ChangeSet, opts ApplyOptions) (*Result, error) {
+func Apply(ctx context.Context, repo Committer, set *ChangeSet, opts ApplyOptions) (*Result, error) {
 	if err := set.Appliable(); err != nil {
 		return nil, err
 	}
