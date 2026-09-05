@@ -6,8 +6,8 @@
 		"fromDefault": {"type": "Integer", "value": 10},
 		"fromCaller": {"type": "Integer", "value": 50},
 		"explicit.times": {"type": "Integer", "value": 1},
-		"explicit.count": {"type": "Integer", "value": 10},
+		"explicit.result": {"type": "Integer", "value": 10},
 		"bare.times": {"type": "Integer", "value": 5},
-		"bare.count": {"type": "Integer", "value": 50}
+		"bare.result": {"type": "Integer", "value": 50}
 	}
 }

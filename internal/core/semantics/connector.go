@@ -62,6 +62,9 @@ func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 			out = append(out, memberSymbol(sym.Scope, end))
 		}
+		for range bindingClauseEnds(u) {
+			out = append(out, nil)
+		}
 	}
 	for _, member := range declMembers(sym) {
 		usage, ok := unwrapUsage(member)
@@ -436,8 +439,8 @@ func (m *Model) BinaryConnectorExcessEnds(sym *symbols.Symbol) ([]ast.Node, int)
 		switch {
 		case end != nil && end.Decl != nil:
 			excess = append(excess, end.Decl)
-		case usage != nil && i < len(usage.ConnectorEnds) && usage.ConnectorEnds[i] != nil:
-			excess = append(excess, usage.ConnectorEnds[i])
+		case clauseEndNode(usage, i) != nil:
+			excess = append(excess, clauseEndNode(usage, i))
 		}
 	}
 	if len(excess) == 0 {
@@ -525,7 +528,7 @@ func ownedRelatedFeatureCount(usage *ast.Usage) int {
 }
 
 // endReferencesFeature reports whether an effective end references a feature, through
-// its own reference clause or its owner's `connect` clause when it has no symbol.
+// its own reference clause or its owner's `connect`/binding clause when it has no symbol.
 func endReferencesFeature(end connectorEnd) bool {
 	if end.feature != nil {
 		switch d := end.feature.Decl.(type) {
@@ -537,7 +540,55 @@ func endReferencesFeature(end connectorEnd) bool {
 		return false
 	}
 	usage, ok := end.owner.Decl.(*ast.Usage)
-	return ok && end.index < len(usage.ConnectorEnds) && usage.ConnectorEnds[end.index].AttachedTarget() != nil
+	return ok && clauseEndTarget(usage, end.index) != nil
+}
+
+// bindingClauseEnds returns the features a binding's clause states as its ends
+// (`of a = b`, `bind a = b`): the referenced feature first, then the bound one.
+func bindingClauseEnds(usage *ast.Usage) []ast.Node {
+	if usage == nil || usage.Kind != ast.UsageBinding {
+		return nil
+	}
+	var out []ast.Node
+	for _, rel := range usage.Relationships {
+		if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+			out = append(out, rel.Target)
+		}
+	}
+	if usage.Value != nil {
+		out = append(out, usage.Value)
+	}
+	return out
+}
+
+// clauseEndNode returns the node stating the clause end at position i: a
+// `connect` end, or the feature a binding clause names there.
+func clauseEndNode(usage *ast.Usage, i int) ast.Node {
+	if usage == nil || i < 0 {
+		return nil
+	}
+	if i < len(usage.ConnectorEnds) {
+		if usage.ConnectorEnds[i] == nil {
+			return nil
+		}
+		return usage.ConnectorEnds[i]
+	}
+	if ends := bindingClauseEnds(usage); i-len(usage.ConnectorEnds) < len(ends) {
+		return ends[i-len(usage.ConnectorEnds)]
+	}
+	return nil
+}
+
+// clauseEndTarget returns the feature the clause end at position i attaches to.
+func clauseEndTarget(usage *ast.Usage, i int) ast.Node {
+	switch node := clauseEndNode(usage, i).(type) {
+	case nil:
+		return nil
+	case *ast.ConnectorEnd:
+		return node.AttachedTarget()
+	default:
+		return node
+	}
 }
 
 // referencesFeature reports whether rels carry a reference-subsetting clause.
