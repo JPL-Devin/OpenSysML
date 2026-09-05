@@ -6,16 +6,17 @@ import (
 )
 
 // Pilot SysMLValidator (2026-05) constraints validateCalculationDefinitionOnlyOneResult,
-// validateStateDefinition{Entry,Do,Exit}Action, validatePortDefinitionOwnedUsagesNotComposite
-// and validatePortUsageNestedUsagesNotComposite. The one-objective rule stays
-// unimplemented by decision (see docs/project/spec-compliance.md).
+// validateStateDefinition{Entry,Do,Exit}Action, validatePortDefinitionOwnedUsagesNotComposite,
+// validatePortUsageNestedUsagesNotComposite and validatePortUsageIsReference. The
+// one-objective rule stays unimplemented by decision (see docs/project/spec-compliance.md).
 const (
-	msgOnlyOneReturn      = "Only one return parameter is allowed"
-	msgOnlyOneEntryAction = "A state may have at most one entry action."
-	msgOnlyOneDoAction    = "A state may have at most one do action."
-	msgOnlyOneExitAction  = "A state may have at most one exit action."
-	msgPortDefComposite   = "Owned usages of a port definition (other than ports) must be referential."
-	msgPortUsageComposite = "Nested usages in a port usage (other than ports) must be referential."
+	msgOnlyOneReturn        = "Only one return parameter is allowed"
+	msgOnlyOneEntryAction   = "A state may have at most one entry action."
+	msgOnlyOneDoAction      = "A state may have at most one do action."
+	msgOnlyOneExitAction    = "A state may have at most one exit action."
+	msgPortDefComposite     = "Owned usages of a port definition (other than ports) must be referential."
+	msgPortUsageComposite   = "Nested usages in a port usage (other than ports) must be referential."
+	msgVariantPortComposite = "A port usage must be referential."
 )
 
 // W10BStructuralPass checks how many members of a kind a declaration owns and
@@ -77,11 +78,32 @@ func (c *w10bStructuralChecker) check(decl ast.Node) {
 	if msg, ok := portOwnerMessage(decl); ok {
 		for _, m := range members {
 			u, ok := unwrapUsageMember(m)
-			if !ok || u.Kind == ast.UsagePort || !w10bIsComposite(u) {
+			if !ok {
 				continue
 			}
-			c.report(m, msg, "port-owned-usage-composite")
+			c.checkVariantPorts(u)
+			if u.Kind != ast.UsagePort && w10bIsComposite(u) {
+				c.report(m, msg, "port-owned-usage-composite")
+			}
 		}
+	}
+}
+
+// checkVariantPorts reports composite port variants under a port owner: a variant
+// has no owning type, so it is no subport and must be referential (validatePortUsageIsReference).
+func (c *w10bStructuralChecker) checkVariantPorts(variation *ast.Usage) {
+	if !variation.IsVariation {
+		return
+	}
+	for _, m := range variation.Members {
+		u, ok := unwrapUsageMember(m)
+		if !ok || !u.IsVariant {
+			continue
+		}
+		if u.Kind == ast.UsagePort && !w10bReferential(u) {
+			c.report(m, msgVariantPortComposite, "variant-port-composite")
+		}
+		c.checkVariantPorts(u)
 	}
 }
 
@@ -104,11 +126,17 @@ func (c *w10bStructuralChecker) report(node ast.Node, msg, code string) {
 	})
 }
 
-// w10bIsComposite reports whether a usage owns its occurrences: `ref`, a
-// direction, an end, an event occurrence, and reference subsetting are
-// referential instead.
+// w10bReferential reports the declarations that are referential whatever their kind:
+// `ref`, a direction, an end, an event, reference subsetting, a bare `variant x;`.
+func w10bReferential(u *ast.Usage) bool {
+	return u.IsReference || u.Direction != ast.DirNone || u.IsEnd || u.IsEvent ||
+		w10bReferences(u) || u.IsVariantReference()
+}
+
+// w10bIsComposite reports whether a usage owns its occurrences: referential
+// declarations do not; of the rest, parts, items and occurrences do by default.
 func w10bIsComposite(u *ast.Usage) bool {
-	if u.IsReference || u.Direction != ast.DirNone || u.IsEnd || u.IsEvent || w10bReferences(u) {
+	if w10bReferential(u) {
 		return false
 	}
 	if u.IsComposite {

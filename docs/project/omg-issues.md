@@ -440,6 +440,17 @@ package T2 {
 }
 ```
 
+The same silence covers every other non-Boolean guard tried: `accept … if 1 then`,
+`transition if 2.5 then`, an enumeration literal, a part-typed attribute, a `String`-valued
+calculation, and the guarded successions of an action body (`first a if "go" then b`, a
+decision's `if e then b`).
+
+The cause appears to be `ExpressionAdapter.getRelevantFeatures` (`EXPRESSION_GUARD_FEATURE`):
+a transition guard implicitly redefines `TransitionPerformances::TransitionPerformance::guard`,
+declared `bool guard[*]`, so `KerMLValidator.isBoolean` finds a `Boolean`-typed result on
+every guard by construction and `checkTransitionFeatureMembership` cannot fail. The reduced fixture library
+has no `TransitionPerformances`, which is why the Xpect expectation holds there.
+
 Is the guard check intended to fire in a full-library workspace? A second
 implementation that rejects `if "test"` with the full library loaded, as the
 fixture suggests it should, currently disagrees with the release's validator on
@@ -484,6 +495,42 @@ Is the operator list the intended reading of `checkTriggerInvocationExpressionAf
 is not a duration, and a quotient of a length by a speed is one; a second
 implementation that judges the value's dimension accepts the last line and
 refuses the first two.
+````
+
+---
+
+### A quantity value is accepted as the unit of a quantity (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML judges the nested quantity by its value type
+(`validation-constraints.md`, `validateOperatorExpressionQuantity`), so the two
+implementations disagree on the shape below.
+
+````markdown
+**Question, not a bug report:** `SysMLValidator.checkOperatorExpression` judges
+the unit of `x [u]` with `resultConformsTo(u, TensorMeasurementReference)`,
+which admits an `OperatorExpression` whose declared result is a supertype of
+the wanted type when one of its arguments conforms. `BaseFunctions::'['` returns
+`Anything`, so a quantity value nested as the unit passes for the measurement
+reference it was built from. With the release's validator
+(`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`) and the full standard
+library:
+
+```sysml
+package Q {
+    private import ISQ::*;
+    private import SI::*;
+    attribute a = 10 [2 [m]];          // no warning: `m` is an argument of `[`
+    attribute b = 10 [(m, 3)];         // no warning: `m` is an element
+    attribute c = 10 [if true ? m else s];  // Should be a measurement reference (unit).
+}
+```
+
+Is the existential reading of `resultConformsTo` intended for `[`? `2 [m]` is a
+`ScalarQuantityValue`, not a measurement reference, and a second implementation
+that judges the value's type warns on `a`; it agrees on `b` (a sequence whose
+elements are units) and on `c` (the branches of a conditional are expression
+bodies, so its result is `Anything` and no argument is a unit).
 ````
 
 ---

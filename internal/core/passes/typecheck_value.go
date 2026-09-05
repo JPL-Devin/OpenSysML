@@ -53,7 +53,8 @@ func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scop
 		if _, ok := value.(*ast.BodyExpr); !ok {
 			continue
 		}
-		if c := ec.model.ExprConformsTo(valueScope, value, want); c.Known && !c.Holds {
+		got := ec.model.ExprResultType(valueScope, value)
+		if got != nil && !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
 			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", semantics.PrimExpression, want.Name)
 		}
 	}

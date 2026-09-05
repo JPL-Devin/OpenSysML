@@ -33,7 +33,7 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
 As of the `semantic/` source (named pilot constraints, KerML and SysML, the control-node
 succession rules, the feature-value overriding rule, the enumeration-variation rules, the send-action cases,
-the metadata typing, annotated-element and body rules, the trigger-argument typing rules, the owning-body member rules, the cross-subsetting rules, the association arity, binary-link end
+the metadata typing, annotated-element and body rules, the trigger-argument typing rules, the owning-body member rules, the cross-subsetting rules, the variant port rule, the association arity, binary-link end
 count and multiplicity-bound typing rules, and the result-expression ownership rules), with a fresh library cache:
 `244 case(s): 236 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
