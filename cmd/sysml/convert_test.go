@@ -304,12 +304,13 @@ func TestConvertMigratesXMI(t *testing.T) {
 		args []string
 		want string
 	}{
-		"xmi as target":                              {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
-		"report without xmi":                         {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
-		"report without convert":                     {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
-		"notation read as xmi":                       {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
-		"report over the model":                      {[]string{xmi, "-convert", "sysml", "-o", textReport, "-migration-report", textReport}, "-migration-report and -o both name"},
-		"report over the model, spelled differently": {[]string{xmi, "-convert", "sysml", "-o", filepath.Join(filepath.Dir(textReport), ".", filepath.Base(textReport)), "-migration-report", textReport}, "-migration-report and -o both name"},
+		"xmi as target":                                {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
+		"report without xmi":                           {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
+		"report without convert":                       {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
+		"notation read as xmi":                         {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
+		"report over the model":                        {[]string{xmi, "-convert", "sysml", "-o", textReport, "-migration-report", textReport}, "-migration-report and -o both name"},
+		"report over the model through dangling links": {[]string{xmi, "-convert", "sysml", "-o", danglingLink(t, dir, "model-link", "shared.txt"), "-migration-report", danglingLink(t, dir, "report-link", "shared.txt")}, "-migration-report and -o both name"},
+		"report over the model, spelled differently":   {[]string{xmi, "-convert", "sysml", "-o", filepath.Join(filepath.Dir(textReport), ".", filepath.Base(textReport)), "-migration-report", textReport}, "-migration-report and -o both name"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			out, err := exec.Command(binary, tc.args...).CombinedOutput()
@@ -362,4 +363,14 @@ func TestMigrationReportRefusedBeforeEveryMode(t *testing.T) {
 			t.Errorf("%v: report written", args[1:])
 		}
 	}
+}
+
+// danglingLink makes a symbolic link in dir to a target that does not exist.
+func danglingLink(t *testing.T, dir, name, target string) string {
+	t.Helper()
+	link := filepath.Join(dir, name)
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot make a symbolic link: %v", err)
+	}
+	return link
 }

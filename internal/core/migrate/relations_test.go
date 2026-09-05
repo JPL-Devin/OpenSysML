@@ -259,6 +259,23 @@ func TestExternalEndKeepsLocalDependencyPairs(t *testing.T) {
 	}
 }
 
+func TestExternalPairsAreEachCounted(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_c" name="C"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" client="_a _b" supplier="_c">
+      <supplier href="other.xmi#_ext"/>
+    </packagedElement>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/><sysml:Block xmi:id="_s3" base_Class="_c"/>`)
+	wantLine(t, r.Notation, "dependency A to C;")
+	wantLine(t, r.Notation, "dependency B to C;")
+	es := entriesFor(r, "_d")
+	if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.HasPrefix(es[0].Note, "2 of 4 relationships written; 2 pair(s) reach outside") {
+		t.Errorf("entries = %+v", es)
+	}
+}
+
 func TestRepeatedAnonymousDerivationsGetDistinctNames(t *testing.T) {
 	r := migrateDocument(t, `
     <packagedElement xmi:type="uml:Class" xmi:id="_r1" name="R1"/>

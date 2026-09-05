@@ -117,17 +117,45 @@ func writeMigrationReport(report *migrate.Report) error {
 	return nil
 }
 
-// samePath reports whether a and b name one file: the same file on disk, or
-// the same absolute path when one does not exist yet.
+// samePath reports whether a and b name one file, following symbolic links,
+// including a dangling link to a file neither has written yet.
 func samePath(a, b string) bool {
 	if fa, err := os.Stat(a); err == nil {
 		if fb, err := os.Stat(b); err == nil {
 			return os.SameFile(fa, fb)
 		}
 	}
-	aa, errA := filepath.Abs(a)
-	ab, errB := filepath.Abs(b)
-	return errA == nil && errB == nil && aa == ab
+	ra, errA := resolvePath(a)
+	rb, errB := resolvePath(b)
+	return errA == nil && errB == nil && ra == rb
+}
+
+// resolvePath returns the absolute path a write to path lands on: every
+// symbolic link on the way is followed, whether or not its target exists.
+func resolvePath(path string) (string, error) {
+	for range 64 {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return filepath.Abs(resolved)
+		}
+		dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(dir, filepath.Base(path))
+		fi, err := os.Lstat(path)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			return filepath.Abs(path)
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(dir, target)
+		}
+		path = target
+	}
+	return "", fmt.Errorf("%s: too many levels of symbolic links", path)
 }
 
 // parseTargetFormat resolves the -convert value, explaining the flag when a file

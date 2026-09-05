@@ -1059,17 +1059,15 @@ func (m *migration) rule(r *xmi.Element) {
 // clients or suppliers stands for every pair.
 type pair struct{ client, supplier *xmi.Element }
 
-// dependencyPairs expands a dependency into its client–supplier pairs; a note
-// with no pairs says why it cannot be written, a note beside pairs which
-// references were dangling or reached outside the document.
-func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
+// dependencyPairs expands a dependency into the client–supplier pairs that can
+// be written and the number that cannot; the note says why, for those.
+func (m *migration) dependencyPairs(d *xmi.Element) (pairs []pair, failed int, note string) {
 	clients := m.model.Refs(d, "client")
 	suppliers := m.model.Refs(d, "supplier")
 	missing := m.dangling(d, "client", "supplier")
 	if len(clients) == 0 || len(suppliers) == 0 {
-		return nil, joinNotes("the dependency's client or supplier is not in the document", missing)
+		return nil, 1, joinNotes("the dependency's client or supplier is not in the document", missing)
 	}
-	var pairs []pair
 	external := 0
 	for _, c := range clients {
 		for _, s := range suppliers {
@@ -1080,10 +1078,13 @@ func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
 			pairs = append(pairs, pair{c, s})
 		}
 	}
+	if missing != "" {
+		failed = 1
+	}
 	if external > 0 {
 		missing = joinNotes(missing, fmt.Sprintf("%d pair(s) reach outside the document and are not written", external))
 	}
-	return pairs, missing
+	return pairs, failed + external, missing
 }
 
 // placement is the outcome of placing a Satisfy or Verify: where each pair was
@@ -1103,9 +1104,9 @@ func (m *migration) placeDependency(d *xmi.Element) {
 	}
 	pl := &placement{}
 	m.unplaced[d] = pl
-	pairs, note := m.dependencyPairs(d)
+	pairs, failed, note := m.dependencyPairs(d)
+	pl.failed += failed
 	if note != "" {
-		pl.failed++
 		pl.notes = append(pl.notes, note)
 	}
 	for _, p := range pairs {
@@ -1132,14 +1133,13 @@ func (m *migration) dependency(d *xmi.Element) {
 		m.relationship(d, m.unplaced[d])
 		return
 	}
-	pairs, note := m.dependencyPairs(d)
+	pairs, failed, note := m.dependencyPairs(d)
 	if len(pairs) == 0 {
 		m.unmapped(d, note)
 		return
 	}
-	pl := &placement{}
+	pl := &placement{failed: failed}
 	if note != "" {
-		pl.failed++
 		pl.notes = append(pl.notes, note)
 	}
 	for i, p := range pairs {
