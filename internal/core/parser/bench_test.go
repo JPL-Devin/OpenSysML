@@ -21,7 +21,11 @@ func BenchmarkParseModel(b *testing.B) {
 	if dir == "" {
 		b.Skipf("%s is not set", benchModelEnv)
 	}
-	var files []*source.SourceFile
+	type file struct {
+		path string
+		data []byte
+	}
+	var files []file
 	var lines, size int
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || source.KindOf(path) == source.KindUnknown {
@@ -31,7 +35,7 @@ func BenchmarkParseModel(b *testing.B) {
 		if err != nil {
 			return err
 		}
-		files = append(files, source.New(path, data))
+		files = append(files, file{path, data})
 		lines += bytes.Count(data, []byte("\n"))
 		size += len(data)
 		return nil
@@ -45,11 +49,12 @@ func BenchmarkParseModel(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for _, sf := range files {
-			p := New(sf)
+		for _, f := range files {
+			// A fresh SourceFile each time, so its lazy text conversion is paid as a real load pays it.
+			p := New(source.New(f.path, f.data))
 			p.ParseFile()
 			if len(p.Diagnostics) > 0 {
-				b.Fatalf("%s: %s", sf.Name(), p.Diagnostics[0].Message)
+				b.Fatalf("%s: %s", f.path, p.Diagnostics[0].Message)
 			}
 		}
 	}
