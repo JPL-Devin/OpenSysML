@@ -125,8 +125,8 @@ func (v Value) WholeNumber() (int64, bool) {
 	return 0, false
 }
 
-// asReal returns the value as a float64 (int and real only).
-func (v Value) asReal() float64 {
+// AsReal returns the value as a float64 (int and real only).
+func (v Value) AsReal() float64 {
 	if v.Kind == ValInt {
 		return float64(v.Int)
 	}
@@ -383,7 +383,7 @@ func evalEquality(op ast.OperatorKind, l, r Value) (Value, bool) {
 	case l.Kind == ValBool && r.Kind == ValBool:
 		eq = l.Bool == r.Bool
 	case l.IsNumeric() && r.IsNumeric():
-		eq = l.asReal() == r.asReal()
+		eq = l.AsReal() == r.AsReal()
 	default:
 		return Value{}, false
 	}
@@ -397,7 +397,7 @@ func evalComparison(op ast.OperatorKind, l, r Value) (Value, bool) {
 	if !l.IsNumeric() || !r.IsNumeric() {
 		return Value{}, false
 	}
-	lf, rf := l.asReal(), r.asReal()
+	lf, rf := l.AsReal(), r.AsReal()
 	var res bool
 	switch op {
 	case ast.OpLt:
@@ -435,7 +435,7 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 		}
 		return evalIntArith(op, l.Int, r.Int)
 	}
-	return evalRealArith(op, l.asReal(), r.asReal())
+	return evalRealArith(op, l.AsReal(), r.AsReal())
 }
 
 // evalIntArith folds Integer arithmetic, declining a result outside the
@@ -518,7 +518,7 @@ func Pow(l, r Value) (Value, error) {
 		return Value{Kind: ValInt, Int: res}, nil
 	}
 
-	base, exp := l.asReal(), r.asReal()
+	base, exp := l.AsReal(), r.AsReal()
 	switch {
 	case base == 0 && exp < 0:
 		return Value{}, fmt.Errorf("%w: 0 ** %v is undefined (negative exponent)", ErrArithmeticDomain, exp)

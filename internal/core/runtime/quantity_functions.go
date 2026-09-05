@@ -165,7 +165,7 @@ func angleArgument(ctx *Context, val Value) (semantics.Value, bool) {
 		if q.Unit.Term.Scale == semantics.UnitScale(1) {
 			return q.Num, true
 		}
-		return semantics.Value{Kind: semantics.ValReal, Real: q.baseMagnitude()}, true
+		return semantics.Value{Kind: semantics.ValReal, Real: q.BaseMagnitude()}, true
 	}
 	return semantics.Value{}, false
 }

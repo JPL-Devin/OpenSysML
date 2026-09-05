@@ -511,7 +511,7 @@ package RobotSolver {
                 driveEnergy >= 200
             }
 
-            attribute :>> best = toolEnergy;
+            in calc :>> eval { toolEnergy }
         }
     }
 
@@ -529,7 +529,7 @@ package RobotSolver {
                 mass <= 420 [kg]
             }
 
-            attribute :>> best = mass;
+            in calc :>> eval { mass }
         }
     }
 
@@ -558,12 +558,12 @@ package RobotSolver {
                 toolEnergy >= 150
             }
 
-            attribute :>> best = standoff;
+            in calc :>> eval { standoff }
         }
 
         objective mostToolTime : MaximizeObjective {
             subject :>> selectedAlternative;
-            attribute :>> best = toolEnergy;
+            in calc :>> eval { toolEnergy }
         }
     }
 }
