@@ -79,6 +79,17 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			} else {
 				tc.checkFeatureDecl(scope, usageDecl(d))
 			}
+			if cross := d.CrossFeature; cross != nil {
+				// A cross feature is a reference usage of its own (SysML.xtext
+				// OwnedCrossFeatureMember), typed by any definition.
+				tc.checkRelationships(scope, cross.Relationships, declKind{
+					lang:        tc.lang,
+					useKind:     ast.UsageAttribute,
+					isReference: true,
+					hasType:     hasTypingRelationship(cross.Relationships),
+					span:        cross.Span(),
+				})
+			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}

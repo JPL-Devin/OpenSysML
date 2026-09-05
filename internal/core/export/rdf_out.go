@@ -717,7 +717,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
-		e.relationships(subject, owner, ast.OwnRelationships(n))
+		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		if err := e.crossFeature(subject, fqn, n); err != nil {
 			return err

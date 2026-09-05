@@ -246,6 +246,30 @@ func anonymousCrossFeature(mult *ast.Multiplicity) *ast.CrossFeatureMember {
 	return cross
 }
 
+// tryParseCrossFeature parses the cross feature an end declares ahead of its
+// kind keyword, `end x1 : Sub1 [0..1] :> g feature x` (KerML.xtext
+// OwnedCrossingFeature, a FeatureDeclaration), consuming nothing otherwise.
+func (p *Parser) tryParseCrossFeature() *ast.CrossFeatureMember {
+	cp := p.checkpoint()
+	defer p.release()
+	start := p.peek().Span.Offset
+	cross := &ast.CrossFeatureMember{}
+	if p.atName() || p.at(lexer.Lt) {
+		cross.Ident = p.parseIdentification()
+	}
+	cross.Relationships = p.parseRelationships(true)
+	if p.at(lexer.LBracket) {
+		cross.Multiplicity = p.parseMultiplicity()
+		cross.Relationships = append(cross.Relationships, p.parseRelationships(true)...)
+	}
+	if !p.isKindKeyword(p.peek()) {
+		p.restore(cp)
+		return nil
+	}
+	cross.NodeSpan = p.spanFrom(start)
+	return cross
+}
+
 // applyFeatureMods transfers modifiers that were consumed before a declaration's
 // kind keyword onto the declaration itself, as in `ref part a : V`. Only
 // modifiers that were present are applied, so a flag the declaration parsed for
@@ -2940,196 +2964,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
 			var cross *ast.CrossFeatureMember
-			var hasDefKeyword bool
-			var endRels []*ast.Relationship // relationships parsed before definition keyword
-
-			if p.isKindKeyword(p.peek()) {
-				// `end [1] part bead : TireBead` — the kind keyword follows the
-				// modifiers directly, so there is no short name, and the
-				// crossing multiplicity was already taken with the modifiers.
-				hasDefKeyword = true
-			} else if p.atNameOrKeyword() {
-				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
-				// OR: [mult] (feature|occurrence|...)
-				// Also: name [mult] subsets X feature name (with relationship clause)
-				ahead := 1
-				if p.peekN(ahead).Kind == lexer.LBracket {
-					// Skip past multiplicity to check for definition keyword
-					ahead++
-					for ahead < 20 && p.peekN(ahead).Kind != lexer.RBracket && p.peekN(ahead).Kind != lexer.EOF {
-						ahead++
-					}
-					if p.peekN(ahead).Kind == lexer.RBracket {
-						ahead++ // past ]
-					}
-				}
-
-				// Skip optional relationship clauses before definition keyword
-				// Pattern: end name[mult] subsets X feature Y
-				for ahead < 40 {
-					tok := p.peekN(ahead)
-					if tok.Kind == lexer.EOF {
-						break
-					}
-					// Check if this is a relationship keyword
-					isRelKeyword := false
-					if tok.Kind == lexer.Keyword {
-						_, isRelKeyword = relationshipKeywords[tok.KeywordID]
-						if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
-							isRelKeyword = true
-						}
-						if !isRelKeyword && tok.KeywordID == "typed" && p.peekN(ahead+1).KeywordID == "by" {
-							isRelKeyword = true
-						}
-					}
-					if isRelKeyword {
-						// Skip relationship keyword
-						ahead++
-						// Skip potential "of" after "inverse"
-						if p.peekN(ahead).KeywordID == "of" {
-							ahead++
-						}
-						// Skip relationship target (identifier/qualified name)
-						for ahead < 40 {
-							t := p.peekN(ahead)
-							// Stop if we hit a definition or usage keyword
-							if t.Kind == lexer.Keyword {
-								_, isDef := p.definitionKind(t.KeywordID)
-								_, isUsage := p.usageKind(t.KeywordID)
-								if isDef || isUsage {
-									break
-								}
-							}
-							if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
-								ahead++
-							} else {
-								break
-							}
-						}
-						// Skip comma for multiple targets
-						if p.peekN(ahead).Kind == lexer.Comma {
-							ahead++
-						} else {
-							break // no more relationship clauses
-						}
-					} else {
-						break // not a relationship keyword
-					}
-				}
-
-				// Check if next token after (optional) multiplicity and relationships is a definition or usage keyword
-				nextTok := p.peekN(ahead)
-				isDefKeyword := false
-				if nextTok.Kind == lexer.Keyword {
-					_, isDef := p.definitionKind(nextTok.KeywordID)
-					_, isUsage := p.usageKind(nextTok.KeywordID)
-					isDefKeyword = isDef || isUsage
-				}
-
-				if isDefKeyword {
-					// `end x1 [0..1] feature x : C1` declares the end's cross
-					// feature ahead of the end itself (KerML.xtext
-					// OwnedCrossFeatureMember).
-					crossStart := p.peek().Span.Offset
-					cross = &ast.CrossFeatureMember{}
-					tok := p.advance()
-					if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName || tok.Kind == lexer.Keyword {
-						cross.Ident.Name = p.src.Text(tok.Span)
-						cross.Ident.NameSpan = tok.Span
-					}
-					if p.at(lexer.LBracket) {
-						cross.Multiplicity = p.parseMultiplicity()
-					}
-					for p.atRelationshipKeyword() {
-						rels := p.parseRelationships(true)
-						cross.Relationships = append(cross.Relationships, rels...)
-						endRels = append(endRels, rels...)
-					}
-					cross.NodeSpan = p.spanFrom(crossStart)
-
-					hasDefKeyword = true
-				}
-			} else if p.at(lexer.LBracket) {
-				// No short name, mult comes directly: end [mult] feature
-				// Also: end [mult] subsets X feature (with relationship)
-				// Check if after mult there's a definition keyword
-				ahead := 1
-				for ahead < 20 && p.peekN(ahead).Kind != lexer.RBracket && p.peekN(ahead).Kind != lexer.EOF {
-					ahead++
-				}
-				if p.peekN(ahead).Kind == lexer.RBracket {
-					ahead++ // past ]
-
-					// Skip optional relationship clauses before definition keyword
-					for ahead < 40 {
-						tok := p.peekN(ahead)
-						if tok.Kind == lexer.EOF {
-							break
-						}
-						isRelKeyword := false
-						if tok.Kind == lexer.Keyword {
-							_, isRelKeyword = relationshipKeywords[tok.KeywordID]
-							if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
-								isRelKeyword = true
-							}
-							if !isRelKeyword && tok.KeywordID == "typed" && p.peekN(ahead+1).KeywordID == "by" {
-								isRelKeyword = true
-							}
-						}
-						if isRelKeyword {
-							ahead++
-							if p.peekN(ahead).KeywordID == "of" {
-								ahead++
-							}
-							for ahead < 40 {
-								t := p.peekN(ahead)
-								// Stop if we hit a definition or usage keyword
-								if t.Kind == lexer.Keyword {
-									_, isDef := p.definitionKind(t.KeywordID)
-									_, isUsage := p.usageKind(t.KeywordID)
-									if isDef || isUsage {
-										break
-									}
-								}
-								if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
-									ahead++
-								} else {
-									break
-								}
-							}
-							if p.peekN(ahead).Kind == lexer.Comma {
-								ahead++
-							} else {
-								break
-							}
-						} else {
-							break
-						}
-					}
-
-					nextTok := p.peekN(ahead)
-					isDefKeyword := false
-					if nextTok.Kind == lexer.Keyword {
-						_, isDef := p.definitionKind(nextTok.KeywordID)
-						_, isUsage := p.usageKind(nextTok.KeywordID)
-						isDefKeyword = isDef || isUsage
-					}
-
-					if isDefKeyword {
-						crossStart := p.peek().Span.Offset
-						cross = anonymousCrossFeature(p.parseMultiplicity())
-
-						// Parse optional relationship clauses before definition keyword
-						for p.atRelationshipKeyword() {
-							rels := p.parseRelationships(true)
-							cross.Relationships = append(cross.Relationships, rels...)
-							endRels = append(endRels, rels...)
-						}
-						cross.NodeSpan = p.spanFrom(crossStart)
-
-						hasDefKeyword = true
-					}
-				}
+			// `end [1] part bead : TireBead` — the kind keyword follows the
+			// modifiers directly, so the crossing multiplicity was already
+			// taken with them.
+			hasDefKeyword := p.isKindKeyword(p.peek())
+			if !hasDefKeyword {
+				cross = p.tryParseCrossFeature()
+				hasDefKeyword = cross != nil
 			}
 
 			// If we found a definition keyword, parse the full declaration
@@ -3142,10 +2983,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 				if u, ok := decl.(*ast.Usage); ok {
 					if cross != nil {
 						u.CrossFeature = cross
-					}
-					// Prepend relationships parsed before definition keyword
-					if len(endRels) > 0 {
-						u.Relationships = append(endRels, u.Relationships...)
 					}
 					// Every modifier ahead of the kind keyword belongs to the
 					// end, not `end` alone: `end ref attribute e : S;`.
