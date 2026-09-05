@@ -245,11 +245,14 @@ func bindArgumentList(ec *EvalContext, inv actionInvocation, callee *symbols.Sym
 		bound[in[i]] = true
 	}
 
-	names := ec.ctx.boundParameterNames(ec.scope, callee, inv.named)
+	names, unbound := ec.ctx.boundParameterNames(ec.scope, callee, inv.named)
 	for i, named := range inv.named {
 		name := names[i]
 		if name == "" {
 			return fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
+		}
+		if err := unbound[i]; err != nil {
+			return err
 		}
 		if !contains(in, name) {
 			return fmt.Errorf(

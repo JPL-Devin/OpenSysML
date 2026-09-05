@@ -100,12 +100,12 @@ var builtinSignatures = map[string][]declaredParam{
 
 // invokeBuiltin binds the arguments of a call to the built-in name to its
 // declared parameters and applies fn to them.
-func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg, names []string) (Value, error) {
+func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg, names []string, unbound []error) (Value, error) {
 	outer := ec.entered
 	ec.entered = ec.ctx.activations
 	defer func() { ec.entered = outer }()
 	return tracedBuiltin(ec.trace, name,
-		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named, names) },
+		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named, names, unbound) },
 		func(args []Value) (Value, error) { return fn(ec, args) },
 	)
 }
@@ -143,14 +143,14 @@ func tracedBuiltin(tr *TraceRecorder, name string, bind func() ([]Value, error),
 // parameter of their name. A parameter left unbound is null when its
 // multiplicity admits no value and reported otherwise. An `expr` parameter's
 // argument is bound unevaluated either way.
-func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg, names []string) ([]Value, error) {
+func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg, names []string, unbound []error) ([]Value, error) {
 	params := builtinSignatures[name]
 	for _, argName := range names {
 		if argName == "" {
 			return nil, fmt.Errorf("unnamed argument in invocation of %s", writtenName(name))
 		}
 	}
-	return bindBuiltin(name, len(exprs), names, func(param, arg int) (Value, error) {
+	return bindBuiltin(name, len(exprs), names, unbound, func(param, arg int) (Value, error) {
 		if len(names) > 0 {
 			return ec.evalArgument(params, param, named[arg].Value)
 		}
@@ -167,7 +167,7 @@ func bindBuiltinValues(name string, args calcArgs) ([]Value, error) {
 		names = append(names, argName)
 	}
 	slices.Sort(names)
-	return bindBuiltin(name, len(args.positional), names, func(_, arg int) (Value, error) {
+	return bindBuiltin(name, len(args.positional), names, nil, func(_, arg int) (Value, error) {
 		if len(names) > 0 {
 			return args.named[names[arg]], nil
 		}
@@ -176,8 +176,9 @@ func bindBuiltinValues(name string, args calcArgs) ([]Value, error) {
 }
 
 // bindBuiltin assigns a call's positional arguments, or its named ones, to the
-// built-in's declared parameters, materializing each through bind(param, arg).
-func bindBuiltin(name string, positional int, named []string, bind func(param, arg int) (Value, error)) ([]Value, error) {
+// built-in's declared parameters, materializing each through bind(param, arg);
+// a named argument the model could not place (unbound[j]) is reported in its turn.
+func bindBuiltin(name string, positional int, named []string, unbound []error, bind func(param, arg int) (Value, error)) ([]Value, error) {
 	params := builtinSignatures[name]
 	written := writtenName(name)
 	if positional > 0 && len(named) > 0 {
@@ -197,6 +198,9 @@ func bindBuiltin(name string, positional int, named []string, bind func(param, a
 		args[i], bound[i] = val, true
 	}
 	for j, argName := range named {
+		if unbound != nil && unbound[j] != nil {
+			return nil, unbound[j]
+		}
 		i := slices.IndexFunc(params, func(p declaredParam) bool { return p.name == argName })
 		if i < 0 {
 			return nil, fmt.Errorf("%w: function %s has no input parameter %q (expected %s)",
