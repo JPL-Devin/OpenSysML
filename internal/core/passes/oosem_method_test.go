@@ -77,6 +77,21 @@ func TestOOSEMRequirementNotSatisfied(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMRequirementNotSatisfied, 4, 5)
 }
 
+// A view satisfying a viewpoint, or a negated satisfy, states no satisfaction.
+func TestOOSEMSatisfactionIgnoresViewpointsAndNegations(t *testing.T) {
+	silent := oosemModel(`
+		#systemRequirement requirement sysA;
+		view v : RequirementsView { satisfy RequirementsViewpoint; }`)
+	w8dWantLines(t, silent, CodeOOSEMRequirementNotSatisfied)
+	negated := oosemModel(`
+		#systemRequirement requirement sysA;
+		#systemRequirement requirement sysB;
+		part p;
+		satisfy sysA by p;
+		assert not satisfy sysB by p;`)
+	w8dWantLines(t, negated, CodeOOSEMRequirementNotSatisfied, 4)
+}
+
 func TestOOSEMSatisfactionWaitsForAnySatisfy(t *testing.T) {
 	src := oosemModel(`
 		#systemRequirement requirement sysA;

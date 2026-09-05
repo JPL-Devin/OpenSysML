@@ -319,8 +319,12 @@ func (a *oosemAudit) bodyEnds(sym *symbols.Symbol) []*symbols.Symbol {
 }
 
 // gatherSatisfaction records the requirement a `satisfy` names, or the
-// satisfy itself when it declares its requirement.
+// satisfy itself when it declares its requirement. A negated satisfy and a
+// view's satisfaction of a viewpoint state no requirement satisfied.
 func (a *oosemAudit) gatherSatisfaction(sym *symbols.Symbol, usage *ast.Usage) {
+	if usage.IsNegated || semantics.IsViewpointSatisfy(sym) {
+		return
+	}
 	a.statesSatisfaction = true
 	if usage.DeclaresRequirement {
 		a.satisfied[symbols.KeyOf(sym)] = true
