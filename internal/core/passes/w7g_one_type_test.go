@@ -191,16 +191,19 @@ func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 }
 
 // TestW7GASelectedEnumeratedValueKeepsItsOperandType: `xs.?{…}` keeps the
-// elements of xs, so it types the value as xs is typed — through a chain, a
-// nested selection or an indexed element — while `.{…}` and `,` yield Anything
-// (pilot 2026-07 agrees on every case).
+// elements of xs, so it types the value as xs is typed — through a chain, an
+// alias, a feature typed only by its own value, a nested selection or an indexed
+// element — while `.{…}` and `,` yield Anything (pilot 2026-07 agrees on every case).
 func TestW7GASelectedEnumeratedValueKeepsItsOperandType(t *testing.T) {
 	const src = `package T {
 		private import ScalarValues::*;
 		part def Other;
-		part def W { attribute q : Real[0..*]; }
+		part def W { attribute q : Real[0..*]; attribute qq = q; }
 		attribute xs : Real[0..*];
 		attribute ns : Natural[0..*];
+		alias ys for xs;
+		attribute zs = xs;
+		attribute z1 = 1.5;
 		part others : Other[0..*];
 		part w : W;
 		enum def Wrong {
@@ -209,10 +212,16 @@ func TestW7GASelectedEnumeratedValueKeepsItsOperandType(t *testing.T) {
 			c = ns.?{in n : Natural; n > 1};
 			d = xs.?{in r : Real; r > 1.0}.?{in r : Real; r > 2.0};
 			e = w.q.?{in r : Real; r > 1.0};
+			f = ys.?{in r : Real; r > 1.0};
+			g = zs.?{in r : Real; r > 1.0};
+			h = zs;
+			i = w.qq.?{in r : Real; r > 1.0};
+			j = z1.?{in r : Real; r > 1.0};
+			k = zs#(1);
 		}
 		enum def WrongNum :> Real {
-			f = ns.?{in n : Natural; n > 1};
-			g = others.?{in o : Other; true};
+			l = ns.?{in n : Natural; n > 1};
+			m = others.?{in o : Other; true};
 		}
 		enum def Right {
 			ok1 = xs.{in r : Real; r};
@@ -224,6 +233,12 @@ func TestW7GASelectedEnumeratedValueKeepsItsOperandType(t *testing.T) {
 			ok5 = (xs, xs).?{in r : Real; r > 1.0};
 			ok6 = xs#(1).?{in r : Real; r > 1.0};
 			ok7 = w.q.?{in r : Real; r > 1.0};
+			ok8 = ys.?{in r : Real; r > 1.0};
+			ok9 = zs.?{in r : Real; r > 1.0};
+			ok10 = zs;
+			ok11 = w.qq.?{in r : Real; r > 1.0};
+			ok12 = z1.?{in r : Real; r > 1.0};
+			ok13 = zs#(1);
 		}
 	}`
 	var got []string
@@ -233,7 +248,7 @@ func TestW7GASelectedEnumeratedValueKeepsItsOperandType(t *testing.T) {
 		}
 		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
 	}
-	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	want := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("selected enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}

@@ -150,15 +150,22 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 	return conformanceUnknown()
 }
 
-// ExprResultType is the type the result of an expression declares by its syntax
-// alone: a literal's scalar type (KerML Performances), the result of the Kernel
-// Function Library function an operator names, the definition a constructor
-// instantiates. Nil for a value only a named declaration or evaluation types.
+// ExprResultType is the type of an expression's result: that of the feature it
+// names, else what its syntax declares (literal, operator, constructor); nil if unknown.
 func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 	if m == nil {
 		return nil
 	}
 	switch n := node.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
+		if m.resolver == nil {
+			return nil
+		}
+		sym, ok := m.resolver.ResolveTarget(scope, n)
+		if !ok || sym == nil {
+			return nil
+		}
+		return m.featureResultType(sym)
 	case *ast.LiteralBool:
 		return m.libSymbol(FQNBoolean)
 	case *ast.LiteralString:
@@ -176,7 +183,7 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 		return m.indexResultType(scope, n)
 	case *ast.SelectExpr:
 		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
-		return m.operandResultType(scope, n.Operand)
+		return m.ExprResultType(scope, n.Operand)
 	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
 		return m.libSymbol(fqnAnything)
 	case *ast.ConstructorExpr:
@@ -215,28 +222,32 @@ func operatorResultFQN(op ast.OperatorKind) string {
 // indexResultType is the type of one element `seq#(i)` selects: seq's own type,
 // or Anything when seq is a Collection (KerML checkIndexExpressionResultSpecialization).
 func (m *Model) indexResultType(scope *symbols.Scope, n *ast.IndexExpr) *symbols.Symbol {
-	seq := m.operandResultType(scope, n.Operand)
+	seq := m.ExprResultType(scope, n.Operand)
 	if collection := m.libSymbol(fqnCollection); seq == nil || collection == nil || m.Conforms(seq, collection) {
 		return m.libSymbol(fqnAnything)
 	}
 	return seq
 }
 
-// operandResultType is the type of the sequence an operand yields: the declared
-// type of the feature it names, else the result its syntax declares.
-func (m *Model) operandResultType(scope *symbols.Scope, operand ast.Node) *symbols.Symbol {
-	switch operand := operand.(type) {
-	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
-		if m.resolver == nil {
-			return nil
-		}
-		sym, ok := m.resolver.ResolveTarget(scope, operand)
-		if !ok || sym == nil || !sym.IsFeature() {
-			return nil
-		}
-		return m.nearestDeclaredType(sym)
+// featureResultType is a feature's declared type, else that of the value typing
+// it (KerML checkFeatureValuationSpecialization); a self-referential value types nothing.
+func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
+	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = alias
 	}
-	return m.ExprResultType(scope, operand)
+	if !sym.IsFeature() {
+		return nil
+	}
+	if typ := m.nearestDeclaredType(sym); typ != nil {
+		return typ
+	}
+	value := m.typingValue(sym)
+	if value == nil || m.valuing[sym] {
+		return nil
+	}
+	m.valuing[sym] = true
+	defer delete(m.valuing, sym)
+	return m.ExprResultType(sym.OwnerScope, value)
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as
