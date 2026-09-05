@@ -89,9 +89,8 @@ func (c *w10bStructuralChecker) check(decl ast.Node) {
 	}
 }
 
-// checkVariantPorts reports composite port variants under a port owner: a variant
-// has no owning type, so it is no subport and must be referential (validatePortUsageIsReference).
-// Variants are not nested usages, so the port owner's check reaches them only through here.
+// checkVariantPorts reports composite port variants under a port owner (validatePortUsageIsReference):
+// a variant is no nested usage, so the owner's check reaches it only through here.
 func (c *w10bStructuralChecker) checkVariantPorts(variation *ast.Usage) {
 	if !variation.IsVariation {
 		return
