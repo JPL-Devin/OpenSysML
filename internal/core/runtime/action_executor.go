@@ -801,6 +801,9 @@ func (e *ActionExecutor) initialize() error {
 	if err := e.validateSubflows(e.graph); err != nil {
 		return err
 	}
+	if err := e.checkResultParameters(); err != nil {
+		return err
+	}
 
 	initialNode := e.graph.Initial
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
