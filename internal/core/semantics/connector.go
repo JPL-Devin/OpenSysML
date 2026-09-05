@@ -199,8 +199,8 @@ func endRedefined(end *symbols.Symbol, i int, owned []*symbols.Symbol, redefined
 	return i < len(owned) && owned[i] == nil
 }
 
-// namedEnds returns the ends of general that end's `:>>` clauses name, matching
-// on the last segment of each qualified name.
+// namedEnds returns the ends of general that end's `:>>` clauses name, matched
+// syntactically against each candidate's owner chain (resolving would re-enter DirectSupertypes).
 func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	if end == nil {
@@ -214,14 +214,33 @@ func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol
 		if !ok || len(qn.Parts) == 0 {
 			continue
 		}
-		name := qn.Parts[len(qn.Parts)-1].Text
 		for _, candidate := range general {
-			if candidate != nil && leafName(candidate.Name) == name {
+			if candidate != nil && qualifiedNameNames(qn, candidate) {
 				out = append(out, candidate)
 			}
 		}
 	}
 	return out
+}
+
+// qualifiedNameNames reports whether qn's segments, read from the last, match
+// sym's name and then its owners' names; `$` pins the chain to the root.
+func qualifiedNameNames(qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	parts := qn.Parts
+	if len(parts) == 0 || leafName(sym.Name) != parts[len(parts)-1].Text {
+		return false
+	}
+	scope := sym.OwnerScope
+	for i := len(parts) - 2; i >= 0; i-- {
+		if parts[i].Text == "$" {
+			return i == 0 && (scope == nil || scope.Owner() == nil)
+		}
+		if scope == nil || scope.Owner() == nil || scope.Owner().Name != parts[i].Text {
+			return false
+		}
+		scope = scope.Owner().OwnerScope
+	}
+	return true
 }
 
 // ImplicitEndRedefinitions returns the ends of the connectors its owner

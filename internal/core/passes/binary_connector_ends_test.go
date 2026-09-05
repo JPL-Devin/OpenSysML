@@ -155,15 +155,24 @@ func TestBinaryConnectorInheritedThirdEndStaysNary(t *testing.T) {
 	assoc O specializes N { end p : T; end q : T; }
 	assoc Q specializes N, Links::BinaryLink { end redefines a : T; end redefines b : T; }
 	interaction I specializes N { end redefines a : T; end redefines b : T; }
+	assoc A { end source : T; end target : T; }
+	assoc B { end source : T; end target : T; }
+	assoc OfA specializes A, B { end redefines A::source : T; end redefines A::target : T; }
+	assoc A3 { end source : T; end target : T; end via : T; }
+	assoc B3 { end source : T; end target : T; end via : T; }
+	assoc OfA3 specializes A3, B3 { end redefines A3::source : T; end redefines A3::target : T; }
 	classifier K {
 		feature x : T; feature y : T; feature z : T;
+		connector ofA : A, B { end redefines A::source references x; end redefines A::target references y; }
+		connector ofA3 : A3, B3 { end redefines A3::source references x; end redefines A3::target references y; }
 		connector n : N (x, y, z);
 		connector m : N { end redefines a references x; end redefines b references y; }
 		connector o :> n { end redefines a references x; end redefines b references y; }
 		connector q :> n, Links::binaryLinks { end redefines a references x; end redefines b references y; }
 	}
 }`
-	if got, want := binaryEndLines(t, src, true), []int{6, 13}; !sameLines(got, want) {
+	// OfA/ofA conform to BinaryLink through binary A and still inherit B's ends.
+	if got, want := binaryEndLines(t, src, true), []int{6, 10, 16, 21}; !sameLines(got, want) {
 		t.Fatalf("binary link diagnostics on lines %v, want %v", got, want)
 	}
 }

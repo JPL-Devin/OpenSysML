@@ -391,8 +391,13 @@ func TestKerMLBinaryBaseFollowsEffectiveEnds(t *testing.T) {
 		assoc Two { end a : T; end b : T; }
 		assoc TwoOfTwo specializes Two { end redefines a : T; end redefines b : T; }
 		assoc OneOfTwo specializes Two { end redefines a : T; }
+		assoc A { end source : T; end target : T; }
+		assoc B { end source : T; end target : T; }
+		assoc OfA specializes A, B { end redefines A::source : T; end redefines A::target : T; }
+		assoc OfBoth specializes A, B { end redefines A::source : T; end redefines B::target : T; }
 		class C {
 			feature x : T; feature y : T; feature z : T;
+			connector ofA : A, B { end redefines A::source references x; end redefines A::target references y; }
 			connector three : Three (x, y, z);
 			connector twoOfThree : Three { end redefines a references x; end redefines b references y; }
 			connector twoOfInherited subsets three { end redefines a references x; end redefines b references y; }
@@ -419,6 +424,9 @@ func TestKerMLBinaryBaseFollowsEffectiveEnds(t *testing.T) {
 		{p.Scope, "Two", []string{"Links::BinaryLink"}},
 		{p.Scope, "TwoOfTwo", []string{"P::Two"}},
 		{p.Scope, "OneOfTwo", []string{"P::Two"}},
+		{p.Scope, "OfA", []string{"P::A", "P::B", "Links::Link"}},
+		{p.Scope, "OfBoth", []string{"P::A", "P::B", "Links::Link"}},
+		{c.Scope, "ofA", []string{"P::A", "P::B", "Links::links"}},
 		{c.Scope, "three", []string{"P::Three", "Links::links"}},
 		{c.Scope, "twoOfThree", []string{"P::Three", "Links::links"}},
 		{c.Scope, "twoOfInherited", []string{"P::C::three", "Links::links"}},
