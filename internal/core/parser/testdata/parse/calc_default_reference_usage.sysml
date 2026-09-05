@@ -23,6 +23,23 @@ package DefaultReferenceUsages {
 		return :> ISQ::length[*] = xs;
 	}
 
+	// The result's identification may open with a short name, with or without a name.
+	calc def Named {
+		in x : Real;
+		return <r> result : Real = x;
+	}
+	calc def ShortOnly {
+		in x : LengthValue;
+		return <r> :> ISQ::length = x;
+	}
+	calc def ShortValued {
+		in x : Real;
+		return <r> = x;
+	}
+	calc def ShortBare {
+		return <r>;
+	}
+
 	// Kind-less members of a calc body are readable locals of its trailing expression.
 	calc def Affine {
 		in n : Integer;

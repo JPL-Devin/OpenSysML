@@ -1472,20 +1472,19 @@ func continuesCondition(tok lexer.Token) bool {
 	return isOperator
 }
 
-// atReturnedUsage reports whether `return` is followed by a usage declaration
-// rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
-// specialization begins one, as does a name a specialization or a
-// multiplicity follows (`return y[*] subsets A;`).
+// atReturnedUsage reports whether `return` opens a usage (`'return' UsageElement`, SysML.xtext:1961):
+// a specialization, or an identification (`<s>`? name?) a specialization, `[`, a value or `;` follows.
 func (p *Parser) atReturnedUsage() bool {
 	if p.atFeatureSpecialization() {
 		return true
 	}
-	if !p.atName() {
+	if !p.atName() && !p.at(lexer.Lt) {
 		return false
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket)
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) ||
+		p.at(lexer.Semicolon) || p.valueOperatorAt(0)
 	p.restore(cp)
 	p.release()
 	return declared
@@ -1522,16 +1521,9 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Parse optional feature modifiers after kind keyword
 	mods := p.parseFeatureModifiers()
 
-	// Check for named or anonymous result parameter syntax
-	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
-	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
-	// Pattern 4: return name = expr;       (result parameter with initializer)
-	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
-	// Pattern 6: return [modifiers] name : Type { body } (with body)
-	// Pattern 7: return :>> x : Type = expr; (anonymous, specialized before typed)
-	// Use lookahead to distinguish Pattern 1 from Pattern 4
+	// A result parameter is a usage, every part optional:
+	// `return [modifiers] <s>? name? : Type[mult] = expr { body }`.
 	if p.atReturnedUsage() {
-		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1547,8 +1539,7 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 
-		// Check if named (identifier before colon)
-		if p.atName() {
+		if p.atName() || p.at(lexer.Lt) {
 			u.Ident = p.parseIdentification()
 		}
 
@@ -1596,86 +1587,14 @@ func (p *Parser) parseResultMember() ast.Node {
 		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
 		p.parseUsageValue(u)
 
-		// Check for body or semicolon
 		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
 			members, hasBody := p.parseDefUsageBody()
 			u.Members = members
 			u.HasBody = hasBody
 		} else {
-			// Neither body nor semicolon → error
-			p.error(p.peek().Span, "expected '{' or ';' after return parameter")
+			p.error(p.peek().Span, msgExpectedReturnEnd)
 		}
 
-		u.NodeSpan = p.spanFrom(start)
-		return u
-	}
-
-	// Check for Pattern 5: return [kind] [modifiers] name [body/semicolon] (no type, no value)
-	// `return` introduces a return parameter, so a lone name after it declares
-	// that parameter (`calc acc : Acceleration { return a; }`) rather than
-	// referencing one.
-	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
-		u := &ast.Usage{
-			Kind:        usageKind,
-			Direction:   ast.DirOut,
-			IsResult:    true,
-			IsAbstract:  mods.isAbstract,
-			IsReference: mods.isReference,
-			IsEnd:       mods.isEnd,
-			IsConstant:  mods.isConstant,
-			IsComposite: mods.isComposite,
-			IsPortion:   mods.isPortion,
-			IsDerived:   mods.isDerived,
-			IsOrdered:   mods.isOrdered,
-			IsNonunique: mods.isNonunique,
-		}
-		u.Ident = p.parseIdentification()
-
-		// Check for body or semicolon
-		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
-			u.Members = bodyMembers
-			if !hasBody {
-				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-			}
-		} else {
-			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-		}
-
-		u.NodeSpan = p.spanFrom(start)
-		return u
-	}
-
-	// Check for Pattern 4: return [kind] [modifiers] name = expr [body] (result parameter with initializer, no type, no mult)
-	// Lookahead: name followed directly by a value operator
-	if p.atName() && p.valueOperatorAt(1) {
-		u := &ast.Usage{
-			Kind:        usageKind,
-			Direction:   ast.DirOut,
-			IsResult:    true,
-			IsAbstract:  mods.isAbstract,
-			IsReference: mods.isReference,
-			IsEnd:       mods.isEnd,
-			IsConstant:  mods.isConstant,
-			IsComposite: mods.isComposite,
-			IsPortion:   mods.isPortion,
-			IsDerived:   mods.isDerived,
-			IsOrdered:   mods.isOrdered,
-			IsNonunique: mods.isNonunique,
-		}
-		u.Ident = p.parseIdentification()
-		p.parseUsageValue(u)
-
-		// Check for optional body or semicolon
-		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
-			u.Members = bodyMembers
-			if !hasBody {
-				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-			}
-		} else {
-			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-		}
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
