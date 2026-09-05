@@ -439,6 +439,17 @@ package T2 {
 }
 ```
 
+The same silence covers every other non-Boolean guard tried: `accept … if 1 then`,
+`transition if 2.5 then`, an enumeration literal, a part-typed attribute, a `String`-valued
+calculation, and the guarded successions of an action body (`first a if "go" then b`, a
+decision's `if e then b`).
+
+The cause appears to be `ExpressionAdapter.getRelevantFeatures` (`EXPRESSION_GUARD_FEATURE`):
+a transition guard implicitly redefines `TransitionPerformances::TransitionPerformance::guard`,
+declared `bool guard[*]`, so `KerMLValidator.isBoolean` finds a `Boolean`-typed result on
+every guard by construction and `checkTransitionFeatureMembership` cannot fail. The reduced fixture library
+has no `TransitionPerformances`, which is why the Xpect expectation holds there.
+
 Is the guard check intended to fire in a full-library workspace? A second
 implementation that rejects `if "test"` with the full library loaded, as the
 fixture suggests it should, currently disagrees with the release's validator on
