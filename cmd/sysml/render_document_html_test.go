@@ -180,6 +180,9 @@ func TestRenderDocumentHTMLMermaid(t *testing.T) {
 		"-doc-form", "html", "-html-mermaid", "mermaid.js"),
 		2, "-html-mermaid takes cdn or the URL of a Mermaid script")
 	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
 		"-doc-form", "html", "-html-fragment", "-html-mermaid", "cdn"),
 		2, "load Mermaid in the page you embed it in")
 	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-html-mermaid", "cdn"),

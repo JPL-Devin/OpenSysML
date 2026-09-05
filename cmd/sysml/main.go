@@ -237,6 +237,10 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
 		return 2
 	}
+	if flagGiven("html-mermaid") && htmlMermaid == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -html-mermaid is empty; give it cdn or the URL of a Mermaid script")
+		return 2
+	}
 
 	// Get positional arguments (files to load)
 	args := flag.Args()
