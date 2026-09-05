@@ -469,7 +469,7 @@
     {
       "name": "validateFeatureValueOverriding",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFlowDefinitionConnectionEnds",

@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 131 of 217 named constraints are reported by OpenSysML — 120 ✅ faithful and 11 ⚠️ approximate; 9 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 77 ❔ unknown.
+**Census:** 132 of 217 named constraints are reported by OpenSysML — 121 ✅ faithful and 11 ⚠️ approximate; 8 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 77 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -131,7 +131,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateFeatureReferenceExpressionReferentIsFeature` | KerML | The referent of a feature reference expression is a feature | internal/core/passes/w8c_feature_reference.go:FeatureReferencePass.Run | — | none | ✅ faithful |
 | `validateFeatureReferenceExpressionResult` | KerML | A feature reference expression owns its result parameter | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateFeatureValueIsInitial` | KerML | A feature with an initial value is variable (`Initialized feature must be variable`) | internal/core/passes/w8c_variable_feature.go:VariableFeaturePass.Run | same wording, on the `:=` value; the variability read is `semantics.Model.FeatureIsVariable` | `semantic/k11-initial-value-nonvariable.kerml` | ✅ faithful |
-| `validateFeatureValueOverriding` | KerML | A feature value does not override a binding feature value inherited from a redefined feature (`Cannot override a binding feature value`) | — | — | none | ❌ not implemented |
+| `validateFeatureValueOverriding` | KerML | A feature value does not override a binding feature value inherited from a redefined feature (`Cannot override a binding feature value`) | internal/core/passes/feature_value_overriding.go:constraintChecker.checkFeatureValueOverriding | `cannot override the binding value of <feature>: a value written with '=' is fixed for every feature redefining it; write it as 'default =' on <feature> to allow overriding, or remove this value`, on the overriding value part | `semantic/s46-feature-value-overriding.sysml` | ✅ faithful |
 | `validateFlowEndImplicitSubsetting` | KerML | A flow end whose owned feature is identified implicitly should use dot notation (warning `Flow ends should use dot notation`); no model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateFlowEndIsEnd` | KerML | A flow end is an end feature | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateFlowEndNestedFeature` | KerML | A flow end has exactly one nested input or output feature; no model made the pilot report it (it reports `validateFlowEndSubsetting` instead) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
@@ -303,8 +303,8 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 ## Out of scope for this census
 
 Rows are recorded as `main` stands at the recording date. Constraints being implemented in
-parallel (`validateFeatureValueOverriding`, the `validateTriggerInvocationAction*Argument`
-trio, and the control-node succession constraints) keep the status the evidence supports today; when their
+parallel (the `validateTriggerInvocationAction*Argument`
+trio and the control-node succession constraints) keep the status the evidence supports today; when their
 passes land, the row's status moves and `-update` is not needed — the baseline's statuses are
 edited by hand, the names are not. The feature-chain value bindings of
 `validateBindingConnectorTypeConformance` landed on `main` before this recording, so its row
