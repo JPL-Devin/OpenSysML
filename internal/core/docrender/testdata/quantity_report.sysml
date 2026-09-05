@@ -56,6 +56,22 @@ package Launcher {
 		)
 	}
 
+	calc def Margin :> Query {
+		in root : Element = rocket;
+		in budget : MassValue;
+		Project(
+			source = Stages(root = root),
+			properties = ("name"),
+			columns = (Column(name = "margin", expression = budget - Stage::mass))
+		)
+	}
+
+	calc def Named :> Query {
+		in root : Element = rocket;
+		in label : String;
+		WhereFeature(source = Stages(root = root), 'feature' = "name", operator = "=", value = label)
+	}
+
 	part def MassReport :> Document {
 		attribute redefines title = "Stage Masses";
 

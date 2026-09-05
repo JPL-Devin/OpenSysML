@@ -71,11 +71,11 @@ func (m *Model) foldQuantityOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 		if len(e.Operands) != 3 {
 			return Quantity{}, false
 		}
-		cond, ok := evalConst(e.Operands[0])
-		if !ok || cond.Kind != ValBool {
+		cond, ok := m.EvalQuantity(scope, e.Operands[0])
+		if !ok || cond.Num.Kind != ValBool || !cond.Unit.None() {
 			return Quantity{}, false
 		}
-		if cond.Bool {
+		if cond.Num.Bool {
 			return m.EvalQuantity(scope, e.Operands[1])
 		}
 		return m.EvalQuantity(scope, e.Operands[2])
@@ -97,8 +97,13 @@ func (m *Model) foldQuantityOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 
 // QuantityUnary applies a unary operator to a quantity, keeping its unit.
 func QuantityUnary(op ast.OperatorKind, q Quantity) (Quantity, error) {
-	if op == ast.OpNeg && q.Num.IsNumeric() {
-		return NegateQuantity(q)
+	if q.Num.IsNumeric() {
+		switch op {
+		case ast.OpPos:
+			return q, nil
+		case ast.OpNeg:
+			return NegateQuantity(q)
+		}
 	}
 	if !q.Unit.None() {
 		return Quantity{}, ErrQuantityOperand

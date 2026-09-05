@@ -5,7 +5,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // quantityBody is the units repro: stages whose masses are quantities, with a
@@ -353,5 +355,69 @@ func TestExecuteNamesTheRowOfAnUnevaluableQuantity(t *testing.T) {
 	want := "query Observatory::Masses cannot evaluate feature mass of Observatory::manifest::payload"
 	if executionErr.Error() != want {
 		t.Fatalf("message = %q, want %q", executionErr.Error(), want)
+	}
+}
+
+// boundQuantity folds a quantity expression in the fixture's package for a binding.
+func boundQuantity(t *testing.T, fixture executionFixture, expr string) Value {
+	t.Helper()
+	p := parser.New(source.New("<expr>", []byte(expr)))
+	node := p.ParseExpression()
+	if node == nil || len(p.Diagnostics) != 0 {
+		t.Fatalf("parse %q: %v", expr, p.Diagnostics)
+	}
+	quantity, ok := fixture.model.EvalQuantity(fixture.symbol(t, "rocket").Scope, node)
+	if !ok {
+		t.Fatalf("%q does not fold to a quantity", expr)
+	}
+	return QuantityValue(quantity)
+}
+
+// TestExecuteBindsQuantityParameters: a quantity binds to a parameter typed by
+// a quantity value type of its dimension, and flows into column arithmetic;
+// another dimension, or a parameter outside the quantity types, is a typed error.
+func TestExecuteBindsQuantityParameters(t *testing.T) {
+	fixture := quantityFixture(t, `
+calc def Margin :> Query {
+	in root : Element;
+	in budget : MassValue;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		properties = ("name"),
+		columns = (Column(name = "margin", expression = budget - Stage::mass))
+	)
+}
+calc def Labelled :> Query {
+	in root : Element;
+	in label : String;
+	WhereFeature(source = Descendants(source = root, maxDepth = 1), 'feature' = "name", operator = "=", value = label)
+}
+`)
+	root := ElementValue(fixture.symbol(t, "rocket"))
+	result, err := fixture.execute(t, "Margin", Bindings{
+		"root":   {root},
+		"budget": {boundQuantity(t, fixture, "2500000 [kg]")},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute with a mass binding: %v", err)
+	}
+	if got := cellTexts(t, result, 1); !slices.Equal(got, []string{"210000 [kg]", "2381000 [kg]"}) {
+		t.Fatalf("margins = %v", got)
+	}
+	_, err = fixture.execute(t, "Margin", Bindings{
+		"root":   {root},
+		"budget": {boundQuantity(t, fixture, "2500 [m]")},
+	}, Options{})
+	executionErr := executionError(t, err, ErrorBindingType)
+	if executionErr.Parameter != "budget" || executionErr.Actual != string(ValueQuantity) {
+		t.Fatalf("length-for-mass binding error = %v", err)
+	}
+	_, err = fixture.execute(t, "Labelled", Bindings{
+		"root":  {root},
+		"label": {boundQuantity(t, fixture, "1 [kg]")},
+	}, Options{})
+	executionErr = executionError(t, err, ErrorBindingType)
+	if executionErr.Parameter != "label" || executionErr.Actual != string(ValueQuantity) {
+		t.Fatalf("quantity-for-string binding error = %v", err)
 	}
 }

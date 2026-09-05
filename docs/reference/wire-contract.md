@@ -835,7 +835,10 @@ arm says what was bound:
   bound as `stringValue` is a string.
 - **`quantity`** binds a magnitude with a unit, the same object a `Value` carries (`unit`,
   `unitTerm` and one of `intMagnitude`/`realMagnitude`); it is how a projected
-  `attribute :>> mass = 2290000 [kg];` is answered.
+  `attribute :>> mass = 2290000 [kg];` is answered. Bound, it conforms to a parameter typed
+  by a quantity value type of the same dimension (`MassValue` for a mass, any for
+  `ScalarQuantityValue`); a parameter of another dimension or of a scalar type such as
+  `String` refuses it with `invalid_argument`.
 
 Model `7e6a…a687` is `conformance/fixtures/document.sysml`; `HeavySubsystemNames` takes
 `root : Element` and `threshold : String`:

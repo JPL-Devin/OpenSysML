@@ -31,6 +31,8 @@ package Q {
 		attribute scaled = 2 [kg] * 3;
 		attribute summed = 1 [km] + 500 [m];
 		attribute negated = -(3 [kg]);
+		attribute affirmed = +(3 [kg]);
+		attribute chosen = if 5 [kg] > 4000 [g] ? 1 [kg] else 2 [kg];
 		attribute quotient = 6 [m] / 2 [s];
 		attribute ratio = 4 [m] / 2 [m];
 		attribute heavier = 5 [kg] > 4000 [g];
@@ -123,6 +125,8 @@ func TestQuantityExpressionsFold(t *testing.T) {
 		{"scaled", symbols.FilterValueQuantity, "6 [kg]"},
 		{"summed", symbols.FilterValueQuantity, "1.5 [km]"},
 		{"negated", symbols.FilterValueQuantity, "-3 [kg]"},
+		{"affirmed", symbols.FilterValueQuantity, "3 [kg]"},
+		{"chosen", symbols.FilterValueQuantity, "1 [kg]"},
 		{"quotient", symbols.FilterValueQuantity, "3.0 [m/s]"},
 		{"ratio", symbols.FilterValueReal, "2.0"},
 		{"heavier", symbols.FilterValueBool, "true"},
