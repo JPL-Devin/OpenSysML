@@ -18,12 +18,19 @@ import (
 // of the namespace declaring the import, which restrict every membership it
 // imports — including a `filter` beside the `expose` lines of a view.
 func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
+	return r.importAdmitsInto(scope, scope, imp)
+}
+
+// importAdmitsInto is importAdmits for an import inherited into the view owning
+// into: what a view exposes through an inherited `expose` has to satisfy the
+// conditions of the inheriting view and its own supertypes as well.
+func (r *Resolver) importAdmitsInto(into, scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
 	filters := r.namespaceFilters(scope)
 	if imp.IsExpose {
-		for _, f := range r.inheritedViewConditions(scope) {
-			if !statesCondition(filters, f) {
-				filters = append(append([]symbols.ElementFilter{}, filters...), f)
-			}
+		filters = appendConditions(filters, r.inheritedViewConditions(scope))
+		if into != scope && isViewSymbol(into.Owner()) {
+			filters = appendConditions(filters, r.namespaceFilters(into))
+			filters = appendConditions(filters, r.inheritedViewConditions(into))
 		}
 	}
 	if imp.FilterExpr != nil {
@@ -37,6 +44,17 @@ func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*sym
 		return func(*symbols.Symbol) bool { return true }
 	}
 	return func(sym *symbols.Symbol) bool { return r.admits(filters, sym) }
+}
+
+// appendConditions adds the conditions of more that filters do not state yet,
+// copying filters before the first addition since callers memoize it.
+func appendConditions(filters, more []symbols.ElementFilter) []symbols.ElementFilter {
+	for _, f := range more {
+		if !statesCondition(filters, f) {
+			filters = append(append([]symbols.ElementFilter{}, filters...), f)
+		}
+	}
+	return filters
 }
 
 // namespaceFilters are the conditions the namespace owning scope declares,
@@ -249,14 +267,24 @@ func (r *Resolver) AdmittedTopLevel(doc string, bindings []symbols.RootBinding) 
 // same admission a lookup through imp makes: the import's filter clause and the
 // `filter` members of the declaring namespace (see importAdmits).
 func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
+	return r.ImportedElementsInto(scope, scope, imp)
+}
+
+// ImportedElementsInto enumerates the elements imp, declared in scope, surfaces
+// into the namespace owning into, which inherits it: an inherited `expose` is
+// admitted against the inheriting view's conditions too (see importAdmitsInto).
+func (r *Resolver) ImportedElementsInto(into, scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
 	if scope == nil || imp == nil || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil
+	}
+	if into == nil {
+		into = scope
 	}
 	target, ok := r.resolveImportTarget(scope, imp)
 	if !ok || target == nil {
 		return nil
 	}
-	admit := r.importAdmits(scope, imp)
+	admit := r.importAdmitsInto(into, scope, imp)
 	out := newElementList()
 	if imp.Kind == ast.ImportMembership {
 		// `import P::x` surfaces x itself; the recursive form adds its subtree.

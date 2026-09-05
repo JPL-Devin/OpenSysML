@@ -148,6 +148,22 @@ func TestExposedElementsSatisfyInheritedViewConditions(t *testing.T) {
 	wantNames(t, "exposed set of again", exposedNames(t, m, sym(t, root, "again")), []string{"C", "D"})
 }
 
+// An expose a view inherits is admitted against the inheriting view's own
+// conditions: the definition's set stays its own, the narrower usage's shrinks.
+func TestExposedElementsInheritedExposeSatisfiesDerivedConditions(t *testing.T) {
+	m, root := buildModel(t, `
+		metadata def Safety;
+		metadata def Reviewed;
+		package Lib { #Safety part def A; part def B; #Safety #Reviewed part def C; }
+		view def Safe { filter @Safety; expose Lib::*; }
+		view sr : Safe { filter @Reviewed; }
+		view srr :> sr;
+	`)
+	wantNames(t, "exposed set of Safe", exposedNames(t, m, sym(t, root, "Safe")), []string{"A", "C"})
+	wantNames(t, "exposed set of sr", exposedNames(t, m, sym(t, root, "sr")), []string{"C"})
+	wantNames(t, "exposed set of srr", exposedNames(t, m, sym(t, root, "srr")), []string{"C"})
+}
+
 // A view exposing nothing has an empty exposed set, which is no error.
 func TestExposedElementsOfAViewExposingNothing(t *testing.T) {
 	m, root := buildModel(t, `
