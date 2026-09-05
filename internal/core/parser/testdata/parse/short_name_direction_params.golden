@@ -1,0 +1,36 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Scale"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<xs> x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<ks> k" ref=false direction="inout" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="2")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<ys> y" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (OperatorExpr operator="*"
+                (FeatureReference name="x")
+                (FeatureReference name="k"))))
+          (Usage kind="attribute" name="<r> result" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (FeatureReference name="y"))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Move"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<ds> d" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<es> e" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName)))))))))

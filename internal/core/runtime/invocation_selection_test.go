@@ -34,6 +34,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_explicit_anything_ties_with_untyped", testCalcCallExplicitAnythingTiesWithUntyped)
 	t.Run("calc_call_crossed_specificity_is_ambiguous", testCalcCallCrossedSpecificityIsAmbiguous)
 	t.Run("calc_call_repeated_named_argument_is_refused", testCalcCallRepeatedNamedArgumentIsRefused)
+	t.Run("calc_call_names_a_parameter_as_the_checker_does", testCalcCallNamesAParameterAsTheCheckerDoes)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("calc_call_selects_among_inherited_imports", testCalcCallSelectsAmongInheritedImports)
 	t.Run("calc_call_selects_by_collection_literal_element_type", testCalcCallSelectsByCollectionLiteralElementType)
@@ -44,6 +45,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 	t.Run("action_call_named_argument_twice_refused", testActionCallNamedArgumentTwiceRefused)
+	t.Run("action_call_names_a_parameter_as_the_checker_does", testActionCallNamesAParameterAsTheCheckerDoes)
 	t.Run("action_call_omits_optional_inputs", testActionCallOmitsOptionalInputs)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
 	t.Run("state_behavior_call_arguments_read_the_performing_object", testStateBehaviorCallArgumentsReadThePerformingObject)
@@ -278,6 +280,50 @@ func testActionCallNamedArgumentTwiceRefused(t *testing.T) {
 	}
 	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
 		t.Fatalf("single tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
+	}
+}
+
+// An action's named argument binds the parameter the checker resolves its label
+// to — by short name, alias, or qualified name — and two labels naming one
+// parameter are one binding made twice.
+func testActionCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
+	const tmpl = `
+		package test {
+			private import ScalarValues::*;
+			action def A { in <ys> y : Integer; alias yy for y; out code : Integer; first start; action set { assign code := y + 10; } done; succession first start then set; succession first set then done; }
+			action def Outer {
+				attribute code : Integer = 0;
+				first start;
+				action call = %s;
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	run := func(call string) (map[string]Value, error) {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(tmpl, call)))
+		outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+		if outer == nil {
+			t.Fatal("Outer action not found")
+		}
+		return ctx.ExecuteAction(outer)
+	}
+	for _, call := range []string{"A(ys = 3)", "A(yy = 3)", "A(A::y = 3)"} {
+		outputs, err := run(call)
+		if err != nil {
+			t.Fatalf("%s: %v", call, err)
+		}
+		if code := outputs["call.code"]; code.Kind != ValConst || code.Const.Int != 13 {
+			t.Fatalf("%s: call.code = %+v, want 13", call, code)
+		}
+	}
+	outputs, err := run("A(y = 1, ys = 2)")
+	if err == nil {
+		t.Fatalf("A(y = 1, ys = 2): expected a refusal, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "y" of A`) {
+		t.Fatalf("A(y = 1, ys = 2): error = %v, want ErrDuplicateArgument naming y", err)
 	}
 }
 
@@ -1156,6 +1202,49 @@ func testCalcCallRepeatedNamedArgumentIsRefused(t *testing.T) {
 	}
 	intArg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	_, err := ctx.InvokeCalc(sym, []Value{intArg, NewStringValue("s")}, rootScope)
+	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
+		t.Fatalf("twice = %v, want ErrCalcArity naming x", err)
+	}
+}
+
+// A named argument binds the parameter the checker resolves its label to — by
+// short name, alias, or qualified inherited name — and two labels naming one
+// parameter are one binding made twice.
+func testCalcCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def F { in <xs> x : Integer; return : Integer = x + 1; }
+			calc def G { in b : Integer; alias bs for b; return : Integer = b * 2; }
+			calc def Base { in n : Integer; return : Integer; }
+			calc def Derived :> Base { return : Integer = n + 10; }
+			calc viaShort { F(xs = 1) }
+			calc viaAlias { G(bs = 2) }
+			calc viaQualified { F(F::x = 3) }
+			calc viaInherited { Derived(Base::n = 4) }
+			calc twice { F(x = 1, xs = 2) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	for calc, want := range map[string]int64{"viaShort": 2, "viaAlias": 4, "viaQualified": 4, "viaInherited": 14} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
+		}
+	}
+	sym := findSymbolByName(rootScope, "twice", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("twice calc not found")
+	}
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
 	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
 		t.Fatalf("twice = %v, want ErrCalcArity naming x", err)
 	}

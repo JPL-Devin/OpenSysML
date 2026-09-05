@@ -126,7 +126,7 @@
         (Usage kind="attribute" name="legalIdentification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
       (RelationshipMember kind="redefines" name="" keyword="redefinition" source="D::vin" target="legalIdentification" conjugated=false)
       (Membership visibility="default"
-        (Usage kind="assoc" name="AS" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="assoc" name="AS" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assoc struct"
           (Membership visibility="default"
             (Usage kind="attribute" name="e1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true))
           (Membership visibility="default"

@@ -2224,6 +2224,65 @@ fetches. Together they bound how long a stale figure can survive to about a day.
 
 ---
 
+### Multiplicity bound result types round
+
+`validateMultiplicityRangeResultTypes` (KerML 1.1 8.3.3.6) is now a constraint-tier rule of ours
+(`passes/w8c_multiplicity_bounds.go`): a bound that is not evaluated at model level must still
+have an Integer-conforming result, read from the referenced feature's declared type or, for
+arithmetic, from its operands. The rule moves no row of the reference corpora — the only
+non-literal bounds in the four OMG roots (`Simple Tests/MultiplicityTest.sysml`,
+`Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`) name Integer- or Natural-typed
+sibling features, which both sides accept — and moves
+`semantic/k37-multiplicity-bound-not-natural.kerml` to both-reject. Two points where
+`KerMLValidator.checkMultiplicityRange` (`KerMLValidator.xtend:1333`) and our rule part are
+adjudicated toward the specification rather than the referee:
+
+- **A bound naming a package-level feature is judged by that feature's type.** The pilot treats
+  a reference to a feature with no featuring type and no value as model-level evaluable, evaluates
+  it to the feature itself rather than a literal, and reports the `-2` null result, so
+  `feature k : Natural; feature d [k];` at package level draws `Must have a Natural value` from
+  the pilot and nothing from us; the same pair inside a class is judged by `k`'s type on both
+  sides. The specification asks for the result's type, which for a feature reference is the
+  referent's wherever it is owned;
+  [omg-issues.md](omg-issues.md#a-bound-naming-a-package-level-feature-is-rejected-whatever-its-type-pilot-2026-07)
+  drafts the question.
+- **`**` and `^` keep an Integer whole only under a Natural exponent.** The pilot's
+  `isIntegerOperator` lists both alongside `+`, `-`, `*` and `%`, so `2 ** n` with `n : Integer`
+  passes its check. `IntegerFunctions::'**'` is declared `in y : Natural`, and an Integer
+  exponent resolves to `RationalFunctions::'**'`, whose result is Rational; we accept the
+  exponentiation only when the exponent is Natural-conforming (`k : Natural`, `p : Positive`, a
+  literal, or `+`/`*`/`%` over such). The pilot's grammar admits only a literal or a feature
+  reference as a bound (`MultiplicityExpressionMember`), so no arithmetic bound reaches its
+  validator and the difference has no referee row; it is a reading of the library.
+
+### Binary-link specialization round
+
+`validateAssociationBinarySpecialization` and `validateConnectorBinarySpecialization`
+(KerML 1.1 8.3.4.4.2, 8.3.4.5.3) are constraint-tier rules of ours (`passes/constraint.go`,
+`semantics/connector.go`): an association or connector that conforms to `Links::BinaryLink` with
+more than two effective ends — owned, positional and inherited ends together — is reported at
+each end past the second. Which base a declaration takes implicitly follows the same effective
+count (`semantics/implicit.go`): KerML 1.1 asks that an association with
+`associationEnd->size() = 2` specialize `Links::BinaryLink` and a connector with
+`connectorEnd->size() = 2` subset `Links::binaryLinks`, and both derived properties include the
+inherited ends. One point where the pilot's `ConnectorAdapter.getDefaultSupertype`
+(`org.omg.sysml.adapter`, pinned `c7fc737`) and our rule part is adjudicated toward the
+specification:
+
+- **A connector owning two ends that redefine two of an n-ary general's ends stays n-ary.**
+  `connector m : N { end redefines a references x; end redefines b references y; }` with
+  `assoc N { end a; end b; end c; }` has three connector ends — the two it owns and the `c` it
+  inherits — so the specification implies no binary base, and we give it `Links::links`. The
+  pilot's adapter counts owned end features only, gives `m` `Links::binaryLinks`, and its
+  `checkConnectorBinarySpecialization` then reports `Cannot have more than two ends` on a
+  connector the specification's own implication never made binary; its `AssociationAdapter`
+  counts the same way, yet the association check inspects owned ends alone, so the association
+  spelling of the same shape (`assoc B specializes N { end redefines a; end redefines b; }`) is
+  accepted by both sides. The corpus has no such row — its binary-ends cases (`k24`, `k26`) declare
+  the binary base — and the four OMG roots contain no connector of that shape;
+  [omg-issues.md](omg-issues.md#a-connector-inheriting-a-third-end-is-given-the-binary-base-pilot-2026-07)
+  drafts the question.
+
 ## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,

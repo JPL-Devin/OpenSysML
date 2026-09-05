@@ -10,6 +10,7 @@
 package semantics
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -46,7 +47,7 @@ type Model struct {
 	// whose type leads back to its own call is not typed again.
 	typingArgs map[*ast.InvocationExpr]bool
 	unioning   map[*symbols.Symbol][]*symbols.Symbol
-	ends       map[*symbols.Symbol][]*symbols.Symbol
+	ends       map[*symbols.Symbol][]connectorEnd
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -118,7 +119,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		invocations:       make(map[invocationKey]*InvocationSelection),
 		typingArgs:        make(map[*ast.InvocationExpr]bool),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
-		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
+		ends:              make(map[*symbols.Symbol][]connectorEnd),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
@@ -421,12 +422,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
-	// A declaration keeps its kind's base whatever else it declares; implicitBase
-	// suppresses it only when a declared chain already reaches that base. A
-	// metadata keyword supplies the kind itself, so its baseType stands in.
-	if base := m.implicitBase(sym); !fromMetadata && base != nil && !seen[base] {
-		seen[base] = true
-		out = append(out, base)
+	// A declaration keeps its kind's bases whatever else it declares; implicitBases
+	// suppresses one only when a declared chain already reaches it. A metadata
+	// keyword supplies the kind itself, so its baseType stands in.
+	if !fromMetadata {
+		for _, base := range m.implicitBases(sym) {
+			if !seen[base] {
+				seen[base] = true
+				out = append(out, base)
+			}
+		}
 	}
 
 	// A target that did not resolve yet — a name still being resolved when this
@@ -646,10 +651,82 @@ func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
 	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
 		return types
 	}
-	if base := m.implicitBase(sym); base != nil {
+	return m.implicitBases(sym)
+}
+
+// FeatureTypeSet returns a feature's types as KerML §8.3.3.3 derives Feature::type:
+// the declared types of the feature and of every feature it subsets, redefines or
+// references, keeping only the most specific; a feature reaching none has the
+// types of its kind's base feature, or that base itself when it is a definition.
+func (m *Model) FeatureTypeSet(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !sym.IsFeature() {
+		return nil
+	}
+	var types []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
+	var visit func(f *symbols.Symbol)
+	visit = func(f *symbols.Symbol) {
+		if f == nil || seen[f] {
+			return
+		}
+		seen[f] = true
+		bases := m.implicitBases(f)
+		for _, super := range m.DirectSupertypes(f) {
+			switch {
+			case containsElement(bases, super):
+			case super.IsFeature():
+				visit(super)
+			case !containsElement(types, super):
+				types = append(types, super)
+			}
+		}
+		visit(m.ReferencedFeature(f))
+	}
+	visit(sym)
+	if len(types) > 0 {
+		return m.mostSpecificTypes(types)
+	}
+	fqn, ok := m.FeatureBaseFQN(sym)
+	if !ok || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(fqn) {
+		if base == nil || base == sym {
+			continue
+		}
+		if base.IsFeature() {
+			return m.FeatureTypeSet(base)
+		}
 		return []*symbols.Symbol{base}
 	}
 	return nil
+}
+
+// mostSpecificTypes drops every type another one in the list specializes.
+func (m *Model) mostSpecificTypes(types []*symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, t := range types {
+		redundant := false
+		for _, other := range types {
+			if !symbols.SameElement(other, t) && m.Conforms(other, t) {
+				redundant = true
+				break
+			}
+		}
+		if !redundant {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func containsElement(list []*symbols.Symbol, sym *symbols.Symbol) bool {
+	for _, s := range list {
+		if symbols.SameElement(s, sym) {
+			return true
+		}
+	}
+	return false
 }
 
 // DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
@@ -666,11 +743,11 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 		return nil
 	}
 	visiting[sym] = true
-	base := m.implicitBase(sym)
+	bases := m.implicitBases(sym)
 	var types, features []*symbols.Symbol
 	for _, super := range m.DirectSupertypes(sym) {
 		switch {
-		case super == base:
+		case slices.Contains(bases, super):
 		case super.IsFeature():
 			features = append(features, super)
 		default:

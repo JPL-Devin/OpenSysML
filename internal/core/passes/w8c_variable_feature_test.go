@@ -14,7 +14,7 @@ func w8cVariableFeatureMessages(t *testing.T, name, src string) map[string]int {
 	got := make(map[string]int)
 	for _, d := range w8cLibraryDiagnostics(t, name, src) {
 		switch d.Message {
-		case msgInitialValueNotVariable, msgConstantNotVariable, msgVariableFeatureOwner:
+		case msgInitialValueNotVariable, msgConstantNotVariable, msgVariableFeatureOwner, msgPortionFeatureVariable:
 			got[d.Message]++
 		}
 	}
@@ -124,12 +124,31 @@ func TestW8CConstantIsVariableKerML(t *testing.T) {
 	class C {
 		const feature k : C;
 		const feature j : C := null;
+		portion const feature pc : C;
+		portion feature pp : C;
 	}
+	datatype D {
+		const feature a : D;
+		const feature b : D = null;
+		const feature c : D := null;
+	}
+	struct S { const feature s : S; }
+	assoc struct AS { const end feature a; const end feature b; var feature v : C; }
+	assoc A { end feature a; end feature b; var feature v : C; }
+	behavior B { in const feature p : C; }
+	const feature top : C;
 }`
-	// KerML `const` implies `var`, so a constant feature is never non-variable.
+	// KerML `const` implies `var`: a constant feature is never non-variable, and it
+	// is owned by an occurrence type and is no portion like any variable feature.
 	got := w8cVariableFeatureMessages(t, "<t>.kerml", src)
-	if len(got) != 0 {
-		t.Errorf("want silence, got %v", got)
+	if got[msgVariableFeatureOwner] != 5 {
+		t.Errorf("want five %q (D::a, D::b, D::c, A::v, top), got %v", msgVariableFeatureOwner, got)
+	}
+	if got[msgPortionFeatureVariable] != 1 {
+		t.Errorf("want one %q (C::pc), got %v", msgPortionFeatureVariable, got)
+	}
+	if got[msgConstantNotVariable] != 0 || got[msgInitialValueNotVariable] != 0 {
+		t.Errorf("unexpected constant or initial messages in %v", got)
 	}
 }
 
@@ -325,5 +344,108 @@ func TestW8CVariableFeatureRulesStillGateOnATypedOwnerHead(t *testing.T) {
 	}
 	if got[msgConstantNotVariable] != 0 || got[msgVariableFeatureOwner] != 0 {
 		t.Errorf("unexpected constant or owner messages in %v", got)
+	}
+}
+
+func TestW8CVariableFeatureRulesSurviveRootStateAndControlNodeOwnerFailures(t *testing.T) {
+	src := `private import ScalarValues::*;
+attribute before : Integer := 1;
+part unrelated : Missing;
+constant attribute k : Integer = 2;
+action def AD {
+	attribute a : Integer := 3;
+	fork f { attribute fa : Integer := 4; part unrelatedFork : Missing; }
+	join j { attribute ja : Integer := 5; part unrelatedJoin : Missing; }
+	merge m { attribute ma : Integer := 6; part unrelatedMerge : Missing; }
+	decide d { attribute da : Integer := 7; part unrelatedDecide : Missing; }
+	part unrelatedAD : Missing;
+}
+state def SD {
+	state s { attribute sa : Integer := 8; part unrelatedState : Missing; }
+	entry action e { attribute ea : Integer := 9; part unrelatedEntry : Missing; }
+	part unrelatedSD : Missing;
+}
+attribute later : Integer := 10;
+attribute def X { attribute x : Integer := 11; }`
+	// The root namespace gates nothing; a control node or state is an occurrence,
+	// so what it owns is variable and its members' failures gate only themselves.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 3 {
+		t.Errorf("want three %q (before, later, X::x), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 1 {
+		t.Errorf("want one %q (k), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 || got[msgPortionFeatureVariable] != 0 {
+		t.Errorf("unexpected owner or portion messages in %v", got)
+	}
+}
+
+func TestW8CVariableOwnerAndPortionRulesAreElementScoped(t *testing.T) {
+	src := `package P {
+	feature unrelatedTop : Missing;
+	datatype D {
+		var feature before : D;
+		feature unrelatedD : Missing;
+		var feature later : D;
+		var feature broken : Missing;
+	}
+	class C {
+		portion var feature p : C;
+		feature unrelatedC : Missing;
+		portion var feature brokenPortion : Missing;
+		var feature ok : C;
+	}
+	datatype Unresolved :> Missing {
+		var feature hidden : Unresolved;
+	}
+	class Broken :> Missing {
+		portion var feature hiddenPortion : Broken;
+	}
+	var feature top : D;
+}
+var feature root : P::D;`
+	// The owner and portion rules gate like the value rules: on the feature's own
+	// head and a typed owner's head, never on a sibling or a package.
+	got := w8cVariableFeatureMessages(t, "<t>.kerml", src)
+	if got[msgVariableFeatureOwner] != 4 {
+		t.Errorf("want four %q (D::before, D::later, top, root), got %v", msgVariableFeatureOwner, got)
+	}
+	if got[msgPortionFeatureVariable] != 1 {
+		t.Errorf("want one %q (C::p), got %v", msgPortionFeatureVariable, got)
+	}
+	if got[msgInitialValueNotVariable] != 0 || got[msgConstantNotVariable] != 0 {
+		t.Errorf("unexpected initial or constant messages in %v", got)
+	}
+}
+
+func TestW8CVariableFeatureRulesSurviveAnOwnerValueFailure(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	attribute def AD;
+	attribute p : AD = missing {
+		attribute a : Integer := 1;
+		constant attribute k : Integer = 2;
+	}
+	attribute q : AD := missing {
+		attribute b : Integer := 3;
+	}
+	attribute r : AD default missing {
+		attribute c : Integer := 4;
+	}
+	attribute broken : Missing = 5 {
+		attribute hidden : Integer := 6;
+	}
+}`
+	// An owner's value is no part of its typing head, so it gates nothing nested.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 4 {
+		t.Errorf("want four %q (p::a, q, q::b, r::c), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 1 {
+		t.Errorf("want one %q (p::k), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected owner messages in %v", got)
 	}
 }
