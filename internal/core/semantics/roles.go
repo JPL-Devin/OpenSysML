@@ -40,6 +40,19 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	return out
 }
 
+// SubjectParameterOf returns the subject parameter of a requirement or case,
+// owned or inherited along its generals, or nil when it has none.
+func (m *Model) SubjectParameterOf(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil || sym == nil {
+		return nil
+	}
+	subjects := m.effectiveRoles(sym, subjectRole, map[*symbols.Symbol]bool{})
+	if len(subjects) == 0 {
+		return nil
+	}
+	return subjects[0]
+}
+
 func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sym == nil || seen[sym] {
 		return nil

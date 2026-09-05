@@ -24,7 +24,8 @@ type Condition struct {
 	// Expr is the condition's expression, nil for a group.
 	Expr ast.Node
 
-	// Scope is where Expr's names resolve, nil for a group.
+	// Scope is where Expr's names resolve, or the type a Conflict is found on;
+	// nil for a group.
 	Scope *symbols.Scope
 
 	// Group is the conditions a body states, all of which must hold; nil for a
@@ -34,6 +35,10 @@ type Condition struct {
 	// Statement is an action statement the body states before its conditions,
 	// which the evaluator does not execute; nil for a condition or a group.
 	Statement ast.Node
+
+	// Conflict is a second result expression, stated or inherited (KerML
+	// 8.3.4.8); no verdict is reached. Nil otherwise.
+	Conflict *semantics.ResultExpressionConflict
 
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
@@ -110,6 +115,13 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 // an anonymous one, which no name can redefine, is always inherited.
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
+		scope := sym.Scope
+		if scope == nil {
+			scope = sym.OwnerScope
+		}
+		out = append(out, Condition{Conflict: conflict, Scope: scope, Required: required})
+	}
 	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
 		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
@@ -232,6 +244,33 @@ func setConstraint(conds []Condition, owner *symbols.Symbol) {
 	for i := range conds {
 		conds[i].Constraints = append([]*symbols.Symbol{owner}, conds[i].Constraints...)
 		setConstraint(conds[i].Group, owner)
+	}
+}
+
+// conflictingResultExpression returns the first result-expression conflict conds
+// record, groups included, or nil when they record none.
+func conflictingResultExpression(conds []Condition) *semantics.ResultExpressionConflict {
+	for _, cond := range conds {
+		if cond.Conflict != nil {
+			return cond.Conflict
+		}
+		if nested := conflictingResultExpression(cond.Group); nested != nil {
+			return nested
+		}
+	}
+	return nil
+}
+
+// conflictText says what a result-expression conflict is: a second result stated
+// in one body, a condition stated over an inherited one, or a declaration inheriting two.
+func conflictText(conflict *semantics.ResultExpressionConflict) string {
+	switch {
+	case conflict.Stated > 1:
+		return "`" + conditionText(conflict.Node) + "` is a second result expression of one body"
+	case conflict.Stated == 1:
+		return "`" + conditionText(conflict.Node) + "` is stated over an inherited result expression"
+	default:
+		return "it inherits a result expression from more than one supertype"
 	}
 }
 
@@ -389,6 +428,10 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) 
 		keyword, _ := statementKeyword(stmt)
 		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
 			check.kind, check.name(), check.what, keyword, ErrStatementNotExecuted)
+	}
+	if conflict := conflictingResultExpression(conds); conflict != nil {
+		return false, fmt.Errorf("%s %s: %s evaluation failed: %s: %w; a redefinition keeps the inherited condition and tightens it with a nested `assert constraint { … }`",
+			check.kind, check.name(), check.what, conflictText(conflict), ErrConflictingResultExpressions)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -895,6 +938,9 @@ func conditionLabel(cond Condition) string {
 	if cond.Statement != nil {
 		keyword, _ := statementKeyword(cond.Statement)
 		return "`" + keyword + "` statement"
+	}
+	if cond.Conflict != nil {
+		return "conflicting result expression"
 	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {

@@ -31,7 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	model := ctx.Model()
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
-		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
+		expr:     &exprChecker{resolver: ctx.Resolver(), model: model, lang: ctx.Kind},
 		lang:     ctx.Kind,
 	}
 	tc.expr.walkMembers = tc.walk
@@ -367,6 +367,9 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	if relKind == ast.RelTyping && decl.useKind == ast.UsageEnumeration &&
 		tc.owningEnumerationConformsTo(scope, targetSym) {
 		return
+	}
+	if relKind == ast.RelSpecializes && w11aFamilyRuleFires(decl, targetSym) {
+		return // a supertype of the wrong classifier family is the family rules' finding
 	}
 	kind := targetSym.Kind
 	if relKind == ast.RelReferences || relKind == ast.RelSubsets {

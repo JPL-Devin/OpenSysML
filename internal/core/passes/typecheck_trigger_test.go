@@ -76,10 +76,10 @@ const triggerFixture = `package P {
 		attribute firstFlag = flags#(1);
 		attribute firstWait = waits#(1);
 		in attribute given = true;
-		part h : Holder;
-		attribute viaDelay :> h.delay;
-		attribute viaInstant :> h.instant;
-		attribute viaOk :> h.ok;
+		part holder : Holder;
+		attribute viaDelay :> holder.delay;
+		attribute viaInstant :> holder.instant;
+		attribute viaOk :> holder.ok;
 		state a;
 		state b;
 		%s
@@ -126,7 +126,7 @@ func TestTriggerAfterRejectsNonDuration(t *testing.T) {
 		{"after x", "Integer"},
 		{"after len", "LengthValue"},
 		{"after t", "TimeInstantValue"},
-		{"after h.instant", "Iso8601DateTime"},
+		{"after holder.instant", "Iso8601DateTime"},
 		{"after untyped", "an untyped feature"},
 		{"after count", "Natural"},
 		{"after wait", "ScalarQuantityValue"},
@@ -168,7 +168,7 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 		"after 2 [h]",
 		"after d",
 		"after d2",
-		"after h.delay",
+		"after holder.delay",
 		"after viaDelay",
 		"after d + 5 [s]",
 		"after 2 [one] * d",
@@ -281,7 +281,7 @@ func TestTriggerIncommensurableArithmeticIsRejected(t *testing.T) {
 		"after untyped + 1 [m]",
 		"after d + missing",
 		"at t - untyped",
-		"at Twice(d) + h.other",
+		"at Twice(d) + holder.other",
 	} {
 		diags := triggerDiags(t, "transition first a accept "+trigger+" then b;")
 		for _, d := range diags {
@@ -299,7 +299,7 @@ func TestTriggerAtRejectsNonTimeInstant(t *testing.T) {
 		{"at 5", "Natural"},
 		{"at 5 [s]", "a quantity in second (a DurationUnit)"},
 		{"at d", "DurationValue"},
-		{"at h.delay", "Delay"},
+		{"at holder.delay", "Delay"},
 		{"at viaDelay", "Delay"},
 		{"at viaOk", "Boolean"},
 		{"at x", "Integer"},
@@ -321,7 +321,7 @@ func TestTriggerAtAcceptsTimeInstants(t *testing.T) {
 	for _, trigger := range []string{
 		"at t",
 		"at t2",
-		"at h.instant",
+		"at holder.instant",
 		"at viaInstant",
 		"at Later(t)",
 		"at TimeOf(a)",
@@ -340,7 +340,7 @@ func TestTriggerWhenRejectsNonBoolean(t *testing.T) {
 		{"when 5", "Natural"},
 		{"when \"yes\"", "String"},
 		{"when d", "DurationValue"},
-		{"when h.delay", "Delay"},
+		{"when holder.delay", "Delay"},
 		{"when viaDelay", "Delay"},
 		{"when viaInstant", "Iso8601DateTime"},
 		{"when untyped", "an untyped feature"},
@@ -369,11 +369,11 @@ func TestTriggerWhenAcceptsBooleans(t *testing.T) {
 	for _, trigger := range []string{
 		"when x > 3",
 		"when flag",
-		"when h.ok",
+		"when holder.ok",
 		"when viaOk",
 		"when x > 3 and flag",
 		"when not flag",
-		"when x == 1 or h.ok",
+		"when x == 1 or holder.ok",
 		"when IsOk()",
 		"when ready",
 		"when alsoReady",
@@ -508,7 +508,7 @@ func TestCollectAndSelectTriggerArguments(t *testing.T) {
 		{"when counts.{in n; n > 3}", "trigger-when-boolean", collected},
 		{"when flags.{in f; f}", "trigger-when-boolean", collected},
 		{"when counts.?{in n; n > 3}", "trigger-when-boolean", "found Integer"},
-		{"when h.ok.{in f; f}", "trigger-when-boolean", collected},
+		{"when holder.ok.{in f; f}", "trigger-when-boolean", collected},
 		{"after waits.{in w; w}", "trigger-after-duration", collected},
 		{"after counts.?{in n; n > 3}", "trigger-after-duration", "found Integer"},
 		{"after times.?{in i; true}", "trigger-after-duration", "found TimeInstantValue"},
@@ -616,9 +616,9 @@ func TestTriggerInBodyValuedExpression(t *testing.T) {
 // function, so it has no result type; the pilot rejects each shape below.
 func TestTriggerArithmeticOverNonArithmeticOperand(t *testing.T) {
 	wantTriggerDiag(t, "transition first a accept after true + d then b;", "trigger-after-duration", "found `+` over Boolean, which no arithmetic function takes")
-	wantTriggerDiag(t, "transition first a accept after h + d then b;", "trigger-after-duration", "found `+` over Holder")
+	wantTriggerDiag(t, "transition first a accept after holder + d then b;", "trigger-after-duration", "found `+` over Holder")
 	wantTriggerDiag(t, "transition first a accept after d * flag then b;", "trigger-after-duration", "found `*` over Boolean")
-	wantTriggerDiag(t, "transition first a accept at t + h then b;", "trigger-at-time-instant", "found `+` over Holder")
+	wantTriggerDiag(t, "transition first a accept at t + holder then b;", "trigger-at-time-instant", "found `+` over Holder")
 	wantTriggerSilent(t, "transition first a accept after untyped + d then b;")
 	wantTriggerSilent(t, "transition first a accept after undeclared + d then b;")
 }

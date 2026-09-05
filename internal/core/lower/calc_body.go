@@ -41,7 +41,7 @@ func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 			// A calculation body runs its steps in declaration order, so a
 			// succession states nothing the order does not already state.
 		default:
-			if isExpressionNode(member) {
+			if ast.IsExpression(member) {
 				results = append(results, Return{Value: member, Node: member, Scope: scope})
 				continue
 			}
@@ -107,19 +107,4 @@ func Returns(stmts []Statement) bool {
 // its statements live.
 func blockReturns(block Block) bool {
 	return Returns(block.Steps())
-}
-
-// isExpressionNode reports whether a body member is an expression rather than a
-// declaration or a statement.
-func isExpressionNode(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralBool, *ast.LiteralString,
-		*ast.LiteralInfinity, *ast.NullExpr, *ast.FeatureReference, *ast.FeatureChainExpr,
-		*ast.OperatorExpr, *ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr,
-		*ast.InvocationExpr, *ast.IndexExpr, *ast.BodyExpr, *ast.ConstructorExpr,
-		*ast.MetadataAccessExpr, *ast.CastExpr:
-		return true
-	default:
-		return false
-	}
 }
