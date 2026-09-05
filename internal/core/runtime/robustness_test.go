@@ -1747,6 +1747,7 @@ func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
 	}{
 		{`NumericalFunctions::sum0(zero = 0, elements = xs)`, ErrUnknownParameter},
 		{`NumericalFunctions::sum0(zero = 0, zero = 1)`, ErrCalcArity},
+		{`NumericalFunctions::sum0(zero = 0, zero = 1, elements = xs)`, ErrCalcArity},
 		{`NumericalFunctions::sum0(collection = xs)`, ErrCalcArity},
 		{`ControlFunctions::'if'(thenValue = 1, elseValue = 2)`, ErrCalcArity},
 		{`ControlFunctions::'if'(test = true, thenValue = {in x; x})`, ErrBodyArity},
