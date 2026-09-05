@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -13,11 +14,11 @@ const (
 	maximizeObjectiveFQN = "TradeStudies::MaximizeObjective"
 )
 
-// An objective states the value it improves by restating the trade-study
-// library's `best` feature (`attribute :>> best = expression;`), since an
-// objective is a requirement usage and carries no scalar value itself.
+// An objective states the value it improves by redefining the trade-study
+// library's `eval` calculation, from which the library derives its bound `best`.
 const (
 	tradeStudyObjectiveFQN = "TradeStudies::TradeStudyObjective"
+	objectiveEvalName      = "eval"
 	objectiveBestName      = "best"
 )
 
@@ -70,9 +71,21 @@ type Objective struct {
 	// Scope is where Value's names resolve.
 	Scope *symbols.Scope
 
-	// Best is the feature restating the library's `best` whose value the
-	// objective improves, nil when the objective states its value another way.
+	// Eval is the calc redefining the library's `eval` that states Value, nil
+	// when the value is stated another way or not at all.
+	Eval *symbols.Symbol
+
+	// StepwiseEval reports an `eval` whose body computes in steps rather than
+	// stating one expression, so no Value is read from it.
+	StepwiseEval bool
+
+	// Best is the objective's `best` feature, derived by the library from Eval;
+	// nil when the objective is no trade-study objective.
 	Best *symbols.Symbol
+
+	// ReboundBest is a feature giving the library's bound `best` a value of its
+	// own (`attribute :>> best = expression;`), which validation rejects; or nil.
+	ReboundBest *symbols.Symbol
 
 	// Conditions are the conditions the objective states itself, its own body's
 	// and the ones it inherits from the model's own objective definitions: the
@@ -145,80 +158,95 @@ func replaceObjective(out []Objective, obj Objective) []Objective {
 }
 
 // objectiveOf reads one objective usage: its direction from the definition it is
-// typed by, its value from the expression it states for the trade-study `best`
-// feature, and its conditions from its own body. owner is the case stating it,
-// which is where a value it takes from a redeclared objective is looked for.
+// typed by, its value from the `eval` calculation it redefines, and its
+// conditions from its own body. owner is the case stating it, which is where a
+// value it takes from a redeclared objective is looked for.
 func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 	typ := ctx.extractType(objSym)
-	value := ctx.extractDefaultValue(objSym)
-	valueDecl := objSym
-	var best *symbols.Symbol
-	if value == nil {
-		value, valueDecl = ctx.bestValueOf(objSym)
-		best = valueDecl
-	}
-	if value == nil {
-		best = nil
-		value, valueDecl = ctx.redefinedDefault(objSym, owner)
-	}
-	if value == nil {
-		// An objective restating another takes the value the restated one
-		// states for `best`.
-		for _, restated := range ctx.relatedFeatures(objSym, owner, ast.RelRedefines) {
-			if value, valueDecl = ctx.bestValueOf(restated); value != nil {
-				best = valueDecl
-				break
-			}
-		}
-	}
-	scope := objSym.OwnerScope
-	if valueDecl != nil {
-		scope = valueDecl.OwnerScope
-	}
-	return Objective{
+	obj := Objective{
 		Name:       objSym.Name,
 		Symbol:     objSym,
 		Type:       typ,
 		Direction:  ctx.objectiveDirection(typ),
-		Value:      value,
-		Scope:      scope,
-		Best:       best,
+		Scope:      objSym.OwnerScope,
 		Conditions: ctx.objectiveConditionsOf(objSym),
 	}
+	tradeStudy := ctx.specializesLibraryType(typ, tradeStudyObjectiveFQN)
+	if tradeStudy {
+		obj.ReboundBest = ctx.reboundBestOf(objSym)
+		if best, ok := ctx.model.LookupMember(objSym, objectiveBestName); ok {
+			obj.Best = best
+		}
+	}
+	if obj.Value = ctx.extractDefaultValue(objSym); obj.Value != nil {
+		return obj
+	}
+	if tradeStudy && ctx.readEvalValue(&obj, objSym) {
+		return obj
+	}
+	if value, decl := ctx.redefinedDefault(objSym, owner); value != nil {
+		obj.Value, obj.Scope = value, decl.OwnerScope
+		return obj
+	}
+	// An objective restating another takes the value the restated one states.
+	for _, restated := range ctx.relatedFeatures(objSym, owner, ast.RelRedefines) {
+		if obj.ReboundBest == nil {
+			obj.ReboundBest = ctx.reboundBestOf(restated)
+		}
+		if tradeStudy && ctx.readEvalValue(&obj, restated) {
+			return obj
+		}
+	}
+	return obj
 }
 
-// bestValueOf returns the expression an objective states for the trade-study
-// `best` feature in its own body, and the usage that states it.
-func (ctx *Context) bestValueOf(objSym *symbols.Symbol) (ast.Node, *symbols.Symbol) {
+// readEvalValue reads the objective's value from the lowered body of its own
+// `eval`: one returned expression, or a stepwise mark. False when it states none.
+func (ctx *Context) readEvalValue(obj *Objective, objSym *symbols.Symbol) bool {
+	evalSym := ctx.objectiveMember(objSym, objectiveEvalName)
+	if evalSym == nil || evalSym.Kind != symbols.SymbolCalcUsage {
+		return false
+	}
+	obj.Eval = evalSym
+	body := bodyScope(evalSym, evalSym.OwnerScope)
+	stmts := lower.CalcBody(declMembers(evalSym.Decl), body)
+	if len(stmts) == 1 {
+		if ret, ok := stmts[0].(lower.Return); ok && ret.Value != nil {
+			obj.Value, obj.Scope = ret.Value, ret.Scope
+			return true
+		}
+	}
+	obj.StepwiseEval = len(stmts) > 0
+	return obj.StepwiseEval
+}
+
+// reboundBestOf returns the member of objSym's own body giving the library's
+// `best` a value of its own, nil when there is none.
+func (ctx *Context) reboundBestOf(objSym *symbols.Symbol) *symbols.Symbol {
+	best := ctx.objectiveMember(objSym, objectiveBestName)
+	if best == nil || ctx.extractDefaultValue(best) == nil {
+		return nil
+	}
+	return best
+}
+
+// objectiveMember returns the member of objSym's own body redefining the
+// trade-study feature of the given name, or nil.
+func (ctx *Context) objectiveMember(objSym *symbols.Symbol, name string) *symbols.Symbol {
 	if objSym == nil {
-		return nil, nil
+		return nil
 	}
 	body := bodyScope(objSym, objSym.OwnerScope)
 	if body == nil {
-		return nil, nil
+		return nil
 	}
 	for _, node := range declMembers(objSym.Decl) {
 		member := memberSymbol(body, node)
-		if member == nil {
-			continue
+		if member != nil && restatesFeatureNamed(member, name) {
+			return member
 		}
-		value := ctx.extractDefaultValue(member)
-		if value == nil || !ctx.statesObjectiveBest(member, ctx.extractType(objSym)) {
-			continue
-		}
-		return value, member
 	}
-	return nil, nil
-}
-
-// statesObjectiveBest reports whether sym restates the `best` feature of an
-// objective typed by objType, which must be a trade-study objective for that
-// feature to be the library's one.
-func (ctx *Context) statesObjectiveBest(sym, objType *symbols.Symbol) bool {
-	if sym == nil || !restatesFeatureNamed(sym, objectiveBestName) {
-		return false
-	}
-	return ctx.specializesLibraryType(objType, tradeStudyObjectiveFQN)
+	return nil
 }
 
 // restatesFeatureNamed reports whether sym redefines a feature of the given
@@ -308,7 +336,7 @@ func (ctx *Context) objectiveConditionsOf(sym *symbols.Symbol) []Condition {
 		return nil
 	}
 	// An inherited condition is read where it is inherited: the objective's own
-	// body, where its `best` restatement answers that name.
+	// body, where the `best` it inherits answers that name.
 	body := bodyScope(sym, sym.OwnerScope)
 	var members []scopedMember
 	supers := ctx.model.AllSupertypes(sym)

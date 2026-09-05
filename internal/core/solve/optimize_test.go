@@ -20,7 +20,8 @@ func fakeOptimizeQuery(t *testing.T) *Query {
 				attribute size : Integer;
 				require constraint { size >= 4 }
 				objective smallest : MinimizeObjective {
-					attribute :>> best = size;
+					subject :>> selectedAlternative;
+					in calc :>> eval { size }
 				}
 			}
 		}`)
