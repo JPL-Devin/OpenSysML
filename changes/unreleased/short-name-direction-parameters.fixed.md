@@ -1,1 +1,0 @@
-- **A direction parameter may open with a short name.** `in <xs> x : Integer` parses; a short name before the parameter name was previously rejected after `in`, `out` and `inout`.
