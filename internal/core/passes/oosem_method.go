@@ -387,6 +387,10 @@ func (a *oosemAudit) check(root *symbols.Scope) {
 			switch d.Kind {
 			case ast.UsageRequirement:
 				a.checkRequirement(sym)
+			case ast.UsageSatisfy:
+				if d.DeclaresRequirement {
+					a.checkRequirement(sym)
+				}
 			case ast.UsagePart, ast.UsageItem:
 				a.checkLogicalComponent(sym)
 			case ast.UsageUseCase:

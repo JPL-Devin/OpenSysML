@@ -77,6 +77,18 @@ func TestOOSEMRequirementNotSatisfied(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMRequirementNotSatisfied, 4, 5)
 }
 
+// A requirement a satisfy declares is held to derivation like any other.
+func TestOOSEMDeclaredSatisfyRequirementDerivation(t *testing.T) {
+	src := oosemModel(`
+		#missionRequirement requirement mission;
+		part p {
+			satisfy requirement own : SystemRequirement;
+			satisfy requirement derived : SystemRequirement;
+		}
+		#derivation connection { end #original ::> mission; end #derive ::> p.derived; }`)
+	w8dWantLines(t, src, CodeOOSEMRequirementNotDerived, 5)
+}
+
 // A view satisfying a viewpoint, or a negated satisfy, states no satisfaction.
 func TestOOSEMSatisfactionIgnoresViewpointsAndNegations(t *testing.T) {
 	silent := oosemModel(`
