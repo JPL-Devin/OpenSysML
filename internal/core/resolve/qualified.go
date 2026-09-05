@@ -187,7 +187,7 @@ func (r *Resolver) registeredFQN(sym *symbols.Symbol) string {
 	if r.idx == nil || sym == nil {
 		return ""
 	}
-	if fqn := withoutEmptySegments(r.idx.GetFQN(sym)); fqn != "" {
+	if fqn := r.idx.GetFQN(sym); fqn != "" {
 		return fqn
 	}
 	return sym.Name
@@ -204,24 +204,10 @@ func (r *Resolver) ReferringNamespaceFQN(scope *symbols.Scope) string {
 	}
 	for s := scope; s != nil; s = s.Parent() {
 		if owner := s.Owner(); owner != nil && owner.Name != "" {
-			return withoutEmptySegments(r.idx.GetFQN(owner))
+			return r.idx.GetFQN(owner)
 		}
 	}
 	return ""
-}
-
-// withoutEmptySegments drops the empty segments an unnamed enclosing element
-// contributes to a fully-qualified name, so "Mid::::inner" reads as
-// "Mid::inner" and still tests as nested inside Mid.
-func withoutEmptySegments(fqn string) string {
-	parts := strings.Split(fqn, "::")
-	kept := parts[:0]
-	for _, p := range parts {
-		if p != "" {
-			kept = append(kept, p)
-		}
-	}
-	return strings.Join(kept, "::")
 }
 
 // lookupInRoot finds a name in the document root scope reachable from scope.

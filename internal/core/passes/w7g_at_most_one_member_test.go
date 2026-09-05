@@ -81,16 +81,115 @@ func TestW7GCaseReportsOnlyTheExtraObjective(t *testing.T) {
 	}
 }
 
-func TestW7GCaseObjectiveCompetesWithInheritedObjective(t *testing.T) {
+func TestW7GVerificationAndUseCaseReportTheExtraObjective(t *testing.T) {
+	for _, src := range []string{
+		`package C {
+			verification def Vs {
+				objective o1;
+				objective o2;
+			}
+		}`,
+		`package C {
+			use case def Us {
+				objective o1;
+				objective o2;
+			}
+		}`,
+		`package C {
+			verification v {
+				objective o1;
+				objective o2;
+			}
+		}`,
+		`package C {
+			use case u {
+				objective o1;
+				objective o2;
+			}
+		}`,
+	} {
+		if got := len(only(constraintDiags(t, src), "only-one-objective")); got != 1 {
+			t.Fatalf("expected one objective diagnostic for %q, got %d", src, got)
+		}
+	}
+}
+
+// An analysis case improves several objectives lexicographically
+// (internal/core/solve), so the cardinality rule does not judge it.
+func TestW7GAnalysisCaseAdmitsSeveralObjectives(t *testing.T) {
+	for _, src := range []string{
+		`package C {
+			analysis def As {
+				objective o1;
+				objective o2;
+			}
+		}`,
+		`package C {
+			analysis a {
+				objective o1;
+				objective o2;
+			}
+		}`,
+	} {
+		if diags := only(constraintDiags(t, src), "only-one-objective"); len(diags) != 0 {
+			t.Fatalf("analysis case objectives were diagnosed for %q: %v", src, diags)
+		}
+	}
+}
+
+// An `objective : R;` is a member under no name, so it competes where a named
+// one does — owned, inherited, and mixed with a named one.
+func TestW7GAnonymousObjectivesCompete(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want int
+	}{
+		{`package P {
+			requirement def R1;
+			case def Anon {
+				objective : R1;
+				objective : R1;
+			}
+			case anonUse : Anon;
+		}`, 2},
+		{`package P {
+			requirement def R1;
+			case def Mixed {
+				objective named : R1;
+				objective : R1;
+			}
+			case mixedUse : Mixed;
+		}`, 2},
+		{`package P {
+			requirement def R1;
+			case def OneAnon {
+				objective : R1;
+			}
+			case anonOk : OneAnon;
+		}`, 0},
+	} {
+		if diags := only(constraintDiags(t, tc.src), "only-one-objective"); len(diags) != tc.want {
+			t.Fatalf("expected %d objective diagnostic(s) for %q, got %v", tc.want, tc.src, diags)
+		}
+	}
+}
+
+// The first owned objective redefines the inherited one, so only the second is
+// reported — the pinned reference is silent on the first.
+func TestW7GOwnedObjectiveRedefinesTheInheritedOne(t *testing.T) {
 	const src = `package C {
 		case def Base { objective inherited; }
 		case c : Base {
-			objective first;
-			objective second;
+			objective one;
+			objective two;
 		}
 	}`
-	if got := len(only(constraintDiags(t, src), "only-one-objective")); got != 2 {
-		t.Fatalf("expected both owned objectives to be diagnosed, got %d", got)
+	diags := only(constraintDiags(t, src), "only-one-objective")
+	if len(diags) != 1 {
+		t.Fatalf("expected only the second owned objective to be diagnosed, got %v", diags)
+	}
+	if got := src[diags[0].Span.Offset:]; len(got) < len("objective two;") || got[:len("objective two;")] != "objective two;" {
+		t.Fatalf("diagnostic is not on the second objective: %q", got)
 	}
 }
 
