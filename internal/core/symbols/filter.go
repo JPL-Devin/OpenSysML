@@ -137,17 +137,28 @@ const (
 	// FilterValueInstance is an instance a condition constructs (`new A(…)`).
 	// It is a value, and never a truth value.
 	FilterValueInstance
+	// FilterValueQuantity is a magnitude in a measurement unit (`5 [kg]`),
+	// carried in Quantity.
+	FilterValueQuantity
 )
 
 // FilterValue is a constant a filter predicate yields or compares: a literal, or
 // the element an enumeration-literal reference names.
 type FilterValue struct {
-	Kind   FilterValueKind
-	Bool   bool
-	Int    int64
-	Real   float64
-	Str    string
-	RefFQN string
+	Kind     FilterValueKind
+	Bool     bool
+	Int      int64
+	Real     float64
+	Str      string
+	RefFQN   string
+	Quantity QuantityValue
+}
+
+// QuantityValue is a constant quantity as the semantic layer represents it;
+// units are resolved there, so the symbol layer carries the value opaquely.
+type QuantityValue interface {
+	// String renders the quantity as `magnitude [unit]`.
+	String() string
 }
 
 // Same reports whether two filters are the same condition, so that two routes to

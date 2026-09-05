@@ -845,25 +845,29 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, args, argTypes, params, considered, complete)
+	ec.checkArguments(scope, invocation{e, sym, args, argTypes, params, complete}, considered)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
 	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
-// checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
+// invocation is a call under argument checking: the expression, the behavior it names,
+// its positional arguments and their types, the `in` parameters, and whether every
+// argument is known (complete).
+type invocation struct {
+	e        *ast.InvocationExpr
+	sym      *symbols.Symbol
+	args     []ast.Node
+	argTypes argumentTypes
+	params   []parameter
+	complete bool
+}
+
+// checkArguments reports the arguments of the call that do not bind to its `in` parameters,
 // listing considered (the other declarations the call could name) on each report.
-func (ec *exprChecker) checkArguments(
-	scope *symbols.Scope,
-	e *ast.InvocationExpr,
-	sym *symbols.Symbol,
-	args []ast.Node,
-	argTypes argumentTypes,
-	params []parameter,
-	considered []*symbols.Symbol,
-	complete bool,
-) {
+func (ec *exprChecker) checkArguments(scope *symbols.Scope, call invocation, considered []*symbols.Symbol) {
+	e, sym, args, argTypes, params, complete := call.e, call.sym, call.args, call.argTypes, call.params, call.complete
 	report := ec.errorf
 	if len(considered) > 1 {
 		suffix := " (candidates: " + candidateNames(considered) + ")"
@@ -872,7 +876,7 @@ func (ec *exprChecker) checkArguments(
 		}
 	}
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report, complete)
+		ec.checkNamedArguments(scope, call, report)
 		return
 	}
 	// Arguments bind in order, so a call must reach the last required parameter.
@@ -1058,14 +1062,10 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 // complete, default-less parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
 	scope *symbols.Scope,
-	e *ast.InvocationExpr,
-	sym *symbols.Symbol,
-	args []ast.Node,
-	argTypes argumentTypes,
-	params []parameter,
+	call invocation,
 	report func(source.Span, string, ...any),
-	complete bool,
 ) {
+	e, sym, args, argTypes, params, complete := call.e, call.sym, call.args, call.argTypes, call.params, call.complete
 	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
 	// reports the same call.
 	if e.Operand != nil {

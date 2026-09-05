@@ -70,7 +70,7 @@ package OpenSysMLInvariants {
         doc /* Every bundled standard library file parses clean. */
         subject stdlib : StandardLibrary;
         require constraint {
-            stdlib.bundledFileCount == 97
+            stdlib.bundledFileCount == 98
         }
     }
 

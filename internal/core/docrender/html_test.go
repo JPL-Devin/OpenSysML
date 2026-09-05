@@ -99,6 +99,25 @@ func TestHTMLSemanticStructure(t *testing.T) {
 	}
 }
 
+// TestHTMLQuantityCells checks that a quantity cell keeps its unit in the text
+// and carries magnitude and unit apart as data attributes.
+func TestHTMLQuantityCells(t *testing.T) {
+	got := renderFixtureHTML(t, filepath.Join("testdata", "quantity_report.sysml"),
+		"Launcher::MassReport", HTMLOptions{})
+	for _, want := range []string{
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290000" data-unit="kg">2290000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="500000" data-unit="g">500000 [g]</span></td>`,
+		`<td class="sysml-cell" data-column="tonnes" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290" data-unit="kg">2290 [kg]</span></td>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Count(got, `data-column="mass" data-value-kind="quantity"`) != 4 {
+		t.Errorf("rendering does not carry four mass cells\n%s", got)
+	}
+}
+
 // TestHTMLNoInlineStylesOrUnknownClasses checks the override contract on the
 // markup: nothing carries a style attribute, and every class is one the
 // documented vocabulary names.

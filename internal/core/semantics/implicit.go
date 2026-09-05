@@ -17,6 +17,8 @@ const (
 	renderingFQN    = "Views::Rendering"
 	concernCheckFQN = "Requirements::ConcernCheck"
 	linksFQN        = "Links::links"
+	performanceFQN  = "Performances::Performance"
+	assocStructKw   = "assoc struct"
 )
 
 // implicitUsageBases maps a usage kind to the qualified name of the standard
@@ -48,7 +50,7 @@ var implicitUsageBases = map[ast.UsageKind]string{
 	ast.UsageAction:           "Actions::Action",
 	ast.UsageState:            "States::StateAction",
 	ast.UsageTransition:       "Actions::TransitionAction",
-	ast.UsageStep:             "Performances::Performance",
+	ast.UsageStep:             performanceFQN,
 	ast.UsageCalc:             "Calculations::Calculation",
 	ast.UsageExpr:             "Performances::Evaluation",
 	ast.UsageConstraint:       "Constraints::ConstraintCheck",
@@ -102,10 +104,10 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 // declaration with exactly two ends specializes (KerML 1.1 §8.3.3.5): the binary
 // link rather than the n-ary one of its kind.
 var implicitKerMLBinaryBases = map[string]string{
-	"assoc":        binaryConnectorBaseFQN,
-	"association":  binaryConnectorBaseFQN,
-	"assoc struct": "Objects::BinaryLinkObject",
-	"interaction":  binaryConnectorBaseFQN,
+	"assoc":       binaryConnectorBaseFQN,
+	"association": binaryConnectorBaseFQN,
+	assocStructKw: "Objects::BinaryLinkObject",
+	"interaction": binaryConnectorBaseFQN,
 }
 
 // implicitKerMLBinaryFeatureBases maps a KerML connector keyword to the base
@@ -117,52 +119,52 @@ var implicitKerMLBinaryFeatureBases = map[string]string{
 // implicitKerMLBehaviorBases is the behavior base a kind that is also an
 // association specializes: an interaction is a Performance and a Link (KerML 1.1 §7.4.10.2).
 var implicitKerMLBehaviorBases = map[string]string{
-	"interaction": "Performances::Performance",
+	"interaction": performanceFQN,
 }
 
 var implicitKerMLBases = map[string]string{
-	"classifier":   anythingFQN,
-	"class":        occurrenceFQN,
-	"struct":       "Objects::Object",
-	"assoc":        "Links::Link",
-	"association":  "Links::Link",
-	"assoc struct": "Objects::LinkObject",
-	"behavior":     "Performances::Performance",
-	"function":     "Performances::Evaluation",
-	"predicate":    "Performances::BooleanEvaluation",
-	"interaction":  "Links::Link",
-	"metaclass":    "Metaobjects::Metaobject",
-	"datatype":     dataValueFQN,
-	"type":         anythingFQN,
+	"classifier":  anythingFQN,
+	"class":       occurrenceFQN,
+	"struct":      "Objects::Object",
+	"assoc":       "Links::Link",
+	"association": "Links::Link",
+	assocStructKw: "Objects::LinkObject",
+	"behavior":    performanceFQN,
+	"function":    "Performances::Evaluation",
+	"predicate":   "Performances::BooleanEvaluation",
+	"interaction": "Links::Link",
+	"metaclass":   "Metaobjects::Metaobject",
+	"datatype":    dataValueFQN,
+	"type":        anythingFQN,
 }
 
 // implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
 // every feature of that kind subsets (KerML 1.1 §8.4.2).
 var implicitKerMLFeatureBases = map[string]string{
-	"":             baseUsageFQN, // a member declared with no kind keyword (`end a;`) is a feature
-	"type":         baseUsageFQN,
-	"classifier":   baseUsageFQN,
-	"feature":      baseUsageFQN,
-	"class":        "Occurrences::occurrences",
-	"struct":       "Objects::objects",
-	"datatype":     "Base::dataValues",
-	"assoc":        linksFQN,
-	"association":  linksFQN,
-	"assoc struct": "Objects::linkObjects",
-	"connector":    linksFQN,
-	"binding":      "Links::selfLinks",
-	"bind":         "Links::selfLinks",
-	"succession":   "Occurrences::happensBeforeLinks",
-	"behavior":     "Performances::performances",
-	"step":         "Performances::performances",
-	"function":     "Performances::evaluations",
-	"expr":         "Performances::evaluations",
-	"predicate":    "Performances::booleanEvaluations",
-	"bool":         "Performances::booleanEvaluations",
-	"inv":          "Performances::trueEvaluations",
-	"interaction":  "Transfers::transfers",
-	"flow":         "Transfers::flowTransfers",
-	"metaclass":    "Metaobjects::metaobjects",
+	"":            baseUsageFQN, // a member declared with no kind keyword (`end a;`) is a feature
+	"type":        baseUsageFQN,
+	"classifier":  baseUsageFQN,
+	"feature":     baseUsageFQN,
+	"class":       "Occurrences::occurrences",
+	"struct":      "Objects::objects",
+	"datatype":    "Base::dataValues",
+	"assoc":       linksFQN,
+	"association": linksFQN,
+	assocStructKw: "Objects::linkObjects",
+	"connector":   linksFQN,
+	"binding":     "Links::selfLinks",
+	"bind":        "Links::selfLinks",
+	"succession":  "Occurrences::happensBeforeLinks",
+	"behavior":    "Performances::performances",
+	"step":        "Performances::performances",
+	"function":    "Performances::evaluations",
+	"expr":        "Performances::evaluations",
+	"predicate":   "Performances::booleanEvaluations",
+	"bool":        "Performances::booleanEvaluations",
+	"inv":         "Performances::trueEvaluations",
+	"interaction": "Transfers::transfers",
+	"flow":        "Transfers::flowTransfers",
+	"metaclass":   "Metaobjects::metaobjects",
 }
 
 // KindBaseFQNs returns the standard-library bases every declaration of sym's

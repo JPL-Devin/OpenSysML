@@ -319,7 +319,7 @@ func featureReal(t *testing.T, ctx *runtime.Context, inst *runtime.Instance, nam
 	if val.Kind != runtime.ValConst || val.Const.Kind != semantics.ValReal {
 		t.Fatalf("feature value %s holds %v, want a Real", name, val)
 	}
-	return runtime.FormatReal(val.Const.Real)
+	return semantics.FormatReal(val.Const.Real)
 }
 
 // featureInteger is the integer a feature value holds, materialized as any reader

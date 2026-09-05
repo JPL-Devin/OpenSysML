@@ -32,8 +32,10 @@ from opensysml.errors import (
     InvalidRequestError,
     ModelNotFoundError,
     SymbolNotFoundError,
+    UnsupportedValueError,
 )
 from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.values import Quantity, Unit, UnitFactor
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 GRPC_BINARIES = (
@@ -121,6 +123,17 @@ def test_bindings_translate_to_typed_values():
     assert [v.string_value for v in by_parameter["several"].values] == ["a", "b"]
 
 
+def test_a_quantity_binding_keeps_its_magnitude_and_unit():
+    """A Quantity binds as the wire's Quantity, unit and reduction intact."""
+    kg = Unit(text="kg", factors=(UnitFactor("SI::kg", 1),), reduction_given=True)
+    bindings = build_bindings({"limit": Quantity(2290000, kg)})
+    (value,) = bindings[0].values
+    assert value.WhichOneof("kind") == "quantity"
+    assert value.quantity.int_magnitude == 2290000
+    assert value.quantity.unit == "kg"
+    assert value.quantity.unit_term.factors[0].unit_id == "SI::kg"
+
+
 def test_a_binding_the_wire_cannot_carry_is_refused():
     """An untranslatable value is a caller error, named before anything is sent."""
     with pytest.raises(DocumentQueryError, match="'root'"):
@@ -133,6 +146,19 @@ def test_an_oversized_int_binding_is_refused():
         build_bindings({"threshold": 1 << 63})
     with pytest.raises(DocumentQueryError, match="signed 64-bit"):
         build_bindings({"threshold": -(1 << 63) - 1})
+
+
+def test_a_quantity_the_wire_cannot_carry_is_refused():
+    """An unreduced unit or an oversized magnitude is a DocumentQueryError, not
+    the Quantity's own UnsupportedValueError or a protobuf ValueError."""
+    kg = Unit(text="kg", factors=(UnitFactor("SI::kg", 1),), reduction_given=True)
+    with pytest.raises(DocumentQueryError, match="'limit'.*no reduction") as caught:
+        build_bindings({"limit": Quantity(1, Unit(text="furlong"))})
+    assert isinstance(caught.value.__cause__, UnsupportedValueError)
+    with pytest.raises(DocumentQueryError, match="'limit'.*signed 64-bit"):
+        build_bindings({"limit": Quantity(1 << 63, kg)})
+    with pytest.raises(DocumentQueryError, match="'limit'.*neither an Integer nor a Real"):
+        build_bindings({"limit": Quantity(True, kg)})
 
 
 def test_no_bindings_is_an_empty_request():
@@ -197,6 +223,15 @@ def test_answered_rows_decode_to_typed_records(fake_service):
                     sysml_pb2.DocumentValue(infinity=True),
                     sysml_pb2.DocumentValue(real_value=1.5),
                     sysml_pb2.DocumentValue(bool_value=True),
+                    sysml_pb2.DocumentValue(quantity=sysml_pb2.Quantity(
+                        int_magnitude=2290000,
+                        unit="kg",
+                        unit_term=sysml_pb2.UnitTerm(
+                            scale_num=1.0,
+                            scale_den=1.0,
+                            factors=[sysml_pb2.UnitFactor(unit_id="SI::kg", exponent=1)],
+                        ),
+                    )),
                 ]),
             ],
         )],
@@ -212,7 +247,9 @@ def test_answered_rows_decode_to_typed_records(fake_service):
     assert row.element == ElementRef(id="Demo::part", type="PartUsage")
     assert str(row.element) == "Demo::part (PartUsage)"
     assert row[0] == ("part",)
-    assert row[1] == (0, INFINITY, 1.5, True)
+    kg = Unit(text="kg", factors=(UnitFactor("SI::kg", 1),), reduction_given=True)
+    assert row[1] == (0, INFINITY, 1.5, True, Quantity(2290000, kg))
+    assert str(row[1][4]) == "2290000 [kg]"
     assert len(result) == 1
 
 
