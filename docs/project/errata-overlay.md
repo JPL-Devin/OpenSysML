@@ -1,19 +1,16 @@
 # The declared errata overlay
 
-> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
-> development round of this project — chronological, with no meaning outside this repository — and
-> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
-> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
+> This is an engineering record. `F<n>` names a row of the divergence census in
+> [pilot-differential.md](pilot-differential.md), and an errata entry's `ID` is that row's number.
 >
-> **Oracle figures in this record are as measured at the round it documents;
-> they are not the current baseline.** The current baseline is the generated block in
-> [README](../../README.md) and [architecture](../internals/architecture.md),
-> regenerated and gated by `make docs-counts`.
+> **Oracle figures in this record are as measured when it was written; they are not the current
+> baseline.** The current baseline is the generated block in [README](../../README.md) and
+> [architecture](../internals/architecture.md), regenerated and gated by `make docs-counts`.
 
 ## The gap this closes
 
 Every divergence row against the pinned pilot implementation carries one of the
-four categories of [wave 11E](wave11e-decisions.md): *our defect*, *unimplemented
+four categories of [the adjudications record](adjudications.md): *our defect*, *unimplemented
 obligation*, *pilot limitation*, *adjudicated divergence*. A fifth case has no
 category and no mechanism: **the OMG-published material is itself wrong**. Such a
 row was written up in [omg-issues.md](omg-issues.md) and then stayed in the
@@ -69,7 +66,7 @@ verification failed and the entry was removed rather than re-pointed.
 - **Documented-only entries substitute nothing.** An entry with no `Corrected`
   text is carried for provenance; both figures keep the published line.
 - **Errata are not a reclassification route.** The overlay changes no category in
-  [wave 11E](wave11e-decisions.md) terms and no analyzer behaviour. F82 stays a
+  [the adjudications record](adjudications.md)'s terms and no analyzer behaviour. F82 stays a
   true positive of ours; what the overlay records is that the *examples* are wrong.
 
 ## Both figures, and which one is the statement
@@ -82,7 +79,7 @@ sentence it prints them. Both come from the same run and the same committed
 baseline (`internal/doccounts` reads the baselines' `errata` sections), so the
 two figures cannot drift apart or be composed from different trees.
 
-Measured on this branch with fresh caches:
+Measured with fresh caches when the overlay landed:
 
 | Oracle | As published | With the errata applied |
 |---|---|---|
