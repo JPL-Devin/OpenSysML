@@ -544,10 +544,8 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 	return false
 }
 
-// keywordlessFeatureAt reports whether the tokens from offset off declare a
-// feature with no kind keyword (KerML.xtext Feature over BasicFeaturePrefix
-// FeatureDeclaration): an identification (`<s>`? name?, at least one of them)
-// followed by a specialization, a multiplicity, a body, or nothing at all.
+// keywordlessFeatureAt reports whether the tokens at offset off declare a feature with
+// no kind keyword: an identification (`<s>`? name?) followed by a declaration tail.
 func (p *Parser) keywordlessFeatureAt(off int) bool {
 	if p.peekN(off).Kind == lexer.Lt {
 		if !isNameToken(p.peekN(off+1).Kind) || p.peekN(off+2).Kind != lexer.Gt {
