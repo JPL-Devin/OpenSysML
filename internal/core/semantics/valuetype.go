@@ -174,7 +174,10 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 			return m.libSymbol(fqnAnything)
 		}
 		return m.indexResultType(scope, n)
-	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr:
+	case *ast.SelectExpr:
+		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
+		return m.operandResultType(scope, n.Operand)
+	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
 		return m.libSymbol(fqnAnything)
 	case *ast.ConstructorExpr:
 		if n.Type == nil || m.resolver == nil {
@@ -212,24 +215,28 @@ func operatorResultFQN(op ast.OperatorKind) string {
 // indexResultType is the type of one element `seq#(i)` selects: seq's own type,
 // or Anything when seq is a Collection (KerML checkIndexExpressionResultSpecialization).
 func (m *Model) indexResultType(scope *symbols.Scope, n *ast.IndexExpr) *symbols.Symbol {
-	if m.resolver == nil {
-		return nil
-	}
-	var seq *symbols.Symbol
-	switch operand := n.Operand.(type) {
-	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
-		sym, ok := m.resolver.ResolveTarget(scope, operand)
-		if !ok || sym == nil || !sym.IsFeature() {
-			return nil
-		}
-		seq = m.nearestDeclaredType(sym)
-	default:
-		seq = m.ExprResultType(scope, operand)
-	}
+	seq := m.operandResultType(scope, n.Operand)
 	if collection := m.libSymbol(fqnCollection); seq == nil || collection == nil || m.Conforms(seq, collection) {
 		return m.libSymbol(fqnAnything)
 	}
 	return seq
+}
+
+// operandResultType is the type of the sequence an operand yields: the declared
+// type of the feature it names, else the result its syntax declares.
+func (m *Model) operandResultType(scope *symbols.Scope, operand ast.Node) *symbols.Symbol {
+	switch operand := operand.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
+		if m.resolver == nil {
+			return nil
+		}
+		sym, ok := m.resolver.ResolveTarget(scope, operand)
+		if !ok || sym == nil || !sym.IsFeature() {
+			return nil
+		}
+		return m.nearestDeclaredType(sym)
+	}
+	return m.ExprResultType(scope, operand)
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as

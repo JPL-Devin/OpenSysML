@@ -189,3 +189,52 @@ func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 		t.Fatalf("computed enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}
 }
+
+// TestW7GASelectedEnumeratedValueKeepsItsOperandType: `xs.?{…}` keeps the
+// elements of xs, so it types the value as xs is typed — through a chain, a
+// nested selection or an indexed element — while `.{…}` and `,` yield Anything
+// (pilot 2026-07 agrees on every case).
+func TestW7GASelectedEnumeratedValueKeepsItsOperandType(t *testing.T) {
+	const src = `package T {
+		private import ScalarValues::*;
+		part def Other;
+		part def W { attribute q : Real[0..*]; }
+		attribute xs : Real[0..*];
+		attribute ns : Natural[0..*];
+		part others : Other[0..*];
+		part w : W;
+		enum def Wrong {
+			a = xs.?{in r : Real; r > 1.0};
+			b = others.?{in o : Other; true};
+			c = ns.?{in n : Natural; n > 1};
+			d = xs.?{in r : Real; r > 1.0}.?{in r : Real; r > 2.0};
+			e = w.q.?{in r : Real; r > 1.0};
+		}
+		enum def WrongNum :> Real {
+			f = ns.?{in n : Natural; n > 1};
+			g = others.?{in o : Other; true};
+		}
+		enum def Right {
+			ok1 = xs.{in r : Real; r};
+			ok2 = Right::ok1.?{in l : Right; true};
+		}
+		enum def RightNum :> Real {
+			ok3 = xs.?{in r : Real; r > 1.0};
+			ok4 = xs.?{in r : Real; r > 1.0}.?{in r : Real; r > 2.0};
+			ok5 = (xs, xs).?{in r : Real; r > 1.0};
+			ok6 = xs#(1).?{in r : Real; r > 1.0};
+			ok7 = w.q.?{in r : Real; r > 1.0};
+		}
+	}`
+	var got []string
+	for _, d := range only(libraryTypeDiags(t, src), "one-type") {
+		if d.Message != oneTypeUsageMessages[ast.UsageEnumeration] {
+			t.Fatalf("unexpected message %q", d.Message)
+		}
+		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
+	}
+	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("selected enumerated values typed outside their enumeration: got %v, want %v", got, want)
+	}
+}
