@@ -8,6 +8,11 @@
 // the baseline. -check verifies instead of writing: the baseline is internally
 // consistent, the document's table has exactly the baseline's rows with the
 // baseline's statuses, every implemented row has a probe under testdata/probes,
+// every implemented row cites an implementation location and every cited one
+// is a declared function, every listed negative case exists, is attributed by
+// its header to the row's constraint and is bucketed by
+// cmd/pilot-reject consistently with the row's status, every case the corpus
+// attributes to a constraint is listed on its row,
 // the summary figures are current, and — when the pinned jar is provisioned or
 // -require-jar is set — the baseline still lists what the jar contains. -update
 // re-extracts the list from the jar, keeping every recorded status.

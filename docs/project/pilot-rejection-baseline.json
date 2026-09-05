@@ -28,7 +28,7 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 236,
-        "digest": "sha256:91558f9bacc0c9eb8d937102ba71e09d078356e7b4bc94eb7cb90dc27b480cb7"
+        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
       }
     ],
     "recorded": "2026-09-05"
@@ -222,7 +222,7 @@
     {
       "path": "grammar/g07-entry-outside-state-body.sysml",
       "source": "grammar",
-      "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry' (SysML.xtext StateBodyItem).",
+      "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry' (SysML.xtext StateBodyItem; pilot validateStateSubactionMembershioOwningType).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -231,7 +231,7 @@
     {
       "path": "grammar/g08-do-outside-state-body.sysml",
       "source": "grammar",
-      "rule": "DoActionMember is a StateBodyItem; a part def body admits no 'do' (SysML.xtext StateBodyItem).",
+      "rule": "DoActionMember is a StateBodyItem; a part def body admits no 'do' (SysML.xtext StateBodyItem; pilot validateStateSubactionMembershioOwningType).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1407,7 +1407,7 @@
     {
       "path": "semantic/k40-metadata-typed-by-class.kerml",
       "source": "semantic",
-      "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
+      "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadataNotAbstract, because its grammar links `@M` only to a metaclass (KerML.xtext MetadataTyping), so the unlinked feature keeps only the implicit abstract Metaobject type).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1938,7 +1938,7 @@
     {
       "path": "xpect/p02-association-end-two-types.kerml",
       "source": "xpect",
-      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
+      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot validateAssociationEndTypes, AssociationTest_EndTypes_invalid.kerml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1947,7 +1947,7 @@
     {
       "path": "xpect/p03-variable-in-datatype.kerml",
       "source": "xpect",
-      "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot Feature_variable_invalid.kerml.xt).",
+      "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot validateFeatureIsVariable, Feature_variable_invalid.kerml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1965,7 +1965,7 @@
     {
       "path": "xpect/p05-single-chaining-feature.kerml",
       "source": "xpect",
-      "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot FeatureChain_invalid.kerml.xt).",
+      "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot validateFeatureChainingFeatureNotOne, FeatureChain_invalid.kerml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2073,7 +2073,7 @@
     {
       "path": "xpect/p17-calc-two-return-parameters.sysml",
       "source": "xpect",
-      "rule": "Only one return parameter is allowed (SysML 7.15 validateReturnParameterMembership; pilot CalculationUsage_Invalid1.sysml.xt).",
+      "rule": "Only one return parameter is allowed (SysML 7.15 validateReturnParameterMembership; pilot validateFunctionResultParameterMembership, CalculationUsage_Invalid1.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2109,7 +2109,7 @@
     {
       "path": "xpect/p20-connection-with-one-end.sysml",
       "source": "xpect",
-      "rule": "A connector must have at least two related elements (KerML 8.3.3.1 validateConnectorRelatedElements; pilot Connector_Invalid.sysml.xt).",
+      "rule": "A connector must have at least two related elements (KerML 8.3.3.1 validateConnectorRelatedElements; pilot validateConnectorRelatedFeatures, Connector_Invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2118,7 +2118,7 @@
     {
       "path": "xpect/p21-filter-constructor-condition.sysml",
       "source": "xpect",
-      "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:74).",
+      "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot validateElementFilterMembershipIsBoolean, MetadataUsage_Invalid.sysml.xt:74).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2127,7 +2127,7 @@
     {
       "path": "xpect/p22-filter-not-model-level-evaluable.sysml",
       "source": "xpect",
-      "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:68).",
+      "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot validateElementFilterMembershipIsModelLevelEvaluable, MetadataUsage_Invalid.sysml.xt:68).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2145,7 +2145,7 @@
     {
       "path": "xpect/p24-metadata-abstract-type.sysml",
       "source": "xpect",
-      "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot MetadataUsage_Invalid.sysml.xt:104).",
+      "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot validateMetadataFeatureMetadataNotAbstract, MetadataUsage_Invalid.sysml.xt:104).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2208,7 +2208,7 @@
     {
       "path": "xpect/p31-redefinition-incompatible-direction.sysml",
       "source": "xpect",
-      "rule": "A redefining feature must have a compatible direction (KerML 7.4.7 validateRedefinitionDirection; pilot PortUsage_Invalid.sysml.xt:57).",
+      "rule": "A redefining feature must have a compatible direction (KerML 7.4.7 validateRedefinitionDirection; pilot validateRedefinitionDirectionConformance, PortUsage_Invalid.sysml.xt:57).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,

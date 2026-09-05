@@ -363,7 +363,7 @@
     {
       "name": "validateFeatureChainExpressionFeatureConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureChainExpressionOperator",
@@ -383,7 +383,7 @@
     {
       "name": "validateFeatureChainingFeaturesNotSelf",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureConstantIsVariable",
@@ -955,7 +955,7 @@
     {
       "name": "validateSubsettingConstantConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateSubsettingFeaturingTypes",
@@ -1005,7 +1005,7 @@
     {
       "name": "validateTransitionUsageSuccession",
       "source": "sysml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateTransitionUsageTriggerActions",
@@ -1061,7 +1061,7 @@
       "name": "validateUsageType",
       "raw": "validateUsageType_",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateUsageVariationIsAbstract",

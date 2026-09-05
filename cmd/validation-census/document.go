@@ -155,10 +155,13 @@ var languageBySource = map[string]string{"kerml": "KerML", "sysml": "SysML", "bo
 // negativeCorpusDir holds the rejection corpus a row's negative case must be in.
 const negativeCorpusDir = "cmd/pilot-reject/testdata/negative"
 
-// checkDocument verifies the census document against the baseline: current
-// summary figures, one row per baseline constraint and no other, each row's
-// language and status as recorded, a location on every implemented row, and
-// negative cases that exist.
+// checkDocument verifies the census document against the baseline and the
+// rejection corpus: current summary figures, one row per baseline constraint
+// and no other, each row's language and status as recorded, a location on
+// every implemented row that resolves to a declared function, and negative
+// cases that exist, name the row's constraint, and whose recorded bucket agrees
+// with the row's status — with every case the corpus attributes to a pilot
+// constraint listed on that constraint's row.
 func checkDocument(root, content string, base *Baseline) error {
 	rewritten, err := rewriteDerivedLines(content, base)
 	if err != nil {
@@ -171,11 +174,17 @@ func checkDocument(root, content string, base *Baseline) error {
 	if err != nil {
 		return err
 	}
+	cases, err := loadCorpus(root)
+	if err != nil {
+		return err
+	}
+	decls := newDeclarations(root)
 	recorded := make(map[string]Constraint, len(base.Constraints))
 	for _, c := range base.Constraints {
 		recorded[c.Name] = c
 	}
 	seen := make(map[string]int, len(rows))
+	listed := make(map[string]map[string]bool, len(rows))
 	var problems []string
 	for _, r := range rows {
 		name, ok := backticked(r.Cells[0])
@@ -203,13 +212,22 @@ func checkDocument(root, content string, base *Baseline) error {
 		if implemented(c.Status) && (r.Cells[3] == "" || r.Cells[3] == "—") {
 			problems = append(problems, fmt.Sprintf("line %d: %s is recorded %s but names no implementation", r.Line, name, c.Status))
 		}
+		problems = append(problems, checkImplementation(decls, r, name, c.Status)...)
 		problems = append(problems, checkNegativeCase(root, r, name)...)
+		listed[name] = make(map[string]bool)
+		for _, path := range negativeCases(r.Cells[5]) {
+			listed[name][path] = true
+			if cc, ok := cases[path]; ok {
+				problems = append(problems, checkCaseEvidence(base, r, name, c.Status, cc)...)
+			}
+		}
 	}
 	for _, c := range base.Constraints {
 		if _, ok := seen[c.Name]; !ok {
 			problems = append(problems, fmt.Sprintf("%s is in %s but has no row", c.Name, baselinePath))
 		}
 	}
+	problems = append(problems, checkAttributions(base, cases, listed)...)
 	if len(problems) == 0 {
 		return nil
 	}
