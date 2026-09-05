@@ -130,7 +130,7 @@ package SolverDemo {
 
         objective mostScience : MaximizeObjective {
             subject :>> selectedAlternative;
-            attribute :>> best = sciencePower;
+            in calc :>> eval { sciencePower }
         }
     }
 
@@ -149,7 +149,7 @@ package SolverDemo {
 
         objective lightest : MinimizeObjective {
             subject :>> selectedAlternative;
-            attribute :>> best = mass;
+            in calc :>> eval { mass }
         }
     }
 
@@ -177,12 +177,12 @@ package SolverDemo {
 
         objective lightest : MinimizeObjective {
             subject :>> selectedAlternative;
-            attribute :>> best = mass;
+            in calc :>> eval { mass }
         }
 
         objective mostScience : MaximizeObjective {
             subject :>> selectedAlternative;
-            attribute :>> best = sciencePower;
+            in calc :>> eval { sciencePower }
         }
     }
 }

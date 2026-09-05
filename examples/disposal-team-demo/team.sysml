@@ -259,6 +259,7 @@ package TeamCases {
 
         objective heaviest : MaximizeObjective {
             subject :>> selectedAlternative;
+            in calc :>> eval { robotMass }
 
             require constraint {
                 2 * robotMass + 2 * cradleMass <= 1200 [kg]
@@ -267,8 +268,6 @@ package TeamCases {
             require constraint {
                 cradleMass >= 60 [kg]
             }
-
-            attribute :>> best = robotMass;
         }
     }
 }

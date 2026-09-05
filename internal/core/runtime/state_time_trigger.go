@@ -72,7 +72,7 @@ func (e *StateExecutor) durationInClockUnits(q *Quantity, what string) (float64,
 		return 0, fmt.Errorf("%w: %s %s is not a time: %s does not measure a duration",
 			ErrIncommensurableUnits, what, q, q.Unit)
 	}
-	magnitude, err := q.convertTo(second)
+	magnitude, err := q.ConvertTo(second)
 	if err != nil {
 		return 0, fmt.Errorf("%s %s: %w", what, q, err)
 	}
