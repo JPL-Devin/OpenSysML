@@ -23,18 +23,22 @@ const (
 	PrimReal
 	PrimComplex
 	PrimNumber
+	// PrimExpression is a body `{ … }` written as a value: the Expression itself,
+	// known and no scalar, unlike PrimUnknown which suppresses checking.
+	PrimExpression
 )
 
 var primNames = map[PrimType]string{
-	PrimUnknown:  "unknown",
-	PrimBoolean:  "Boolean",
-	PrimString:   "String",
-	PrimNatural:  "Natural",
-	PrimInteger:  "Integer",
-	PrimRational: "Rational",
-	PrimReal:     "Real",
-	PrimComplex:  "Complex",
-	PrimNumber:   "Number",
+	PrimUnknown:    "unknown",
+	PrimBoolean:    "Boolean",
+	PrimString:     "String",
+	PrimNatural:    "Natural",
+	PrimInteger:    "Integer",
+	PrimRational:   "Rational",
+	PrimReal:       "Real",
+	PrimComplex:    "Complex",
+	PrimNumber:     "Number",
+	PrimExpression: "Expression",
 }
 
 // String returns the stdlib name of the type, or "unknown".
@@ -165,14 +169,15 @@ func (m *Model) ScalarSymbol(prim PrimType) *symbols.Symbol {
 
 // scalarDefFQNs names the definition each lattice element stands for.
 var scalarDefFQNs = map[PrimType]string{
-	PrimBoolean:  "ScalarValues::Boolean",
-	PrimString:   "ScalarValues::String",
-	PrimNatural:  "ScalarValues::Natural",
-	PrimInteger:  "ScalarValues::Integer",
-	PrimRational: "ScalarValues::Rational",
-	PrimReal:     "ScalarValues::Real",
-	PrimComplex:  "ScalarValues::Complex",
-	PrimNumber:   "ScalarValues::Number",
+	PrimBoolean:    "ScalarValues::Boolean",
+	PrimString:     "ScalarValues::String",
+	PrimNatural:    "ScalarValues::Natural",
+	PrimInteger:    "ScalarValues::Integer",
+	PrimRational:   "ScalarValues::Rational",
+	PrimReal:       "ScalarValues::Real",
+	PrimComplex:    "ScalarValues::Complex",
+	PrimNumber:     "ScalarValues::Number",
+	PrimExpression: fqnEvaluation,
 }
 
 // PrimTypeOf classifies sym against the scalar lattice. A definition is

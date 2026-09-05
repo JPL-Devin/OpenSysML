@@ -39,10 +39,17 @@ func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scop
 			continue
 		}
 		// The feature's type has no scalar ancestor, so no literal value can
-		// conform to it. Only literals are judged here: any other expression
-		// may produce an instance of the type.
+		// conform to it. Only literals and bodies are judged here: any other
+		// expression may produce an instance of the type.
 		if prim := literalPrimType(value); prim != semantics.PrimUnknown {
 			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", prim, want.Name)
+			continue
+		}
+		if _, ok := value.(*ast.BodyExpr); !ok {
+			continue
+		}
+		if c := ec.model.ExprConformsTo(valueScope, value, want); c.Known && !c.Holds {
+			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", semantics.PrimExpression, want.Name)
 		}
 	}
 }
