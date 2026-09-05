@@ -68,6 +68,12 @@ _UNRESOLVED = object()
 #: Naming one here is the opt-in for a caller who cannot pass host and port.
 SERVICE_ENV = 'OPENSYSML_SERVICE'
 
+#: Options of every channel this client opens: only identity, so no service
+#: compresses a response, which grpcio can hand to the parser still compressed.
+CHANNEL_OPTIONS = (
+    ('grpc.compression_enabled_algorithms_bitset', 1 << grpc.Compression.NoCompression),
+)
+
 #: Seconds a private child is given to report the address it bound.
 START_TIMEOUT = 2.5
 
@@ -89,6 +95,18 @@ _private_services: Dict[Optional[str], '_PrivateService'] = {}
 #: Held to start, join or release a private service, since connections of one
 #: interpreter share them and may be opened and closed by different threads.
 _private_services_lock = threading.RLock()
+
+
+def open_channel(address):
+    """Open an insecure channel to ``address`` with this client's options.
+
+    Args:
+        address (str): The service's ``host:port``
+
+    Returns:
+        grpc.Channel: The channel, to be closed by the caller
+    """
+    return grpc.insecure_channel(address, options=CHANNEL_OPTIONS)
 
 
 def split_target(host, port=None):
@@ -478,7 +496,7 @@ class Connection:
                 f"service at {self._address} (not started by this client)"
             )
 
-        self._channel = grpc.insecure_channel(self._address)
+        self._channel = open_channel(self._address)
         self._service = sysml_pb2_grpc.SysMLServiceStub(self._channel)
         try:
             if self._private is None:
@@ -1483,7 +1501,7 @@ class Connection:
                 predates the handshake, which is itself an answer, and None when
                 the call failed, so nothing was learned
         """
-        channel = grpc.insecure_channel(self._address)
+        channel = open_channel(self._address)
         try:
             stub = sysml_pb2_grpc.SysMLServiceStub(channel)
             response = stub.GetServerInfo(
