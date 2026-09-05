@@ -58,6 +58,16 @@ func TestW10BCrossFeatureTypeEffectiveTypes(t *testing.T) {
 			class A; class B;
 			assoc S { end a : A { member feature ac : B [0..1]; } end b : A; }
 		}`, "member feature ac : B [0..1];"},
+		{"explicit type plus unrelated subsetted type", `package P {
+			class A; class W;
+			class Q { feature w : W; feature x : A subsets w; }
+			assoc S { end a : Q; end b : A crosses a.x; }
+		}`, "a.x"},
+		{"untyped reference to a typed feature", `package P {
+			class A; class B;
+			class Q { feature y : B; feature r references y; }
+			assoc S { end a : Q; end b : A crosses a.r; }
+		}`, "a.r"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			diags := constraintDiagsKerML(t, tc.src)
@@ -66,11 +76,16 @@ func TestW10BCrossFeatureTypeEffectiveTypes(t *testing.T) {
 	}
 }
 
-// Types inherited through redefinition or subsetting, and an owned cross
-// feature's implied typing by its end, count toward the comparison.
+// Types inherited through redefinition, subsetting or referencing, and an
+// owned cross feature's implied typing by its end, count toward the
+// comparison, and a type is dropped once a more specific one is present.
 func TestW10BCrossFeatureTypeEffectiveTypesClean(t *testing.T) {
 	const src = `package P {
 		class A { feature x : A; feature y subsets x; }
+		class A2 specializes A { feature g : A; feature h : A2 subsets g; feature j : A subsets h; feature k references h; }
+		assoc R { end a : A2; end b : A2 crosses a.h; }
+		assoc R2 { end a : A2; end b : A2 crosses a.k; }
+		assoc R3 { end a : A2; end b : A2 crosses a.j; }
 		assoc S { end a : A; end b : A crosses a.x; }
 		assoc T specializes S { end a2 redefines a; end b2 redefines b crosses a2.y; }
 		assoc U { end a : A { member feature ac [0..1]; } end b : A { member feature bc : A [0..1]; } }

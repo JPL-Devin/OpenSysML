@@ -123,42 +123,14 @@ func w10bIsOppositeEnd(ends []*symbols.Symbol, end, base *symbols.Symbol) bool {
 }
 
 // w10bSameTypes reports whether a cross feature and its end have the same
-// effective types, an untyped feature counting as typed by its kind's base.
+// types (KerML Feature::type), an untyped feature counting as typed by its kind's base.
 func (cc *constraintChecker) w10bSameTypes(cross, end *symbols.Symbol) bool {
-	crossTypes := cc.w10bFeatureTypes(cross)
-	endTypes := cc.w10bFeatureTypes(end)
+	crossTypes := cc.model.FeatureTypeSet(cross)
+	endTypes := cc.model.FeatureTypeSet(end)
 	if len(crossTypes) == 0 || len(endTypes) == 0 {
 		return true // nothing resolved to compare
 	}
 	return w10bCoversTypes(crossTypes, endTypes) && w10bCoversTypes(endTypes, crossTypes)
-}
-
-// w10bFeatureTypes returns a feature's effective types, a feature with none
-// taking those of the feature it reference-subsets, else of the base feature
-// its kind implicitly subsets.
-func (cc *constraintChecker) w10bFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	seen := map[*symbols.Symbol]bool{}
-	for !seen[sym] {
-		seen[sym] = true
-		if types := cc.model.FeatureTypes(sym); len(types) > 0 {
-			return types
-		}
-		ref := cc.model.ReferencedFeature(sym)
-		if ref == nil {
-			break
-		}
-		sym = ref
-	}
-	fqn, ok := cc.model.FeatureBaseFQN(sym)
-	if !ok || cc.resolver == nil {
-		return nil
-	}
-	for _, base := range cc.resolver.Index().LookupQualified(fqn) {
-		if base != nil && base != sym {
-			return cc.model.FeatureTypes(base)
-		}
-	}
-	return nil
 }
 
 func w10bCoversTypes(types, want []*symbols.Symbol) bool {
