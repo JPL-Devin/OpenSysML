@@ -16,4 +16,9 @@
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))))
           (*ast.AssignmentActionNode)
-          (*ast.AssignmentActionNode))))))
+          (*ast.AssignmentActionNode)
+          (Membership visibility="default"
+            (Usage kind="attribute" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="+"
+                (FeatureReference name="n")
+                (LiteralInteger value="3")))))))))

@@ -337,26 +337,101 @@ func TestF61KeywordlessMembers(t *testing.T) {
 	})
 }
 
-// Assignment statements keep their meaning: `a = e;` in a behavioral body is
-// an assignment shorthand, not a keyword-less usage.
+// `a = e;` in a calculation body declares a keyword-less usage `a` with a value
+// (SysML.xtext DefaultReferenceUsage); only `assign a := e;` is an assignment.
 func TestF61AssignmentStaysAssignment(t *testing.T) {
-	src := "package B { calc def C { in n : ScalarValues::Integer; out a : ScalarValues::Integer; a = n + 1; } }"
-	sf := source.New("f61.sysml", []byte(src))
-	p := New(sf)
-	root := p.ParseFile()
-	if len(p.Diagnostics) > 0 {
-		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
-	}
-	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
-	def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
-	found := false
-	for _, m := range def.Members {
-		if _, ok := m.(*ast.AssignmentActionNode); ok {
-			found = true
+	parseCalc := func(t *testing.T, body string) []ast.Node {
+		t.Helper()
+		src := "package B { calc def C { in n : ScalarValues::Integer; out a : ScalarValues::Integer; " + body + " } }"
+		sf := source.New("f61.sysml", []byte(src))
+		p := New(sf)
+		root := p.ParseFile()
+		if len(p.Diagnostics) > 0 {
+			t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
 		}
+		pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+		return pkg.Members[0].(*ast.Membership).Member.(*ast.Definition).Members
 	}
-	if !found {
-		t.Error("no AssignmentActionNode in calc body; assignment was reparsed as a usage")
+
+	t.Run("value_declares_usage", func(t *testing.T) {
+		members := parseCalc(t, "a = n + 1;")
+		for _, m := range members {
+			if _, ok := m.(*ast.AssignmentActionNode); ok {
+				t.Fatal("found an AssignmentActionNode; `a = n + 1;` is a usage declaration, not an assignment")
+			}
+		}
+		u, ok := members[2].(*ast.Membership).Member.(*ast.Usage)
+		if !ok {
+			t.Fatalf("member 2 = %T, want *ast.Usage", members[2])
+		}
+		if u.Keyword != "" || u.Ident.Name != "a" || u.Value == nil {
+			t.Errorf("got keyword=%q name=%q value=%v, want a kind-less usage `a` with a value", u.Keyword, u.Ident.Name, u.Value)
+		}
+	})
+
+	t.Run("assign_keyword_is_assignment", func(t *testing.T) {
+		members := parseCalc(t, "assign a := n + 1;")
+		if _, ok := members[2].(*ast.AssignmentActionNode); !ok {
+			t.Fatalf("member 2 = %T, want *ast.AssignmentActionNode", members[2])
+		}
+	})
+
+	// A body right after the name is the usage's (DefaultReferenceUsage's UsageBody),
+	// not a body expression following an expression `twice`.
+	t.Run("body_declares_usage", func(t *testing.T) {
+		members := parseCalc(t, "twice { doc /* two n */ } <t> thrice { doc /* three n */ } n")
+		if len(members) != 5 {
+			t.Fatalf("members = %d, want 5", len(members))
+		}
+		for i, want := range []ast.Identification{{Name: "twice"}, {ShortName: "t", Name: "thrice"}} {
+			u, ok := members[2+i].(*ast.Membership).Member.(*ast.Usage)
+			if !ok {
+				t.Fatalf("member %d = %T, want *ast.Usage", 2+i, members[2+i])
+			}
+			if u.Keyword != "" || u.Ident.ShortName != want.ShortName || u.Ident.Name != want.Name || !u.HasBody || u.Value != nil {
+				t.Errorf("member %d = keyword %q <%q> %q body %v, want kind-less <%q> %q with a body",
+					2+i, u.Keyword, u.Ident.ShortName, u.Ident.Name, u.HasBody, want.ShortName, want.Name)
+			}
+		}
+		if _, ok := members[4].(*ast.FeatureReference); !ok {
+			t.Errorf("member 4 = %T, want the trailing expression", members[4])
+		}
+	})
+}
+
+// A keyword of the other language names a short-named keyword-less feature,
+// as a short name or a name, in either file kind.
+func TestF61ShortNamedFeatureOtherLanguageKeywordNames(t *testing.T) {
+	for _, tt := range []struct {
+		file, src string
+		want      []ast.Identification
+	}{
+		{"b.sysml", "package B { <chains> links = 3; <s> featured = 1; <inv> :> links = 2; }",
+			[]ast.Identification{{ShortName: "chains", Name: "links"}, {ShortName: "s", Name: "featured"}, {ShortName: "inv"}}},
+		{"b.kerml", "package B { <s> part = 1; <attribute> y = 2; <action> :> y = 3; }",
+			[]ast.Identification{{ShortName: "s", Name: "part"}, {ShortName: "attribute", Name: "y"}, {ShortName: "action"}}},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			p := New(source.New(tt.file, []byte(tt.src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			members := root.Members[0].(*ast.Membership).Member.(*ast.Package).Members
+			if len(members) != len(tt.want) {
+				t.Fatalf("members = %d, want %d", len(members), len(tt.want))
+			}
+			for i, want := range tt.want {
+				u, ok := members[i].(*ast.Membership).Member.(*ast.Usage)
+				if !ok {
+					t.Fatalf("member %d = %T, want *ast.Usage", i, members[i].(*ast.Membership).Member)
+				}
+				if u.Keyword != "" || u.Ident.ShortName != want.ShortName || u.Ident.Name != want.Name || u.Value == nil {
+					t.Errorf("member %d = keyword %q <%q> %q value %v, want kind-less <%q> %q with a value",
+						i, u.Keyword, u.Ident.ShortName, u.Ident.Name, u.Value != nil, want.ShortName, want.Name)
+				}
+			}
+		})
 	}
 }
 

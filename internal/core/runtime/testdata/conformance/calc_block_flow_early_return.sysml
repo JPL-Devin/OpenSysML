@@ -7,13 +7,13 @@ package test {
 	calc firstAbove {
 		attribute seen : Integer = 0;
 		for i in 1..3 {
-			seen = i;
+			assign seen := i;
 			action check {
 				if seen > 1 {
 					return : Integer = seen;
 				}
 			}
-			seen = 0;
+			assign seen := 0;
 		}
 		return : Integer = seen;
 	}

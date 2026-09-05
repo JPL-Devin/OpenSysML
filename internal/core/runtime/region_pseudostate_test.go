@@ -68,7 +68,7 @@ func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 		state right {
 			entry; then rs;
 			state rs;
-			state rstart { entry { rightEntries = rightEntries + 1; } }
+			state rstart { entry { assign rightEntries := rightEntries + 1; } }
 			succession first rs then rstart;
 		}
 		choice pick;
@@ -160,14 +160,14 @@ func TestRegionPseudostateLeavingEveryRegion(t *testing.T) {
 			state left {
 				entry; then ls;
 				state ls;
-				state lstart { exit { leftExits = leftExits + 1; } }
+				state lstart { exit { assign leftExits := leftExits + 1; } }
 				succession first ls then lstart;
 				transition first lstart then pick;
 			}
 			state right {
 				entry; then rs;
 				state rs;
-				state rstart { exit { rightExits = rightExits + 1; } }
+				state rstart { exit { assign rightExits := rightExits + 1; } }
 				succession first rs then rstart;
 			}
 		}
@@ -213,7 +213,7 @@ func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 				entry; then rs;
 				state rs;
 				state rstart;
-				state rtarget { entry { x = 2; } }
+				state rtarget { entry { assign x := 2; } }
 				succession first rs then rstart;
 			}
 		}

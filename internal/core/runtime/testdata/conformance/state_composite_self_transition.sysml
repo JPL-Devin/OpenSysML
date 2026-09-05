@@ -8,15 +8,15 @@ package Test {
 		entry; then start;
 		state start;
 		state Working parallel {
-			entry { log = log * 10 + 1; }
-			exit { log = log * 10 + 2; }
+			entry { assign log := log * 10 + 1; }
+			exit { assign log := log * 10 + 2; }
 
 			state left {
 				entry; then lstart;
 				state lstart;
 				state l1 {
-					entry { log = log * 10 + 3; }
-					exit { log = log * 10 + 4; }
+					entry { assign log := log * 10 + 3; }
+					exit { assign log := log * 10 + 4; }
 				}
 
 				succession first lstart then l1;

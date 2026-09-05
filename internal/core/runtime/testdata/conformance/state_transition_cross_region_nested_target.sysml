@@ -25,13 +25,13 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state wrapper parallel {
-					entry { wrapperEntries = wrapperEntries + 1; }
+					entry { assign wrapperEntries := wrapperEntries + 1; }
 
 					state inner {
 						entry; then istart;
 						state istart;
-						state ridle { exit { innerExits = innerExits + 1; } }
-						state rtarget { entry { crossed = 1; } }
+						state ridle { exit { assign innerExits := innerExits + 1; } }
+						state rtarget { entry { assign crossed := 1; } }
 
 						succession first istart then ridle;
 					}

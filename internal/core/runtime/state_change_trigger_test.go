@@ -18,7 +18,7 @@ func TestChangeTriggerRunsWithoutAnExternalPoll(t *testing.T) {
 			state waiting {
 				accept when ready then done;
 			}
-			state done { entry { log = 1; } }
+			state done { entry { assign log := 1; } }
 			succession first start then waiting;
 		}
 	}`)
@@ -504,7 +504,7 @@ func TestChangeTriggerKeepsAnEdgeBlockedDuringThePoll(t *testing.T) {
 					entry; then s0;
 					state s0;
 					state sWait;
-					state sDone { entry { laps = 1; } }
+					state sDone { entry { assign laps := 1; } }
 					transition first s0 then sWait;
 					transition first sWait accept when ready if allowed then sDone;
 				}

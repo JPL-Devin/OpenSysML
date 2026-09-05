@@ -1,7 +1,7 @@
-// An `out` feature a statement of the calc's body assigns is bound for that
-// activation, in either spelling of assignment, and is read through a calc
-// usage. A body computing its outputs with a loop and a conditional binds them
-// the same way.
+// An `out` feature an `assign` statement of the calc's body writes is bound for
+// that activation and is read through a calc usage, whether the statements are
+// spelled at the top of the body or nested in a while/if. A body computing its
+// outputs with a loop and a conditional binds them the same way.
 package test {
 	private import ScalarValues::*;
 
@@ -9,16 +9,19 @@ package test {
 		in n : Integer;
 		out a : Integer;
 		out b : Integer;
-		a = n + 1;
-		b = n + 2;
+		assign a := n + 1;
+		assign b := n + 2;
 	}
 
+	// The outputs are written from inside a nested statement body.
 	calc def TwoAssign {
 		in n : Integer;
 		out a : Integer;
 		out b : Integer;
-		a := n + 1;
-		b := n + 2;
+		if true {
+			assign a := n + 1;
+			assign b := n + 2;
+		}
 	}
 
 	calc def LoopBranch {
@@ -28,14 +31,14 @@ package test {
 		attribute s : Integer = 0;
 		attribute i : Integer = 1;
 		while i <= n {
-			s = s + i;
-			i = i + 1;
+			assign s := s + i;
+			assign i := i + 1;
 		}
-		total = s;
+		assign total := s;
 		if s > 10 {
-			size = "big";
+			assign size := "big";
 		} else {
-			size = "small";
+			assign size := "small";
 		}
 	}
 
@@ -45,10 +48,10 @@ package test {
 		in n : Integer;
 		out total : Integer;
 		attribute i : Integer = 1;
-		total = 0;
+		assign total := 0;
 		while i <= n {
-			total = total + i;
-			i = i + 1;
+			assign total := total + i;
+			assign i := i + 1;
 		}
 	}
 
@@ -56,8 +59,8 @@ package test {
 	calc def Bump {
 		inout p : Integer;
 		out q : Integer;
-		p = p + 1;
-		q = p * 10;
+		assign p := p + 1;
+		assign q := p * 10;
 	}
 
 	// A body that returns a value of its own leaves an output it assigned alone: the
@@ -65,7 +68,7 @@ package test {
 	calc def AssignAndReturn {
 		in n : Integer;
 		out a : Integer;
-		a = n + 1;
+		assign a := n + 1;
 		n * 100
 	}
 
