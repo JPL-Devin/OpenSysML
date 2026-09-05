@@ -208,8 +208,8 @@ package 'Wildfire Watch Mission' {
 		allocate logical.downlink to physical.space.transmitter;
 
 		satisfy 'System Requirements'::revisitTime by physical;
-		satisfy 'System Requirements'::alertDownlink by physical.space.transmitter;
-		satisfy detectionTime by physical.space.computer.detector;
+		satisfy 'System Requirements'::alertDownlink by physical;
+		satisfy detectionTime by logical.detection;
 	}
 
 	@OOSEMPackage { kind = OOSEMPackageKind::tradeStudies; }
