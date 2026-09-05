@@ -1,0 +1,444 @@
+package passes
+
+import (
+	"fmt"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// OOSEMMethodPass audits the artefacts a model classifies with the OOSEM
+// library against the method's traceability and allocation rules. Each rule
+// fires only once the model declares the artefacts the rule relates, so a model
+// still being built is not told what it has not reached yet.
+type OOSEMMethodPass struct{}
+
+// Diagnostic codes of the OOSEM method rules.
+const (
+	CodeOOSEMRequirementNotDerived   = "oosem-requirement-not-derived"
+	CodeOOSEMRequirementNotSatisfied = "oosem-requirement-not-satisfied"
+	CodeOOSEMLogicalNotAllocated     = "oosem-logical-component-not-allocated"
+	CodeOOSEMUseCaseSubject          = "oosem-use-case-subject"
+)
+
+const oosemSource = "oosem"
+
+func (OOSEMMethodPass) Level() PassLevel { return LevelConstraint }
+
+func (OOSEMMethodPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	if ctx == nil || ctx.Index == nil || root == nil {
+		return nil
+	}
+	if ctx.Index.DocumentLibraryTier(name).Library() {
+		return nil
+	}
+	rootScope := ctx.Index.DocumentRoot(name)
+	if rootScope == nil {
+		return nil
+	}
+	a := newOOSEMAudit(ctx)
+	if a == nil {
+		return nil
+	}
+	gathered := map[*symbols.Scope]bool{}
+	for _, doc := range ctx.Index.WorkspaceDocuments() {
+		if r := ctx.Index.DocumentRoot(doc); r != nil && !gathered[r] {
+			gathered[r] = true
+			a.gather(r)
+		}
+	}
+	if !gathered[rootScope] {
+		a.gather(rootScope)
+	}
+	a.check(rootScope)
+	return a.diags
+}
+
+// oosemKind is an OOSEM artefact class, told by conformance to its library definition.
+type oosemKind int
+
+const (
+	oosemNone oosemKind = iota
+	oosemStakeholderNeed
+	oosemMissionRequirement
+	oosemSystemRequirement
+	oosemComponentRequirement
+	oosemLogicalComponent
+	oosemPhysicalComponent
+	oosemNode
+	oosemSystemContext
+	oosemEnterprise
+	oosemEnterpriseUseCase
+	oosemSystemUseCase
+)
+
+// oosemKindDefinitions lists the library definitions each kind conforms to.
+// Order matters where kinds specialize one another: a data component is a
+// physical component, so DataComponent is listed with PhysicalComponent.
+var oosemKindDefinitions = []struct {
+	kind oosemKind
+	fqns []string
+}{
+	{oosemStakeholderNeed, []string{"OOSEM::StakeholderNeed"}},
+	{oosemMissionRequirement, []string{"OOSEM::MissionRequirement"}},
+	{oosemSystemRequirement, []string{"OOSEM::SystemRequirement"}},
+	{oosemComponentRequirement, []string{"OOSEM::ComponentRequirement"}},
+	{oosemLogicalComponent, []string{"OOSEM::LogicalComponent"}},
+	{oosemPhysicalComponent, []string{"OOSEM::PhysicalComponent", "OOSEM::DataComponent"}},
+	{oosemNode, []string{"OOSEM::Node"}},
+	{oosemSystemContext, []string{"OOSEM::SystemContext"}},
+	{oosemEnterprise, []string{"OOSEM::Enterprise"}},
+	{oosemEnterpriseUseCase, []string{"OOSEM::EnterpriseUseCase"}},
+	{oosemSystemUseCase, []string{"OOSEM::SystemUseCase"}},
+}
+
+var oosemKindNames = map[oosemKind]string{
+	oosemStakeholderNeed:      "stakeholder need",
+	oosemMissionRequirement:   "mission requirement",
+	oosemSystemRequirement:    "system requirement",
+	oosemComponentRequirement: "component requirement",
+	oosemLogicalComponent:     "logical component",
+	oosemPhysicalComponent:    "physical component",
+	oosemNode:                 "node",
+	oosemSystemContext:        "system context",
+	oosemEnterprise:           "enterprise",
+	oosemEnterpriseUseCase:    "enterprise use case",
+	oosemSystemUseCase:        "system use case",
+}
+
+// oosemDerivesFrom is the requirement level each level derives from.
+var oosemDerivesFrom = map[oosemKind]oosemKind{
+	oosemMissionRequirement:   oosemStakeholderNeed,
+	oosemSystemRequirement:    oosemMissionRequirement,
+	oosemComponentRequirement: oosemSystemRequirement,
+}
+
+const derivedRequirementMetadataFQN = "RequirementDerivation::DerivedRequirementMetadata"
+
+type oosemAudit struct {
+	ctx   *Context
+	model *semantics.Model
+	// definitions holds the library definition of each OOSEM kind.
+	definitions map[oosemKind][]*symbols.Symbol
+	// present records the kinds the workspace declares at all.
+	present map[oosemKind]bool
+	// derived, satisfied and allocated hold the requirements at a `#derive`
+	// end, the requirements a `satisfy` names, and the sources of allocations.
+	derived   map[symbols.ElementKey]bool
+	satisfied map[symbols.ElementKey]bool
+	allocated map[symbols.ElementKey]bool
+	// statesSatisfaction reports whether the workspace states any satisfy.
+	statesSatisfaction bool
+	kinds              map[*symbols.Symbol]oosemKind
+	diags              []Diagnostic
+}
+
+// newOOSEMAudit returns nil when the OOSEM library is not loaded, since no
+// element can then be an OOSEM artefact.
+func newOOSEMAudit(ctx *Context) *oosemAudit {
+	a := &oosemAudit{
+		ctx:         ctx,
+		model:       ctx.Model(),
+		definitions: map[oosemKind][]*symbols.Symbol{},
+		present:     map[oosemKind]bool{},
+		derived:     map[symbols.ElementKey]bool{},
+		satisfied:   map[symbols.ElementKey]bool{},
+		allocated:   map[symbols.ElementKey]bool{},
+		kinds:       map[*symbols.Symbol]oosemKind{},
+	}
+	found := false
+	for _, entry := range oosemKindDefinitions {
+		for _, fqn := range entry.fqns {
+			for _, def := range ctx.Index.LookupQualified(fqn) {
+				if def != nil {
+					a.definitions[entry.kind] = append(a.definitions[entry.kind], def)
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+	return a
+}
+
+// kindOf classifies sym: a usage by the types it has, a definition by itself.
+func (a *oosemAudit) kindOf(sym *symbols.Symbol) oosemKind {
+	if sym == nil {
+		return oosemNone
+	}
+	if kind, ok := a.kinds[sym]; ok {
+		return kind
+	}
+	a.kinds[sym] = oosemNone
+	var types []*symbols.Symbol
+	if sym.IsFeature() {
+		types = a.model.FeatureTypeSet(sym)
+	} else if _, ok := sym.Decl.(*ast.Definition); ok {
+		types = []*symbols.Symbol{sym}
+	}
+	kind := oosemNone
+	for _, t := range types {
+		if kind = a.kindOfType(t); kind != oosemNone {
+			break
+		}
+	}
+	a.kinds[sym] = kind
+	return kind
+}
+
+func (a *oosemAudit) kindOfType(t *symbols.Symbol) oosemKind {
+	for _, entry := range oosemKindDefinitions {
+		for _, def := range a.definitions[entry.kind] {
+			if a.model.Conforms(t, def) {
+				return entry.kind
+			}
+		}
+	}
+	return oosemNone
+}
+
+// gather records the kinds a document declares and the derivation,
+// satisfaction and allocation relationships it states.
+func (a *oosemAudit) gather(root *symbols.Scope) {
+	w8dWalkSymbols(a.ctx, root, func(sym *symbols.Symbol) {
+		usage, isUsage := sym.Decl.(*ast.Usage)
+		if kind := a.kindOf(sym); kind != oosemNone {
+			a.present[kind] = true
+		}
+		if !isUsage {
+			return
+		}
+		switch {
+		case usage.IsEnd:
+			a.gatherDerivationEnd(sym, usage)
+		case usage.Kind == ast.UsageAllocation:
+			a.gatherAllocation(sym, usage)
+		case usage.Kind == ast.UsageSatisfy && usage.Keyword != "verify":
+			a.gatherSatisfaction(sym, usage)
+		}
+	})
+}
+
+// gatherDerivationEnd records the requirement a `#derive` end refers to.
+func (a *oosemAudit) gatherDerivationEnd(sym *symbols.Symbol, usage *ast.Usage) {
+	if !a.annotatedWith(sym, derivedRequirementMetadataFQN) {
+		return
+	}
+	for _, target := range a.referents(sym, usage) {
+		a.derived[symbols.KeyOf(target)] = true
+	}
+}
+
+// gatherAllocation records the source of an allocation: the first end of its
+// `allocate x to y` clause, else the first `end` its body declares.
+func (a *oosemAudit) gatherAllocation(sym *symbols.Symbol, usage *ast.Usage) {
+	if len(usage.ConnectorEnds) > 0 {
+		attachments := a.model.ConnectorEndAttachments(sym)
+		if len(attachments) < 2 || attachments[0].Attachment == nil {
+			return
+		}
+		if source, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, attachments[0].Attachment); ok && source != nil {
+			a.allocated[symbols.KeyOf(source)] = true
+		}
+		return
+	}
+	if sym.Scope == nil {
+		return
+	}
+	var ends []*symbols.Symbol
+	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
+		if u, ok := member.Decl.(*ast.Usage); ok && u.IsEnd {
+			ends = append(ends, member)
+		}
+		return true
+	})
+	if len(ends) < 2 {
+		return
+	}
+	if u, ok := ends[0].Decl.(*ast.Usage); ok {
+		for _, target := range a.referents(ends[0], u) {
+			a.allocated[symbols.KeyOf(target)] = true
+		}
+	}
+}
+
+// gatherSatisfaction records the requirement a `satisfy` names, or the
+// satisfy itself when it declares its requirement.
+func (a *oosemAudit) gatherSatisfaction(sym *symbols.Symbol, usage *ast.Usage) {
+	a.statesSatisfaction = true
+	if usage.DeclaresRequirement {
+		a.satisfied[symbols.KeyOf(sym)] = true
+		return
+	}
+	for _, rel := range usage.Relationships {
+		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
+			continue
+		}
+		if target, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, rel.Target); ok && target != nil {
+			a.satisfied[symbols.KeyOf(target)] = true
+		}
+	}
+}
+
+// referents resolves the features an end refers to or subsets.
+func (a *oosemAudit) referents(sym *symbols.Symbol, usage *ast.Usage) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, rel := range usage.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		if rel.Kind != ast.RelReferences && rel.Kind != ast.RelSubsets {
+			continue
+		}
+		if target, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, rel.Target); ok && target != nil {
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
+func (a *oosemAudit) annotatedWith(sym *symbols.Symbol, fqn string) bool {
+	for _, facts := range a.model.AnnotationFactsOf(sym) {
+		if facts.TypeFQN == fqn {
+			return true
+		}
+	}
+	return false
+}
+
+// check judges the document's own artefacts.
+func (a *oosemAudit) check(root *symbols.Scope) {
+	w8dWalkSymbols(a.ctx, root, func(sym *symbols.Symbol) {
+		switch d := sym.Decl.(type) {
+		case *ast.Usage:
+			switch d.Kind {
+			case ast.UsageRequirement:
+				a.checkRequirement(sym)
+			case ast.UsagePart, ast.UsageItem:
+				a.checkLogicalComponent(sym)
+			case ast.UsageUseCase:
+				a.checkUseCaseSubject(sym)
+			}
+		case *ast.Definition:
+			if d.Kind == ast.DefUseCase {
+				a.checkUseCaseSubject(sym)
+			}
+		}
+	})
+}
+
+// checkRequirement expects a requirement to derive from the level above it
+// once that level exists, and to be satisfied once anything is satisfied.
+func (a *oosemAudit) checkRequirement(sym *symbols.Symbol) {
+	kind := a.kindOf(sym)
+	from, derives := oosemDerivesFrom[kind]
+	if !derives {
+		return
+	}
+	key := symbols.KeyOf(sym)
+	if a.present[from] && !a.derived[key] {
+		a.report(sym, CodeOOSEMRequirementNotDerived, fmt.Sprintf(
+			"This %s derives from no %s: the model declares %ss, so OOSEM expects a #derivation connection naming it at a #derive end.",
+			oosemKindNames[kind], oosemKindNames[from], oosemKindNames[from]))
+	}
+	if kind != oosemMissionRequirement && a.statesSatisfaction && !a.satisfied[key] {
+		a.report(sym, CodeOOSEMRequirementNotSatisfied, fmt.Sprintf(
+			"This %s is satisfied by nothing: the model states satisfactions, so OOSEM expects a `satisfy` naming it.",
+			oosemKindNames[kind]))
+	}
+}
+
+// checkLogicalComponent expects a logical component usage to be allocated to
+// a node or physical component once the model declares either; an allocation
+// of its type or of an enclosing component covers it.
+func (a *oosemAudit) checkLogicalComponent(sym *symbols.Symbol) {
+	if a.kindOf(sym) != oosemLogicalComponent {
+		return
+	}
+	if !a.present[oosemNode] && !a.present[oosemPhysicalComponent] {
+		return
+	}
+	if a.allocated[symbols.KeyOf(sym)] {
+		return
+	}
+	for _, t := range a.model.FeatureTypeSet(sym) {
+		if a.allocated[symbols.KeyOf(t)] {
+			return
+		}
+	}
+	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
+		if owner := scope.Owner(); owner != nil && a.allocated[symbols.KeyOf(owner)] {
+			return
+		}
+	}
+	a.report(sym, CodeOOSEMLogicalNotAllocated,
+		"This logical component is allocated to nothing: the model declares nodes or physical components, so OOSEM expects an `allocate` from it (or its type) to one.")
+}
+
+// checkUseCaseSubject expects a system use case's subject to be a system
+// context and an enterprise use case's subject to be an enterprise.
+func (a *oosemAudit) checkUseCaseSubject(sym *symbols.Symbol) {
+	kind := a.kindOf(sym)
+	var want oosemKind
+	switch kind {
+	case oosemSystemUseCase:
+		want = oosemSystemContext
+	case oosemEnterpriseUseCase:
+		want = oosemEnterprise
+	default:
+		return
+	}
+	if sym.Scope == nil {
+		return
+	}
+	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
+		u, ok := member.Decl.(*ast.Usage)
+		if !ok || u.Kind != ast.UsageSubject {
+			return true
+		}
+		var types []*symbols.Symbol
+		for _, rel := range u.Relationships {
+			if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
+				continue
+			}
+			if t, ok := a.ctx.Resolver().ResolveTarget(member.OwnerScope, rel.Target); ok && t != nil {
+				types = append(types, t)
+			}
+		}
+		if len(types) == 0 {
+			return true
+		}
+		for _, t := range types {
+			if a.kindOfType(t) == want {
+				return true
+			}
+		}
+		a.report(member, CodeOOSEMUseCaseSubject, fmt.Sprintf(
+			"The subject of a%s %s is the %s it serves, but this one is typed by none.",
+			article(oosemKindNames[kind]), oosemKindNames[kind], oosemKindNames[want]))
+		return true
+	})
+}
+
+func article(noun string) string {
+	if len(noun) > 0 && (noun[0] == 'a' || noun[0] == 'e' || noun[0] == 'i' || noun[0] == 'o' || noun[0] == 'u') {
+		return "n"
+	}
+	return ""
+}
+
+func (a *oosemAudit) report(sym *symbols.Symbol, code, message string) {
+	if sym == nil || sym.Decl == nil {
+		return
+	}
+	a.diags = append(a.diags, Diagnostic{
+		Severity: SeverityWarning,
+		Span:     sym.Decl.Span(),
+		Message:  message,
+		Code:     code,
+		Source:   oosemSource,
+	})
+}

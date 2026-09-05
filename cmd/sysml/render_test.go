@@ -409,3 +409,55 @@ func TestRenderFilenameStaysInsideTheDestination(t *testing.T) {
 		t.Fatal("a view name containing a path was accepted as a rendering filename")
 	}
 }
+
+// The OOSEM view definitions carry their filter and rendering; a usage only
+// exposes, and the inherited filter keeps everything else out of the artifact.
+func TestRenderAllOOSEMViews(t *testing.T) {
+	binary := buildCLI(t)
+	const model = `package Demo {
+    private import OOSEM::*;
+    package Needs {
+        #stakeholderNeed requirement coverage;
+        #systemRequirement requirement revisit;
+        #logical part def Sensing;
+        #logical part sensing : Sensing;
+        part def Plain;
+    }
+    view requirements : RequirementsView { expose Needs::*; }
+    view architecture : LogicalArchitectureView { expose Needs::*; }
+}
+`
+	dir := filepath.Join(t.TempDir(), "rendered")
+	got := runStreams(t, binary, model, "-render-all", dir)
+	if got.status != exitHolds {
+		t.Fatalf("exit status = %d, want %d\n%s", got.status, exitHolds, got.output())
+	}
+	table, err := os.ReadFile(filepath.Join(dir, "Demo.requirements.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"| Element | Kind |", "coverage", "revisit"} {
+		if !strings.Contains(string(table), want) {
+			t.Errorf("requirements table is missing %q:\n%s", want, table)
+		}
+	}
+	for _, unwanted := range []string{"Plain", "sensing"} {
+		if strings.Contains(string(table), unwanted) {
+			t.Errorf("requirements table leaks %q past the view's filter:\n%s", unwanted, table)
+		}
+	}
+	tree, err := os.ReadFile(filepath.Join(dir, "Demo.architecture.mmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"flowchart TD", "Sensing", "sensing"} {
+		if !strings.Contains(string(tree), want) {
+			t.Errorf("logical tree is missing %q:\n%s", want, tree)
+		}
+	}
+	for _, unwanted := range []string{"Plain", "coverage"} {
+		if strings.Contains(string(tree), unwanted) {
+			t.Errorf("logical tree leaks %q past the view's filter:\n%s", unwanted, tree)
+		}
+	}
+}

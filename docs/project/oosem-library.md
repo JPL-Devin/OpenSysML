@@ -75,6 +75,32 @@ usages, so a model written against the stub resolves the same features.
 | Physical architecture | `PhysicalComponent` `#physical`, `HardwareComponent` `#hardware`, `SoftwareComponent` `#software`, `OperationalProcedure` `#operationalProcedure`, `DataComponent` `#data` |
 | Lifecycle | `#asIs` / `#toBe` marking (`EnterpriseStateKind`) |
 | Package template | `@OOSEMPackage { kind = OOSEMPackageKind::…; }` — the activity a package holds, for navigating a model by method rather than by package name |
+| Viewpoints & views | `EnterpriseViewpoint`, `SystemContextViewpoint`, `RequirementsViewpoint`, `LogicalArchitectureViewpoint`, `PhysicalArchitectureViewpoint` framing one concern each; view definitions `EnterpriseModelView`, `SystemContextView`, `SystemUseCaseView`, `RequirementsView`, `MeasuresView`, `LogicalArchitectureView`, `LogicalScenarioView`, `PhysicalArchitectureView` |
+
+**Views.** Each OOSEM view definition specialises a `StandardViewDefinitions` view (`BrowserView`,
+`InterconnectionView`, `GridView`, `ActionFlowView`), carries the `filter` that admits the
+activity's artefacts by their metadata, and states its `render` (`asTreeDiagram`,
+`asInterconnectionDiagram`, `asElementTable`). A model then writes only the usage and what it
+exposes — `view requirements : RequirementsView { expose 'System Requirements'::*; }` — and
+`sysml -render-all` produces the artefact. This relies on a view usage honouring the filters of
+its definition and that definition's supertypes; `resolve.Resolver.importAdmits` applies those
+inherited conditions to `expose` imports (before, only the usage's own `filter` counted).
+
+**Method checks.** `passes.OOSEMMethodPass` (constraint tier, source `oosem`) audits a model
+against the traces the method expects. Every finding is a **warning**, since an incomplete
+model is a normal state of the work, and every rule waits until the model has reached the level
+it checks against:
+
+| Code | Rule | Applies once the model has |
+| --- | --- | --- |
+| `oosem-requirement-not-derived` | a mission / system / component requirement is the `#derive` end of a `#derivation` from the level above (stakeholder need / mission / system requirement) | any requirement of the level above |
+| `oosem-requirement-not-satisfied` | a system or component requirement is the requirement of some `satisfy` | any `satisfy` |
+| `oosem-logical-component-not-allocated` | a `#logical` component usage is the source of an `allocate` (itself, an enclosing usage, or its type) | any `#node` or physical component |
+| `oosem-use-case-subject` | the subject of a `#systemUseCase` is a `#systemContext`, of an `#enterpriseUseCase` an `#enterprise` | always, for typed subjects |
+
+Classification follows the metadata *or* the typing, so `requirement r : SystemRequirement` and
+`#systemRequirement requirement r` are both system requirements. Library documents are not
+audited, and a model that never touches `OOSEM` gets no finding.
 
 Naming follows the SysML v1 OOSEM profile where the word is not a SysML v2 reserved keyword.
 `stakeholder`, `analysis` and `verification` are keywords, hence `#stakeholderRole`,
@@ -83,9 +109,12 @@ names where OpenSysML's would not, and the library is written so both accept it.
 
 ## Alternatives considered
 
-- **Views and viewpoints for the OOSEM diagram set** (the DesertKite stub's placeholders). Left
-  out: `Views`/`StandardViewDefinitions` already cover the rendering kinds, and OOSEM's diagrams
-  are the SysML diagrams applied to the artefacts above; a view library would restate them.
+- **An OOSEM rendering engine.** Rejected: OOSEM's diagrams are the SysML diagrams applied to
+  the artefacts above, so the view definitions specialise `StandardViewDefinitions` and reuse the
+  `Views` renderings; the only OOSEM-specific part is the filter.
+- **Method checks as errors, or unconditional.** Rejected: OOSEM is worked top-down over weeks,
+  and a model with system requirements and no mission requirements yet is not wrong. The rules
+  gate on the presence of the level they trace to and stay at warning severity.
 - **Requirement categories as `RequirementCheck` subtypes vs. metadata only.** Subtypes were
   chosen so a requirement can be typed by its level with no keyword, and so the level is an
   ordinary specialisation the checker and RDF export already understand.
@@ -94,11 +123,13 @@ names where OpenSysML's would not, and the library is written so both accept it.
 
 ## Known limitations
 
-- The library marks *what* an artefact is, not *whether the method was followed*: there is no
-  validation pass that, say, requires every `#systemRequirement` to derive from a
-  `#missionRequirement`. That is a natural follow-on as a `DocumentQueries` query or a
-  constraint-tier pass.
-- Views for the OOSEM package template are not provided (see above).
+- The method checks cover traceability (derivation, satisfaction, allocation) and use-case
+  subjects. Not checked: that every MOE has a trade-study objective, that every system
+  requirement is verified, or that a `#logicalScenario` decomposes a use case.
+- `LogicalScenarioView` renders only what `ActionFlowView` renders; a `GeometryView`-based
+  physical layout is not offered because the geometry renderer does not draw yet.
+- No dedicated vocabulary for risk, design margins or verification-method assignment beyond
+  native `VerificationCases`.
 
 ## Parser fix made along the way
 

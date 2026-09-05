@@ -107,7 +107,7 @@ rather than a verdict against us — the pilot answers `false` for
   such file or directory`.
 - **Additivity.** `go run ./cmd/pilot-diff` must still print the headline the
   committed baseline holds (`367 file(s), 338 fully agreeing; 43 agreed
-  diagnostic(s), 20 only ours, 572 only the pilot's` after the OOSEM library landed — read it from the baseline JSON, not from this line, since each
+  diagnostic(s), 20 only ours, 598 only the pilot's` after the OOSEM library landed — read it from the baseline JSON, not from this line, since each
   fix round moves it) and `jq -S` diff clean against
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`
   empty at the end.
