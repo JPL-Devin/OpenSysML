@@ -77,7 +77,8 @@ func (tc *typeChecker) enumeratedValueTypeDiffers(scope *symbols.Scope, d featur
 }
 
 // enumeratedValueType is the type a non-default value gives an enumerated value
-// declaring no generalization (KerML checkFeatureValuationSpecialization).
+// declaring no generalization (KerML checkFeatureValuationSpecialization): the
+// result its syntax declares, else that of the feature or function it names.
 func (tc *typeChecker) enumeratedValueType(scope *symbols.Scope, u *ast.Usage) *symbols.Symbol {
 	if u.Value == nil || u.ValueIsDefault || u.Direction != ast.DirNone {
 		return nil
@@ -87,7 +88,7 @@ func (tc *typeChecker) enumeratedValueType(scope *symbols.Scope, u *ast.Usage) *
 			return nil
 		}
 	}
-	if typ := tc.expr.model.LiteralResultType(u.Value); typ != nil {
+	if typ := tc.expr.model.ExprResultType(scope, u.Value); typ != nil {
 		return typ
 	}
 	if typ := tc.expr.valueTypeSymbol(scope, u.Value); typ != nil {

@@ -23,6 +23,7 @@ const (
 	fqnAnything                   = "Base::Anything"
 	fqnEvaluation                 = "Performances::Evaluation"
 	fqnCollection                 = "Collections::Collection"
+	fqnMetaobject                 = "Metaobjects::Metaobject"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
 
@@ -149,13 +150,15 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 	return conformanceUnknown()
 }
 
-// LiteralResultType is the result type a literal's evaluation declares (KerML
-// Performances: Integer, Real, String, Boolean); nil for any other node.
-func (m *Model) LiteralResultType(node ast.Node) *symbols.Symbol {
+// ExprResultType is the type the result of an expression declares by its syntax
+// alone: a literal's scalar type (KerML Performances), the result of the Kernel
+// Function Library function an operator names, the definition a constructor
+// instantiates. Nil for a value only a named declaration or evaluation types.
+func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 	if m == nil {
 		return nil
 	}
-	switch node.(type) {
+	switch n := node.(type) {
 	case *ast.LiteralBool:
 		return m.libSymbol(FQNBoolean)
 	case *ast.LiteralString:
@@ -164,8 +167,69 @@ func (m *Model) LiteralResultType(node ast.Node) *symbols.Symbol {
 		return m.libSymbol(fqnInteger)
 	case *ast.LiteralReal:
 		return m.libSymbol(fqnReal)
+	case *ast.OperatorExpr:
+		return m.libSymbol(operatorResultFQN(n.Operator))
+	case *ast.IndexExpr:
+		if n.Bracket {
+			return m.libSymbol(fqnAnything)
+		}
+		return m.indexResultType(scope, n)
+	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr:
+		return m.libSymbol(fqnAnything)
+	case *ast.ConstructorExpr:
+		if n.Type == nil || m.resolver == nil {
+			return nil
+		}
+		def, ok := m.resolver.ResolveQualified(scope, n.Type)
+		if !ok || def == nil {
+			return nil
+		}
+		if alias, ok := m.resolver.ResolveAliasTarget(def); ok {
+			def = alias
+		}
+		return def
 	}
 	return nil
+}
+
+// operatorResultFQN names the result type of the Kernel Function Library
+// function an operator resolves to (BaseFunctions, DataFunctions, ControlFunctions).
+func operatorResultFQN(op ast.OperatorKind) string {
+	switch op {
+	case ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq, ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe,
+		ast.OpIsType, ast.OpHasType, ast.OpAt, ast.OpMetaAt,
+		ast.OpConditionalAnd, ast.OpConditionalOr, ast.OpImplies:
+		return FQNBoolean
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow, ast.OpMod, ast.OpNeg, ast.OpPos,
+		ast.OpNot, ast.OpAnd, ast.OpOr, ast.OpXor, ast.OpBitNot, ast.OpRange:
+		return dataValueFQN
+	case ast.OpMeta:
+		return fqnMetaobject
+	}
+	return fqnAnything
+}
+
+// indexResultType is the type of one element `seq#(i)` selects: seq's own type,
+// or Anything when seq is a Collection (KerML checkIndexExpressionResultSpecialization).
+func (m *Model) indexResultType(scope *symbols.Scope, n *ast.IndexExpr) *symbols.Symbol {
+	if m.resolver == nil {
+		return nil
+	}
+	var seq *symbols.Symbol
+	switch operand := n.Operand.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
+		sym, ok := m.resolver.ResolveTarget(scope, operand)
+		if !ok || sym == nil || !sym.IsFeature() {
+			return nil
+		}
+		seq = m.nearestDeclaredType(sym)
+	default:
+		seq = m.ExprResultType(scope, operand)
+	}
+	if collection := m.libSymbol(fqnCollection); seq == nil || collection == nil || m.Conforms(seq, collection) {
+		return m.libSymbol(fqnAnything)
+	}
+	return seq
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as

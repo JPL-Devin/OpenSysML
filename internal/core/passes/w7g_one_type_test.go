@@ -140,3 +140,52 @@ func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
 		t.Fatalf("enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}
 }
+
+// TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult: an operator
+// expression types the value as the result of the library function it names —
+// Boolean for comparisons and logic, DataValue for arithmetic — a constructor as
+// its definition, `#` as an element of its sequence (pilot 2026-07 agrees).
+func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
+	const src = `package T {
+		private import ScalarValues::*;
+		attribute def A;
+		attribute a0 : A;
+		attribute r0 : Real;
+		attribute xs : Integer[0..*];
+		enum def Wrong {
+			a = true and false;
+			b = 1 == 2;
+			c = a0 == a0;
+			d = new A();
+			e = xs#(1);
+			f = 1 < 2;
+			g = 1 istype Integer;
+		}
+		enum def Right {
+			ok1 = 1 + 2;
+			ok2 = -r0;
+			ok3 = "x" + "y";
+			ok4 = (1, 2);
+			ok5 = if true ? 1 else 2;
+			ok6 = r0 + 1;
+			ok7 = not true;
+			ok8 = 1 ?? 2;
+			ok9 = 3 % 2;
+		}
+		enum def Flag :> Boolean {
+			ok10 = 1 == 2;
+			ok11 = true and false;
+		}
+	}`
+	var got []string
+	for _, d := range only(libraryTypeDiags(t, src), "one-type") {
+		if d.Message != oneTypeUsageMessages[ast.UsageEnumeration] {
+			t.Fatalf("unexpected message %q", d.Message)
+		}
+		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
+	}
+	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("computed enumerated values typed outside their enumeration: got %v, want %v", got, want)
+	}
+}
