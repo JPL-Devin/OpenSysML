@@ -99,6 +99,37 @@ func TestInteractionInheritsLinkAndPerformanceMembers(t *testing.T) {
 	}
 }
 
+// An interaction is a behavior, so a step may invoke it; its directed features
+// are the parameters the arguments are checked against, inherited ones included.
+func TestInteractionIsInvocable(t *testing.T) {
+	const src = `package P {
+	class T; class U;
+	interaction I { end a : T; end b : T; in x : T; out y : U; }
+	interaction J specializes I { in redefines x; in z : U; }
+	behavior B {
+		feature f : T; feature g : U;
+		step ok = I(f);
+		step okJ = J(f, g);
+		step okStep : I { in redefines x = f; }
+		step badType = I(g);
+		step badArity = I(f, f);
+	}
+}`
+	diags := analyzeAll(t, "interaction.kerml", src)
+	if hasCode(diags, "invocation-not-behavior") {
+		t.Fatalf("interaction invocation reported as a non-behavior: %v", diags)
+	}
+	var lines []int
+	for _, d := range diags {
+		if d.Source == "type" {
+			lines = append(lines, strings.Count(src[:d.Span.Offset], "\n")+1)
+		}
+	}
+	if want := []int{10, 11}; !sameLines(lines, want) {
+		t.Fatalf("type diagnostics on lines %v, want %v: %v", lines, want, diags)
+	}
+}
+
 // A binary pair inherited along both paths of a diamond is still one pair; only
 // a leaf adding a third end of its own is reported.
 func TestBinaryConnectorDiamondInheritance(t *testing.T) {

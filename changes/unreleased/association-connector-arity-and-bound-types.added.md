@@ -2,7 +2,8 @@
   the reference does.** A concrete KerML `assoc`, `assoc struct` or `interaction` with fewer than
   two ends is reported `Must have at least two related elements`, as a SysML `connection def`
   already was; an interaction now implicitly specializes `Links::Link` (`Links::BinaryLink` when
-  binary) and `Performances::Performance`, being both an association and a behavior.
+  binary) and `Performances::Performance`, being both an association and a behavior: a step may
+  invoke it, and its directed features are parameters, redefined by position like any behavior's.
   A connector, binding, succession, flow or association that conforms to `Links::BinaryLink` yet
   has more than two ends — positional `(x, y, z)` ends, declared `end` features and inherited
   ends counted alike — reports each end past the second, with the redefinition check no longer
