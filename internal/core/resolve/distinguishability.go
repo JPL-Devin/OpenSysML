@@ -504,12 +504,6 @@ func contributesName(sym *symbols.Symbol) bool {
 		if decl.Kind == ast.UsageMetadata && !hasTypingRelationship(decl) {
 			return false
 		}
-		// `connector a to b` names no connector either: a name may only precede
-		// `from` (KerML.xtext BinaryConnectorDeclaration). Our parser records
-		// the first end as the declared name and keeps one end.
-		if decl.Keyword == "connector" && len(decl.ConnectorEnds) == 1 {
-			return false
-		}
 		return true
 	case *ast.Definition:
 		return decl.Ident.Name != "" || decl.Ident.ShortName != ""

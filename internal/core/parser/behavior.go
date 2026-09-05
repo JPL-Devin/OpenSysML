@@ -364,7 +364,7 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	// parameter, as the stdlib's `in 'type': Anything;` does; `ordered`/`nonunique`
 	// follow a nameless parameter instead, so they stop the name.
 	var ident ast.Identification
-	if p.atNameOrKeyword() {
+	if p.atNameOrKeyword() || p.at(lexer.Lt) {
 		ident = p.parseIdentificationStopping("ordered", "nonunique")
 	}
 

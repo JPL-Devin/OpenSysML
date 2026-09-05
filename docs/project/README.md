@@ -3,10 +3,10 @@
 The current state of the project: what is implemented, what is known to be missing, and
 how a release is produced.
 
-The conformance records below are engineering records rather than user documentation. Where one
-still uses a short internal label (a numbered development round, or an `F<n>` follow-up row), the
-label is defined in the record that uses it and means nothing outside this repository. Each record
-says so at the top.
+The conformance records below are engineering records rather than user documentation: they state
+what each oracle measures, which divergences are deliberate, and which rows are still open. Where
+the divergence census still keys its rows by a short row number, that number is a cross-reference
+within these records and means nothing outside this repository.
 
 - **[Spec compliance](spec-compliance.md)** — faithful, approximate, or not implemented,
   rule by rule
@@ -29,19 +29,15 @@ says so at the top.
 - **[Validation-constraint census](validation-constraints.md)** — which of the pilot's named
   validation constraints OpenSysML reports, each mapped to the pass and message that reports it,
   with a violating model as evidence; the figures and the name list are gated in CI
-- **[Validation adjudications](wave10-decisions.md)** — the three adjudications the validation work
-  depends on, with the measurements behind them
-- **[Parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
-  defects, and what each of the other 18 actually needs
-- **[Metadata and evaluability](wave11d-metadata-evaluability.md)** — what the metadata
-  annotation and model-level evaluability rules now do, and the two divergences left standing
-- **[KerML validation and visibility decisions](wave11e-decisions.md)** — the KerML validation and
-  visibility rows that stay open, and why
-- **[Lossless library records](wave12c-lossless-library-records.md)** — the record format
+- **[Adjudications](adjudications.md)** — the divergences from the pinned pilot implementation we
+  keep, the rows still open against it, and the reading behind each one
+- **[Element-scoped tier gating](element-scoped-tier-gating.md)** — how a pass opts out of
+  document-wide skipping and gates itself per subject, and what that measured
+- **[Declared errata overlay](errata-overlay.md)** — how a defect in the published reference
+  material is declared, cited and applied to what the oracles read a second time
+- **[Lossless library records](lossless-library-records.md)** — the record format
   and version-compatibility surface roadmap L3 needs, the measurements that chose it, and the rows
   it leaves open
-- **[Scope enumeration and visibility decisions](wave12e-decisions.md)** — the visible-name enumeration rule, the two
-  resolver defects it closes, and the import-visibility divergence it keeps
 - **[Exact-rational evaluation](exact-rational-evaluation.md)** — whether the evaluator should
   compute `Real`/`Rational` arithmetic exactly rather than in binary64, adjudicated against the
   pinned pilot and the specification text, and declined

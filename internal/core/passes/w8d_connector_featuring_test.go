@@ -70,3 +70,25 @@ func TestW8DAccessibleConnectorEndsStaySilent(t *testing.T) {
 		t.Fatalf("legal connector model reported: %v", diags)
 	}
 }
+
+// An end resolves in the connector's enclosing scope, so an interface whose
+// type declares ends named like the parts it connects still names those parts.
+func TestW8DEndNamedLikeAnInheritedEndStaysSilent(t *testing.T) {
+	const src = `package P {
+		port def UPort;
+		interface def UInterface {
+			end plss : UPort;
+			end psa : ~UPort;
+		}
+		part def PLSS { port umbilicalPort : UPort; }
+		part def PSA { port umbilicalPort : ~UPort; }
+		part def EMU {
+			part psa : PSA;
+			part plss : PLSS;
+			interface suitToPLSS : UInterface connect plss.umbilicalPort to psa.umbilicalPort;
+		}
+	}`
+	if diags := only(w8dDiags(t, src), "connector-type-featuring"); len(diags) != 0 {
+		t.Fatalf("legal interface model reported: %v", diags)
+	}
+}

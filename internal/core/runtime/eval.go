@@ -2036,6 +2036,7 @@ type invocationTarget struct {
 	builtinName string            // the built-in's registered name, keying its declared signature
 	library     *libraryFunction  // the library function the name denotes: the library declaration calc is
 	shape       *calcShape        // calc's invocation interface, nil when it has none
+	names       []string          // the parameter each named argument binds, as calc's signature spells it
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
@@ -2055,8 +2056,29 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	} else if sym := sel.Called(); sym != nil {
 		ec.ctx.implementInvocation(target, sym)
 	}
+	if len(n.NamedArgs) > 0 {
+		target.names = ec.ctx.boundParameterNames(ec.scope, target.calc, n.NamedArgs)
+	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// boundParameterNames is the parameter each named argument binds in callee, spelled as
+// callee's signature spells it; a label the model cannot place keeps its last segment.
+func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) []string {
+	names := make([]string, len(named))
+	for i, arg := range named {
+		if arg.Name == nil || len(arg.Name.Parts) == 0 {
+			continue
+		}
+		names[i] = arg.Name.Parts[len(arg.Name.Parts)-1].Text
+		if callee != nil && ctx.model != nil {
+			if name, ok := ctx.model.BoundParameter(scope, callee, arg.Name); ok {
+				names[i] = name
+			}
+		}
+	}
+	return names
 }
 
 // implementInvocation records how a call of the selected sym is applied: by a
@@ -2130,7 +2152,7 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	}
 	// A built-in binds its arguments by its declared signature.
 	if target.builtin != nil {
-		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs)
+		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs, target.names)
 	}
 
 	args := make([]Value, len(exprs))
@@ -2146,11 +2168,11 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if len(n.NamedArgs) > 0 {
 		named = make(map[string]Value, len(n.NamedArgs))
 	}
-	for _, arg := range n.NamedArgs {
-		if arg.Name == nil || len(arg.Name.Parts) == 0 {
+	for i, arg := range n.NamedArgs {
+		name := target.names[i]
+		if name == "" {
 			return Value{}, fmt.Errorf("unnamed argument in invocation of %s", qualName)
 		}
-		name := arg.Name.Parts[len(arg.Name.Parts)-1].Text
 		if _, dup := named[name]; dup {
 			return Value{}, fmt.Errorf("%w: %s binds parameter %q twice", ErrCalcArity, qualName, name)
 		}

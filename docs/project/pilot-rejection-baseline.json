@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 234,
-    "bothReject": 223,
-    "pilotOnlyRejects": 3,
+    "bothReject": 226,
+    "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 105,
-      "bothReject": 94,
-      "pilotOnlyRejects": 3,
+      "bothReject": 97,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1274,24 +1274,18 @@
       "source": "semantic",
       "rule": "a concrete association must have at least two related types (KerML 8.3.3.5 validateAssociationRelatedTypes; pilot validateAssociationRelatedTypes).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Must have at least two related elements"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k26-binary-connector-three-ends.kerml",
       "source": "semantic",
       "rule": "a connector typed by BinaryLink cannot have more than two ends (KerML 8.3.4.1 validateConnectorBinarySpecialization; pilot validateConnectorBinarySpecialization).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: Cannot have more than two ends"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k27-connector-feature-outside-featuring-type.kerml",
@@ -1388,12 +1382,9 @@
       "source": "semantic",
       "rule": "a multiplicity bound must have a Natural value (KerML 8.3.3.6 validateMultiplicityRangeResultTypes; pilot validateMultiplicityRangeResultTypes).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Must have a Natural value"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k38-flow-end-without-dot-notation.kerml",
@@ -2266,8 +2257,8 @@
     ],
     "totals": {
       "cases": 234,
-      "bothReject": 223,
-      "pilotOnlyRejects": 3,
+      "bothReject": 226,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

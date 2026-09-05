@@ -280,6 +280,15 @@
       margin: 0;
       color: var(--md-default-fg-color--light);
     }
+    /* A card whose heading is the link carries a row of per-client references too,
+       which a card that is itself one <a> could not hold. */
+    .osml-card h3 a {
+      color: inherit;
+    }
+    .osml-card__links {
+      margin-top: .5rem;
+      font-size: .66rem;
+    }
 
     .osml-strip {
       border-top: 1px solid var(--md-default-fg-color--lightest);
@@ -341,7 +350,8 @@
       <p class="osml-hero__lede">
         OpenSysML parses and validates SysML v2 and KerML 1.1, serves an editor over
         the Language Server Protocol, executes actions, state machines and constraints,
-        and exports models as RDF — with a Python client for the same runtime.
+        and exports models as RDF — with Go, Python, Node, Java and Rust clients for the
+        same runtime.
       </p>
       <div class="osml-hero__actions">
         <a class="osml-btn osml-btn--primary" href="{{ 'guide/01-install/'|url }}">Install</a>
@@ -442,11 +452,17 @@
       <p>Round-trip models through RDF/Turtle and query them with OSLC query text,
       so a model is data other tools can read.</p>
     </a>
-    <a class="osml-card" href="{{ 'guide/09-python/'|url }}">
-      <h3>Automate from your language</h3>
+    <div class="osml-card">
+      <h3><a href="{{ 'guide/09-clients/'|url }}">Automate from your language</a></h3>
       <p>Go, Python, Node/TypeScript, Java and Rust clients drive the same
       execution runtime — in process, or over the <code>sysml-grpc</code> service.</p>
-    </a>
+      <p class="osml-card__links"><a href="{{ 'reference/clients/'|url }}">Choosing a client</a>
+      &middot; <a href="{{ 'reference/api/'|url }}">Go</a>
+      &middot; <a href="{{ 'reference/python-api/'|url }}">Python</a>
+      &middot; <a href="{{ 'reference/node-api/'|url }}">Node</a>
+      &middot; <a href="{{ 'reference/java-api/'|url }}">Java</a>
+      &middot; <a href="{{ 'reference/rust-api/'|url }}">Rust</a></p>
+    </div>
   </div>
 </section>
 

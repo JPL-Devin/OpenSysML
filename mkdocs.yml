@@ -54,6 +54,14 @@ extra_css:
 
 plugins:
   - search
+  # A page published under another name keeps answering there: the site redirects the old
+  # URL, and the pointer file left at the old path answers the links GitHub serves.
+  - redirects:
+      redirect_maps:
+        guide/09-python.md: guide/09-clients.md
+
+not_in_nav: |
+  guide/09-python.md
 
 # repo_links: links out of docs/ (examples/, Go sources, CONTRIBUTING.md) are correct
 # on GitHub and 404 here, so they are rewritten to the repository at build time.
@@ -131,7 +139,10 @@ exclude_docs: |
   project/validation-constraints.md
   project/element-identity-annotations.md
   project/html-document-backend.md
-  project/wave*.md
+  project/adjudications.md
+  project/element-scoped-tier-gating.md
+  project/lossless-library-records.md
+  project/errata-overlay.md
 
 nav:
   - Documentation: README.md
@@ -145,7 +156,7 @@ nav:
       - guide/06-behavior.md
       - guide/07-saving-and-rdf.md
       - guide/08-editors.md
-      - guide/09-python.md
+      - guide/09-clients.md
       - guide/10-troubleshooting.md
   - Document generation:
       - manual/README.md

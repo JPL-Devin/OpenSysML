@@ -285,7 +285,7 @@ export `OPENSYSML_REQUIRE_SERVICE=1`, and its absence fails instead of skipping.
 ## Documentation
 
 - Using the client:
-  [docs/guide/09-python.md](https://github.com/Open-MBEE/OpenSysML/blob/main/docs/guide/09-python.md)
+  [docs/guide/09-clients.md](https://github.com/Open-MBEE/OpenSysML/blob/main/docs/guide/09-clients.md)
   — installing the service binary, loading a model, instances, verification, conversion
   and queries
 - The API surface, generated typed classes, latency and the module map:

@@ -134,7 +134,7 @@ func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, targ
 		return false
 	}
 	for _, part := range chain.Member.Parts {
-		if cur, ok = r.chainMember(cur, part.Text); !ok {
+		if cur, ok = r.chainMember(cur, part.Text, nil); !ok {
 			return false
 		}
 	}

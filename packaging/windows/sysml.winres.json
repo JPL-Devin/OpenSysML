@@ -1,0 +1,24 @@
+{
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "0.0.0.0",
+          "product_version": "0.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "CompanyName": "Open-MBEE",
+            "FileDescription": "OpenSysML command-line tool and REPL for SysML v2 and KerML models",
+            "FileVersion": "dev",
+            "InternalName": "sysml",
+            "LegalCopyright": "Copyright 2026 Open-MBEE. Licensed under the Apache License, Version 2.0.",
+            "OriginalFilename": "sysml.exe",
+            "ProductName": "OpenSysML",
+            "ProductVersion": "dev"
+          }
+        }
+      }
+    }
+  }
+}

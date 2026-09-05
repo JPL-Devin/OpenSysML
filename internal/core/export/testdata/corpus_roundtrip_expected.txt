@@ -20,7 +20,7 @@ stable	disposal-team-demo/team.sysml
 stable	orthogonal-regions-demo.sysml
 stable	parser_features_demo_action_semantics.sysml
 stable	parser_features_demo_advanced_bodies.kerml
-refused:duplicate-declaration	parser_features_demo_advanced_connectors.kerml
+stable	parser_features_demo_advanced_connectors.kerml
 stable	parser_features_demo_binding.kerml
 stable	parser_features_demo_connectors.sysml
 refused:feature-declaration	parser_features_demo_declarations.kerml
@@ -52,10 +52,10 @@ stable	pilot-corpora/kerml-examples/Mass Roll-up Example/Vehicles_1.kerml
 stable	pilot-corpora/kerml-examples/Mass Roll-up Example/Vehicles_2.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Mass Roll-up Example/Vehicles_3.kerml
 stable	pilot-corpora/kerml-examples/Massed Thing Example/MassedThings.kerml
-refused:duplicate-declaration	pilot-corpora/kerml-examples/Named Collection Members Example/VehicleTanks.kerml
+stable	pilot-corpora/kerml-examples/Named Collection Members Example/VehicleTanks.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Packet Example/PacketUsage.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Packet Example/Packets.kerml
-refused:duplicate-declaration	pilot-corpora/kerml-examples/Simple Tests/ArgumentResolution.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/ArgumentResolution.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Associations.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Behaviors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Circular.kerml
