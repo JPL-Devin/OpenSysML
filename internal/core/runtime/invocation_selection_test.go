@@ -320,12 +320,14 @@ func testActionCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 			t.Fatalf("%s: call.code = %+v, want 13", call, code)
 		}
 	}
-	outputs, err := run("A(y = 1, ys = 2)")
-	if err == nil {
-		t.Fatalf("A(y = 1, ys = 2): expected a refusal, action returned %v", outputs)
-	}
-	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "y" of A`) {
-		t.Fatalf("A(y = 1, ys = 2): error = %v, want ErrDuplicateArgument naming y", err)
+	for _, call := range []string{"A(y = 1, ys = 2)", "A(y = 1, ys = 2, Other::y = 3)"} {
+		outputs, err := run(call)
+		if err == nil {
+			t.Fatalf("%s: expected a refusal, action returned %v", call, outputs)
+		}
+		if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "y" of A`) {
+			t.Fatalf("%s: error = %v, want ErrDuplicateArgument naming y", call, err)
+		}
 	}
 	for _, call := range []string{"A(Other::y = 1)", "B(Other::y = 1)"} {
 		outputs, err := run(call)
@@ -1237,6 +1239,7 @@ func testCalcCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 			calc viaInherited { Derived(Base::n = 4) }
 			calc viaUnrestricted { H('Other::x' = 5) }
 			calc twice { F(x = 1, xs = 2) }
+			calc twiceThenElsewhere { F(x = 1, xs = 2, Other::x = 3) }
 			calc elsewhere { F(Other::x = 1) }
 			calc elsewhereSpelled { H(Other::x = 1) }
 		}
@@ -1256,13 +1259,15 @@ func testCalcCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 			t.Fatalf("%s = %+v, want %d", calc, result, want)
 		}
 	}
-	sym := findSymbolByName(rootScope, "twice", ast.DefCalc)
-	if sym == nil {
-		t.Fatal("twice calc not found")
-	}
-	_, err := ctx.InvokeCalc(sym, nil, rootScope)
-	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
-		t.Fatalf("twice = %v, want ErrCalcArity naming x", err)
+	for _, calc := range []string{"twice", "twiceThenElsewhere"} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		_, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
+			t.Fatalf("%s = %v, want ErrCalcArity naming x", calc, err)
+		}
 	}
 	for _, calc := range []string{"elsewhere", "elsewhereSpelled"} {
 		sym := findSymbolByName(rootScope, calc, ast.DefCalc)

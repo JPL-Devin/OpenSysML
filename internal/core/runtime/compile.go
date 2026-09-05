@@ -587,7 +587,7 @@ type callArguments struct {
 // callArgumentsOf reads an invocation's arguments, declining the forms the
 // evaluator reports at run time: a receiver or positional beside named ones.
 // names is the parameter each named argument binds, as the target resolved them.
-func callArgumentsOf(n *ast.InvocationExpr, names []string) (callArguments, error) {
+func callArgumentsOf(n *ast.InvocationExpr, names []string, unbound []error) (callArguments, error) {
 	var args callArguments
 	if n.Operand != nil {
 		if len(n.NamedArgs) > 0 {
@@ -605,6 +605,9 @@ func callArgumentsOf(n *ast.InvocationExpr, names []string) (callArguments, erro
 	for i, arg := range n.NamedArgs {
 		if names[i] == "" {
 			return args, ineligible("invocation with an unnamed argument")
+		}
+		if err := unbound[i]; err != nil {
+			return args, ineligible(err.Error())
 		}
 		args.exprs = append(args.exprs, arg.Value)
 		args.names = append(args.names, names[i])
@@ -670,10 +673,7 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 		return nil, ineligible("invocation without a scope")
 	}
 	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
-	if target.unbound != nil {
-		return nil, ineligible(target.unbound.Error())
-	}
-	args, err := callArgumentsOf(n, target.names)
+	args, err := callArgumentsOf(n, target.names, target.unbound)
 	if err != nil {
 		return nil, err
 	}

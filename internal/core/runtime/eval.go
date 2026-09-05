@@ -2037,7 +2037,7 @@ type invocationTarget struct {
 	library     *libraryFunction  // the library function the name denotes: the library declaration calc is
 	shape       *calcShape        // calc's invocation interface, nil when it has none
 	names       []string          // the parameter each named argument binds, as calc's signature spells it
-	unbound     error             // the named argument calc has no parameter for, nil when every one binds
+	unbound     []error           // per named argument, why calc has no parameter for it; nil when it binds
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
@@ -2065,11 +2065,11 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 }
 
 // boundParameterNames is the parameter each named argument binds in callee, spelled as
-// callee's signature spells it. A label callee has no parameter for is an error, and is
-// kept as written; with no callee to place them against, every label is kept as written.
-func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) ([]string, error) {
+// callee's signature spells it, and per argument the error when callee has no such
+// parameter; a label kept as written. Without a callee every label is kept as written.
+func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) ([]string, []error) {
 	names := make([]string, len(named))
-	var unbound error
+	unbound := make([]error, len(named))
 	for i, arg := range named {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			continue
@@ -2080,8 +2080,8 @@ func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Sy
 		}
 		if name, ok := ctx.model.BoundParameter(scope, callee, arg.Name); ok {
 			names[i] = name
-		} else if unbound == nil {
-			unbound = fmt.Errorf("%w: %s has no parameter named %q",
+		} else {
+			unbound[i] = fmt.Errorf("%w: %s has no parameter named %q",
 				ErrUnknownParameter, ctx.qualifiedSymbolName(callee), names[i])
 		}
 	}
@@ -2157,12 +2157,9 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if target.shape != nil && len(n.NamedArgs) == 0 {
 		return ec.invokeCalcShapeStacked(target.shape, exprs)
 	}
-	if target.unbound != nil {
-		return Value{}, target.unbound
-	}
 	// A built-in binds its arguments by its declared signature.
 	if target.builtin != nil {
-		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs, target.names)
+		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs, target.names, target.unbound)
 	}
 
 	args := make([]Value, len(exprs))
@@ -2182,6 +2179,9 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		name := target.names[i]
 		if name == "" {
 			return Value{}, fmt.Errorf("unnamed argument in invocation of %s", qualName)
+		}
+		if err := target.unbound[i]; err != nil {
+			return Value{}, err
 		}
 		if _, dup := named[name]; dup {
 			return Value{}, fmt.Errorf("%w: %s binds parameter %q twice", ErrCalcArity, qualName, name)

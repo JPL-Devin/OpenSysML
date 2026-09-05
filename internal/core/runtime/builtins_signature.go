@@ -100,12 +100,12 @@ var builtinSignatures = map[string][]declaredParam{
 
 // invokeBuiltin binds the arguments of a call to the built-in name to its
 // declared parameters and applies fn to them.
-func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg, names []string) (Value, error) {
+func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg, names []string, unbound []error) (Value, error) {
 	outer := ec.entered
 	ec.entered = ec.ctx.activations
 	defer func() { ec.entered = outer }()
 	return tracedBuiltin(ec.trace, name,
-		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named, names) },
+		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named, names, unbound) },
 		func(args []Value) (Value, error) { return fn(ec, args) },
 	)
 }
@@ -143,11 +143,14 @@ func tracedBuiltin(tr *TraceRecorder, name string, bind func() ([]Value, error),
 // parameter of their name. A parameter left unbound is null when its
 // multiplicity admits no value and reported otherwise. An `expr` parameter's
 // argument is bound unevaluated either way.
-func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg, names []string) ([]Value, error) {
+func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg, names []string, unbound []error) ([]Value, error) {
 	params := builtinSignatures[name]
-	for _, argName := range names {
+	for i, argName := range names {
 		if argName == "" {
 			return nil, fmt.Errorf("unnamed argument in invocation of %s", writtenName(name))
+		}
+		if err := unbound[i]; err != nil {
+			return nil, err
 		}
 	}
 	return bindBuiltin(name, len(exprs), names, func(param, arg int) (Value, error) {
