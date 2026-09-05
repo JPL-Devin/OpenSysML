@@ -224,6 +224,21 @@ func TestOOSEMUseCaseSubjectInheritedWithoutBody(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 7, 9)
 }
 
+// With a classified and a plain base, only the plain base's subject is judged here.
+func TestOOSEMUseCaseSubjectMixedInheritance(t *testing.T) {
+	src := oosemModel(`
+		#systemContext part def Ctx;
+		part def Sat;
+		use case def OnSat { subject s : Sat; }
+		use case def OnCtx { subject t : Ctx; }
+		#systemUseCase use case def Bare;
+		#systemUseCase use case def Bad :> Bare, OnSat;
+		#systemUseCase use case def Good :> Bare, OnCtx;
+		#systemUseCase use case def Judged { subject u : Sat; }
+		#systemUseCase use case def Once :> Judged, OnCtx;`)
+	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 8, 10)
+}
+
 // A model that does not touch the OOSEM library gets no OOSEM finding.
 func TestOOSEMSilentWithoutTheLibrary(t *testing.T) {
 	const src = `package P {

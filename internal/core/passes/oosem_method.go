@@ -462,24 +462,15 @@ func (a *oosemAudit) checkUseCaseSubject(sym *symbols.Symbol) {
 		return
 	}
 	// Effective members, so a subject inherited from a plain base use case is
-	// judged too; one inherited through a model use case of the same kind is judged there.
-	inherited := false
-	for _, src := range a.model.MemberSources(sym) {
-		if a.kindOf(src) == kind && !a.ctx.Index.Library(src) {
-			inherited = true
-			break
-		}
-	}
+	// judged too; one reached through a model use case of the same kind is judged there.
+	judged := a.subjectsJudgedHere(sym, kind)
 	for _, member := range a.model.MembersOf(sym) {
 		u, ok := member.Decl.(*ast.Usage)
-		if !ok || u.Kind != ast.UsageSubject {
+		if !ok || u.Kind != ast.UsageSubject || !judged[member] {
 			continue
 		}
 		at := member
 		if member.OwnerScope != sym.Scope {
-			if inherited {
-				continue
-			}
 			at = sym
 		}
 		// Types the wanted kind itself conforms to (Anything, Part) say nothing either way.
@@ -500,6 +491,36 @@ func (a *oosemAudit) checkUseCaseSubject(sym *symbols.Symbol) {
 			"The subject of a%s %s is the %s it serves, but this one is typed by none.",
 			article(oosemKindNames[kind]), oosemKindNames[kind], oosemKindNames[want]))
 	}
+}
+
+// subjectsJudgedHere collects the subjects sym declares or inherits along paths
+// that cross no model use case of its own kind, since those judge their own.
+func (a *oosemAudit) subjectsJudgedHere(sym *symbols.Symbol, kind oosemKind) map[*symbols.Symbol]bool {
+	out := map[*symbols.Symbol]bool{}
+	seen := map[*symbols.Symbol]bool{}
+	var visit func(s *symbols.Symbol)
+	visit = func(s *symbols.Symbol) {
+		if seen[s] {
+			return
+		}
+		seen[s] = true
+		if s.Scope != nil {
+			s.Scope.ForEachMember(func(member *symbols.Symbol) bool {
+				if u, ok := member.Decl.(*ast.Usage); ok && u.Kind == ast.UsageSubject {
+					out[member] = true
+				}
+				return true
+			})
+		}
+		for _, src := range a.model.DirectMemberSources(s) {
+			if a.kindOf(src) == kind && !a.ctx.Index.Library(src) {
+				continue
+			}
+			visit(src)
+		}
+	}
+	visit(sym)
+	return out
 }
 
 // generalizes reports whether every library definition of kind conforms to t.
