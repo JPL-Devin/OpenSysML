@@ -1,6 +1,10 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `3c454856`, verified locally on 2026-09-03 with Go 1.25.0.
+Baseline: `main` @ `70fc6e16`, verified locally on 2026-09-05 with Go 1.25.0, read with
+[#900](https://github.com/JPL-Devin/OpenSysML/pull/900) and
+[#908](https://github.com/JPL-Devin/OpenSysML/pull/908) treated as landed (both open and mergeable
+at the time of writing; each is a record correction or a runtime error-path fix and moves no
+roadmap line except the census figures under Track V, which are quoted from #900's branch).
 Read `AGENTS.md` first; it governs everything below.
 
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
@@ -18,51 +22,64 @@ Read `AGENTS.md` first; it governs everything below.
 > pull request yet. *Not started* means exactly that. A status is taken from the pull request
 > itself, never from a branch name or a commit message.
 
-`v0.4.3` is the newest tag on `Open-MBEE/OpenSysML` (`99e02003`, 2026-09-02, the "Identity
-Release"); the tag's CI release job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five
-platforms and the Homebrew bundles, and the Python client is on PyPI as `opensysml` 0.4.0. The
-baseline is **ahead of the tag** by the work listed in the next paragraph, so the tracks below
-state what is on `main`, not what a `v0.4.3` binary does. `CHANGELOG.md` agrees with the tag: its
-**0.4.3** section holds everything `99e02003` shipped and is dated to the tag (R1, done). Everything
-in "Release follow-through" is maintainer- or account-gated; everything after it is ordinary
-engineering work.
+`v0.5.0` is the newest tag on `Open-MBEE/OpenSysML` (`0fdeb11e`, 2026-09-04); the tag's CI release
+job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five platforms and the Homebrew bundles,
+and the Python client is on PyPI as `opensysml` 0.4.0. `CHANGELOG.md`'s **0.5.0** section is the
+tag's content (#894 folded the fragments; #877 did the same for 0.4.3), and everything under
+`changes/unreleased/` is what `main` carries past it — the baseline is **ahead of the tag** by
+those fragments, so the tracks below state what is on `main`, not what a `v0.5.0` binary does.
+Everything in "Release follow-through" is maintainer- or account-gated; everything after it is
+ordinary engineering work.
 
-**What closed between `1f136d27` (2026-09-02) and `4e3d5f2e`** — in `CHANGELOG.md` for the
-detail, listed here because each retires or narrows a roadmap line: native compilation landed in
-four pull requests (#778 the scalar spike, #781 the interpreter's closure fast path, #796
-statement bodies, redefined parameters, library intrinsics and named arguments, #828 sequences,
-`for` and the collection libraries), which moves Track N from "in review" to the second phase
-below; `x @ T` on a value evaluates as `istype` (#794), a feature named `chain` is a name again
-(#795) and the stale test skips are gone (#797); a qualified name through a `public import`
-evaluates (#801) and an unqualified library call resolves as the checker does (#816); `%state`
-attaches to the machine an object already exhibits and objects are addressed by id or path (#810),
-a superseded object is no longer addressed by its old id (#836), and `%features` reads a whole
-object tree (#841); identity-keyed change sets apply to a live Flexo repository (`-sync-apply`,
-#791); the RDF round trip is ratcheted per file over every example (#800, #834) and writes back the
-notation it was written from (#793, #813, #814); documents render as semantic HTML (#790, #820);
-the LSP serves the standard library read-only (#806) and mints identity annotations (#789); a
-library-derived semantic oracle adjudicates action and state execution (#804); the behavior
-execution review's findings became Track E (#802); and the identity design record states itself
-fully implemented (#844).
+**What closed between `3c454856` (2026-09-03, the previous baseline) and this one** — 65
+pull requests, in `CHANGELOG.md` and `changes/unreleased/` for the detail, listed here because each
+retires or narrows a roadmap line.
 
-**What closed since `4e3d5f2e`** (2026-09-03, the previous baseline; 22 pull requests): the
-Connect + JSON wire contract is written down (#848,
-[wire-contract.md](../reference/wire-contract.md)), which closes I1; every Kernel Function Library
-declaration dispatches by name or is refused by name (#821, closes L4); `QuantityCalculations`
-dispatches and composed units render canonically (#818, closes L5); Systems and Domain library
-features are materialized on objects (#830, closes L3); each nested action node has its own
-performance frame (#823); messages route across binding connectors at boundary ports (#839);
-expression surfaces read the instantiated object after `-instantiate` (#843), `%eval in` reads a
-valueless feature as `<unset>` (#805), `%send` exists (#808), every REPL command takes one
-object-reference grammar (#809) and `%state <machine>` attaches to the one object exhibiting the
-machine (#845); document-query parameter defaults are evaluated when unbound (#849, closes Q4);
-multi-valued RDF properties are written as the JSON annotation Flexo reads (#850, closes D3.4 and
-D3), stored source text is written back byte for byte (#819) and an end-binding usage's body is
-kept as elements (#842); the inherited-name warning beside a typing error is adjudicated as not a
-defect (#837); and the changelog is written as fragments under `changes/unreleased/` (#852, #854)
-with the compliance census counted at docs build instead of committed (#853) — which retargets R1
-below. The earlier baseline's retirements — element identity, document generation, the performance
-census, the client tours, the pilot pin — stay retired and are not repeated.
+- *Library and expression evaluation.* Invocation overloads are selected by argument type with one
+  selection shared by the checker, the evaluator, queries and sends (#825, #861, closes L6); a
+  calc specializing a library function keeps its own signature (#862); `Array`, `NumericalVector`
+  and `VectorQuantity` are runtime value kinds of their own (#883, the vector half of X7);
+  `OccurrenceFunctions` evaluate over occurrence lifetimes (#884); `RationalFunctions::rat`,
+  `numer` and `denom` compute (#876); nested `ShapeItems` geometry evaluates through the general
+  binding, scoping and subsetting rules (#886); `send new Def(args)` constructs the message it
+  sends and a constructor's arguments are checked against its type (#838, #875 — the
+  message-constructor half of X1); a recursion through a library calc's parameter default runs in
+  collapsed frames (#890); a feature whose value calls a function on itself types in finite time
+  (#903); an unplaceable named-argument label is kept as written and refused, not bound by its last
+  segment (#904, #908).
+- *Validation.* The census of the pilot's 217 named constraints and its gate (#822), re-audited
+  against the code and the corpus with the gate tightened to check the cited function exists and
+  each case belongs to its row (#900); KerML and SysML negative cases refereed by the pinned pilot
+  (#817, #831); control-node successions (#832), trigger arguments (#833, #871), `send` arguments
+  (#838), feature-value overriding (#826), enumeration definitions as variations (#811) and
+  enumerated values typed by their enumeration only (#907; the cast and body-expression forms are
+  [#909](https://github.com/JPL-Devin/OpenSysML/pull/909), open and mergeable),
+  cross-subsetting (#872), duplicate parameter bindings (#875), owning-body membership (#874),
+  initial values and `constant` on variable features (#873), metadata typing and
+  `annotatedElement` conformance (#881, #905, #906, #901), association arity and multiplicity bound
+  types (#882), requirement-member prefix metadata and short names (#868, #880), a chained
+  generalization under the cycle guard (#902).
+- *RDF.* A body's result expression converts and is owned through its membership (#815, #835,
+  the third D1 bullet); metadata bodies and prefix metadata convert structurally (#824); a
+  reference written back re-resolves to the element the graph named (#827) and one reached through
+  an import or alias links (#855); a positional `then` sequences past every non-feature member
+  (#866, #879). The ratchet reads 305 of 345 stable and 40 refused, none for an expression.
+- *Performance.* The release comparison against `v0.4.3` found and fixed the regressions it
+  measured (#885, [performance-release-0.5-vs-0.4.3.md](performance-release-0.5-vs-0.4.3.md));
+  wildcard-import member lookups are answered by name (#893). Nothing moved in Track N: the compiled
+  subset is what #828 left it.
+- *Editor and REPL.* Find References and Rename answer from a reverse reference index (#867),
+  rename refuses collisions and renames one name at a time (#887, #888), formatting is minimal
+  edits with range formatting (#864), an ambiguous call navigates to every tied overload (#860);
+  `%state <machine>` on a typed body attaches rather than detaching (#856).
+- *Records and release.* Manual pages for the three binaries, installed by the Homebrew bundles
+  (#699); Windows Authenticode signing prepared through SignPath (#897, R4); a unified client
+  guide (#898); seven adjudication records folded into one (#899); the Apollo 11 parse figures on
+  the landing page (#896); SonarCloud findings cleared (#891, #892); the solver's design provenance
+  credited (#878).
+
+The previous baselines' retirements — native compilation's first phase, the wire contract, L3–L5,
+the nested-action frames, D3, Q4, the changelog fragments — stay retired and are not repeated.
 
 ## Where the repository stands
 
@@ -78,24 +95,27 @@ before re-recording anything.
 | OMG training corpus | **100/100 clean** — asserted, not ratcheted: no file reports a semantic error |
 | OMG pilot corpora (ratchet) | 213 files; 5 report a diagnostic, each adjudicated in [pilot-corpora.md](pilot-corpora.md) and [omg-issues.md](omg-issues.md) |
 | Stdlib parser conformance | 97/97 clean — 94 vendored OMG files and 3 non-normative OpenSysML extensions |
-| Execution conformance cases | 551 (`TestExecutionConformance`) |
-| Golden execution traces | 136 (`TestExecutionTrace`) |
-| Runtime robustness cases | 314 first-level subtests of `TestRuntimeRobustness` |
+| Execution conformance cases | 614 (`TestExecutionConformance`) |
+| Golden execution traces | 138 (`TestExecutionTrace`) |
+| Runtime robustness cases | 324 first-level subtests of `TestRuntimeRobustness` |
 | gRPC conformance fixtures / robustness cases | 15 / 10 |
-| Golden AST fixtures | 162 (`TestGolden`) |
-| Negative parser subtests | 201 first-level subtests of `TestNegative` (319 across every `*Negative*` parser test) |
+| Golden AST fixtures | 183 (`TestGolden`) |
+| Negative parser subtests | 225 first-level subtests of `TestNegative` (346 across every `*Negative*` parser test) |
+| Rejection oracle | 236 self-authored invalid models: 228 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
+| Validation census | 148 of 217 named constraints reported (137 faithful, 11 approximate), 6 not implemented, 63 unknown — with #900 |
+| RDF corpus round trip | 305 of 345 models stable, 40 refused, no other verdict |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
 external conformance statement, and their figures are generated into `README.md` by `make
 docs-counts` from the committed baselines; they are not repeated here.
 
-The figures above are counted from `go test -v` at the baseline, and the hand-counted surfaces
-have drifted: `README.md` still says 380 conformance cases, 118 traces, 146 golden ASTs, 261
-negatives, 256 robustness cases and 8 gRPC robustness cases, and
-`docs/project/spec-compliance.md` says 389 and 266. `releasing.md` requires
-the four surfaces allowed to repeat these counts to agree and be recounted in one commit. That
-recount — or, better, folding these counts into `cmd/doc-counts` so they are generated like the
-pilot figures and can no longer drift — is a small open item and is listed under sequencing.
+The test-suite figures above are counted from `go test -v` at the baseline, and the hand-counted
+surfaces have drifted further: `README.md` still says 380 conformance cases, 118 traces, 146
+golden ASTs, 261 negatives, 256 robustness cases and 8 gRPC robustness cases, and
+`docs/project/spec-compliance.md` says 389 and 266. `releasing.md` requires the four surfaces
+allowed to repeat these counts to agree and be recounted in one commit. That recount — or, better,
+folding these counts into `cmd/doc-counts` so they are generated like the pilot figures and can no
+longer drift — is a small open item and is listed under sequencing.
 
 Statement coverage, measured with `go test -cover ./...` at the baseline. It counts only each
 package's own tests, which understates a package consumed by others (`internal/core/ast` is
@@ -104,21 +124,22 @@ process contributes no profile).
 
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
-| `internal/core/quickfix` | 100.0% | `internal/core/export` | 83.2% |
-| `internal/core/conformance` | 100.0% | `internal/core/queryplan` | 82.1% |
-| `internal/core/ast/astcodec` | 99.5% | `internal/core/project` | 81.0% |
-| `internal/core/format` | 97.2% | `internal/core/symbols` | 80.0% |
-| `internal/core/identity` | 93.2% | `internal/core/queryexec` | 78.6% |
-| `internal/core/rdf/ontology` | 92.1% | `internal/core/resolve` | 77.2% |
-| `internal/repl` | 88.4% | `internal/core/query` | 72.5% |
-| `internal/grpc` | 87.7% | `cmd/sysml-lsp` | 71.7% |
-| `internal/core/passes` | 87.5% | `client/opensysml` | 71.2% |
-| `internal/core/runtime` | 85.9% | `internal/core/lower` | 69.7% |
-| `internal/lsp` | 85.7% | `internal/core/semantics` | 60.9% |
-| `internal/core/rdf` | 85.3% | `cmd/sysml-grpc` | 34.7% |
-| `internal/core/parser` | 84.6% | `internal/interop/flexo` | 24.1% (the live-stack half is gated) |
-| `internal/core/solve` | 84.0% | `cmd/sysml` | 23.7% |
-| `internal/core/libs` | 83.6% | `internal/core/ast` | 20.1% |
+| `internal/core/quickfix` | 100.0% | `internal/core/symbols` | 84.8% |
+| `internal/core/conformance` | 100.0% | `internal/core/solve` | 83.9% |
+| `internal/core/ast/astcodec` | 99.5% | `internal/core/identity` | 83.5% |
+| `internal/core/format` | 97.2% | `internal/core/project` | 81.0% |
+| `internal/core/docrender` | 92.7% | `internal/core/queryexec` | 80.0% |
+| `internal/core/rdf/ontology` | 92.1% | `internal/core/resolve` | 76.6% |
+| `internal/repl` | 89.8% | `client/opensysml` | 74.6% |
+| `internal/core/passes` | 89.0% | `internal/core/query` | 74.3% |
+| `internal/core/libs` | 88.9% | `internal/core/lower` | 73.5% |
+| `internal/lsp` | 88.5% | `cmd/sysml-lsp` | 70.0% |
+| `internal/grpc` | 88.5% | `internal/core/semantics` | 55.0% |
+| `internal/core/runtime` | 88.5% | `internal/interop/flexo` | 39.5% (the live-stack half is gated) |
+| `internal/core/export` | 88.1% | `cmd/sysml` | 19.4% |
+| `internal/core/parser` | 87.6% | `internal/core/ast` | 18.5% |
+| `internal/core/rdf` | 87.1% | `internal/core/codegen` | 1.9% (its differential runs from `internal/repl`) |
+| `internal/core/queryplan` | 85.6% | | |
 
 The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and never
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
@@ -134,21 +155,20 @@ well as on branches.
 # Release follow-through
 
 Tagging a core release, publishing the Python client and the Homebrew bump are all proven paths:
-`v0.4.3` is tagged and its release job runs the same path `v0.4.2` completed with its full archive
-set, `opensysml-v0.4.0` uploaded the client to PyPI,
+`v0.5.0` is tagged and its release job runs the same path `v0.4.2` and `v0.4.3` completed with
+their full archive sets, `opensysml-v0.4.0` uploaded the client to PyPI,
 and the tap `Open-MBEE/homebrew-tap` bumps itself from its own scheduled workflow on each tag,
 rendering the formula from this repository's `scripts/render-homebrew-formula.sh` and template.
 The procedure and its post-tag verification are in `docs/project/releasing.md`.
 
-## R1 — the changelog says "Unreleased" about work `v0.4.3` shipped
+## R1 — the changelog agrees with the tags (done)
 
-**Done.** `v0.4.3` was tagged at `99e02003`, which contained five entries `CHANGELOG.md` filed
-under **Unreleased** (the serialized library snapshot, the calc-evaluator work, the closure fast
-path and the two self-model updates describing them); they are now in the **0.4.3** section, dated
-to the tag (2026-09-02), and Unreleased holds only what landed after it. Since #852 a change no
-longer edits `CHANGELOG.md`: it adds a fragment under `changes/unreleased/` and
+`CHANGELOG.md`'s **0.4.3** section holds what `99e02003` shipped (#877) and its **0.5.0** section
+what `0fdeb11e` shipped (#894), each dated to its tag; **Unreleased** is empty in the file because
+since #852 a change adds a fragment under `changes/unreleased/` instead, and
 `python3 scripts/changelog.py release X.Y.Z` folds the fragments in at release time
-(`releasing.md`), so that fold was the last hand edit of the file.
+(`releasing.md`). The 0.5.0 fold was the first release cut that way. Nothing remains here; the
+item is kept because the two folds are the procedure's proof.
 
 ## R2 — the Node, Java and Rust clients are unpublished
 
@@ -162,9 +182,10 @@ like R4, not engineering.
 ## R3 — Homebrew: install it on a real Mac
 
 Everything about the tap is automated and verified on Linux (install, `brew test`,
-`brew audit --strict --online`), and the open PR shipping man pages adds them to the bundles the
-formula installs. The one thing never done is running the darwin bottle on macOS: the darwin
-archives' checksums match the release manifest and nothing more.
+`brew audit --strict --online`), and the manual pages (#699, `man/man1/*.1`, generated from
+`internal/usage` and drift-gated by `make man-check`) are in the bundles the formula installs. The
+one thing never done is running the darwin bottle on macOS: the darwin archives' checksums match
+the release manifest and nothing more.
 
 `homebrew/core` — which would drop the tap and the trust step entirely — is gated on
 [notability](https://docs.brew.sh/Package-Acceptance-Policy#notability) (75 stars / 30 forks /
@@ -217,13 +238,13 @@ and status; none needs code here until an answer arrives.
 Loading is closed: every library file is parsed and indexed on every load path, built once and
 frozen, read through a per-model overlay (`libs.Loader`, `libs.SharedBase`, `symbols.NewOverlay`)
 rather than copied per model, and the serialized snapshot brings a process up in under 20 ms.
-Name resolution caught up at this baseline: a qualified name through a `public import` (`ISQ::speed`
-or any user façade package) evaluates (#801, landed) and an unqualified library call resolves at
-evaluation exactly as the checker resolved it (#816, landed). What remains is *evaluation*: which
-library declarations compute, which features a library type contributes to an object, and how the
-failures are named. The library review after `v0.4.3` measured it against the Kernel Function
-Library's 279 declarations in 17 packages and against the domain libraries; the items below are
-its findings.
+Name resolution is closed too: a qualified name through a `public import` (`ISQ::speed` or any
+user façade package) evaluates (#801), an unqualified library call resolves at evaluation exactly
+as the checker resolved it (#816), and an overloaded name reaches the declaration the argument
+types select (#825, #861). The library review after `v0.4.3` measured *evaluation* against the
+Kernel Function Library's 279 declarations in 17 packages and against the domain libraries; of its
+findings L3–L6 have landed and L7 — the analysis libraries — is what remains, and it is a Track X
+item in library clothing.
 
 ## L3 — evaluation does not reach standard-library-inherited features
 
@@ -269,28 +290,34 @@ gap: with `ScalarFunctions` and `QuantityCalculations` both imported, `ToReal("2
 scalar overload. Domain failures (`sqrt` of a negative quantity, a unit mismatch in `+`) must stay
 typed errors naming the function and the units, as the scalar library's already do.
 
-## L6 — invocation overloads selected by argument type
+## L6 — invocation overloads selected by argument type (done)
 
-The checker and the runtime pick a library overload by name and arity, so `max(1, 2)` and
-`max(1.0, 2.0)` reach the same declaration and a `Real`/`Integer`/`Natural` result type is
-whatever that declaration says. KerML resolves the overload by the argument types. **Open,
-mergeable:** [PR #825](https://github.com/JPL-Devin/OpenSysML/pull/825) shares one selection
-between `semantics` and `runtime`, so the static type and the evaluated value agree.
+The checker and the runtime used to pick a library overload by name and arity, so `max(1, 2)` and
+`max(1.0, 2.0)` reached the same declaration and the result type was whatever that declaration
+said. **Landed:** [PR #825](https://github.com/JPL-Devin/OpenSysML/pull/825) selects by argument
+type with one selection shared between `semantics` and `runtime`, and
+[PR #861](https://github.com/JPL-Devin/OpenSysML/pull/861) makes every reader of a call —
+expression calls, document queries, `send` — use it; [PR #862](https://github.com/JPL-Devin/OpenSysML/pull/862)
+keeps a calc that specializes a library function on its own signature. The `ToReal("2.5")` probe
+under L5 reaches the scalar overload. On an ill-formed model the runtime package now agrees with
+the checker about a named argument it cannot place (#904, #908): the label is kept as written and
+refused as `ErrUnknownParameter` rather than bound by its last segment.
 
 ## L7 — the analysis libraries do not run
 
 `SampledFunctions::interpolateLinear` fails on the library's own examples: a feature inherited
 with `[0..*]` yields the sequence `[0.0]` where KerML reads a singleton sequence *as* the scalar,
-and every arithmetic operator refuses a sequence operand. `SampledFunctions::Sample` needs the
-constructor form `new Sample(…)` (X1) and a function-typed parameter (X6). `StateSpaceRepresentation`
-and `TradeStudies` load and type-check but depend on A1–A4. `VectorFunctions` computes over a
-sequence standing in for the vector (the Cartesian operations, norms, the zero vector — conformance
-`calc_library_vector_*`), but a vector is not a value kind of its own, so `VectorValues`,
-`TensorValues` and the measurement-reference libraries have nothing to type against (X7). Closing
-this item is closing X2, X1 and X6 and then adding a *measured
-per-library conformance table* — package → declarations → evaluated → refused by name → wrong — to
-`spec-compliance.md`, so the library's status stops being anecdotal. Not started; it depends on
-L4 and the X items it names.
+and every arithmetic operator refuses a sequence operand (X2). `SampledFunctions::Sample` needs the
+general constructor form `new Sample(…)` as a value (X1 — only the `send new` form constructs
+today) and a function-typed parameter (X6). `StateSpaceRepresentation` and `TradeStudies` load and
+type-check but depend on A1–A4. What did move is the vector half: since #883 a `NumericalVector`
+and a `VectorQuantity` are value kinds of their own, `VectorFunctions` computes over them and
+`OccurrenceFunctions` evaluates over lifetimes (#884), so `VectorValues` and the measurement
+reference libraries have a value to type against; `TensorValues` and the set kind are what is left
+of X7. Closing this item is closing X2, X1 and X6 and then adding a *measured per-library
+conformance table* — package → declarations → evaluated → refused by name → wrong — to
+`spec-compliance.md`, so the library's status stops being anecdotal. Not started as an item; it
+depends on the X items it names.
 
 ---
 
@@ -337,8 +364,10 @@ constraints and requirements, documents, actions, state machines, embedding. Pha
 
 1. **Records, enums and record field access** — the remainder of phase 1. `type X is not
    Integer, Real or Boolean` is the refusal today, as is a sequence mixing `Integer` and `Real`
-   elements. Quantities with units and structured parameters follow from the record type. This is
-   what stands between "a calc compiles" and "an analysis case compiles" (A1).
+   elements, and the interpreter's new `Array`/`NumericalVector`/`VectorQuantity` kinds (#883)
+   are refused by the compiler by the same rule until they have a native layout. Quantities with
+   units and structured parameters follow from the record type. This is what stands between "a
+   calc compiles" and "an analysis case compiles" (A1).
 2. **The step budget.** The interpreter stops a runaway loop at `OPENSYSML_MAX_STEPS`; compiled
    code counts elements (the element budget landed with #828) but not steps, so a `while` that
    never terminates runs forever. Decide whether a compiled program carries an optional iteration
@@ -374,34 +403,22 @@ drops what those items carry. Every surface says so (`export.ExperimentalNotice`
 it to stable is re-measuring the harness once those land, not a documentation change.
 
 Measured by the per-file ratchet at this baseline (`TestCorpusRoundTrip`,
-`internal/core/export/testdata/corpus_roundtrip_expected.txt`), **273 of the 345 models under
+`internal/core/export/testdata/corpus_roundtrip_expected.txt`), **305 of the 345 models under
 `examples/` convert** (the training corpus, the three pilot corpora and this repository's own
-demos): 272 round-trip `notation → RDF → notation → RDF` byte-identically and 1 writes a graph the
-decoder refuses — each pinned by file, so a movement in any direction has to be adjudicated
-([rdf-corpus-roundtrip.md](rdf-corpus-roundtrip.md)). The 78 whitespace-only, 7 graph-diff and 4
-unparseable verdicts of the previous baseline are gone: #819 writes the stored source text back
-byte for byte when it still states the graph, and #842 keeps an end-binding usage's body as
-elements. A model the mapping cannot write back is refused rather than converted lossily, and the 72
-refusals sort into: 36 declarations that name no element of their own (20 features, 9 events, 3
-snapshots, 3 asserts, 1 timeslice — the notation cannot be rebuilt from a graph keyed by name), 19
-prefix metadata, 13 expressions standing as a body member — a calc's trailing result expression such
-as `a - b` (6 operator, 3 invocation, 2 feature-chain, 1 feature-reference, 1 constructor), which
-the mapping writes only in a valued position (**D1**), and 4 duplicate declarations, where two
-members of one namespace share a name the graph would merge. Two models the previous ratchet
-counted as converting now refuse (one feature declaration, one prefix metadata) because the
-source-preserving writer states what the earlier one skipped.
-
-**In flight against these numbers**, every one open: [#815](https://github.com/JPL-Devin/OpenSysML/pull/815)
-(mergeable) carries a calc's trailing result expression as a `ResultExpressionMembership` (the 13
-refusals above) and [#835](https://github.com/JPL-Devin/OpenSysML/pull/835) (conflicts), branched
-from it, makes the expression itself the member so a foreign graph reads — they land in that order;
-[#824](https://github.com/JPL-Devin/OpenSysML/pull/824) (conflicts) writes metadata bodies and
-prefix metadata as owned `MetadataUsage`s (the 19);
-[#827](https://github.com/JPL-Devin/OpenSysML/pull/827) (conflicts) spells a reference back so it
-re-resolves to the element the graph named. Each moves rows of the ratchet and must regenerate it in
-the same change; rebase each onto the current ratchet, re-run it, and adjudicate the rows it moves.
-The three in conflict also carry a `CHANGELOG.md` edit that must move to a fragment under
-`changes/unreleased/` (#852).
+demos), every one round-tripping `notation → RDF → notation → RDF` byte-identically; there is no
+whitespace-only, graph-diff, unwritable or unparseable verdict left — each file is pinned, so a
+movement in any direction has to be adjudicated ([rdf-corpus-roundtrip.md](rdf-corpus-roundtrip.md)).
+A model the mapping cannot write back is refused rather than converted lossily, and the 40
+refusals are now one kind: declarations that name no element of their own, which a graph keyed by
+name cannot rebuild — 23 anonymous `feature`s, 10 `event`s, 3 `snapshot`s, 3 `assert`s and 1
+`timeslice`. The previous baseline's other refusal classes are gone: the 13 result-expression
+refusals with #815 and #835 (a body's trailing `a - b` is a `ResultExpressionMembership` owning the
+expression itself, so a foreign graph reads), the 19 prefix-metadata refusals with #824 (metadata
+bodies and prefix metadata are owned `MetadataUsage`s, written back where the grammar puts them),
+and the duplicate-declaration refusals once the parser read the anonymous `connector a to b;` as
+ends rather than as a connector named `a`. #827 spells
+a reference back so it re-resolves to the element the graph named and #855 links a reference
+reached through an import or alias. Nothing is in flight against these numbers.
 
 ## The target, stated precisely
 
@@ -501,9 +518,10 @@ What remains is what the Flexo hop still loses and the metamodel still does not 
   a `FeatureMembership`. Writing expressions as owned elements is the same materialization D3.3
   did for ownership, and it is what the ontology gate's `value` → `FeatureValue` findings (D8) are
   waiting on;
-- an expression standing as a body member — a calc's trailing result expression — has no mapping
-  at all and refuses to convert (13 of the 77 refusals above). It is a `ResultExpressionMembership`
-  in the metamodel; carry it as one.
+- ~~an expression standing as a body member~~ — done: a calc's trailing result expression is a
+  `ResultExpressionMembership` owning the expression (#815, #835,
+  [rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), and no
+  file in the ratchet is refused for an expression.
 
 ## D2 — end bindings are structure, but in `sysx:`
 
@@ -535,13 +553,17 @@ elements are `NamespaceImport` or `MembershipImport`.
 
 The reference-vs-literal half is mechanized against the OWL ontology (D8):
 `TestGoldenGraphsMatchOntology` (`internal/core/export`) checks every SysML-namespace triple in
-the 25 golden graphs against the metamodel's declared domain and range, finds **136 triples in 46
-distinct metaclass/property violations**, and every one is inventoried key-by-key with a reason in
+the 48 golden graphs against the metamodel's declared domain and range, finds **363 triples in 69
+distinct metaclass/property violations** at this baseline (the count grew with the fixtures the
+metadata, result-expression and reference work added, not with new kinds of disagreement), and
+every one is inventoried key-by-key with a reason in
 `internal/core/export/testdata/ontology-known-violations.txt`, so any *new* disagreement fails the
 build. The object-property-carrying-a-literal group is this item's own bug: `type` on
 `AttributeUsage`, `ReferenceUsage` and `PartUsage`, `sourceFeature` on `SuccessionAsUsage` and
 `sysx:InitialNode`, `referent` on `FeatureReferenceExpression` where the referent resolves outside
-the graph, and `targetFeature` on `FeatureChainExpression`. Identity is stable (D3.1), so each is
+the graph, and `targetFeature` on `FeatureChainExpression`. #827 and #855 narrowed the *decoder*
+side — a name written back re-resolves to the element the graph named, through imports and
+aliases — but the encoder still writes the name as a literal, which is what this item is. Identity is stable (D3.1), so each is
 mechanical: resolve the name and emit the IRI, and fall back to the literal only where the
 referent is outside the graph, as feature references already do. The abstract-metaclass half is
 not mechanizable from the ontology: `SysML.owl` records no ecore abstractness (see D8), so nothing
@@ -572,20 +594,20 @@ names — 59 names are declared by more than one metaclass** (`type`, `value`, `
 …), so the unqualified convention is genuinely lossy in the other direction and a profile encoder
 has to pick by the subject's metaclass (`LookupProperty` returns every declaration;
 `AmbiguousNames` reports the set). The gate is `TestGoldenGraphsMatchOntology`, whose inventory is
-also the profile's work list, sorted into four causes: properties the metamodel declares on a
+also the profile's work list, sorted into five causes: properties the metamodel declares on a
 relationship or membership element that we collapse into the element (`value` → `FeatureValue`,
 the multiplicity bounds → `MultiplicityRange`, `isNegated` → `Invariant`, a transition's ends →
 `Connector`) — the same collapse D3.3 undid for ownership and D1/D2 will undo for expressions and
-ends; names as literals (D7); 12 metaclasses of our own `sysx:` namespace plus two names the
-202407 rendering does not have (`FlowUsage`, which it calls `FlowConnectionUsage`, and
-`TerminateActionUsage`); and 17 properties we write into the SysML namespace that no metaclass
+ends; names as literals (D7); metaclass names the 202407 rendering does not have (`FlowUsage`,
+which it calls `FlowConnectionUsage`, and `TerminateActionUsage`); the metaclasses of our own
+`sysx:` namespace; and the properties we write into the SysML namespace that no metaclass
 declares, each either a relationship the metamodel reifies as an element (`specializes`,
 `subsets`, `redefines`, `references`, `aliasedElement`, `via`) or a notation flag with no
 metamodel property (`isAccept`, `isResult`, `isSnapshot`, `isTimeslice`, `isChain`) — arguably
 those belong in `sysx:` regardless of this item.
 
-**Open:** [PR #774](https://github.com/JPL-Devin/OpenSysML/pull/774) (mergeable, awaiting review)
-ships the ontology itself as **41 leaf Turtle modules and 6 layer ontologies** under
+**Open, conflicts:** [PR #774](https://github.com/JPL-Devin/OpenSysML/pull/774) (needs a rebase onto
+the current `main` before review) ships the ontology itself as **41 leaf Turtle modules and 6 layer ontologies** under
 `ontology/sysmlv2/`, cut along
 the package hierarchy of the normative KerML/SysML XMI (`KerML/Root/Elements.ttl`,
 `KerML/Kernel/Expressions.ttl`, `SysML/Systems/Requirements.ttl`, …) with a `catalog.tsv` from
@@ -597,7 +619,7 @@ and `make ontology-modules-check` in CI keeps the committed output equal to the 
 once merged, the profile can import the module a metaclass lives in rather than the monolith, and
 a consumer wanting only, say, the requirements vocabulary has a file to import.
 
-**Not started:** the profile plumbing itself — about one session now that the table, the gate and
+**Not started:** the profile plumbing itself — about one session once the table, the gate and
 the modules exist. Conformance beyond that is gated on D1 and D2 rather than on this item: `sysx:`
 has no place in the ontology, so an ontology-profile graph is conformant only as far as those
 have landed, and the profile's documentation should say so.
@@ -665,7 +687,7 @@ failure mode, and the row in `spec-compliance.md` moving out of the "not support
 every item is self-assessed, since the pinned pilot evaluates expressions and executes no action
 or state machine ([pilot-execution-referee.md](pilot-execution-referee.md)).
 
-**Landed ahead of E1–E7**, all merged at this baseline: the one structural finding of the review
+**Landed ahead of E1–E7**, all merged: the one structural finding of the review
 — nested action nodes shared the enclosing action's flat feature space, so `p.v` and `q.v`
 collided and same-named outputs overwrote each other — is
 [PR #823](https://github.com/JPL-Devin/OpenSysML/pull/823), which gives each performance its own
@@ -690,6 +712,11 @@ objects (or, before any object exists, the types) when there are zero or several
 truly unbound `state def` running detached; re-run at this baseline the same probe reads `n = 4`
 on object `#1` after `%advance 2.5 [s]` (entry, then the timed re-entries at 1 and 2). The double
 initial-`do` the review first reported is not reproducible on `main` since #810 and is retired.
+Since then: `%state <machine>` on a state machine with a typed body attaches the same way (#856);
+the state executor refuses the trigger arguments validation refuses (`accept after 5` without a
+unit, a conditional `when`) instead of running them (#833, #871); `send` arguments are validated
+and `send new Def(args)` constructs the message it sends (#838, #875); and a message through a
+binding connector at a boundary port routes in both directions (#839).
 
 ## E1 — `terminate` in a body
 
@@ -711,15 +738,13 @@ and does not run at this baseline: it stops earlier, at the nested action node w
 re-measured after #823's nested frames landed — the refusal is the flow rule, not the frame), and
 would stop at the first `terminate` once that is in.
 
-One position is not refused. A nested action node written as a statement body
-(`action a { assign n := 1; terminate; }`) is lowered by `lower/action_graph.go` `lowerBody`,
-whose statement cases are `send`, `assign`, `while`/`loop`/`for` and `if` — `terminate` is not
-among them, so it is dropped and the node completes as if it were not written (the sibling that
-follows runs; measured at this baseline). That is a silent no-op of the kind `AGENTS.md` §8
-forbids and it is a defect, not part of this item: closing it means adding
-`*ast.TerminateStatement` to that case so the statement is refused there as everywhere else,
-with a robustness case, and it should be fixed whenever it is next touched rather than waiting
-for E1.
+Every position is refused. The previous baseline recorded one that was not — a nested action node
+written as a statement body (`action a { assign n := 1; terminate; }`) dropped the `terminate`
+because `lowerBody`'s statement cases did not include it. That is closed: `BodyStatementMembers`
+and `lowerStatement` (`lower/action_graph.go`) take `*ast.TerminateStatement`, the action
+executor's `stepStatementNode` recognises it, and the statement reaches the same `'terminate' in a
+body is not executable` refusal as every other body. There is no silent no-op left in this item;
+what remains is the semantics below.
 
 **Target.** SysML v2 §7.17.10: a terminate action usage "forces the lifetime of the terminated
 occurrence to end by the completion of the `TerminateAction`"; when no occurrence is given, the
@@ -953,21 +978,27 @@ Expression evaluation is the most externally refereed part of the runtime: when
 round, not the current baseline), 55 cases agreed with the pinned pilot, 1 agreed in kind only, 1
 disagreement and 2 errors of ours were adjudicated, and 35 cases the pilot cannot evaluate; 70 of
 the 71 grammar forms in `KerMLExpressions.xtext` have a corpus witness (only `%` lacks one).
-Scalars, Booleans, strings, enumerations, quantities, `Complex` (#777, #788), collection bodies, indexing, qualified names, the
-lazy conditionals, `??`, most of the Kernel Function Library, the step and element budgets, RDF
-expression trees and the native scalar/collection fast path are done. The review after `v0.4.3`
-found two defects, both landed since (#794: `x @ T` on a value is `istype`, with `@@` still the
-metadata classification; #795: a feature named `chain` resolves as a name where the lookahead does
-not establish the `chain` modifier — `step chain …` still does not parse and is a separate parser
-item), and the following forms that parse and type-check but do not evaluate. Each refuses today
-with a typed error; the item is the evaluation, and each one ends with what depends on it.
+Scalars, Booleans, strings, enumerations, quantities, `Complex` (#777, #788), arrays, vectors and
+vector quantities (#883), rationals (#876), occurrence lifetimes (#884), collection bodies and the
+named reducers (`->reduce '+'`, `builtinControlReduce`), indexing, qualified names, the lazy
+conditionals, `??`, the Kernel Function Library with overloads by argument type, the step and
+element budgets, RDF expression trees and the native scalar/collection fast path are done. The
+review after `v0.4.3` found two defects, both landed (#794: `x @ T` on a value is `istype`, with
+`@@` still the metadata classification; #795: a feature named `chain` resolves as a name where the
+lookahead does not establish the `chain` modifier — `step chain …` still does not parse and is a
+separate parser item). What follows are the forms that parse and type-check but do not evaluate,
+re-measured against `runtime/eval.go` at this baseline. Each refuses today with a typed error; the
+item is the evaluation, and each one ends with what depends on it.
 
-## X1 — constructors: `new Pt(1, 2)`
+## X1 — constructors: `new Pt(1, 2)` as a value
 
-`ast.ConstructorExpr` parses and types as the definition it names; the evaluator refuses it.
-The value is an object of the definition with positional and named arguments bound to its features
-in declaration order, created in the evaluating context the way `%instantiate` creates one, so it
-has an identity and `%features` can read it. Needed by `SampledFunctions::Sample` (`new
+`ast.ConstructorExpr` parses with its positional and named arguments (#838, #875) and types as the
+definition it names, and its arguments are checked against that type. One position evaluates: the
+payload of a `send new Def(args)` is built by `runtime/signal.go` `buildConstructedMessage`. In a
+value position the evaluator still refuses it. The remaining value is an object of the definition
+with the arguments bound to its features in declaration order, created in the evaluating context
+the way `%instantiate` creates one, so it has an identity and `%features` can read it — the
+message-constructor path is the model for it. Needed by `SampledFunctions::Sample` (`new
 SampledFunction(samples = …)`, `new SamplePair(x, calculation(x))` — L7), by any
 analysis case that builds its own records, and by the interpreted/native differential once N2.1
 gives the compiled side a record type.
@@ -996,12 +1027,14 @@ access path the metadata library defines — parses but is not evaluated, while 
 is. Both are representation items: an infinity kind (or a flag on the numeric kinds) and a metadata
 value the evaluator can hand back from the side tables the checker already keeps.
 
-## X5 — `all`, and named reducers
+## X5 — `all` (named reducers done)
 
-`all T` (every instance of a type) is the expression form of Q2 and is refused until there is a
-runtime population to enumerate. `->reduce '+'` and the other named-reducer spellings resolve to a
-library function by name where the collection operations today take only an inline body; with L4's
-dispatch by name they are the same lookup from a different position, and they should land together.
+`all T` (every instance of a type) is the expression form of Q2 and is refused (`'all' needs the
+extent of a type, which the runtime does not enumerate`) until there is a runtime population to
+enumerate; the item is now Q2's alone. The named-reducer half is done: `->reduce '+'` and the other
+named spellings resolve to the library function by name through L4's dispatch
+(`runtime/collections.go` `builtinControlReduce`; conformance `calc_library_complex_sum_real_axis`
+exercises the Real-axis case).
 
 ## X6 — function values
 
@@ -1012,20 +1045,25 @@ function value kind. Analysis libraries pass behaviors as data (`SampledFunction
 is a reference to a lowered calc plus the environment it closes over, invoked through the same path
 as a calc usage; it is not an arbitrary closure over statements.
 
-## X7 — vectors, arrays and set-producing expressions
+## X7 — tensors and set-producing expressions (vectors and arrays done)
 
-A vector is a sequence today (L7), so `VectorValues` and `TensorValues` types have nothing to type
-against, multidimensional indexing (`m[i][j]`, `m[i, j]`) has no shape to check, and a set-producing
-expression (`->distinct`, the set operators) yields a sequence in which order is significant where
-the library says it is not. Three representation decisions — vector kind, array shape, set kind —
-each with the operator table, the static element type (X8) and the RDF literal form to match.
-Larger than the others and last in the track.
+Two of the three representation decisions are taken: since #883 a `Collections::Array` is a
+`ValArray` with its dimensions and row-major elements, a `NumericalVectorValue` a `ValVector`, and
+a `VectorQuantityValue` a `ValVectorQuantity` with a unit per axis, so `VectorValues` and the
+measurement-reference libraries type against a value and `VectorFunctions` computes over it rather
+than over a stand-in sequence. What is left: `TensorValues` (rank above two, and the shape check for
+`m[i][j]`/`m[i, j]` indexing beyond what the array's dimensions give); a set kind, since a
+set-producing expression (`->distinct`, the set operators) still yields a sequence in which order
+is significant where the library says it is not; the static element type of the new kinds through
+collection bodies (X8); their RDF literal form; and their native layout (N2.1 refuses them today).
+Still last in the track, but smaller than it was.
 
 ## X8 — static element types through collection bodies, and the two harnesses
 
 The checker types a collection operation's result as its input's element type, not what the body
 returns, so `xs->collect { in x; x.mass }` is typed as the part not the quantity, and a downstream
-error names the wrong type. Interpreted and compiled evaluation are held equal by one differential
+error names the wrong type (#903 made the typer terminate on an argument that leads back to its
+own call — the Apollo 11 mass rollup — but did not change what it answers). Interpreted and compiled evaluation are held equal by one differential
 over the compiled subset; the pilot differential (`cmd/pilot-exec-diff`) still needs its normalization
 of numeric spellings and its adjudication file to say why each of the remaining disagreements is
 ours or the pilot's; and the RDF expression trees have no round trip of their own — a tree is
@@ -1159,38 +1197,45 @@ reports it on the same surfaces beside the satisfaction verdicts. Small once A1 
 
 # Track V — validation against the pilot's named constraints
 
-Everything the oracles see is at or near parity: 118 of 120 self-authored invalid models agree with
-the pinned pilot by default, and the pilot's 217 named `validate*` constraints are the denominator
-the review chose to measure against. Of those `spec-compliance.md` names 59 under the pilot's own
-names by the review's count (about 70 by #822's, which reads the names from the jar) and covers
-more under our own diagnostic wording; a 24-probe sample of the rest found 5 models we accept
-silently that the pilot rejects. The track is one item with a queue behind it, and most of the
-queue is already open:
+The denominator is the pilot's 217 named `validate*` constraints, read from the pinned jar by the
+census [validation-constraints.md](validation-constraints.md) (#822) and re-audited row by row
+against the code and the corpus (#900, whose gate now also checks that the function each row cites
+exists and that each cited case belongs to its row). With #900 the census reads **148 of 217
+reported — 137 faithful, 11 approximate — 6 not implemented, 0 deliberate, 0 known failure and 63
+unknown**, against 143 / 133 / 10 / 68 at the tag. The oracle at the other end agrees: of 236
+self-authored invalid models, the pinned pilot and we both reject 228, the pilot alone rejects 0,
+and the 8 only we reject are control-node succession rules the pinned pilot leaves unimplemented
+([pilot-rejection.md](pilot-rejection.md)). Everything the previous baseline listed as open here has
+landed:
 
-- **The census and its gate** — [PR #822](https://github.com/JPL-Devin/OpenSysML/pull/822) (open,
-  mergeable): the 217 names read from the pinned jar with each one's status, and a gate that keeps
-  the table honest; implements no rule.
-- **Negative cases for the 100 SysML constraint names the corpus owns** —
-  [PR #831](https://github.com/JPL-Devin/OpenSysML/pull/831) (open, mergeable): one minimal
-  pilot-refereed invalid model per name, or a stated reason none can exist.
-- **Rules the sample found missing**, each a pass of the type or constraint tier:
-  overriding a bound (`=`) feature value — [PR #826](https://github.com/JPL-Devin/OpenSysML/pull/826)
-  (open, mergeable; carries the `=`/`default =` distinction through the AST, which the parser dropped);
-  control-node succession counts and placement — [PR #832](https://github.com/JPL-Devin/OpenSysML/pull/832)
-  (open, mergeable); trigger arguments (`after` a duration, `at` an instant, `when` a Boolean) —
-  [PR #833](https://github.com/JPL-Devin/OpenSysML/pull/833) (open, mergeable); `send` payload,
-  `via` and `to` typing — [PR #838](https://github.com/JPL-Devin/OpenSysML/pull/838) (open,
-  mergeable); [PR #817](https://github.com/JPL-Devin/OpenSysML/pull/817) adds further rejection
-  cases (open, mergeable).
-- **One finding adjudicated as not a defect** —
-  [PR #837](https://github.com/JPL-Devin/OpenSysML/pull/837) (landed) records why the
-  inherited-name warning beside a typing error stays: the pilot reports both.
-- **Still to take**: `enum def F :> E` (an enumeration specializing another) — related to
-  [PR #811](https://github.com/JPL-Devin/OpenSysML/pull/811) (open, mergeable), which treats
-  enumeration definitions as variations and must be reconciled with the rule before either lands —
-  and whatever the census marks *uncovered* once #822 is in. The order is #822, then #831 (they
-  define the denominator and the corpus), then the rule PRs in any order, each moving its census
-  row.
+- **The census and its gate** (#822, #900); **negative cases**, one minimal pilot-refereed invalid
+  model per SysML constraint name the corpus owns or a stated reason none can exist (#831), and
+  the KerML rejection cases (#817).
+- **The rules the sample found missing**: overriding a bound (`=`) feature value (#826, which also
+  carries the `=`/`default =` distinction through the AST); control-node succession counts and
+  placement (#832); trigger arguments — `after` a duration, `at` an instant, `when` a Boolean —
+  in validation and in the state executor (#833, #871); `send` payload, `via` and `to` typing and
+  constructor arguments (#838, #875); `enum def F :> E` — an enumeration definition is a
+  variation (#811) and an enumerated value is typed only by its enumeration (#907; the cast and
+  body-expression positions are [#909](https://github.com/JPL-Devin/OpenSysML/pull/909), open and
+  mergeable).
+- **Rows the census audit itself moved**: cross-subsetting (#872), duplicate parameter bindings
+  (#875), owning-body membership (#874), initial values and `constant` on variable features (#873),
+  metadata typing and `annotatedElement` conformance (#881, #901, #905, #906), association arity
+  and the type of a multiplicity bound (#882), requirement-member prefix metadata and short names
+  (#868, #880), a chained generalization under the cycle guard (#902).
+- **Adjudicated as not a defect**: the inherited-name warning beside a typing error stays (#837);
+  the pilot reports both.
+
+**What remains is the census's own tail**, and it is the whole of the track: the 6 rows marked *not
+implemented* and the 63 marked *unknown* — a row is unknown when neither a pass nor a negative case
+can be pointed at for the pilot's name, which is a gap in evidence before it is a gap in checking.
+The order is the same as before: take the 6, then work the 63 down by writing the pilot-refereed
+negative case first and implementing the rule only where the case shows we accept what the pilot
+rejects; each change moves exactly its census row and `make docs-counts` regenerates the summary.
+The 11 *approximate* rows (a check under our own wording that covers the pilot's constraint
+without matching it) are honest as they stand and become faithful one at a time as their
+wording is aligned.
 
 ---
 
@@ -1330,9 +1375,9 @@ not more harness work.
 
 Two orders, because there are two kinds of item. The **track-local** orders say where to start
 inside a track; the **cross-cutting** order says which tracks' first items go first when a session
-must choose, and it is the one that has been agreed. Everything in flight (the open pull requests
-named above) lands or is closed before either order is consulted — they are already the next
-thing.
+must choose, and it is the one that has been agreed. Two pull requests are in flight at this
+baseline — #909 (the cast and body positions of the enumeration rule, mergeable) and #774 (the
+ontology modules, in conflict) — and they land or are closed before either order is consulted.
 
 ## Cross-cutting order (agreed)
 
@@ -1340,10 +1385,11 @@ thing.
    bodies (A6) and the analysis library (L7) fall out of it, and nothing else on this list is asked
    for as often. Depends on expression and library semantics being *sufficient*, which they are for
    a case over calcs that evaluate today; the next step widens them.
-2. **X2, X1, X6** — the singleton sequence read as the scalar, constructors, function values. The
-   three items the standard analysis library (`SampledFunctions`, `TradeStudies`) needs to run, and
-   what A2 waits on for `evaluationFunction`. L4 (dispatch by name) and X5's named reducers go in
-   the same pass, since they are one lookup.
+2. **X2, X1, X6** — the singleton sequence read as the scalar, constructors as values, function
+   values. The three items the standard analysis library (`SampledFunctions`, `TradeStudies`) needs
+   to run, and what A2 waits on for `evaluationFunction`. L4 (dispatch by name), L6 (overloads)
+   and X5's named reducers, which were to go in the same pass, have landed; X1 has the
+   message-constructor path (#875) to generalize from.
 3. **The REPL state attachment** — `%state <machine>` attaching to the exhibiting object (#845,
    **landed**), *after* validating on `main` that #810 closed the original duplicate initial `do`,
    which the review did (it no longer reproduces; the probe and its oracle are recorded under
@@ -1374,26 +1420,26 @@ thing.
   publisher tokens for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer
   and an OV/EV certificate to sign with, and a marketplace publisher for the extension. None gates
   the others or anything below.
-- **Track L.** L3, L4 and L5 landed (#830, #821, #818); the one open pull request, #825
-  (L6, overloads by argument type), is mergeable and needs review before anything new — the
-  `ToReal("2.5")` probe under L5 is what it fixes. Then L7, which is step 2 above.
+- **Track L.** L3–L6 landed (#830, #821, #818, #825/#861). Only L7 is left, and it is step 2
+  above.
 - **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
   differential's record coverage both need it; decide N2.2 (the budget) before N2.4; N2.3 tracks L4
   package by package; N2.6's actions and states are Track M's M1/M2.
-- **Track D.** Land #815 (clean), then rebase and land the rest of the open RDF work (#835, #824,
-  #827, each moving its changelog entry to a fragment) first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
-  profile after #774 merges, since it only becomes conformant behind D1 and D2.
+- **Track D.** The open RDF work (#815, #835, #824, #827) has landed and the ratchet is 305/345
+  with one refusal class left; step 6 above is next; **D7** is mechanical now that identity is
+  stable and fits anywhere; rebase and land #774, then **D8**'s profile after it, since it only
+  becomes conformant behind D1 and D2.
 - **Track E.** The in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845) have
   all landed.
   The track itself is not scheduled; each item states what would prioritize it. If one is picked
   up without such a trigger, the order is **E1** (termination of an ongoing performance, which
   **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's
   work; **E3** and **E5** only after their design records; **E7** after the object-model item it
-  depends on. The `lowerBody` silent drop noted under E1 is a defect and does not wait for the
-  track.
+  depends on. The `lowerBody` silent drop the previous baseline noted under E1 is closed.
 - **Track X.** X8's harness half (normalization, adjudication, the RDF expression round trip)
   first so every later X item is measured; then step 2 above; X3 and X4 whenever a model needs
   them; X7 last.
-- **Track V.** #822 (the census), then #831 (the negative cases), then the rule pull requests in
-  any order; reconcile #811 with the `enum def F :> E` rule before either lands.
+- **Track V.** Everything queued has landed (#822, #900, #831, #817, the rule pull requests, #811
+  reconciled with #907); land #909, then work the census's 6 *not implemented* and 63 *unknown*
+  rows, negative case first, each change moving its row.
 - **Track Q, A, I, M.** Entirely given by the cross-cutting order above.
