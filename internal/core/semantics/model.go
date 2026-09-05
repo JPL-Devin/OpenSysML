@@ -624,7 +624,7 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 // FeatureTypes returns a feature's effective types: those it declares, else those
 // of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
 func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
@@ -639,7 +639,7 @@ func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
 // DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
 // feature is written with, directly or through the features it specializes.
 func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
@@ -655,7 +655,7 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 	for _, super := range m.DirectSupertypes(sym) {
 		switch {
 		case super == base:
-		case isFeature(super):
+		case super.IsFeature():
 			features = append(features, super)
 		default:
 			types = append(types, super)

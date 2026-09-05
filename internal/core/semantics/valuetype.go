@@ -185,7 +185,7 @@ func (m *Model) featureConformance(sym *symbols.Symbol, want *symbols.Symbol) Co
 	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = alias
 	}
-	if !isFeature(sym) {
+	if !sym.IsFeature() {
 		return conformanceUnknown()
 	}
 	if m.Conforms(sym, want) {
@@ -278,9 +278,9 @@ func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool
 		}
 		switch {
 		case super == base:
-		case isTypeDecl(super):
+		case super.Kind.IsDefinition():
 			defs = append(defs, super)
-		case isFeature(super):
+		case super.IsFeature():
 			features = append(features, super)
 		}
 	}

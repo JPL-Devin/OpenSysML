@@ -177,6 +177,33 @@ func (k SymbolKind) String() string {
 	return "unknown"
 }
 
+// IsFeature reports whether k classifies a KerML Feature (KerML 1.0 §8.3.3): a
+// usage of any kind, a connector end or a multiplicity, never a type or a namespace.
+func (k SymbolKind) IsFeature() bool {
+	switch k {
+	case SymbolPartUsage, SymbolAttributeUsage, SymbolItemUsage, SymbolOccurrenceUsage,
+		SymbolIndividualUsage, SymbolMetadataUsage, SymbolEnumerationUsage, SymbolViewUsage,
+		SymbolViewpointUsage, SymbolRenderingUsage, SymbolConcernUsage, SymbolConnectionUsage,
+		SymbolSuccessionUsage, SymbolFlowUsage, SymbolPortUsage, SymbolInterfaceUsage,
+		SymbolAllocationUsage, SymbolActionUsage, SymbolStateUsage, SymbolCalcUsage,
+		SymbolConstraintUsage, SymbolRequirementUsage, SymbolSatisfyRequirementUsage,
+		SymbolCaseUsage, SymbolAnalysisCaseUsage, SymbolVerificationCaseUsage, SymbolUseCaseUsage,
+		SymbolConnectorEnd, SymbolMultiplicity:
+		return true
+	}
+	return false
+}
+
+// IsFeature reports whether s declares a KerML Feature: by its kind, or by its
+// usage declaration when the kind is unclassified (a named binding).
+func (s *Symbol) IsFeature() bool {
+	if s.Kind != SymbolUnknown {
+		return s.Kind.IsFeature()
+	}
+	_, ok := s.Decl.(*ast.Usage)
+	return ok
+}
+
 // IsDefinition reports whether k classifies a definition — a SysML `def` or a
 // KerML classifier — as opposed to a usage or a non-type member.
 func (k SymbolKind) IsDefinition() bool {

@@ -32,7 +32,7 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, b
 	default:
 		return nil, true
 	}
-	isDef := !isFeature(sym)
+	isDef := !sym.IsFeature()
 
 	var out []*symbols.Symbol
 	complete := true
@@ -59,11 +59,11 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, b
 			continue
 		}
 		switch {
-		case isDef && isFeature(base):
+		case isDef && base.IsFeature():
 			// A definition cannot subclassify a feature: it subclassifies
 			// what the feature is typed by.
 			out = append(out, m.DirectSupertypes(base)...)
-		case isDef || isFeature(base):
+		case isDef || base.IsFeature():
 			// Definition with a definition baseType, or usage with a usage
 			// baseType. A usage with a definition baseType adds nothing.
 			out = append(out, base)
@@ -300,22 +300,4 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 		return qn
 	}
 	return nil
-}
-
-// isFeature reports whether sym declares a feature rather than a type. A KerML
-// type is recorded as a usage node, so the symbol kind decides (KerML §8.3).
-func isFeature(sym *symbols.Symbol) bool {
-	switch sym.Decl.(type) {
-	case *ast.Usage:
-		return !isTypeDecl(sym)
-	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
-		return true
-	}
-	return false
-}
-
-// isTypeDecl reports whether sym declares a type rather than a feature: a SysML
-// definition, or a KerML classifier the parser records as a usage (`datatype`).
-func isTypeDecl(sym *symbols.Symbol) bool {
-	return sym != nil && sym.Kind.IsDefinition()
 }

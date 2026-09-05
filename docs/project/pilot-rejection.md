@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-234 case(s): 211 both reject, 15 only the pilot rejects, 8 only we reject, 0 both accept
+234 case(s): 213 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 81 | 6 | 0 | 0 |
-| semantic | 105 | 88 | 9 | 8 | 0 |
+| semantic | 105 | 90 | 7 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -227,9 +227,9 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 15 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 7 named KerML constraints (`k16`–`k42`) and 2
-named SysML constraints (`s04`, `s43`) the pinned validators enforce as errors and
+All 13 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 7 named KerML constraints (`k16`–`k42`) the
+pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
 last three of those were severity-policy gaps — the pinned grammar excluded the spellings, while
@@ -255,8 +255,6 @@ silent in either mode.
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
 | `semantic/k42-two-cross-subsettings.kerml` | accepts | `Error executing EValidator` (the pilot's `validateFeatureOwnedCrossSubsetting` check indexes the wrong list and throws before it can say `At most one cross subsetting is allowed`; filed as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794), body in [omg-issues.md](omg-issues.md#validatefeatureownedcrosssubsetting-indexes-the-wrong-list-and-throws-pilot-2026-07)) | `internal/core/passes` — the one-reference-subsetting check that rejects `k09` has no counterpart for a second `crosses` clause (`validateFeatureOwnedCrossSubsetting`) |
-| `semantic/s04-assert-references-non-constraint.sysml` | accepts | `Must reference a constraint.` | `internal/core/passes/typecheck.go` — the referent-kind check on reference subsetting covers `satisfy` (`satisfy target must be a requirement usage`) but not `assert`; no pass checks that an asserted usage is a constraint usage |
-| `semantic/s43-assign-to-non-feature.sysml` | accepts | `An assignment must have a referent.` | `internal/core/passes/constraint.go` `assignmentReferentChecker` — returns silently when the resolved target is not a `*ast.Usage`, so assigning to a definition reports nothing. Pass exists, misses the shape |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays. The six `grammar/` gaps share one cause: the pilot's grammar
@@ -555,9 +553,9 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateActorMembershipOwningType` | `grammar/g61-actor-outside-requirement-body.sysml` | pilot-only-rejects | mismatched input 'actor' expecting '}' / extraneous input '}' expecting EOF | — | `actor` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
 | `validateAllocationUsageType` | `semantic/s02-allocation-typed-by-connection-def.sysml` | both-reject | An allocation must be typed by allocation definitions. | An allocation must be typed by allocation definitions. | — |
 | `validateAnalysisCaseUsageType` | `semantic/s03-analysis-typed-by-case-def.sysml` | both-reject | An analysis case must be typed by one analysis case definition. | An analysis case must be typed by one analysis case definition. | — |
-| `validateAssertConstraintUsageReference` | `semantic/s04-assert-references-non-constraint.sysml` | pilot-only-rejects | Must reference a constraint. | — | `typecheck.go` checks the `satisfy` referent kind but has no `assert` counterpart |
+| `validateAssertConstraintUsageReference` | `semantic/s04-assert-references-non-constraint.sysml` | both-reject | Must reference a constraint. | assert target must be a constraint usage, found attributeUsage | — |
 | `validateAssignmentActionUsageArguments` | none: `AssignmentNode` always parses both arguments | no violating model | — | — | — |
-| `validateAssignmentActionUsageReferent` | `semantic/s43-assign-to-non-feature.sysml` | pilot-only-rejects | An assignment must have a referent. | — | the assignment referent checker in `constraint.go` returns silently when the referent is not a usage |
+| `validateAssignmentActionUsageReferent` | `semantic/s43-assign-to-non-feature.sysml` | both-reject | An assignment must have a referent. | An assignment must have a referent. PD is declared `part def`, not a feature. | — |
 | `validateAssignmentActionUsageReferentIsTimeVarying` | `semantic/s05-assign-to-package-level-attribute.sysml` | both-reject | Referent must be time varying. | Referent must be time varying. | — |
 | `validateAttributeDefinitionFeatures` | none: nested attribute features are normalised to referential | no violating model | — | — | — |
 | `validateAttributeUsageEnumerationType` | `semantic/s06-enum-attribute-two-types.sysml` | both-reject | An enumeration attribute cannot have more than one type. | An enumeration attribute cannot have more than one type. | — |

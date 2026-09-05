@@ -102,6 +102,33 @@ func TestSemanticMetadataKeywordSubclassifiesBaseTypeOfDefinition(t *testing.T) 
 	}
 }
 
+// A named binding is a usage like any other, so a semantic metadata keyword on
+// it subsets the baseType usage rather than subclassifying what that usage is
+// typed by (SysML v2 §7.27.3).
+func TestSemanticMetadataKeywordSubsetsBaseTypeOfBinding(t *testing.T) {
+	src := `package P {
+		private import Metaobjects::SemanticMetadata;
+
+		part def D { attribute a; attribute b; }
+		part d : D;
+		binding baseBinding bind d.a = d.b;
+		metadata def link :> SemanticMetadata {
+			:>> baseType = baseBinding meta SysML::Usage;
+		}
+
+		part def Car {
+			part e : D;
+			#link binding tied bind e.a = e.b;
+		}
+	}`
+	if got := diagnoseSource(t, "file:///semantic-metadata-binding.sysml", src); len(got) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", got)
+	}
+	if got := implicitBaseOf(t, src, "P", "Car", "tied"); len(got) != 1 || got[0] != "P::baseBinding" {
+		t.Fatalf("supertypes of the annotated binding = %v, want [P::baseBinding]", got)
+	}
+}
+
 // TestPlainMetadataKeywordAddsNoSpecialization pins the other side of §7.27.3:
 // a keyword naming a metadata definition that is not semantic metadata
 // annotates the declaration without specializing anything: the usage keeps the

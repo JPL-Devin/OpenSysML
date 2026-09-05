@@ -130,7 +130,14 @@ func (tc *typeChecker) checkOwnedConstraint(scope *symbols.Scope, m ast.Node) {
 func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	switch m := n.(type) {
 	case *ast.ConstraintMember:
-		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		// `assert [not] c;` in a body states a reference to a constraint usage
+		// (SysML.xtext AssertConstraintUsage), not a condition to be Boolean.
+		if m.Keyword == "assert" && w8cIsReference(m.Expression) {
+			tc.checkTypeTarget(scope, m.Expression, ast.RelReferences,
+				declKind{lang: tc.lang, useKind: ast.UsageConstraint, keyword: m.Keyword, span: m.Span()})
+		} else {
+			tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		}
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
@@ -280,6 +287,12 @@ func (d declKind) isReferenceUsage() bool {
 	return !d.isDef && d.keyword == "" && d.useKind == ast.UsageAttribute
 }
 
+// isAssertedReference reports whether the usage is the reference form of an
+// assert constraint usage, `assert [not] c;`, rather than a declaration.
+func (d declKind) isAssertedReference() bool {
+	return !d.isDef && d.useKind == ast.UsageConstraint && d.keyword == "assert"
+}
+
 // isKerML reports whether the declaration is written in KerML, which has no
 // definition/usage distinction to classify it against (KerML 1.0 §8.3).
 func (d declKind) isKerML() bool { return d.lang == source.KindKerML }
@@ -327,6 +340,7 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	qn, isQN := targetNode.(*ast.QualifiedName)
 	if !isQN {
 		tc.checkChainSegments(scope, targetNode)
+		tc.checkChainReferenceKind(scope, targetNode, relKind, decl)
 		return
 	}
 	sym, ok := tc.resolver.ResolveQualified(scope, qn)
@@ -351,6 +365,10 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		}
 	}
 	msg := compatMessage(decl, relKind, targetSym.Kind)
+	if (relKind == ast.RelReferences || relKind == ast.RelSubsets) &&
+		targetSym.Kind == symbols.SymbolUnknown && targetSym.IsFeature() {
+		msg = unclassifiedReferenceKindMessage(decl, relKind, targetSym)
+	}
 	if msg == "" {
 		return
 	}
@@ -395,6 +413,32 @@ func (tc *typeChecker) checkChainSegments(scope *symbols.Scope, target ast.Node)
 		Severity: SeverityError,
 		Span:     chain.Operand.Span(),
 		Message:  fmt.Sprintf("feature chain segment must be a feature, found %s", sym.Kind),
+		Code:     "type",
+		Source:   "type",
+	})
+}
+
+// checkChainReferenceKind applies the referent-kind rule of a reference form to
+// a feature chain, whose referent is its last chaining feature (KerML §8.3.4.7).
+func (tc *typeChecker) checkChainReferenceKind(scope *symbols.Scope, target ast.Node, relKind ast.RelationshipKind, decl declKind) {
+	if _, ok := target.(*ast.FeatureChainExpr); !ok {
+		return
+	}
+	sym, ok := tc.resolver.ResolveTarget(scope, target)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	msg := referenceKindMessage(decl, relKind, sym.Kind)
+	if sym.Kind == symbols.SymbolUnknown && sym.IsFeature() {
+		msg = unclassifiedReferenceKindMessage(decl, relKind, sym)
+	}
+	if msg == "" {
+		return
+	}
+	tc.appendUnique(Diagnostic{
+		Severity: SeverityError,
+		Span:     target.Span(),
+		Message:  msg,
 		Code:     "type",
 		Source:   "type",
 	})
@@ -618,16 +662,14 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if target == symbols.SymbolUnknown {
 			return "" // an unclassified target constrains nothing
 		}
+		if msg := referenceKindMessage(decl, rel, target); msg != "" {
+			return msg
+		}
 		// Usages can subset/redefine other usages OR definitions
 		// Example: datatype MyReal :>> Real (usage redefines attributeDef)
 		// The check for isUsageKind OR isDefKind allows both patterns
 		if !isUsageKind(target) && !isDefKind(target) {
 			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
-		}
-		// `satisfy`/`verify <name>` is a reference subsetting of an existing
-		// requirement usage; viewpoint and concern usages are requirement usages.
-		if useKind == ast.UsageSatisfy && rel == ast.RelSubsets && !isRequirementUsageKind(target) {
-			return fmt.Sprintf("satisfy target must be a requirement usage, found %s", target)
 		}
 	case ast.RelTyping:
 		if isDef {
@@ -672,6 +714,9 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelSubject:
+		if msg := referenceKindMessage(decl, rel, target); msg != "" {
+			return msg
+		}
 		if !isDef && !isUsageKind(target) {
 			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
 		}
@@ -679,6 +724,42 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// An Annotation's annotatedElement is any Element (SysML v2 §7.9):
 		// definitions, packages and usages are all legal `about` targets.
 		return ""
+	}
+	return ""
+}
+
+// referenceKindMessage is the referent-kind rule shared by the reference forms
+// `satisfy r` (a requirement usage, SysML v2 §7.20) and `assert c` (a constraint usage, §7.19).
+func referenceKindMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+	if target == symbols.SymbolUnknown {
+		return ""
+	}
+	return referentKindMessage(decl, rel, target, target.String())
+}
+
+// unclassifiedReferenceKindMessage judges a referent the builder leaves without a
+// kind (a named binding): a feature of no constraint kind, named by its notation.
+func unclassifiedReferenceKindMessage(decl declKind, rel ast.RelationshipKind, sym *symbols.Symbol) string {
+	return referentKindMessage(decl, rel, sym.Kind, sym.Notation())
+}
+
+func referentKindMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind, found string) string {
+	if decl.isDef {
+		return ""
+	}
+	switch {
+	// `satisfy`/`verify <name>` is a reference subsetting of an existing
+	// requirement usage; viewpoint and concern usages are requirement usages.
+	case decl.useKind == ast.UsageSatisfy && rel == ast.RelSubsets:
+		if !isRequirementUsageKind(target) {
+			return fmt.Sprintf("satisfy target must be a requirement usage, found %s", found)
+		}
+	// `assert [not] <name>` is a reference subsetting of an existing constraint
+	// usage; a requirement usage is a constraint usage.
+	case decl.isAssertedReference() && rel == ast.RelReferences:
+		if !isConstraintUsageKind(target) {
+			return fmt.Sprintf("assert target must be a constraint usage, found %s", found)
+		}
 	}
 	return ""
 }
@@ -995,6 +1076,12 @@ func defKindsComparable(a, b symbols.SymbolKind) bool {
 // are disjoint with data values (§8.4.5.1).
 func isDataTypeDefKind(k symbols.SymbolKind) bool {
 	return k == symbols.SymbolAttributeDef || k == symbols.SymbolEnumerationDef
+}
+
+// isConstraintUsageKind reports whether k is a ConstraintUsage or one of its
+// specializations, the requirement usage kinds among them (SysML v2 §8.3.19).
+func isConstraintUsageKind(k symbols.SymbolKind) bool {
+	return k == symbols.SymbolConstraintUsage || isRequirementUsageKind(k)
 }
 
 // isRequirementUsageKind reports whether k is a RequirementUsage or one of its

@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 234,
-    "bothReject": 211,
-    "pilotOnlyRejects": 15,
+    "bothReject": 213,
+    "pilotOnlyRejects": 13,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 105,
-      "bothReject": 88,
-      "pilotOnlyRejects": 9,
+      "bothReject": 90,
+      "pilotOnlyRejects": 7,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1509,12 +1509,9 @@
       "source": "semantic",
       "rule": "An assert constraint usage must reference a constraint usage (SysML 7.19 Constraints; pilot validateAssertConstraintUsageReference).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Must reference a constraint."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/s05-assign-to-package-level-attribute.sysml",
@@ -1863,12 +1860,9 @@
       "source": "semantic",
       "rule": "An assignment must have a feature as its referent (SysML 7.16 Actions; pilot validateAssignmentActionUsageReferent).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: An assignment must have a referent."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/s44-transition-target-not-action.sysml",
@@ -2309,8 +2303,8 @@
     ],
     "totals": {
       "cases": 234,
-      "bothReject": 211,
-      "pilotOnlyRejects": 15,
+      "bothReject": 213,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
