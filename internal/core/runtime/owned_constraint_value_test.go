@@ -258,3 +258,106 @@ func TestOwnedConstraintParametersMaskSubjectAndActorBindings(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnedConstraintArgumentsReadSameNamedSubjectAndActor(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Vehicle { attribute mass : Real default = 300.0; }
+			constraint def Lighter { in v : Vehicle; in limit : Vehicle; v.mass < limit.mass }
+			constraint def Heavier { in v : Vehicle; in mass : Real; v.mass > mass }
+			requirement def Within {
+				subject s : Vehicle;
+				in v : Vehicle;
+				in limit : Vehicle;
+				in mass : Real;
+				require constraint lighter : Lighter { in v = v; in limit = limit; }
+				require constraint heavier : Heavier { in v = v; in mass = mass; }
+			}
+			part car : Vehicle;
+			part truck : Vehicle { attribute :>> mass = 1000.0; }
+			requirement def Base {
+				subject v : Vehicle;
+				actor limit : Vehicle = truck;
+				attribute mass : Real default = 100.0;
+				require constraint lighter : Lighter { in v = v; in limit = limit; }
+				require constraint heavier : Heavier { in v = v; in mass = mass; }
+				require constraint within : Within { in v = v; in limit = limit; in mass = mass; }
+			}
+			requirement def Heavy :> Base {
+				attribute :>> mass = 500.0;
+			}
+			requirement base : Base;
+			requirement heavy : Heavy;
+			satisfy base by car;
+			satisfy heavy by car;
+		}
+	`)
+	car, err := ctx.Instantiate(memberPath(t, pkg, "car"))
+	if err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	assertions := ctx.SatisfyAssertionsIn(pkg)
+	if len(assertions) != 2 {
+		t.Fatalf("assertions = %d, want the two the package states", len(assertions))
+	}
+	for i, want := range []bool{true, false} {
+		a := assertions[i]
+		result, err := ctx.CheckSatisfactionOn(a, car)
+		if want {
+			if err != nil || !result.Holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", a.Text(), result.Holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) || violation.Condition != "v.mass > mass" {
+			t.Errorf("%s: err = %v; want a violation of v.mass > mass", a.Text(), err)
+		}
+	}
+}
+
+func TestOwnedConstraintParameterHoldingAnObjectReadsItsFeatures(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Vehicle { attribute mass : Real default = 300.0; }
+			constraint def MassIs { in limit : Vehicle; in m : Real; limit.mass == m }
+			part car : Vehicle;
+			part truck : Vehicle { attribute :>> mass = 1000.0; }
+			requirement def Base {
+				subject v : Vehicle;
+				require constraint massIs : MassIs { in limit = truck; in m = 1000.0; }
+			}
+			requirement def Wrong :> Base {
+				require constraint :>> massIs { in m = 300.0; }
+			}
+			requirement base : Base;
+			requirement wrong : Wrong;
+			satisfy base by car;
+			satisfy wrong by car;
+		}
+	`)
+	car, err := ctx.Instantiate(memberPath(t, pkg, "car"))
+	if err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	assertions := ctx.SatisfyAssertionsIn(pkg)
+	if len(assertions) != 2 {
+		t.Fatalf("assertions = %d, want the two the package states", len(assertions))
+	}
+	for i, want := range []bool{true, false} {
+		a := assertions[i]
+		result, err := ctx.CheckSatisfactionOn(a, car)
+		if want {
+			if err != nil || !result.Holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", a.Text(), result.Holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) || violation.Condition != "limit.mass == m" {
+			t.Errorf("%s: err = %v; want a violation of limit.mass == m", a.Text(), err)
+		}
+	}
+}

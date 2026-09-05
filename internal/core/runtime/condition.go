@@ -80,6 +80,17 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 type scopedExpr struct {
 	expr  ast.Node
 	scope *symbols.Scope
+
+	// env is the enclosing environment a constraint usage's argument reads,
+	// rather than the parameters the usage binds; nil for a feature read in place.
+	env *conditionEnv
+}
+
+// conditionEnv is what a condition's names resolve to: the features in scope
+// and the values the checked element binds by name (subject, actors).
+type conditionEnv struct {
+	features map[string]scopedExpr
+	bindings map[string]Value
 }
 
 // conditionsOf returns the conditions sym's members state, inherited ones first.
@@ -817,19 +828,21 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 	return out
 }
 
-// constraintScope overlays the features of a named constraint usage stating a
-// condition on those already in scope: its parameters mask same-named ones,
-// the subject and actors the checked element binds by name included.
+// constraintScope overlays a named constraint usage's features on those in scope:
+// its parameters mask same-named ones (subject and actors included), while the
+// arguments binding them (`in v = v`) still read the enclosing environment.
 func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings map[string]Value, constraint *symbols.Symbol) (map[string]scopedExpr, map[string]Value) {
 	own := ctx.conditionFeatures(constraint)
 	if len(own) == 0 {
 		return features, bindings
 	}
+	enclosing := &conditionEnv{features: features, bindings: bindings}
 	out := make(map[string]scopedExpr, len(features)+len(own))
 	for name, feat := range features {
 		out[name] = feat
 	}
 	for name, feat := range own {
+		feat.env = enclosing
 		out[name] = feat
 	}
 	return out, unmasked(bindings, own)
