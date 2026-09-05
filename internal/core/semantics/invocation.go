@@ -268,12 +268,18 @@ func (m *Model) selectAmong(scope *symbols.Scope, named []*symbols.Symbol, args 
 	for i, c := range behaviors {
 		signatures[i] = m.signatureOf(c)
 	}
-	// Candidates the arguments conform to are preferred; failing any, the ones
-	// they may fit at run time are kept, and no tie among those is reported.
-	applicable, sigs, fits := m.filterApplicable(scope, behaviors, signatures, args, bindStrict)
-	strict := len(applicable) > 0
-	if !strict {
-		applicable, sigs, fits = m.filterApplicable(scope, behaviors, signatures, args, bindLoose)
+	// Candidates binding every default-less parameter come first (the others cannot run), and
+	// within each the ones the arguments conform to; a loose fit reports no tie.
+	var applicable []*symbols.Symbol
+	var sigs []invocationSignature
+	var fits []bindFit
+	var strict bool
+	for _, pass := range bindingPasses {
+		applicable, sigs, fits = m.filterApplicable(scope, behaviors, signatures, args, pass)
+		if len(applicable) > 0 {
+			strict = pass.mode == bindStrict
+			break
+		}
 	}
 	sel.Applicable = applicable
 	switch len(applicable) {
@@ -337,14 +343,29 @@ const (
 	fitOpen                 // a type the checker cannot determine, so anything may fit
 )
 
-// filterApplicable keeps the candidates whose signature args bind to, with how
-// surely each takes them.
-func (m *Model) filterApplicable(scope *symbols.Scope, cands []*symbols.Symbol, sigs []invocationSignature, args []Argument, mode bindMode) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
+// bindingPass is one attempt at binding the arguments: how closely their types must fit,
+// and whether a candidate may be left with a default-less parameter unbound.
+type bindingPass struct {
+	mode    bindMode
+	partial bool
+}
+
+// bindingPasses are tried in order until one admits a candidate.
+var bindingPasses = []bindingPass{
+	{bindStrict, false},
+	{bindLoose, false},
+	{bindStrict, true},
+	{bindLoose, true},
+}
+
+// filterApplicable keeps the candidates whose signature args bind to under pass, with
+// how surely each takes them.
+func (m *Model) filterApplicable(scope *symbols.Scope, cands []*symbols.Symbol, sigs []invocationSignature, args []Argument, pass bindingPass) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
 	var outCands []*symbols.Symbol
 	var outSigs []invocationSignature
 	var outFits []bindFit
 	for i, sig := range sigs {
-		if fit, ok := m.applicable(scope, sig, args, mode); ok {
+		if fit, complete, ok := m.applicable(scope, sig, args, pass.mode); ok && (complete || pass.partial) {
 			outCands = append(outCands, cands[i])
 			outSigs = append(outSigs, sig)
 			outFits = append(outFits, fit)
@@ -476,15 +497,15 @@ func (m *Model) declaresType(sym *symbols.Symbol) bool {
 	return len(m.ImplicitParameterRedefinitions(sym)) > 0
 }
 
-// applicable reports whether args bind to sig by count, name and type, and
-// how surely.
-func (m *Model) applicable(scope *symbols.Scope, sig invocationSignature, args []Argument, mode bindMode) (bindFit, bool) {
+// applicable reports whether args bind to sig by count, name and type, how surely, and
+// whether they leave no default-less parameter unbound (complete).
+func (m *Model) applicable(scope *symbols.Scope, sig invocationSignature, args []Argument, mode bindMode) (fit bindFit, complete, ok bool) {
 	if !sig.known {
-		return fitOpen, true
+		return fitOpen, true, true
 	}
 	bound := make([]bool, len(sig.params))
 	positional := 0
-	fit := fitExact
+	fit = fitExact
 	for _, arg := range args {
 		var i int
 		if arg.Name == nil {
@@ -494,23 +515,25 @@ func (m *Model) applicable(scope *symbols.Scope, sig invocationSignature, args [
 			i = m.parameterIndex(scope, sig, arg.Name)
 		}
 		if i < 0 || i >= len(sig.params) || bound[i] {
-			return fitOpen, false
+			return fitOpen, false, false
 		}
 		bound[i] = true
-		argFit, ok := m.argumentBinds(arg, sig.params[i], mode)
-		if !ok {
-			return fitOpen, false
+		argFit, binds := m.argumentBinds(arg, sig.params[i], mode)
+		if !binds {
+			return fitOpen, false, false
 		}
 		if argFit > fit {
 			fit = argFit
 		}
 	}
+	complete = true
 	for i, p := range sig.params {
 		if !bound[i] && !p.optional {
-			return fitOpen, false
+			complete = false
+			break
 		}
 	}
-	return fit, true
+	return fit, complete, true
 }
 
 // namesParameters reports whether every named argument identifies a parameter of sig.

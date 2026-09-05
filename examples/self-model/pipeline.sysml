@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 51;
+        attribute passCount : Integer = 53;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -227,17 +227,25 @@ package OpenSysMLPipeline {
             attribute :>> goType = "VariableFeaturePass";
             attribute :>> elementScoped = true;
         }
+        part endFeatures : ConstraintCheck {
+            attribute :>> goType = "EndFeaturePass";
+            attribute :>> elementScoped = true;
+        }
         part assignmentReferents : ConstraintCheck {
             attribute :>> goType = "AssignmentReferentPass";
             attribute :>> elementScoped = true;
         }
-        part resultExpressions : ConstraintCheck { attribute :>> goType = "ResultExpressionPass"; }
+        part resultExpressions : ConstraintCheck {
+            attribute :>> goType = "ResultExpressionPass";
+            attribute :>> elementScoped = true;
+        }
         part featureReferences : ConstraintCheck { attribute :>> goType = "FeatureReferencePass"; }
         part metadataTypes : TypeCheck {
             attribute :>> goType = "MetadataTypePass";
             attribute :>> elementScoped = true;
         }
         part metadataAnnotations : TypeCheck { attribute :>> goType = "MetadataAnnotationPass"; }
+        part annotationOwnership : ConstraintCheck { attribute :>> goType = "AnnotationOwnershipPass"; }
         part occurrenceTyping : TypeCheck { attribute :>> goType = "W8DOccurrenceTypingPass"; }
         part connectorFeaturing : ConstraintCheck { attribute :>> goType = "W8DConnectorFeaturingPass"; }
         part flowEnds : ConstraintCheck { attribute :>> goType = "W8DFlowEndPass"; }

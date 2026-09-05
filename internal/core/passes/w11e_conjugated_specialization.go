@@ -47,17 +47,28 @@ func (c *w11eConjugatedChecker) check(sym *symbols.Symbol) {
 		return
 	}
 	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Kind != ast.RelSpecializes || rel.Conjugated || rel.Target == nil {
+		if rel == nil || !w11eIsSpecialization(rel.Kind) || rel.Conjugated || rel.Target == nil {
 			continue
 		}
 		c.report(w11eNameSpan(sym), msgConjugatedSpecific)
 	}
 }
 
-// checkRelationshipMember checks `subtype A specializes B`, whose specific type
-// is named rather than owning the relationship.
+// w11eIsSpecialization reports whether k is a Specialization in the KerML sense:
+// subclassification, subsetting, redefinition and feature typing all are.
+func w11eIsSpecialization(k ast.RelationshipKind) bool {
+	switch k {
+	case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines, ast.RelTyping:
+		return true
+	}
+	return false
+}
+
+// checkRelationshipMember checks `subtype A specializes B` and the subset,
+// redefinition and typing members, whose specific type is named rather than
+// owning the relationship.
 func (c *w11eConjugatedChecker) checkRelationshipMember(sym *symbols.Symbol, rel *ast.RelationshipMember) {
-	if rel.Kind != ast.RelSpecializes || rel.Conjugated || rel.Source == nil || rel.Target == nil {
+	if !w11eIsSpecialization(rel.Kind) || rel.Conjugated || rel.Source == nil || rel.Target == nil {
 		return
 	}
 	specific, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), rel.Source)

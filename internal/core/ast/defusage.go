@@ -491,6 +491,12 @@ func (u *Usage) IsPerformedAction() bool {
 	return u.Kind == UsageAction && (u.Keyword == "perform" || u.PrefixKeyword == "perform")
 }
 
+// IsVariantReference reports a bare `variant x;` (SysML.xtext VariantReference),
+// a reference to an existing feature rather than a declaration of a new one.
+func (u *Usage) IsVariantReference() bool {
+	return u.IsVariant && u.Keyword == "variant"
+}
+
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
 func (u *Usage) HasConjugatedTyping() bool {
 	_, ok := u.ConjugatedTyping()

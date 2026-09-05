@@ -223,20 +223,6 @@ func expressionMetaclass(node ast.Node) string {
 	return mExpression
 }
 
-// isExpressionMember reports whether a body member is a bare expression: the
-// result a calculation or case body ends in.
-func isExpressionMember(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.LiteralBool, *ast.LiteralString, *ast.LiteralInteger, *ast.LiteralReal,
-		*ast.LiteralInfinity, *ast.NullExpr, *ast.FeatureReference, *ast.OperatorExpr,
-		*ast.CastExpr, *ast.FeatureChainExpr, *ast.IndexExpr, *ast.InvocationExpr,
-		*ast.ConstructorExpr, *ast.CollectExpr, *ast.SelectExpr, *ast.SequenceExpr,
-		*ast.MetadataAccessExpr, *ast.BodyExpr:
-		return true
-	}
-	return false
-}
-
 // bodyDeclarations emits what an expression body declares ahead of its result,
 // parameters and members alike, indexed in the one order they were written.
 func (e *encoder) bodyDeclarations(subject rdf.Term, owner string, params []ast.BodyParam, members []ast.Node) {

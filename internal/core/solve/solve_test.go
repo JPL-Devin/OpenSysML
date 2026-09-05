@@ -14,18 +14,36 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// document is a named source a fixture indexes.
+type document struct {
+	path, src string
+}
+
 // fixture indexes a model over the standard library and returns a runtime
 // context and the index to look symbols up in. path names the document, which
 // appears in the provenance a script records.
 func fixture(t *testing.T, path, src string) (*runtime.Context, *symbols.Index) {
 	t.Helper()
+	return fixtureDocuments(t, document{path, src})
+}
+
+// fixtureDocuments indexes several documents over the standard library, in the
+// order given.
+func fixtureDocuments(t *testing.T, docs ...document) (*runtime.Context, *symbols.Index) {
+	t.Helper()
 	idx := libraryIndex()
-	sf := source.New(path, []byte(src))
-	idx.AddDocument(path, parser.New(sf).ParseFile())
+	sources := make([]*source.SourceFile, 0, len(docs))
+	for _, doc := range docs {
+		sf := source.New(doc.path, []byte(doc.src))
+		idx.AddDocument(doc.path, parser.New(sf).ParseFile())
+		sources = append(sources, sf)
+	}
 	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)
 	ctx := runtime.NewContext(semantics.NewModel(resolver), resolver, 10000)
-	ctx.RegisterSource(sf)
+	for _, sf := range sources {
+		ctx.RegisterSource(sf)
+	}
 	return ctx, idx
 }
 

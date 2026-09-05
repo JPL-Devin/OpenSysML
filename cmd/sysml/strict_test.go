@@ -50,6 +50,26 @@ func TestStrictConformanceLeavesStandardNotationAlone(t *testing.T) {
 	}
 }
 
+// -strict judges notation, not the model: the unbound-parameter advisory on well-formed
+// SysML v2 stays a warning in either mode, at a bare call and a chain head alike.
+func TestStrictConformanceKeepsUnboundParameterAdvisory(t *testing.T) {
+	binary := buildCLI(t)
+	const unbound = `package Arity {
+    private import ScalarValues::*;
+    calc def F { in x : Real; in y : Real; return : Real = x + y; }
+    attribute plain : Real = F(1.0);
+    attribute head : Real = F(1.0).result;
+}
+`
+	for _, args := range [][]string{{"-validate"}, {"-validate", "-strict"}} {
+		got := check(t, binary, unbound, args...)
+		wantReport(t, got, 0, "no errors",
+			"4:30: warning: F leaves parameter y unbound, so the call cannot be evaluated",
+			"5:29: warning: F leaves parameter y unbound, so the call cannot be evaluated")
+		rejectReport(t, got, "error:")
+	}
+}
+
 // A notation error does not stop a check, so the run succeeds — but a run that
 // reported an error must not also report that the model has none.
 func TestValidateDoesNotCallAReportedErrorNone(t *testing.T) {

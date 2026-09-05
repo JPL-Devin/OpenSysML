@@ -81,6 +81,35 @@ func TestInheritedCalcBodyRunsInDeclaringScope(t *testing.T) {
 	}
 }
 
+// A bodiless calc referencing another (calc two ::> one) inherits the referenced
+// body and parameters, as it does through specialization; a diamond over the
+// same calc contributes it once.
+func TestReferencedCalcBodyIsInherited(t *testing.T) {
+	const src = `
+package test {
+	calc def Plus { in x : Integer; x + 1 }
+	calc one : Plus;
+	calc two ::> one;
+	calc three :> two ::> one;
+}
+`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	root := idx.DocumentRoot("<test>")
+	for _, name := range []string{"one", "two", "three"} {
+		sym, scope := calcByName(t, root, "test", name)
+		got, err := ctx.InvokeCalc(sym, []Value{constInt(1)}, scope)
+		if err != nil {
+			t.Fatalf("test::%s: %v", name, err)
+		}
+		if got.Const.Int != 2 {
+			t.Fatalf("test::%s(1) = %s, want 2", name, FormatTraceValue(got))
+		}
+		if shape, err := ctx.calcShapeOf(sym); err != nil || len(shape.Params) != 1 {
+			t.Fatalf("test::%s has parameters %v (%v), want x only", name, shape.ParamNames, err)
+		}
+	}
+}
+
 // statementBodyModel is a calc with a statement body, invoked by every entry
 // point the runtime offers.
 const statementBodyModel = `
