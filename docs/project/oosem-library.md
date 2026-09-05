@@ -96,7 +96,7 @@ it checks against:
 | `oosem-requirement-not-derived` | a mission / system / component requirement is the `#derive` end of a `#derivation` connection whose `#original` end is a requirement of the level above (stakeholder need / mission / system requirement); a derivation from any other level does not count | any requirement of the level above |
 | `oosem-requirement-not-satisfied` | a system or component requirement is the requirement of some `satisfy` | any `satisfy` |
 | `oosem-logical-component-not-allocated` | a `#logical` component usage is the source of an `allocate` (itself, an enclosing usage, or its type) whose destination is a `#node` or physical component; an allocation to anything else does not count | any `#node` or physical component |
-| `oosem-use-case-subject` | the subject of a `#systemUseCase` is a `#systemContext`, of an `#enterpriseUseCase` an `#enterprise` | always, for typed subjects |
+| `oosem-use-case-subject` | the subject of a `#systemUseCase` is a `#systemContext`, of an `#enterpriseUseCase` an `#enterprise`; the subject's effective types count, whether declared, redefined or subsetted | always, for subjects typed by more than what every system context or enterprise is anyway (`Anything`, `Part`) |
 
 Classification follows the metadata *or* the typing, so `requirement r : SystemRequirement` and
 `#systemRequirement requirement r` are both system requirements. Library documents are not

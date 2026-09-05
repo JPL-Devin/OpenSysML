@@ -452,28 +452,34 @@ func (a *oosemAudit) checkUseCaseSubject(sym *symbols.Symbol) {
 		if !ok || u.Kind != ast.UsageSubject {
 			return true
 		}
-		var types []*symbols.Symbol
-		for _, rel := range u.Relationships {
-			if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
-				continue
-			}
-			if t, ok := a.ctx.Resolver().ResolveTarget(member.OwnerScope, rel.Target); ok && t != nil {
-				types = append(types, t)
-			}
-		}
-		if len(types) == 0 {
-			return true
-		}
-		for _, t := range types {
+		// Types the wanted kind itself conforms to (Anything, Part) say nothing either way.
+		typed := false
+		for _, t := range a.model.FeatureTypeSet(member) {
 			if a.kindOfType(t) == want {
 				return true
 			}
+			if !a.generalizes(t, want) {
+				typed = true
+			}
+		}
+		if !typed {
+			return true
 		}
 		a.report(member, CodeOOSEMUseCaseSubject, fmt.Sprintf(
 			"The subject of a%s %s is the %s it serves, but this one is typed by none.",
 			article(oosemKindNames[kind]), oosemKindNames[kind], oosemKindNames[want]))
 		return true
 	})
+}
+
+// generalizes reports whether every library definition of kind conforms to t.
+func (a *oosemAudit) generalizes(t *symbols.Symbol, kind oosemKind) bool {
+	for _, def := range a.definitions[kind] {
+		if !a.model.Conforms(def, t) {
+			return false
+		}
+	}
+	return true
 }
 
 func article(noun string) string {

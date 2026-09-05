@@ -173,6 +173,23 @@ func TestOOSEMUseCaseSubject(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 7, 9)
 }
 
+// A subject typed through redefinition or subsetting is judged by its effective
+// types, not only by an explicit `:`.
+func TestOOSEMUseCaseSubjectInherited(t *testing.T) {
+	src := oosemModel(`
+		#enterprise part def Corp;
+		#systemContext part def Ctx;
+		part def Sat;
+		part sat : Sat;
+		part ctx : Ctx;
+		use case def Base { subject s : Sat; }
+		#systemUseCase use case def Bad :> Base { subject :>> s; }
+		#systemUseCase use case def Good :> Base { subject :>> s : Ctx; }
+		#systemUseCase use case def Sub { subject s :> ctx; }
+		#enterpriseUseCase use case def Wrong { subject s :> sat; }`)
+	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 9, 12)
+}
+
 // A model that does not touch the OOSEM library gets no OOSEM finding.
 func TestOOSEMSilentWithoutTheLibrary(t *testing.T) {
 	const src = `package P {
