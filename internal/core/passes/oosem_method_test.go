@@ -207,6 +207,23 @@ func TestOOSEMUseCaseSubjectInherited(t *testing.T) {
 	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 9, 12)
 }
 
+// A bodyless OOSEM use case inherits its subject from a plain base and is judged
+// by it; one inheriting from an OOSEM use case of its kind is judged there only.
+func TestOOSEMUseCaseSubjectInheritedWithoutBody(t *testing.T) {
+	src := oosemModel(`
+		#systemContext part def Ctx;
+		part def Sat;
+		use case def OnSat { subject s : Sat; }
+		use case def OnCtx { subject s : Ctx; }
+		#systemUseCase use case def Bad :> OnSat;
+		#systemUseCase use case def Good :> OnCtx;
+		#systemUseCase use case bad : OnSat;
+		#systemUseCase use case good : OnCtx;
+		use case fromBad : Bad;
+		use case fromGood : Good;`)
+	w8dWantLines(t, src, CodeOOSEMUseCaseSubject, 7, 9)
+}
+
 // A model that does not touch the OOSEM library gets no OOSEM finding.
 func TestOOSEMSilentWithoutTheLibrary(t *testing.T) {
 	const src = `package P {

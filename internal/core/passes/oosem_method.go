@@ -461,32 +461,45 @@ func (a *oosemAudit) checkUseCaseSubject(sym *symbols.Symbol) {
 	default:
 		return
 	}
-	if sym.Scope == nil {
-		return
+	// Effective members, so a subject inherited from a plain base use case is
+	// judged too; one inherited through a model use case of the same kind is judged there.
+	inherited := false
+	for _, src := range a.model.MemberSources(sym) {
+		if a.kindOf(src) == kind && !a.ctx.Index.Library(src) {
+			inherited = true
+			break
+		}
 	}
-	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
+	for _, member := range a.model.MembersOf(sym) {
 		u, ok := member.Decl.(*ast.Usage)
 		if !ok || u.Kind != ast.UsageSubject {
-			return true
+			continue
+		}
+		at := member
+		if member.OwnerScope != sym.Scope {
+			if inherited {
+				continue
+			}
+			at = sym
 		}
 		// Types the wanted kind itself conforms to (Anything, Part) say nothing either way.
-		typed := false
+		typed, served := false, false
 		for _, t := range a.model.FeatureTypeSet(member) {
 			if a.kindOfType(t) == want {
-				return true
+				served = true
+				break
 			}
 			if !a.generalizes(t, want) {
 				typed = true
 			}
 		}
-		if !typed {
-			return true
+		if served || !typed {
+			continue
 		}
-		a.report(member, CodeOOSEMUseCaseSubject, fmt.Sprintf(
+		a.report(at, CodeOOSEMUseCaseSubject, fmt.Sprintf(
 			"The subject of a%s %s is the %s it serves, but this one is typed by none.",
 			article(oosemKindNames[kind]), oosemKindNames[kind], oosemKindNames[want]))
-		return true
-	})
+	}
 }
 
 // generalizes reports whether every library definition of kind conforms to t.
