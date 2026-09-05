@@ -88,6 +88,10 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrConflictingResultExpressions is returned when a calc or constraint owns or
+	// inherits more than one result expression (KerML 8.3.4.8); no body is chosen.
+	ErrConflictingResultExpressions = errors.New("more than one result expression, owned or inherited")
+
 	// ErrUnsupportedOperator is returned when an operator has no runtime
 	// evaluation, so an expression naming it fails rather than yielding nothing.
 	ErrUnsupportedOperator = errors.New("unsupported operator")

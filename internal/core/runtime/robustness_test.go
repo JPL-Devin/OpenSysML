@@ -106,6 +106,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_parameter_named_twice", testCalcParameterNamedTwice)
 	t.Run("calc_without_result", testCalcWithoutResult)
+	t.Run("calc_states_second_result", testCalcStatesSecondResult)
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
@@ -5256,6 +5257,39 @@ func testCalcWithoutResult(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNoResultExpression) {
 		t.Errorf("expected ErrNoResultExpression, got: %v", err)
+	}
+}
+
+// testCalcStatesSecondResult: a calc stating a body over an inherited result
+// expression is refused, not computed from a body of the runtime's choosing.
+func testCalcStatesSecondResult(t *testing.T) {
+	src := `
+		package test {
+			calc def Plus {
+				in x: Integer;
+				x + 1
+			}
+			calc def Twice :> Plus {
+				x + 2
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Twice", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("Twice calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if !errors.Is(err, ErrConflictingResultExpressions) {
+		t.Fatalf("expected ErrConflictingResultExpressions, got: %v", err)
+	}
+	for _, want := range []string{"test::Twice", "test::Plus"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %s", err, want)
+		}
 	}
 }
 
