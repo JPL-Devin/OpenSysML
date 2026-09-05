@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/migrate"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 )
 
@@ -24,6 +27,9 @@ func (f *deprecatedFlag) Set(string) error { return errors.New(f.instead) }
 // The input format is taken from -from when given and from the file extension
 // otherwise; the model itself is a positional argument, as it is for every other
 // mode of the command, and a lone "-" names standard input.
+//
+// A SysML v1 model (-from xmi, or a .xmi/.mdzip file) is migrated to v2 on the
+// way in; see writeMigrationReport for where its report goes.
 func runConvert(files []string) error {
 	to, err := parseTargetFormat(convertFormat)
 	if err != nil {
@@ -51,9 +57,24 @@ func runConvert(files []string) error {
 	if export.IsExperimental(from, to) {
 		fmt.Fprintf(os.Stderr, "note: %s\n", export.ExperimentalNotice)
 	}
-	out, err := export.Convert(name, data, from, to)
-	if err != nil {
-		return err
+	if migrationReport != "" && from != export.FormatXMI {
+		return fmt.Errorf("-migration-report describes a SysML v1 migration, and %s input is not migrated; pass it with -from xmi or a .xmi/.mdzip file", from)
+	}
+	var out []byte
+	if from == export.FormatXMI {
+		var report *migrate.Report
+		out, report, err = export.Migrate(name, data, to)
+		if err != nil {
+			return err
+		}
+		if err := writeMigrationReport(report); err != nil {
+			return err
+		}
+	} else {
+		out, err = export.Convert(name, data, from, to)
+		if err != nil {
+			return err
+		}
 	}
 	if outputPath == "" {
 		_, err := os.Stdout.Write(out)
@@ -71,12 +92,37 @@ func runConvert(files []string) error {
 	return nil
 }
 
+// writeMigrationReport writes the report to the -migration-report file (JSON when
+// it ends in .json), or just its summary to stderr when the flag was not given.
+func writeMigrationReport(report *migrate.Report) error {
+	if migrationReport == "" {
+		fmt.Fprintf(os.Stderr, "migration: %s; pass -migration-report FILE for the element-by-element report\n", report.Summary())
+		return nil
+	}
+	var body bytes.Buffer
+	write := report.WriteText
+	if strings.EqualFold(filepath.Ext(migrationReport), ".json") {
+		write = report.WriteJSON
+	}
+	if err := write(&body); err != nil {
+		return err
+	}
+	if _, err := export.WriteFile(migrationReport, body.Bytes()); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "wrote %s (migration report: %s)\n", migrationReport, report.Summary())
+	return nil
+}
+
 // parseTargetFormat resolves the -convert value, explaining the flag when a file
 // name was passed where a format belongs — the spelling this flag used to take.
 func parseTargetFormat(value string) (export.Format, error) {
 	f, err := export.ParseFormat(value)
 	if err != nil && namesAFile(value) {
 		return 0, fmt.Errorf("%w; -convert names the format to convert to, so write `sysml %s -convert ttl`", err, value)
+	}
+	if err == nil && !f.Writable() {
+		return 0, &export.NotWritableError{Format: f}
 	}
 	return f, err
 }

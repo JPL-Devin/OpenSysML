@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/migrate"
 )
 
 // buildCLI builds the sysml binary once so the conversion tests exercise the
@@ -245,4 +248,75 @@ func run(t *testing.T, binary string, args ...string) string {
 		t.Fatalf("%v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+// TestConvertMigratesXMI drives a SysML v1 migration through the command line:
+// the .xmi extension picks the input format, -migration-report writes text or
+// JSON by extension, the summary goes to stderr otherwise, and XMI is never a
+// target.
+func TestConvertMigratesXMI(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	xmi := filepath.Join("..", "..", "internal", "core", "migrate", "testdata", "cameo", "vehicle.xmi")
+	model := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	migrated := runCommand(t, exec.Command(binary, xmi, "-convert", "sysml"))
+	if migrated.status != 0 {
+		t.Fatalf("migrating failed: %s%s", migrated.stdout, migrated.stderr)
+	}
+	if !strings.Contains(migrated.stdout, "part def Vehicle") {
+		t.Errorf("no migrated notation on stdout:\n%s", migrated.stdout)
+	}
+	if !strings.Contains(migrated.stderr, "migration: migrated") || strings.Contains(migrated.stdout, "migration:") {
+		t.Errorf("the migration summary belongs on stderr:\nstdout: %s\nstderr: %s", migrated.stdout, migrated.stderr)
+	}
+
+	textReport := filepath.Join(dir, "report.txt")
+	jsonReport := filepath.Join(dir, "report.json")
+	turtle := filepath.Join(dir, "model.ttl")
+	run(t, binary, xmi, "-convert", "ttl", "-o", turtle, "-migration-report", textReport)
+	run(t, binary, xmi, "-from", "xmi", "-convert", "sysml", "-o", model, "-migration-report", jsonReport)
+	text, err := os.ReadFile(textReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(text), "unmapped") || !strings.Contains(string(text), "Vehicle") {
+		t.Errorf("text report lacks its verdicts:\n%s", text)
+	}
+	var report migrate.Report
+	raw, err := os.ReadFile(jsonReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatalf("JSON report does not decode: %v\n%s", err, raw)
+	}
+	if report.Exporter != "MagicDraw UML" || len(report.Entries) == 0 {
+		t.Errorf("JSON report is incomplete: exporter %q, %d entries", report.Exporter, len(report.Entries))
+	}
+	// The written notation must be what the ttl was built from.
+	run(t, binary, model, "-convert", "ttl")
+
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"xmi as target":          {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
+		"report without xmi":     {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
+		"report without convert": {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
+		"notation read as xmi":   {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := exec.Command(binary, tc.args...).CombinedOutput()
+			if err == nil {
+				t.Fatalf("expected a non-zero exit, got:\n%s", out)
+			}
+			if !strings.Contains(string(out), tc.want) {
+				t.Errorf("expected %q in the error, got:\n%s", tc.want, out)
+			}
+		})
+	}
 }

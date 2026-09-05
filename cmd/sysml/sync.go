@@ -294,8 +294,11 @@ func loadSyncGraph(path string) (*rdf.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	if format == export.FormatTurtle {
+	switch format {
+	case export.FormatTurtle:
 		return rdf.ParseTurtle(data)
+	case export.FormatXMI:
+		return nil, fmt.Errorf("%s is SysML v1 XMI, which a sync cannot read; migrate it first with `sysml %s -convert sysml -o model.sysml`", path, path)
 	}
 	return export.SysMLToRDF(name, data)
 }

@@ -101,36 +101,37 @@ func writableFile(dir, name string) (string, bool) {
 
 // CLI flags
 var (
-	evalExprs     stringSlice
-	showHelp      bool
-	showMan       bool
-	showVersion   bool
-	debugMode     bool
-	quietMode     bool
-	traceMode     bool
-	convertFormat string
-	queryText     string
-	outputPath    string
-	fromFormat    string
-	renderView    string
-	renderAllDir  string
-	renderForm    string
-	renderDoc     string
-	renderDocsDir string
-	docForm       string
-	pdfEngine     string
-	pdfTitlePage  bool
-	pdfTOC        bool
-	pdfNumbering  bool
-	htmlCSS       stringSlice
-	htmlNoCSS     bool
-	htmlShowCSS   bool
-	htmlFragment  bool
-	strictMode    bool
-	modelChecks   checks
-	compileCalc   string
-	compileTarget string
-	compileSource bool
+	evalExprs       stringSlice
+	showHelp        bool
+	showMan         bool
+	showVersion     bool
+	debugMode       bool
+	quietMode       bool
+	traceMode       bool
+	convertFormat   string
+	queryText       string
+	outputPath      string
+	fromFormat      string
+	migrationReport string
+	renderView      string
+	renderAllDir    string
+	renderForm      string
+	renderDoc       string
+	renderDocsDir   string
+	docForm         string
+	pdfEngine       string
+	pdfTitlePage    bool
+	pdfTOC          bool
+	pdfNumbering    bool
+	htmlCSS         stringSlice
+	htmlNoCSS       bool
+	htmlShowCSS     bool
+	htmlFragment    bool
+	strictMode      bool
+	modelChecks     checks
+	compileCalc     string
+	compileTarget   string
+	compileSource   bool
 
 	syncDiffWith       string
 	syncApplyTo        string
@@ -395,6 +396,11 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	if migrationReport != "" && convertFormat == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -migration-report accompanies -convert of a SysML v1 model; write `sysml model.xmi -convert sysml -migration-report report.txt`")
+		return 2
 	}
 
 	if convertFormat != "" {

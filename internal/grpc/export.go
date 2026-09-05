@@ -32,6 +32,9 @@ func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.Conv
 	if err != nil {
 		return nil, statusError(connect.CodeInvalidArgument, err.Error())
 	}
+	if !to.Writable() {
+		return nil, statusError(connect.CodeInvalidArgument, (&export.NotWritableError{Format: to}).Error())
+	}
 
 	resp := &pb.ConvertResponse{FromFormat: from.String(), ToFormat: to.String()}
 	// Marked on the response rather than left to the client to infer, so a caller
@@ -114,7 +117,7 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 		return export.FormatSysML, nil
 	}
 	if req.GetFilePath() == "" {
-		return 0, statusError(connect.CodeInvalidArgument, "from_format is required for inline content: expected sysml, kerml, ttl, turtle or rdf")
+		return 0, statusError(connect.CodeInvalidArgument, "from_format is required for inline content: expected "+export.FormatList)
 	}
 	from, err := export.FormatOfPath(name)
 	if err != nil {
