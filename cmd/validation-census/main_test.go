@@ -321,7 +321,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			{"path": "kerml/other.kerml", "bucket": "both-reject"},
 			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
 			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"}]}`,
-		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n",
+		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n\ntype Arena[T any] struct{}\n\nfunc (a *Arena[T]) Take() {}\n",
 	})
 	base := testBaseline(
 		Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful},
@@ -333,7 +333,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
-		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper) | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `xpect/x.kerml` | ✅ faithful |",
+		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take). | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `xpect/x.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |",
 		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
 		"",
@@ -450,9 +450,17 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		},
 		"implementation cites no location": {
 			mutate: func(s string) string {
-				return strings.Replace(s, "internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper)", "internal/core/passes/a.go (APass)", 1)
+				return strings.Replace(s, "internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take).", "internal/core/passes/a.go (APass)", 1)
 			},
 			want: "validateA implementation \"internal/core/passes/a.go (APass)\" cites no internal/<file>.go:<function> location",
+		},
+		"implementation continues past the method": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:APass.Run ", "a.go:APass.Run.extra ", 1) },
+			want:   "internal/core/passes/a.go:APass.Run.extra is not a <function> or <Type>.<method> location",
+		},
+		"generic method is missing": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:Arena.Take", "a.go:Arena.Put", 1) },
+			want:   "internal/core/passes/a.go declares no Arena.Put",
 		},
 		"negative case attributed to another constraint": {
 			mutate: func(s string) string {

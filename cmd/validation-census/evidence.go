@@ -184,9 +184,9 @@ func checkAttributions(base *Baseline, cases map[string]corpusCase, listed map[s
 	return problems
 }
 
-// implementationRef is a `<file>.go:<func>` or `<file>.go:<Type>.<method>`
-// location an Implementation cell cites.
-var implementationRef = regexp.MustCompile(`\b(internal/[\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)`)
+// implementationRef is a `<file>.go:<func>` or `<file>.go:<Type>.<method>` citation;
+// group 3 captures a dotted continuation past the symbol, which is malformed.
+var implementationRef = regexp.MustCompile(`\b(internal/[\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)((?:\.\w+)+)?`)
 
 // declarations caches the function and method names each cited Go file declares.
 type declarations struct {
@@ -235,8 +235,17 @@ func receiverType(fn *ast.FuncDecl) string {
 	if star, ok := expr.(*ast.StarExpr); ok {
 		expr = star.X
 	}
-	if ident, ok := expr.(*ast.Ident); ok {
-		return ident.Name
+	switch expr := expr.(type) {
+	case *ast.Ident:
+		return expr.Name
+	case *ast.IndexExpr:
+		if ident, ok := expr.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	case *ast.IndexListExpr:
+		if ident, ok := expr.X.(*ast.Ident); ok {
+			return ident.Name
+		}
 	}
 	return ""
 }
@@ -252,6 +261,10 @@ func checkImplementation(decls *declarations, r row, name, status string) []stri
 	}
 	for _, m := range refs {
 		file, symbol := m[1], m[2]
+		if m[3] != "" {
+			problems = append(problems, fmt.Sprintf("line %d: %s implementation %s:%s%s is not a <function> or <Type>.<method> location", r.Line, name, file, symbol, m[3]))
+			continue
+		}
 		found, err := decls.declared(file, symbol)
 		switch {
 		case err != nil:
