@@ -1,9 +1,7 @@
 package passes
 
-// Codes and messages of the operator-expression rules: KerML's `[` names no
-// function (validateOperatorExpressionBracketOperator), SysML's takes a
-// measurement reference (validateOperatorExpressionQuantity), and a cast names
-// a type related to its argument's (validateOperatorExpressionCastConformance).
+// Codes and messages of the pilot's three operator-expression rules
+// (validateOperatorExpression{BracketOperator,Quantity,CastConformance}).
 const (
 	codeBracketOperator = "bracket-operator"
 	codeQuantityUnit    = "quantity-unit"

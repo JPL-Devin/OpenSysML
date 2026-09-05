@@ -582,10 +582,8 @@ func (ec *exprChecker) checkCast(scope *symbols.Scope, e *ast.OperatorExpr) {
 	}
 }
 
-// checkBracket judges `x [unit]`: KerML gives `[` no function, so the notation
-// is a misspelt index (KerML validateOperatorExpressionBracketOperator); SysML
-// invokes a quantity function, whose unit operand is a measurement reference
-// (SysML validateOperatorExpressionQuantity).
+// checkBracket judges `x [u]`: a misspelt index in KerML (validateOperatorExpressionBracketOperator),
+// a quantity whose unit u is a measurement reference in SysML (validateOperatorExpressionQuantity).
 func (ec *exprChecker) checkBracket(scope *symbols.Scope, e *ast.IndexExpr) {
 	if ec.lang == source.KindKerML {
 		ec.warnCode(codeBracketOperator, e.Span(), msgBracketOperator)
