@@ -127,6 +127,31 @@ func TestObjectiveBestShadowsTheCases(t *testing.T) {
 	}
 }
 
+// TestObjectiveConditionLocalIsNotShadowed: a `best` a condition nested in the
+// objective declares for itself is that condition's, not the objective's nor the
+// case's; a sibling condition without one still reads the objective's.
+func TestObjectiveConditionLocalIsNotShadowed(t *testing.T) {
+	q := analysisQuery(t, "LocalBest")
+	script := Script(q)
+	objBest := "|test::LocalBest::lightest.best|"
+	localBest := "|test::LocalBest::lightest::tight::best|"
+	for _, want := range []string{
+		"(assert (>= " + localBest + " 6))",
+		"(assert (>= " + objBest + " 3))",
+		"(assert (>= " + objBest + " 2))",
+		"(assert (= " + objBest + " |test::LocalBest::mass|))",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not assert %s:\n%s", want, script)
+		}
+	}
+	for _, wrong := range []string{"(>= " + objBest + " 6)", "(>= |test::LocalBest::best| 6)"} {
+		if strings.Contains(script, wrong) {
+			t.Errorf("the condition's own best is read as another's %s:\n%s", wrong, script)
+		}
+	}
+}
+
 // TestObjectivesInDeclarationOrder: objectives are optimized in the order
 // declared, which is what makes them lexicographic.
 func TestObjectivesInDeclarationOrder(t *testing.T) {

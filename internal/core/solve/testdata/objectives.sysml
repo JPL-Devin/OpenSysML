@@ -285,4 +285,24 @@ package test {
 			in calc :>> eval { mass }
 		}
 	}
+
+	// A condition's own `best` is neither the objective's nor the case's.
+	analysis def LocalBest {
+		attribute mass : Integer;
+		attribute best : Integer;
+		require constraint {
+			mass <= 9 and best <= 1
+		}
+		objective lightest : LeastMass {
+			subject :>> selectedAlternative;
+			in calc :>> eval { mass }
+			require constraint tight {
+				in best : Integer = mass * 2;
+				best >= 6
+			}
+			require constraint own {
+				best >= 3
+			}
+		}
+	}
 }
