@@ -249,7 +249,7 @@ package OpenSysMLPipeline {
         part portionOwners : ConstraintCheck { attribute :>> goType = "W10BPortionOwnerPass"; }
         part verificationCases : ConstraintCheck { attribute :>> goType = "W8DVerificationPass"; }
         part viewRenderings : ConstraintCheck { attribute :>> goType = "W8DViewRenderingPass"; }
-        part metadataUsages : ConstraintCheck { attribute :>> goType = "W8DMetadataUsagePass"; }
+        part metadataUsages : TypeCheck { attribute :>> goType = "W8DMetadataUsagePass"; }
         part identityMetadata : ConstraintCheck { attribute :>> goType = "IdentityMetadataPass"; }
         part redefinitionConformance : ConstraintCheck { attribute :>> goType = "RedefinitionConformancePass"; }
         part shortNameDistinguishability : NameResolutionCheck { attribute :>> goType = "W9CShortNameDistinguishabilityPass"; }
