@@ -377,7 +377,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A parameter of a behavior or step implicitly redefines the corresponding
 	// parameter of each behavior or step its owner specializes, and so takes
 	// that parameter's type when it declares none (see redefinition.go).
-	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+	for _, redefined := range m.ImplicitParameterRedefinitions(sym) {
 		if seen[redefined] {
 			continue
 		}

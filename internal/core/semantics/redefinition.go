@@ -50,6 +50,8 @@ func behaviorLike(sym *symbols.Symbol) bool {
 			ast.UsageStep, ast.UsageBehavior, ast.UsagePredicate, ast.UsageBool:
 			return true
 		}
+	case *ast.AssumeMember, *ast.RequireMember:
+		return true // owns a constraint usage
 	}
 	return false
 }
@@ -62,6 +64,10 @@ func declMembers(sym *symbols.Symbol) []ast.Node {
 		return d.Members
 	case *ast.Usage:
 		return d.Members
+	case *ast.AssumeMember:
+		return d.Body
+	case *ast.RequireMember:
+		return d.Body
 	default:
 		return nil
 	}
@@ -275,12 +281,12 @@ func memberSymbol(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 	return found
 }
 
-// implicitParameterRedefinitions returns the features sym implicitly redefines
+// ImplicitParameterRedefinitions returns the features sym implicitly redefines
 // as a parameter of its owning behavior or step: the parameter at the same
 // position of each general behavior or step, or, for a result parameter, their
 // result parameters. It returns nothing for a feature that is not a parameter,
 // or whose declaration redefines something explicitly.
-func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+func (m *Model) ImplicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	return m.implicitParameterTargets(sym, true)
 }
 
