@@ -171,6 +171,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
 	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
+	t.Run("no_flow_performed_action_refuses_return_parameter", testNoFlowPerformedActionRefusesReturnParameter)
 	t.Run("binding_end_of_a_destroyed_object", testBindingEndOfADestroyedObject)
 	t.Run("operation_of_a_destroyed_object", testOperationOfADestroyedObject)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
@@ -8430,6 +8431,26 @@ func testNoFlowPerformedActionChecksItsInputs(t *testing.T) {
 		if !errors.Is(err, tc.want) {
 			t.Errorf("%s: Instantiate(Camera) = %v; want %v", name, err, tc.want)
 		}
+	}
+}
+
+// testNoFlowPerformedActionRefusesReturnParameter: an action stating no flow is
+// refused for a `return` parameter as a flowed one is, so its performer fails.
+func testNoFlowPerformedActionRefusesReturnParameter(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			action def Report { return r : Integer; }
+			part def Camera { perform action report : Report; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.Instantiate(idx.LookupQualified("test::Camera")[0])
+	if !errors.Is(err, ErrActionResultParameter) {
+		t.Fatalf("Instantiate(Camera) = %v; want ErrActionResultParameter", err)
+	}
+	if !strings.Contains(err.Error(), "declares `return r`; write `out r`") {
+		t.Errorf("err = %v; want it to name the parameter and the fix", err)
 	}
 }
 

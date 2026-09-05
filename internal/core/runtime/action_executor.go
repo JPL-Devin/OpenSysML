@@ -721,6 +721,9 @@ func (e *ActionExecutor) hasFlow() bool {
 // completeWithoutFlow completes an action stating no flow: it performs no step,
 // so its performance begins, takes its inputs, and ends at once.
 func (e *ActionExecutor) completeWithoutFlow() error {
+	if err := e.checkResultParameters(); err != nil {
+		return err
+	}
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 	if err := e.bindInputs(); err != nil {
 		return err

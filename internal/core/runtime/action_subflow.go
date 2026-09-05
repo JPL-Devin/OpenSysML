@@ -204,6 +204,9 @@ func (e *ActionExecutor) checkResultParameters() error {
 }
 
 func (e *ActionExecutor) checkNodeResultParameters(graph *lower.ActionGraph) error {
+	if graph == nil {
+		return nil
+	}
 	for _, node := range graph.Nodes {
 		for _, f := range graph.Features[node] {
 			if f.IsResult {
