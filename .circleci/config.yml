@@ -1084,6 +1084,12 @@ jobs:
             BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
             GO_VERSION=$(go version | awk '{print $3}')
             
+            # Static binaries: the only cgo users are the stdlib net and
+            # runtime/cgo packages, and a host-linked libc pins the release
+            # to the builder's glibc (2.34+ on this image). The
+            # cross-compiled targets are already cgo-free.
+            export CGO_ENABLED=0
+            
             # Build for multiple platforms using make
             mkdir -p dist
             
