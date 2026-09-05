@@ -72,6 +72,30 @@ func TestW10BBindingBinarySysML(t *testing.T) {
 	}
 }
 
+// An end naming a classifier is still a stated end: the pilot reports it as an
+// unresolved feature and counts it, so a two-ended binding to a definition is
+// not reported as non-binary and a three-ended one is.
+func TestW10BBindingBinaryCountsNonFeatureEnds(t *testing.T) {
+	const src = `package P {
+		part def A;
+		part def B;
+		part x : A;
+		binding b1 bind x = B;
+		part def C { binding b3 bind x = B { end e references x; } }
+	}`
+	diags := constraintDiags(t, src)
+	if got, want := bindingBinaryLines(t, src, false), []int{6}; !sameLines(got, want) {
+		t.Fatalf("binding-binary lines = %v, want %v", got, want)
+	}
+	var referent []int
+	for _, d := range only(diags, "feature-reference-referent") {
+		referent = append(referent, strings.Count(src[:d.Span.Offset], "\n")+1)
+	}
+	if want := []int{5, 6}; !sameLines(referent, want) {
+		t.Fatalf("feature-reference-referent lines = %v, want %v", referent, want)
+	}
+}
+
 // A binding that inherits its two ends from the binding it subsets is binary.
 func TestW10BBindingInheritingTwoEndsIsBinary(t *testing.T) {
 	const src = `package P {
