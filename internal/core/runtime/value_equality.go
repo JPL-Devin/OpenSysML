@@ -66,7 +66,7 @@ func valueKeyFunc(v Value) valueKey {
 		key.literal = v.Literal()
 	case ValQuantity:
 		if v.Quantity() != nil {
-			key.realVal = v.Quantity().baseMagnitude()
+			key.realVal = v.Quantity().BaseMagnitude()
 			key.strVal = v.Quantity().Unit.Term.DimensionKey()
 		}
 	case ValArray, ValVector, ValVectorQuantity:

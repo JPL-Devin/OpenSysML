@@ -22,6 +22,9 @@ const telescopeGolden = "../core/docrender/testdata/telescope_report.golden.md"
 // defaultedFixture declares queries whose parameters carry defaults.
 const defaultedFixture = "../core/docrender/testdata/defaulted_queries.sysml"
 
+// quantityFixture declares quantity-valued attributes and queries over them.
+const quantityFixture = "../core/docrender/testdata/quantity_report.sysml"
+
 // parseTelescope loads the telescope fixture into a fresh service.
 func parseTelescope(t *testing.T, srv *Service) string {
 	t.Helper()
@@ -111,6 +114,58 @@ func TestRunDocumentQueryAnswersTypedRows(t *testing.T) {
 		massValues := row.Cells[1].Values
 		if len(massValues) != 1 || massValues[0].GetRealValue() != wantMasses[i] {
 			t.Errorf("row %d mass = %v, want %v", i, massValues, wantMasses[i])
+		}
+	}
+}
+
+// TestRunDocumentQueryAnswersQuantities: a quantity-valued attribute is answered
+// as a quantity value keeping its magnitude and the unit the model spelt.
+func TestRunDocumentQueryAnswersQuantities(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := parseFixture(t, srv, quantityFixture)
+
+	resp, err := srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+		ModelHash: hash,
+		QueryId:   "Launcher::Masses",
+		Bindings:  []*pb.DocumentQueryBinding{binding("root", element("Launcher::rocket"))},
+	})
+	if err != nil {
+		t.Fatalf("RunDocumentQuery failed: %v", err)
+	}
+	want := []struct {
+		name      string
+		magnitude int64
+		unit      string
+		tonnes    float64
+	}{
+		{"s1", 2290000, "kg", 2290},
+		{"s2", 119000, "kg", 119},
+		{"probe", 500000, "g", 500},
+	}
+	if len(resp.Rows) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(resp.Rows), len(want))
+	}
+	for i, row := range resp.Rows {
+		if got := stringCell(t, row.Cells[0]); got != want[i].name {
+			t.Errorf("row %d name = %q, want %q", i, got, want[i].name)
+		}
+		mass := row.Cells[1].Values
+		if len(mass) != 1 || mass[0].GetQuantity() == nil {
+			t.Fatalf("row %d mass = %v, want one quantity", i, mass)
+		}
+		got := mass[0].GetQuantity()
+		if got.GetIntMagnitude() != want[i].magnitude || got.GetUnit() != want[i].unit {
+			t.Errorf("row %d mass = %v, want %d [%s]", i, got, want[i].magnitude, want[i].unit)
+		}
+		if len(got.GetUnitTerm().GetFactors()) == 0 {
+			t.Errorf("row %d mass carries no unit term: %v", i, got)
+		}
+		tonnes := row.Cells[2].Values
+		if len(tonnes) != 1 || tonnes[0].GetQuantity() == nil {
+			t.Fatalf("row %d tonnes = %v, want one quantity", i, tonnes)
+		}
+		if got := tonnes[0].GetQuantity(); got.GetRealMagnitude() != want[i].tonnes || got.GetUnit() != want[i].unit {
+			t.Errorf("row %d tonnes = %v, want %v [%s]", i, got, want[i].tonnes, want[i].unit)
 		}
 	}
 }

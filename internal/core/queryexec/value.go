@@ -3,6 +3,7 @@ package queryexec
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -16,17 +17,20 @@ const (
 	ValueReal     ValueKind = "real"
 	ValueBoolean  ValueKind = "boolean"
 	ValueInfinity ValueKind = "infinity"
+	// ValueQuantity is a magnitude in a measurement unit, `2290000 [kg]`.
+	ValueQuantity ValueKind = "quantity"
 )
 
 // Value is one immutable scalar carried through query execution.
 type Value struct {
-	kind    ValueKind
-	element *symbols.Symbol
-	text    string
-	integer int64
-	real    float64
-	boolean bool
-	origin  provenance.Origin
+	kind     ValueKind
+	element  *symbols.Symbol
+	text     string
+	integer  int64
+	real     float64
+	boolean  bool
+	quantity *semantics.Quantity
+	origin   provenance.Origin
 }
 
 // ElementValue constructs an element value with declaration provenance.
@@ -54,6 +58,29 @@ func BooleanValue(value bool) Value {
 	return Value{kind: ValueBoolean, boolean: value}
 }
 
+// QuantityValue constructs a quantity value from a magnitude in a unit; the
+// quantity is copied, so the value stays immutable.
+func QuantityValue(quantity semantics.Quantity) Value {
+	return Value{kind: ValueQuantity, quantity: &quantity}
+}
+
+// constantValue converts a folded semantic constant to the query value of the
+// same kind.
+func constantValue(constant semantics.Value) (Value, bool) {
+	switch constant.Kind {
+	case semantics.ValInt:
+		return IntegerValue(constant.Int), true
+	case semantics.ValReal:
+		return RealValue(constant.Real), true
+	case semantics.ValBool:
+		return BooleanValue(constant.Bool), true
+	case semantics.ValInfinity:
+		return Value{kind: ValueInfinity}, true
+	default:
+		return Value{}, false
+	}
+}
+
 func valueAt(value Value, origin provenance.Origin) Value {
 	value.origin = origin
 	return value
@@ -78,6 +105,25 @@ func (v Value) Real() (float64, bool) { return v.real, v.kind == ValueReal }
 
 // Boolean returns the value's Boolean and whether it is a Boolean value.
 func (v Value) Boolean() (bool, bool) { return v.boolean, v.kind == ValueBoolean }
+
+// Quantity returns the value's quantity and whether it is a quantity value.
+func (v Value) Quantity() (semantics.Quantity, bool) {
+	if v.kind != ValueQuantity || v.quantity == nil {
+		return semantics.Quantity{}, false
+	}
+	return *v.quantity, true
+}
+
+// Magnitude returns a quantity value's magnitude as the bare integer or real
+// value it is, and whether the value is a quantity.
+func (v Value) Magnitude() (Value, bool) {
+	quantity, ok := v.Quantity()
+	if !ok {
+		return Value{}, false
+	}
+	magnitude, ok := constantValue(quantity.Num)
+	return valueAt(magnitude, v.origin), ok
+}
 
 // Origin returns the source declaration behind the value.
 func (v Value) Origin() provenance.Origin { return v.origin }

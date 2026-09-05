@@ -338,7 +338,7 @@ func (m *Model) unitProductOfOperator(n *ast.OperatorExpr, lookup UnitLookup) (U
 		if !ok || !exp.IsNumeric() {
 			return UnitProduct{}, fmt.Errorf("%w: unit exponent is not a constant number", ErrUnitExpr)
 		}
-		return left.Pow(exp.asReal()), nil
+		return left.Pow(exp.AsReal()), nil
 	default:
 		return UnitProduct{}, fmt.Errorf("%w: operator %v", ErrUnitExpr, n.Operator)
 	}

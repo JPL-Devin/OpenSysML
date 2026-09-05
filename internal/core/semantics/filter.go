@@ -682,6 +682,9 @@ func (m *Model) evalComparison(p *symbols.FilterPredicate, cand *symbols.Symbol)
 		same := left == right
 		return boolValue(same == (p.Op == symbols.FilterEq)), nil
 	}
+	if left.Kind == symbols.FilterValueQuantity || right.Kind == symbols.FilterValueQuantity {
+		return compareQuantityValues(p, left, right)
+	}
 	l, lok := numericValue(left)
 	r, rok := numericValue(right)
 	if !lok || !rok {
@@ -691,6 +694,40 @@ func (m *Model) evalComparison(p *symbols.FilterPredicate, cand *symbols.Symbol)
 			Span:   p.Span,
 		}
 	}
+	switch p.Op {
+	case symbols.FilterEq:
+		return boolValue(l == r), nil
+	case symbols.FilterNeq:
+		return boolValue(l != r), nil
+	case symbols.FilterLt:
+		return boolValue(l < r), nil
+	case symbols.FilterLe:
+		return boolValue(l <= r), nil
+	case symbols.FilterGt:
+		return boolValue(l > r), nil
+	default: // symbols.FilterGe
+		return boolValue(l >= r), nil
+	}
+}
+
+// compareQuantityValues compares a quantity with another quantity or a bare
+// number in the left operand's unit; incommensurable units are unevaluable,
+// never an inequality decided over magnitudes.
+func compareQuantityValues(p *symbols.FilterPredicate, left, right symbols.FilterValue) (symbols.FilterValue, error) {
+	lq, lok := asQuantity(left)
+	rq, rok := asQuantity(right)
+	if !lok || !rok {
+		return symbols.FilterValue{}, &FilterError{
+			Err:    ErrFilterUnevaluable,
+			Reason: fmt.Sprintf("comparing %s with %s", describeValueKind(left.Kind), describeValueKind(right.Kind)),
+			Span:   p.Span,
+		}
+	}
+	converted, err := rq.ConvertTo(lq.Unit)
+	if err != nil {
+		return symbols.FilterValue{}, &FilterError{Err: ErrFilterUnevaluable, Reason: err.Error(), Span: p.Span}
+	}
+	l, r := lq.Num.AsReal(), converted
 	switch p.Op {
 	case symbols.FilterEq:
 		return boolValue(l == r), nil
@@ -1134,6 +1171,36 @@ func constValue(v Value) symbols.FilterValue {
 	}
 }
 
+// quantityValue converts a folded quantity to the form a filter predicate
+// holds; one whose unit cancelled is the bare constant it folded to.
+func quantityValue(q Quantity) symbols.FilterValue {
+	if q.Unit.None() {
+		return constValue(q.Num)
+	}
+	return symbols.FilterValue{Kind: symbols.FilterValueQuantity, Quantity: &q}
+}
+
+// QuantityOf returns the quantity a FilterValueQuantity carries.
+func QuantityOf(v symbols.FilterValue) (*Quantity, bool) {
+	if v.Kind != symbols.FilterValueQuantity {
+		return nil, false
+	}
+	q, ok := v.Quantity.(*Quantity)
+	return q, ok && q != nil
+}
+
+// asQuantity views a value as a quantity for comparison: a quantity as itself,
+// a bare number as a magnitude of dimension one.
+func asQuantity(v symbols.FilterValue) (*Quantity, bool) {
+	if q, ok := QuantityOf(v); ok {
+		return q, true
+	}
+	if n, ok := numericValue(v); ok {
+		return &Quantity{Num: Value{Kind: ValReal, Real: n}, Unit: UnitOne()}, true
+	}
+	return nil, false
+}
+
 func boolValue(b bool) symbols.FilterValue {
 	return symbols.FilterValue{Kind: symbols.FilterValueBool, Bool: b}
 }
@@ -1173,6 +1240,8 @@ func describeValueKind(k symbols.FilterValueKind) string {
 		return "nothing"
 	case symbols.FilterValueInstance:
 		return "a constructed instance"
+	case symbols.FilterValueQuantity:
+		return "a quantity"
 	default:
 		return "no value"
 	}

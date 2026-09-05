@@ -443,15 +443,15 @@ func (m *Model) numericMember(sym *symbols.Symbol, name string) (Scale, bool) {
 	if op, ok := expr.(*ast.OperatorExpr); ok && op.Operator == ast.OpDiv && len(op.Operands) == 2 {
 		num, numOK := m.Eval(op.Operands[0])
 		den, denOK := m.Eval(op.Operands[1])
-		if numOK && denOK && num.IsNumeric() && den.IsNumeric() && den.asReal() != 0 {
-			return reduceScale(Scale{Num: num.asReal(), Den: den.asReal()}), true
+		if numOK && denOK && num.IsNumeric() && den.IsNumeric() && den.AsReal() != 0 {
+			return reduceScale(Scale{Num: num.AsReal(), Den: den.AsReal()}), true
 		}
 	}
 	val, ok := m.Eval(expr)
 	if !ok || !val.IsNumeric() {
 		return Scale{}, false
 	}
-	return UnitScale(val.asReal()), true
+	return UnitScale(val.AsReal()), true
 }
 
 // referencedUnitSymbol resolves the feature a member's value names, for a value
@@ -659,7 +659,7 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 		if !ok || !exp.IsNumeric() {
 			return UnitTerm{}, fmt.Errorf("%w: unit exponent is not a constant number", ErrUnitExpr)
 		}
-		return base.Pow(exp.asReal()), nil
+		return base.Pow(exp.AsReal()), nil
 	default:
 		return UnitTerm{}, fmt.Errorf("%w: operator %v", ErrUnitExpr, n.Operator)
 	}

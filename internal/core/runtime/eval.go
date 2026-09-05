@@ -1634,7 +1634,7 @@ func constArithmetic(op ast.OperatorKind, left, right semantics.Value) (semantic
 		case ast.OpAdd, ast.OpSub, ast.OpMul:
 			var ok bool
 			if result, ok = semantics.IntArith(op, left.Int, right.Int); !ok {
-				return semantics.Value{}, integerOverflow(op, left.Int, right.Int)
+				return semantics.Value{}, semantics.IntegerOverflow(op, left.Int, right.Int)
 			}
 		case ast.OpMod:
 			if right.Int == 0 {
@@ -1670,13 +1670,7 @@ func constArithmetic(op ast.OperatorKind, left, right semantics.Value) (semantic
 		result = math.Mod(leftReal, rightReal)
 	}
 	// A result that is not a finite Real is reported, not carried as an infinity.
-	return realResult(result)
-}
-
-// integerOverflow reports an Integer operation whose result leaves the range.
-func integerOverflow(op ast.OperatorKind, left, right int64) error {
-	return fmt.Errorf("%w: %d %s %d exceeds the Integer range",
-		semantics.ErrArithmeticOverflow, left, op.String(), right)
+	return semantics.RealResult(result)
 }
 
 // toReal converts a semantics.Value to float64.
@@ -1972,7 +1966,7 @@ func constUnary(op ast.OperatorKind, operand semantics.Value) (semantics.Value, 
 	if op == ast.OpNot {
 		// Logical not: not bool
 		if operand.Kind != semantics.ValBool {
-			return semantics.Value{}, fmt.Errorf("%w: logical not requires bool operand, got %s", ErrTypeMismatch, FormatConst(operand))
+			return semantics.Value{}, fmt.Errorf("%w: logical not requires bool operand, got %s", ErrTypeMismatch, semantics.FormatConst(operand))
 		}
 		return semantics.Value{Kind: semantics.ValBool, Bool: !operand.Bool}, nil
 	}
@@ -1982,7 +1976,7 @@ func constUnary(op ast.OperatorKind, operand semantics.Value) (semantics.Value, 
 	}
 	result, ok := semantics.EvalUnary(op, operand)
 	if !ok {
-		return semantics.Value{}, fmt.Errorf("%w: unary '%s' is not defined for %s", ErrTypeMismatch, op, FormatConst(operand))
+		return semantics.Value{}, fmt.Errorf("%w: unary '%s' is not defined for %s", ErrTypeMismatch, op, semantics.FormatConst(operand))
 	}
 	return result, nil
 }
@@ -2313,7 +2307,7 @@ func valueEqual(a, b Value) bool {
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.
-		converted, err := b.Quantity().convertTo(a.Quantity().Unit)
+		converted, err := b.Quantity().ConvertTo(a.Quantity().Unit)
 		return err == nil && toReal(a.Quantity().Num) == converted
 	case ValArray:
 		return arrayEqual(a.Array(), b.Array())
