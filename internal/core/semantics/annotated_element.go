@@ -139,17 +139,21 @@ func (m *Model) annotatedElementFeatures(def *symbols.Symbol) []*symbols.Symbol 
 	return all
 }
 
-// specializesAnnotatedElement reports whether a feature is the annotatedElement
-// feature or specializes it, by redefinition or subsetting at any distance.
+// specializesAnnotatedElement reports whether a feature is Metaobject's
+// annotatedElement or specializes it, by redefinition or subsetting at any distance.
 func (m *Model) specializesAnnotatedElement(feature *symbols.Symbol) bool {
 	if feature == nil || !feature.IsFeature() {
 		return false
 	}
-	if leafName(feature.Name) == annotatedElementName {
+	root := m.symbolByFQN(annotatedElementFQN)
+	if root == nil {
+		return false
+	}
+	if feature == root {
 		return true
 	}
 	for _, super := range m.AllSupertypes(feature) {
-		if super != nil && super.IsFeature() && leafName(super.Name) == annotatedElementName {
+		if super == root {
 			return true
 		}
 	}
@@ -199,4 +203,8 @@ func (m *Model) conformsToDeclaredTypesOf(meta, feature *symbols.Symbol) bool {
 	return true
 }
 
-const annotatedElementName = "annotatedElement"
+const (
+	annotatedElementName = "annotatedElement"
+	// annotatedElementFQN is the library feature every annotatedElement alternative specializes.
+	annotatedElementFQN = "Metaobjects::Metaobject::" + annotatedElementName
+)
