@@ -129,6 +129,71 @@ func TestRunQueryFlag(t *testing.T) {
 		2, `does not support relationship kind "refinement"`)
 }
 
+// derivedModel declares attributes whose values are expressions over other
+// features, bound through type- and usage-level redefinitions of the carrier.
+const derivedModel = `package DerivedRepro {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	private import ScalarValues::*;
+	private import SI::*;
+	private import ISQ::*;
+
+	part def Stage {
+		attribute dryMass :> ISQ::mass;
+		attribute propellantMass :> ISQ::mass;
+		attribute mass :> ISQ::mass = dryMass + propellantMass;
+	}
+	part def FirstStage :> Stage {
+		attribute :>> dryMass default = 130000 [kg];
+		attribute :>> propellantMass = 2160000 [kg];
+	}
+	part def Vehicle {
+		part s1 : FirstStage;
+		part s2 : FirstStage {
+			attribute :>> dryMass = 120000 [kg];
+		}
+		attribute liftoffMass :> ISQ::mass = s1.mass + s2.mass;
+	}
+	part rocket : Vehicle;
+
+	calc def Masses :> Query {
+		in root : Element;
+		Project(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+			properties = ("name", "dryMass", "mass")
+		)
+	}
+	calc def Vehicles :> Query {
+		in root : Element;
+		Project(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+			properties = ("name", "liftoffMass")
+		)
+	}
+}
+`
+
+// TestRunQueryDerivedValues checks that -run-query reports attributes derived
+// from sibling features and feature chains, evaluated for each row's element.
+func TestRunQueryDerivedValues(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, derivedModel, "-run-query", "DerivedRepro::Masses root=DerivedRepro::Vehicle"),
+		0, "✓ Query DerivedRepro::Masses returned 2 rows",
+		"Columns: name, dryMass, mass",
+		"Row 1: DerivedRepro::Vehicle::s1",
+		"dryMass = 130000 [kg]",
+		"mass = 2290000 [kg]",
+		"Row 2: DerivedRepro::Vehicle::s2",
+		"dryMass = 120000 [kg]",
+		"mass = 2280000 [kg]")
+
+	wantReport(t, check(t, binary, derivedModel, "-run-query", "DerivedRepro::Vehicles root=DerivedRepro"),
+		0, "✓ Query DerivedRepro::Vehicles returned 1 row",
+		"Row 1: DerivedRepro::rocket",
+		"liftoffMass = 4570000 [kg]")
+}
+
 // TestRunQueryJSON checks that a query's verdict is reported as data a build
 // step reads: its row count and projected columns as named values.
 func TestRunQueryJSON(t *testing.T) {

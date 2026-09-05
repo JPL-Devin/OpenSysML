@@ -119,6 +119,34 @@ func TestHTMLQuantityCells(t *testing.T) {
 	}
 }
 
+// TestHTMLDerivedQuantityCells checks that a quantity derived from other
+// features renders as a quantity cell — unit in the text, magnitude and unit
+// apart as data attributes — and reaches list items and definitions.
+func TestHTMLDerivedQuantityCells(t *testing.T) {
+	got := renderFixtureHTML(t, filepath.Join("testdata", "derived_report.sysml"),
+		"Derived::MassReport", HTMLOptions{})
+	for _, want := range []string{
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290000" data-unit="kg">2290000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2280000" data-unit="kg">2280000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="engines" data-value-kind="integer"><span class="sysml-value" data-value-kind="integer">3</span></td>`,
+		`<td class="sysml-cell" data-column="class" data-value-kind="string"><span class="sysml-value" data-value-kind="string">light</span></td>`,
+		`<td class="sysml-cell" data-column="perEngine" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="458000" data-unit="kg">458000 [kg]</span></td>`,
+		`<li class="sysml-item" data-element="Derived::rocket::s1" data-element-kind="partUsage">s1 2290000 [kg]</li>`,
+		`<dt class="sysml-term">rocket</dt>`,
+		`<dd class="sysml-description">4689000 [kg]</dd>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Count(got, `data-column="mass" data-value-kind="quantity"`) != 3 {
+		t.Errorf("rendering does not carry three mass cells\n%s", got)
+	}
+	if strings.Contains(got, `data-element="Derived::rocket::s2" data-element-kind="partUsage">s2`) {
+		t.Errorf("list holds s2, whose derived mass is not above the threshold\n%s", got)
+	}
+}
+
 // TestHTMLNoInlineStylesOrUnknownClasses checks the override contract on the
 // markup: nothing carries a style attribute, and every class is one the
 // documented vocabulary names.
