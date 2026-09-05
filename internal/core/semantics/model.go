@@ -10,6 +10,7 @@
 package semantics
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -27,20 +28,26 @@ type Model struct {
 	// provisionalSupers holds the symbols whose last DirectSupertypes answer was
 	// incomplete, so neither it nor a closure over it may be memoized.
 	provisionalSupers map[*symbols.Symbol]bool
-	// computingSupers holds the symbols whose DirectSupertypes call is still on
-	// the stack, so the re-entrancy guard answers nil for them.
-	computingSupers map[*symbols.Symbol]bool
-	referenced      map[*symbols.Symbol]*symbols.Symbol
-	resolvingRef    map[*symbols.Symbol]bool
-	memberSources   map[*symbols.Symbol][]*symbols.Symbol
-	contributed     map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
-	primTypes       map[*symbols.Symbol]PrimType
-	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
-	params          map[*symbols.Symbol]behaviorParameters
-	invocations     map[invocationKey]*InvocationSelection
-	arguments       ArgumentTyper // the checker's argument typing, nil when no checker runs
-	unioning        map[*symbols.Symbol][]*symbols.Symbol
-	ends            map[*symbols.Symbol][]*symbols.Symbol
+	// computingSupers holds the resolver depth of each DirectSupertypes call on
+	// the stack, so the re-entrancy guard answers nil for its symbol.
+	computingSupers map[*symbols.Symbol]int
+	// valuing holds the features whose typing value is being judged, so a value
+	// that leads back to its own feature is not followed again.
+	valuing       map[*symbols.Symbol]bool
+	referenced    map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef  map[*symbols.Symbol]bool
+	memberSources map[*symbols.Symbol][]*symbols.Symbol
+	contributed   map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
+	primTypes     map[*symbols.Symbol]PrimType
+	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params        map[*symbols.Symbol]behaviorParameters
+	invocations   map[invocationKey]*InvocationSelection
+	arguments     ArgumentTyper // the checker's argument typing, nil when no checker runs
+	// typingArgs holds the calls whose arguments are being typed, so an argument
+	// whose type leads back to its own call is not typed again.
+	typingArgs map[*ast.InvocationExpr]bool
+	unioning   map[*symbols.Symbol][]*symbols.Symbol
+	ends       map[*symbols.Symbol][]connectorEnd
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -101,7 +108,8 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		provisionalSupers: make(map[*symbols.Symbol]bool),
-		computingSupers:   make(map[*symbols.Symbol]bool),
+		computingSupers:   make(map[*symbols.Symbol]int),
+		valuing:           make(map[*symbols.Symbol]bool),
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
@@ -109,8 +117,9 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
+		typingArgs:        make(map[*ast.InvocationExpr]bool),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
-		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
+		ends:              make(map[*symbols.Symbol][]connectorEnd),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
@@ -173,6 +182,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return d.Relationships
 	case *ast.ConnectorEnd:
 		return d.Relationships
+	case *ast.CrossFeatureMember:
+		return d.Relationships
 	case *ast.BodyExpr:
 		// A body parameter is not a node of its own, so its symbol declares the
 		// body and names the parameter its typing is written on.
@@ -226,15 +237,20 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		return nil
 	}
 	if cached, ok := m.directSupers[sym]; ok {
+		// The seed answers a re-entrant query with nothing, cutting that query short.
+		if depth := m.computingSupers[sym]; depth != 0 {
+			m.resolver.CutShort(depth)
+		}
 		return cached
 	}
 	// Guard against re-entrancy on cyclic graphs: seed with an empty slice.
 	m.directSupers[sym] = nil
-	m.computingSupers[sym] = true
+	m.computingSupers[sym] = m.resolver.Enter()
 	defer delete(m.computingSupers, sym)
 	if sym.Facts != nil && sym.Facts.Supers != nil {
 		out := m.recordedSupertypes(sym)
 		m.directSupers[sym] = out
+		m.resolver.Leave()
 		return out
 	}
 
@@ -253,14 +269,15 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !isQN {
 			// A chain target (`subsets b.f`) generalizes to the chain's final feature.
 			if fc, isChain := targetNode.(*ast.FeatureChainExpr); isChain {
-				if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc); ok && target != nil && target != sym && !seen[target] {
+				target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc)
+				if ok && target != nil && target != sym && !seen[target] {
 					seen[target] = true
 					out = append(out, target)
 				}
 			}
 			continue
 		}
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, qn)
 		if !ok || target == nil {
 			continue
 		}
@@ -367,7 +384,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A parameter of a behavior or step implicitly redefines the corresponding
 	// parameter of each behavior or step its owner specializes, and so takes
 	// that parameter's type when it declares none (see redefinition.go).
-	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+	for _, redefined := range m.ImplicitParameterRedefinitions(sym) {
 		if seen[redefined] {
 			continue
 		}
@@ -386,6 +403,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
+	// The cross feature an end owns is implicitly typed by the end's types and
+	// subsets the cross feature of each end the end redefines (see crossing.go).
+	for _, general := range m.implicitCrossFeatureGenerals(sym) {
+		if general == sym || seen[general] {
+			continue
+		}
+		seen[general] = true
+		out = append(out, general)
+	}
+
 	// The subject or objective of a case, requirement or their usages implicitly
 	// redefines the same role of each general, so it takes that role's type when
 	// it declares none (see roles.go).
@@ -397,18 +424,21 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
-	// A declaration keeps its kind's base whatever else it declares; implicitBase
-	// suppresses it only when a declared chain already reaches that base. A
-	// metadata keyword supplies the kind itself, so its baseType stands in.
-	if base := m.implicitBase(sym); !fromMetadata && base != nil && !seen[base] {
-		seen[base] = true
-		out = append(out, base)
+	// A declaration keeps its kind's bases whatever else it declares; implicitBases
+	// suppresses one only when a declared chain already reaches it. A metadata
+	// keyword supplies the kind itself, so its baseType stands in.
+	if !fromMetadata {
+		for _, base := range m.implicitBases(sym) {
+			if !seen[base] {
+				seen[base] = true
+				out = append(out, base)
+			}
+		}
 	}
 
-	// A metadata annotation whose type did not resolve yet — a name still being
-	// resolved when this query ran — leaves the answer provisional, so it is
-	// recomputed on the next query instead of being memoized.
-	if !metadataComplete {
+	// An answer derived while a guard cut a query short saw fewer members than
+	// the finished model has, so it is recomputed on the next query, not memoized.
+	if !m.resolver.Leave() || !metadataComplete {
 		delete(m.directSupers, sym)
 		m.provisionalSupers[sym] = true
 		return out
@@ -443,9 +473,9 @@ func (m *Model) recordedSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
-// SupertypesProvisional reports whether sym's supertypes were last derived from
-// a metadata annotation whose type had not resolved yet, so the answer may still
-// change and must not be recorded as a fact.
+// SupertypesProvisional reports whether sym's supertypes were last derived while
+// a generalization target or metadata type had not resolved yet, so the answer
+// may still change and must not be recorded as a fact.
 func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym]
 }
@@ -454,7 +484,7 @@ func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 // provisional, or its own computation is on the stack and the re-entrancy guard
 // is answering nil for it.
 func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
-	return m.provisionalSupers[sym] || m.computingSupers[sym]
+	return m.provisionalSupers[sym] || m.computingSupers[sym] != 0
 }
 
 // subsetsSibling reports whether sym's subsetting resolved to another member of
@@ -616,22 +646,94 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 // FeatureTypes returns a feature's effective types: those it declares, else those
 // of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
 func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
 		return types
 	}
-	if base := m.implicitBase(sym); base != nil {
+	return m.implicitBases(sym)
+}
+
+// FeatureTypeSet returns a feature's types as KerML §8.3.3.3 derives Feature::type:
+// the declared types of the feature and of every feature it subsets, redefines or
+// references, keeping only the most specific; a feature reaching none has the
+// types of its kind's base feature, or that base itself when it is a definition.
+func (m *Model) FeatureTypeSet(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !sym.IsFeature() {
+		return nil
+	}
+	var types []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
+	var visit func(f *symbols.Symbol)
+	visit = func(f *symbols.Symbol) {
+		if f == nil || seen[f] {
+			return
+		}
+		seen[f] = true
+		bases := m.implicitBases(f)
+		for _, super := range m.DirectSupertypes(f) {
+			switch {
+			case containsElement(bases, super):
+			case super.IsFeature():
+				visit(super)
+			case !containsElement(types, super):
+				types = append(types, super)
+			}
+		}
+		visit(m.ReferencedFeature(f))
+	}
+	visit(sym)
+	if len(types) > 0 {
+		return m.mostSpecificTypes(types)
+	}
+	fqn, ok := m.FeatureBaseFQN(sym)
+	if !ok || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(fqn) {
+		if base == nil || base == sym {
+			continue
+		}
+		if base.IsFeature() {
+			return m.FeatureTypeSet(base)
+		}
 		return []*symbols.Symbol{base}
 	}
 	return nil
 }
 
+// mostSpecificTypes drops every type another one in the list specializes.
+func (m *Model) mostSpecificTypes(types []*symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, t := range types {
+		redundant := false
+		for _, other := range types {
+			if !symbols.SameElement(other, t) && m.Conforms(other, t) {
+				redundant = true
+				break
+			}
+		}
+		if !redundant {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func containsElement(list []*symbols.Symbol, sym *symbols.Symbol) bool {
+	for _, s := range list {
+		if symbols.SameElement(s, sym) {
+			return true
+		}
+	}
+	return false
+}
+
 // DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
 // feature is written with, directly or through the features it specializes.
 func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
@@ -642,12 +744,12 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 		return nil
 	}
 	visiting[sym] = true
-	base := m.implicitBase(sym)
+	bases := m.implicitBases(sym)
 	var types, features []*symbols.Symbol
 	for _, super := range m.DirectSupertypes(sym) {
 		switch {
-		case super == base:
-		case isFeature(super):
+		case slices.Contains(bases, super):
+		case super.IsFeature():
 			features = append(features, super)
 		default:
 			types = append(types, super)

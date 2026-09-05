@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"math"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -22,18 +23,22 @@ const (
 	PrimReal
 	PrimComplex
 	PrimNumber
+	// PrimExpression is a body `{ … }` written as a value: the Expression itself,
+	// known and no scalar, unlike PrimUnknown which suppresses checking.
+	PrimExpression
 )
 
 var primNames = map[PrimType]string{
-	PrimUnknown:  "unknown",
-	PrimBoolean:  "Boolean",
-	PrimString:   "String",
-	PrimNatural:  "Natural",
-	PrimInteger:  "Integer",
-	PrimRational: "Rational",
-	PrimReal:     "Real",
-	PrimComplex:  "Complex",
-	PrimNumber:   "Number",
+	PrimUnknown:    "unknown",
+	PrimBoolean:    "Boolean",
+	PrimString:     "String",
+	PrimNatural:    "Natural",
+	PrimInteger:    "Integer",
+	PrimRational:   "Rational",
+	PrimReal:       "Real",
+	PrimComplex:    "Complex",
+	PrimNumber:     "Number",
+	PrimExpression: "Expression",
 }
 
 // String returns the stdlib name of the type, or "unknown".
@@ -164,14 +169,15 @@ func (m *Model) ScalarSymbol(prim PrimType) *symbols.Symbol {
 
 // scalarDefFQNs names the definition each lattice element stands for.
 var scalarDefFQNs = map[PrimType]string{
-	PrimBoolean:  "ScalarValues::Boolean",
-	PrimString:   "ScalarValues::String",
-	PrimNatural:  "ScalarValues::Natural",
-	PrimInteger:  "ScalarValues::Integer",
-	PrimRational: "ScalarValues::Rational",
-	PrimReal:     "ScalarValues::Real",
-	PrimComplex:  "ScalarValues::Complex",
-	PrimNumber:   "ScalarValues::Number",
+	PrimBoolean:    "ScalarValues::Boolean",
+	PrimString:     "ScalarValues::String",
+	PrimNatural:    "ScalarValues::Natural",
+	PrimInteger:    "ScalarValues::Integer",
+	PrimRational:   "ScalarValues::Rational",
+	PrimReal:       "ScalarValues::Real",
+	PrimComplex:    "ScalarValues::Complex",
+	PrimNumber:     "ScalarValues::Number",
+	PrimExpression: fqnEvaluation,
 }
 
 // PrimTypeOf classifies sym against the scalar lattice. A definition is
@@ -204,6 +210,56 @@ func (m *Model) PrimTypeOf(sym *symbols.Symbol) PrimType {
 	}
 	m.primTypes[sym] = prim
 	return prim
+}
+
+// DeclaresResolvedType reports whether sym resolves a declared type — directly, via
+// subsetting/redefinition, or an implicit kind base no prim value can be of (Part, not Anything).
+func (m *Model) DeclaresResolvedType(sym *symbols.Symbol, prim PrimType) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	seen := map[*symbols.Symbol]bool{sym: true}
+	queue := []*symbols.Symbol{sym}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		bases := m.implicitBases(cur)
+		for _, sup := range m.DirectSupertypes(cur) {
+			if seen[sup] {
+				continue
+			}
+			if slices.Contains(bases, sup) {
+				if m.kindBaseExcludes(sup, prim) {
+					return true
+				}
+				continue
+			}
+			if !sup.IsFeature() {
+				return true
+			}
+			seen[sup] = true
+			queue = append(queue, sup)
+		}
+		if m.kindBaseExcludes(m.implicitKerMLFeatureBase(cur), prim) {
+			return true
+		}
+	}
+	return false
+}
+
+// kindBaseExcludes reports whether no value of prim is of the type a kind base implies.
+func (m *Model) kindBaseExcludes(base *symbols.Symbol, prim PrimType) bool {
+	scalar := m.ScalarSymbol(prim)
+	if scalar == nil || base == nil {
+		return false
+	}
+	typ := base
+	if base.IsFeature() {
+		if typ = m.nearestDeclaredType(base); typ == nil {
+			return false
+		}
+	}
+	return !m.Conforms(scalar, typ)
 }
 
 // CouldHold reports whether a feature of the given type could hold a value of

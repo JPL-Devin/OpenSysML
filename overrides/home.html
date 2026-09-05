@@ -26,6 +26,7 @@
     .osml-hero__inner,
     .osml-features,
     .osml-install,
+    .osml-numbers__inner,
     .osml-referee__inner,
     .osml-strip__inner {
       width: 100%;
@@ -128,8 +129,54 @@
     .osml-terminal .osml-ok     { color: #a5d6a7; }
     .osml-terminal .osml-dim    { opacity: .68; }
 
-    /* The refereed band: the first thing below the hero, because measurement
-       against the reference implementation is the claim the rest rests on. */
+    /* The numbers strip: what a real model costs, in one row, the last thing before
+       the documentation index. Each figure links to the measurement behind it. */
+    .osml-numbers {
+      border-bottom: 1px solid var(--md-default-fg-color--lightest);
+      scroll-margin-top: 3rem;
+    }
+    .osml-numbers__inner {
+      padding: .9rem 1.2rem .8rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+      gap: .4rem 1.6rem;
+      align-items: baseline;
+    }
+    .osml-numbers__figure {
+      display: flex;
+      gap: .55rem;
+      align-items: baseline;
+      color: inherit;
+    }
+    .osml-numbers__value {
+      font-size: 1.15rem;
+      line-height: 1.2;
+      font-weight: 700;
+      white-space: nowrap;
+      color: var(--md-primary-fg-color);
+    }
+    [data-md-color-scheme="slate"] .osml-numbers__value {
+      color: var(--md-default-fg-color);
+    }
+    .osml-numbers__label {
+      font-size: .66rem;
+      line-height: 1.5;
+      color: var(--md-default-fg-color--light);
+    }
+    .osml-numbers__source {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-size: .62rem;
+      line-height: 1.5;
+      color: var(--md-default-fg-color--light);
+    }
+    .osml-numbers__source a {
+      color: var(--md-typeset-a-color);
+      text-decoration: underline;
+    }
+
+    /* The refereed band: measurement against the reference implementation is
+       the claim the rest rests on. */
     .osml-referee {
       background: var(--md-code-bg-color);
       border-bottom: 1px solid var(--md-default-fg-color--lightest);
@@ -233,6 +280,15 @@
       margin: 0;
       color: var(--md-default-fg-color--light);
     }
+    /* A card whose heading is the link carries a row of per-client references too,
+       which a card that is itself one <a> could not hold. */
+    .osml-card h3 a {
+      color: inherit;
+    }
+    .osml-card__links {
+      margin-top: .5rem;
+      font-size: .66rem;
+    }
 
     .osml-strip {
       border-top: 1px solid var(--md-default-fg-color--lightest);
@@ -294,7 +350,8 @@
       <p class="osml-hero__lede">
         OpenSysML parses and validates SysML v2 and KerML 1.1, serves an editor over
         the Language Server Protocol, executes actions, state machines and constraints,
-        and exports models as RDF — with a Python client for the same runtime.
+        and exports models as RDF — with Go, Python, Node, Java and Rust clients for the
+        same runtime.
       </p>
       <div class="osml-hero__actions">
         <a class="osml-btn osml-btn--primary" href="{{ 'guide/01-install/'|url }}">Install</a>
@@ -303,7 +360,8 @@
         <a class="osml-btn" href="#refereed">How it compares</a>
       </div>
       <p class="osml-hero__meta">
-        Apache-2.0 &middot; Linux, macOS and Windows binaries
+        Apache-2.0 &middot; Linux, macOS and Windows binaries &middot;
+        <a href="#numbers">parses the Apollo 11 model in 8 ms</a>
       </p>
     </div>
     <div class="osml-terminal">
@@ -394,11 +452,17 @@
       <p>Round-trip models through RDF/Turtle and query them with OSLC query text,
       so a model is data other tools can read.</p>
     </a>
-    <a class="osml-card" href="{{ 'guide/09-python/'|url }}">
-      <h3>Automate from your language</h3>
+    <div class="osml-card">
+      <h3><a href="{{ 'guide/09-clients/'|url }}">Automate from your language</a></h3>
       <p>Go, Python, Node/TypeScript, Java and Rust clients drive the same
       execution runtime — in process, or over the <code>sysml-grpc</code> service.</p>
-    </a>
+      <p class="osml-card__links"><a href="{{ 'reference/clients/'|url }}">Choosing a client</a>
+      &middot; <a href="{{ 'reference/api/'|url }}">Go</a>
+      &middot; <a href="{{ 'reference/python-api/'|url }}">Python</a>
+      &middot; <a href="{{ 'reference/node-api/'|url }}">Node</a>
+      &middot; <a href="{{ 'reference/java-api/'|url }}">Java</a>
+      &middot; <a href="{{ 'reference/rust-api/'|url }}">Rust</a></p>
+    </div>
   </div>
 </section>
 
@@ -432,6 +496,28 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
       <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>
       <p>The roadmap lists what is missing, in the order it should be picked up.</p>
     </div>
+  </div>
+</section>
+
+<section class="osml-numbers" id="numbers">
+  <div class="osml-numbers__inner">
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">8 ms</span>
+      <span class="osml-numbers__label">to parse the Apollo 11 model &mdash; 28 files, 7,200 lines &mdash; on one core.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">0.37 s</span>
+      <span class="osml-numbers__label">to load it with the standard library, resolve every name and validate it.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">42 MB/s</span>
+      <span class="osml-numbers__label">of SysML v2 through the parser &mdash; 880 lines a millisecond.</span>
+    </a>
+    <p class="osml-numbers__source">
+      Measured on the public <a href="https://github.com/airbus/apollo-11-sysml-v2">Apollo 11 SysML v2 model</a>
+      (Airbus, MPL-2.0); the commands to repeat it are on
+      <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
+    </p>
   </div>
 </section>
 {% endblock %}

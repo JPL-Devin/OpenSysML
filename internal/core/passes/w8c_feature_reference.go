@@ -128,15 +128,15 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 	switch n := m.(type) {
 	case *ast.ConstraintMember:
 		c.walkExpr(site, scope, n.Expression)
-		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+		c.walkConstraintBody(site, scope, n, n.Body)
 	case *ast.AssumeMember:
 		c.walkExpr(site, scope, n.Expression)
 		c.walkExpr(site, scope, n.Value)
-		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+		c.walkConstraintBody(site, scope, n, n.Body)
 	case *ast.RequireMember:
 		c.walkExpr(site, scope, n.Expression)
 		c.walkExpr(site, scope, n.Value)
-		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+		c.walkConstraintBody(site, scope, n, n.Body)
 	case *ast.SubjectMember:
 		c.walkExpr(site, scope, n.BindingExpr)
 	case *ast.AssignmentActionNode:
@@ -178,6 +178,8 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 		c.walkMembers(site, childScopeOr(scope, n), n.States)
 	case *ast.InitialNode:
 		c.walkMembers(site, childScopeOr(scope, n), n.Members)
+	case *ast.SuccessionEdge:
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		c.walkMembers(site, childScopeOr(scope, m), ast.NodeBodyMembers(m))
 	case *ast.SendStatement:
@@ -196,6 +198,18 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 		// body whose result is its last expression.
 		c.walkExpr(site, scope, m)
 	}
+}
+
+// walkConstraintBody visits a nested constraint's body from the constraint usage
+// the member owns, whose own parameters the body reads.
+func (c *featureReferenceChecker) walkConstraintBody(site refSite, scope *symbols.Scope, decl ast.Node, body []ast.Node) {
+	inner := symbols.ConstraintBodyScope(scope, decl)
+	if inner != scope {
+		if owner := inner.Owner(); owner != nil {
+			site = refSite{sym: owner, inBody: true}
+		}
+	}
+	c.walkMembers(site, inner, body)
 }
 
 // walkExpr visits the references an expression names. Nested declarations are

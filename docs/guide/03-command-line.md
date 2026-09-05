@@ -56,7 +56,7 @@ package MyModel {
         then off;
         state off;
         state warming {
-            accept after 10 then running;
+            accept after 10 [SI::s] then running;
         }
         state running;
         transition first off then warming;
@@ -190,7 +190,7 @@ package M {
             defer Alarm;
         }
         state warming {
-            accept after 10 then done;
+            accept after 10 [SI::s] then done;
         }
         succession first off then warming;
     }
@@ -224,7 +224,7 @@ it off otherwise. Each finding names the standard notation to use instead, and
 each extension is measured against. The same setting is available as `%strict` at the prompt
 ([4. The REPL](04-repl.md)), as the `sysml.strictConformance` editor setting
 ([8. Editors](08-editors.md)) and as `strict_conformance=True` from Python
-([9. From your own program](09-python.md#from-python)).
+([9. From your own program](09-clients.md#from-python)).
 
 ## Running behavior
 

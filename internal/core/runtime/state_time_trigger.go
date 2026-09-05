@@ -3,7 +3,10 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // secondFQN names the unit the machine's virtual clock counts in, so a duration
@@ -28,6 +31,32 @@ func (e *StateExecutor) timeMagnitude(val Value, what string) (float64, error) {
 	default:
 		return 0, fmt.Errorf("%s must be constant, got %v", what, val.Kind)
 	}
+}
+
+// checkTimeTriggerType refuses, before evaluating it, the trigger argument
+// validation refuses; one the declarations leave open is left to its value.
+// The verdict is static, so it is judged once per transition and then reused.
+func (e *StateExecutor) checkTimeTriggerType(trans *lower.Transition, t *ast.TimeEvent) error {
+	if err, ok := e.timeTriggerVerdict[trans]; ok {
+		return err
+	}
+	err := e.judgeTimeTriggerType(trans.Scope, t)
+	e.timeTriggerVerdict[trans] = err
+	return err
+}
+
+// judgeTimeTriggerType is the uncached judgement checkTimeTriggerType records.
+func (e *StateExecutor) judgeTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent) error {
+	c := e.ctx.model.TimeEventConforms(scope, t)
+	if !c.Known || c.Holds {
+		return nil
+	}
+	keyword := "after"
+	if t.Absolute {
+		keyword = "at"
+	}
+	return fmt.Errorf("%w: `%s %s` must be a %s, found %s",
+		ErrTimeTriggerType, keyword, e.ctx.bindingExprText(t.Duration, scope), semantics.TimeEventType(t), c.Found)
 }
 
 // durationInClockUnits expresses a quantity in the clock's unit, reporting a

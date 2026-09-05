@@ -23,13 +23,13 @@ const forkJoinMachine = `package test {
             state left {
                 entry; then lstart;
                 state lstart;
-                state working { entry { leftRan = 1; } }
+                state working { entry { assign leftRan := 1; } }
                 succession first lstart then working;
             }
             state right {
                 entry; then rstart;
                 state rstart;
-                state watching { entry { rightRan = 1; } }
+                state watching { entry { assign rightRan := 1; } }
                 succession first rstart then watching;
             }
         }

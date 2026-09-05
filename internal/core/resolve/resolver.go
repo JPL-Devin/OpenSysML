@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"math"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
@@ -76,11 +78,16 @@ type filteredMemoKey struct {
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
-	idx       *symbols.Index
-	memo      map[ast.Node]resolution
-	modeMemo  map[modeMemoKey]resolution
-	filtered  map[filteredMemoKey]resolution
-	resolving map[ast.Node]bool // cycle detection
+	idx      *symbols.Index
+	memo     map[ast.Node]resolution
+	modeMemo map[modeMemoKey]resolution
+	filtered map[filteredMemoKey]resolution
+	// resolving holds the depth (see enter) of each lookup on the stack, so a
+	// re-entrant query of the same name fails instead of recursing.
+	resolving map[ast.Node]int
+	// frames holds, per lookup on the stack, the shallowest depth a guard has
+	// cut a query short for since the lookup began (see leave).
+	frames []int
 	// featureChains are resolved per scope because a chain's leading operand
 	// can resolve differently in different document scopes.
 	featureChains map[featureChainKey]resolution
@@ -110,6 +117,9 @@ type Resolver struct {
 	// allVisible is nonzero while the target of an `import all` (or of an
 	// expose) is resolved, which reaches every membership, not the visible ones.
 	allVisible int
+	// trial is the name a ProbeReading is reading, whose segment records a
+	// failed probe keeps: the reader wants what each segment reached.
+	trial *ast.QualifiedName
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 	// payloads are the accept-node payloads a scope's body shares, collected
@@ -238,7 +248,7 @@ func New(idx *symbols.Index) *Resolver {
 		memo:             map[ast.Node]resolution{},
 		modeMemo:         map[modeMemoKey]resolution{},
 		filtered:         map[filteredMemoKey]resolution{},
-		resolving:        map[ast.Node]bool{},
+		resolving:        map[ast.Node]int{},
 		featureChains:    map[featureChainKey]resolution{},
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
 		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
@@ -442,6 +452,42 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 	return r.resolveQualified(scope, qn, nil)
 }
 
+// Enter begins a lookup that memoizes its answer and returns its depth, which
+// the guard protecting it passes to CutShort. A nil resolver has no lookups to
+// cut short, so its every answer is settled.
+func (r *Resolver) Enter() int {
+	if r == nil {
+		return 1
+	}
+	r.frames = append(r.frames, math.MaxInt)
+	return len(r.frames)
+}
+
+// Leave ends the innermost lookup and reports whether its answer is settled: no
+// guard cut a query short for a lookup outside it, so it saw every member.
+func (r *Resolver) Leave() bool {
+	if r == nil {
+		return true
+	}
+	depth := len(r.frames)
+	cut := r.frames[depth-1]
+	r.frames = r.frames[:depth-1]
+	if depth > 1 && cut < r.frames[depth-2] {
+		r.frames[depth-2] = cut
+	}
+	return cut >= depth
+}
+
+// CutShort records that a guard cut a query short for the lookup at depth.
+func (r *Resolver) CutShort(depth int) {
+	if r == nil {
+		return
+	}
+	if top := len(r.frames) - 1; top >= 0 && depth < r.frames[top] {
+		r.frames[top] = depth
+	}
+}
+
 // resolveQualified is ResolveQualified with an optional filter hiding the
 // bindings a reference subsetting's own borrowed name contributes.
 func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName, hide *refFilter) (*symbols.Symbol, bool) {
@@ -471,15 +517,17 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 			return res.sym, res.ok
 		}
 	}
-	// Detect resolution cycles
-	if r.resolving[qn] {
-		// Cycle detected, fail resolution
+	if depth := r.resolving[qn]; depth != 0 {
+		r.CutShort(depth)
 		return nil, false
 	}
-	r.resolving[qn] = true
+	r.resolving[qn] = r.Enter()
 	// A feature that took its name from qn is never what qn names.
 	res := r.walkQualified(scope, qn, hide.hiding(qn))
 	delete(r.resolving, qn)
+	if !r.Leave() {
+		return res.sym, res.ok
+	}
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
 	if keyed {
@@ -525,18 +573,20 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 			return res.sym, res.ok
 		}
 	}
+	r.Enter()
 	res := r.walkUnqualified(scope, name)
+	settled := r.Leave()
 	res.sym = r.AliasedElement(res.sym)
 	if r.AliasNamesNothing(res.sym) {
 		res = resolution{nil, false}
 	}
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
-	if keyed && (res.ok || r.quiet == 0) {
+	if keyed && (res.ok || r.quiet == 0) && settled {
 		journalNew(r, r.modeMemo, mode, at)
 		r.modeMemo[mode] = res
 	}
-	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
+	if (res.ok || r.quiet == 0) && r.allVisible == 0 && settled {
 		r.memoize(at, res)
 	}
 	if !res.ok {
@@ -597,12 +647,12 @@ func (r *Resolver) outsideAllVisible(f func()) {
 // probe runs a trial reading of qn, reported by f as resolved or not. Its
 // diagnostics are suppressed, and the per-segment resolutions it records are
 // kept only where it resolved: a reading not adopted leaves nothing behind for a
-// caller to read back.
+// caller to read back — unless qn is itself the name a ProbeReading reads.
 func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	saved := r.saveSegments(qn)
 	resolved := false
 	r.aside(func() { resolved = f() })
-	if !resolved {
+	if !resolved && qn != r.trial {
 		r.restoreSegments(qn, saved)
 	}
 	return resolved
@@ -678,9 +728,10 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 	r.memo[at] = res
 }
 
-// memoizeFeatureChain caches a chain result unless condition or quiet rules forbid it.
-func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr, res resolution) {
-	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
+// memoizeFeatureChain caches a settled chain result unless condition or quiet
+// rules forbid it.
+func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr, res resolution, settled bool) {
+	if fc == nil || !settled || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
 		return
 	}
 	key := featureChainKey{scope: scope, node: fc}

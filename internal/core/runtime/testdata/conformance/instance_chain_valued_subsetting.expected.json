@@ -1,0 +1,24 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rack",
+  "slots": {
+    "panel.sides": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "panel.top": {"type": "Instance"},
+    "panel.left.corners": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "panel.corners": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]}
+  },
+  "identical": [
+    ["panel.sides.1", "panel.left"],
+    ["panel.sides.3", "panel.top"],
+    ["panel.corners.1", "panel.left.corners.1"],
+    ["panel.corners.6", "panel.top.corners.2"]
+  ],
+  "distinct": [
+    ["panel.corners.1", "panel.corners.3"]
+  ]
+}

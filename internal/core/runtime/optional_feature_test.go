@@ -358,6 +358,37 @@ func TestSubsettingKeepsTargetAcrossInheritedNameCollision(t *testing.T) {
 	}
 }
 
+// A bare restatement (`:>> slots`) masks nothing on the redefinition walk that
+// starts from it, so the multiplicity of the chain's root is reached.
+func TestRedefinitionChainReachesPastOwnRestatement(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		part def Base { attribute slots : Integer[0..*]; }
+		part def Middle :> Base { attribute :>> slots; }
+		part def Leaf :> Middle { attribute :>> slots; }
+		part deep : Leaf { :>> slots = (1, 2, 3); }
+	}`))
+	deep := oneSymbol(t, idx, "test::deep")
+	slots, ok := ctx.model.LookupMember(deep, "slots")
+	if !ok {
+		t.Fatal("deep declares no slots")
+	}
+	if mult := ctx.featureMultiplicity(slots, deep); mult.Text() != "[0..*]" {
+		t.Errorf("deep.slots multiplicity = %s, want [0..*] from Base::slots", mult.Text())
+	}
+	inst, err := ctx.Instantiate(deep)
+	if err != nil {
+		t.Fatalf("instantiate deep: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "slots")
+	if err != nil {
+		t.Fatalf("deep.slots: %v", err)
+	}
+	if held := fv.HeldValue(); elementCount(&held) != 3 {
+		t.Errorf("deep.slots = %s, want the three values", FormatValue(held))
+	}
+}
+
 func symbolNames(ctx *Context, syms []*symbols.Symbol) []string {
 	names := make([]string, 0, len(syms))
 	for _, sym := range syms {

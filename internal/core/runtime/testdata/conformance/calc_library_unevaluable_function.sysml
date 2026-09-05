@@ -1,10 +1,10 @@
 // A library function this runtime has no representation for the values of
-// reports itself by name: an aggregation over a collection of vectors.
+// reports itself by name: a tensor quantity has no value kind.
 package test {
 	private import ScalarValues::*;
-	private import VectorFunctions::*;
+	private import TensorCalculations::*;
 
-	calc def total {
-		return : Real[3] = sum(((1.0, 2.0, 3.0), (4.0, 5.0, 6.0)));
+	calc def zeroTensor {
+		return : Boolean = isZeroTensorQuantity(1.0);
 	}
 }

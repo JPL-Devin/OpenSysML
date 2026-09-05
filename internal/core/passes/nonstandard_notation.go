@@ -150,12 +150,16 @@ func (w *notationWalker) walk(members []ast.Node) {
 				"no notation states a deferred event")
 		case *ast.InitialNode:
 			w.initialNode(n)
-			w.walkActionBody(n.Members)
+			// `first a then b { … }` ends in the succession's UsageBody (SysML.xtext:1698).
+			w.walkDeclaration(n.Members, n)
 		case *ast.DecisionNode:
 			w.walkActionBody(n.Members)
 		case *ast.TransitionMember:
 			w.walkActionBody(n.Effect)
 			w.walkActionBody(n.Members)
+		case *ast.SuccessionEdge:
+			// `then b { … }` ends in the succession's UsageBody (SysML.xtext:1698).
+			w.walkDeclaration(n.Members, n)
 		case *ast.EntryMember:
 			w.walkActionBody(n.Actions)
 		case *ast.DoMember:
@@ -333,7 +337,7 @@ func (w *notationWalker) kermlRelationships(rels []*ast.Relationship) {
 // kermlDeclarationKeywords are the definition and usage keywords the pinned
 // KerML grammar spells; a kind keyword outside the set is SysML-only.
 var kermlDeclarationKeywords = map[string]bool{
-	"assoc": true, "behavior": true, "binding": true, "bool": true,
+	"assoc": true, "assoc struct": true, "behavior": true, "binding": true, "bool": true,
 	"class": true, "classifier": true, "connector": true, "datatype": true,
 	"dependency": true, "expr": true, "feature": true, "flow": true,
 	"function": true, "interaction": true, "inv": true, "metaclass": true,

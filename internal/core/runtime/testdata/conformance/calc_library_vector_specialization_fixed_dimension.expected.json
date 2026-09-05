@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "evaluate": "test::probe",
+  "result": {"type": "Sequence", "elements": [
+    {"type": "String", "value": "three"},
+    {"type": "Integer", "value": 3},
+    {"type": "Real", "value": 3.0}
+  ]}
+}

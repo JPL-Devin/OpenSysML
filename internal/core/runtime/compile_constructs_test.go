@@ -360,6 +360,38 @@ func TestCompiledNamedArguments(t *testing.T) {
 	}
 }
 
+// A label spelled as a short name, an alias, or a qualified inherited name binds
+// the parameter it resolves to on both tiers, and two spellings of one parameter
+// are refused as the checker refuses them.
+func TestCompiledNamedArgumentSpellings(t *testing.T) {
+	f := buildCompiledFixture("named_spellings.sysml", []byte(`package test {
+		private import ScalarValues::*;
+		calc def F { in <xs> x : Integer; return : Integer = x + 1; }
+		calc def G { in b : Integer; alias bs for b; return : Integer = b * 2; }
+		calc def Base { in n : Integer; return : Integer; }
+		calc def Derived :> Base { return : Integer = n + 10; }
+		calc def ViaShort { in v : Integer; return : Integer = F(xs = v); }
+		calc def ViaAlias { in v : Integer; return : Integer = G(bs = v); }
+		calc def ViaQualified { in v : Integer; return : Integer = F(F::x = v); }
+		calc def ViaInherited { in v : Integer; return : Integer = Derived(Base::n = v); }
+		calc def Twice { in v : Integer; return : Integer = F(x = v, xs = v); }
+	}`))
+	for name, want := range map[string]int64{"ViaShort": 3, "ViaAlias": 4, "ViaQualified": 3, "ViaInherited": 12} {
+		if ok, why := f.eligible(t, name); !ok {
+			t.Errorf("%s: ineligible: %s", name, why)
+		}
+		wantOutcomeInt(t, name+"(2)", f.same(t, name, intArg(2)), want)
+	}
+	if ok, why := f.eligible(t, "Twice"); ok || why == "" {
+		t.Errorf("Twice: eligible %v, reason %q", ok, why)
+	}
+	twice := f.same(t, "Twice", intArg(2))
+	wantErrorIs(t, "Twice(2)", twice, ErrCalcArity)
+	if !strings.Contains(twice.err.Error(), `binds parameter "x" twice`) {
+		t.Errorf("Twice(2) = %v", twice.err)
+	}
+}
+
 // Calls the type checker refuses (a required parameter left unbound, a name
 // bound twice) are ineligible for the compiled tier and fail on the evaluator
 // as the checker says they do.
@@ -373,13 +405,20 @@ func TestCompiledNamedArgumentsIllFormed(t *testing.T) {
 		}
 		calc def Missing { in v : Real; return : Real = Weighted(weight = v); }
 		calc def Duplicate { in v : Real; return : Real = Weighted(value = v, value = 2.0); }
+		calc def Other { in value : Real; return : Real = value; }
+		calc def Elsewhere { in v : Real; return : Real = Weighted(Other::value = v); }
 	}`))
-	for _, name := range []string{"Missing", "Duplicate"} {
+	for _, name := range []string{"Missing", "Duplicate", "Elsewhere"} {
 		if ok, why := f.eligible(t, name); ok || why == "" {
 			t.Errorf("%s: eligible %v, reason %q", name, ok, why)
 		}
 	}
 	wantErrorIs(t, "Missing(1)", f.same(t, "Missing", realArg(1)), ErrUnboundParameter)
+	elsewhere := f.same(t, "Elsewhere", realArg(1))
+	wantErrorIs(t, "Elsewhere(1)", elsewhere, ErrUnknownParameter)
+	if !strings.Contains(elsewhere.err.Error(), `"Other::value"`) {
+		t.Errorf("Elsewhere(1) = %v", elsewhere.err)
+	}
 	duplicate := f.same(t, "Duplicate", realArg(1))
 	wantErrorIs(t, "Duplicate(1)", duplicate, ErrCalcArity)
 	if !strings.Contains(duplicate.err.Error(), `binds parameter "value" twice`) {

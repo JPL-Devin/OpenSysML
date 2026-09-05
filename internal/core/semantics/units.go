@@ -714,8 +714,8 @@ func unitOperandGrouped(op ast.OperatorKind, operand ast.Node, right bool) bool 
 	return false
 }
 
-// libSymbol resolves a library element by qualified name, uniquely or not at
-// all: a name two documents declare is no evidence of the library's element.
+// libSymbol resolves a library element by qualified name: the one bundled
+// library declaration, else the one declaration there is, else nothing.
 func (m *Model) libSymbol(fqn string) *symbols.Symbol {
 	if m.resolver == nil || m.resolver.Index() == nil {
 		return nil
@@ -723,8 +723,20 @@ func (m *Model) libSymbol(fqn string) *symbols.Symbol {
 	if cached, ok := m.libSymbols[fqn]; ok {
 		return cached
 	}
+	idx := m.resolver.Index()
+	matches := idx.LookupQualified(fqn)
 	var found *symbols.Symbol
-	if matches := m.resolver.Index().LookupQualified(fqn); len(matches) == 1 {
+	for _, sym := range matches {
+		if !idx.Library(sym) {
+			continue
+		}
+		if found != nil {
+			found = nil
+			break
+		}
+		found = sym
+	}
+	if found == nil && len(matches) == 1 {
 		found = matches[0]
 	}
 	m.libSymbols[fqn] = found

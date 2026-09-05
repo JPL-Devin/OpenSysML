@@ -91,15 +91,15 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	}
 	term, err := ec.ctx.model.UnitTermOfExpr(ec.scope, n.Index)
 	if err != nil {
-		return Value{}, fmt.Errorf("%w: %w", ErrNotAQuantity, err)
+		return Value{}, ec.notAQuantityError(n, err)
 	}
 
 	magnitude, err := ec.Eval(n.Operand)
 	if err != nil {
 		return Value{}, err
 	}
-	if magnitude.Kind != ValConst || !magnitude.Const.IsNumeric() {
-		return Value{}, fmt.Errorf("%w: magnitude of a quantity is %s, want a number", ErrNotAQuantity, magnitude.Kind)
+	if magnitude.Kind != ValVector && (magnitude.Kind != ValConst || !magnitude.Const.IsNumeric()) {
+		return Value{}, fmt.Errorf("%w: magnitude of a quantity is %s, want a number or a vector", ErrNotAQuantity, magnitude.Kind)
 	}
 
 	product, err := ec.ctx.model.UnitProductOfExpr(ec.scope, n.Index)
@@ -107,7 +107,61 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %w", ErrNotAQuantity, err)
 	}
 	unit := Unit{Text: semantics.UnitExprText(n.Index), Product: product, Term: term}
+	if magnitude.Kind == ValVector {
+		// A vector in a unit is the vector quantity with that unit on every axis.
+		num := magnitude.Vector().Elements
+		units := make([]Unit, len(num))
+		for i := range units {
+			units[i] = unit
+		}
+		return ec.ctx.vectorQuantityValue(num, units)
+	}
 	return NewQuantityValue(&Quantity{Num: magnitude.Const, Unit: unit}), nil
+}
+
+// notAQuantityError reports a bracket whose index is no unit; over an operand
+// declared a collection it adds that `#(…)` indexes. The operand is not evaluated.
+func (ec *EvalContext) notAQuantityError(n *ast.IndexExpr, cause error) error {
+	err := fmt.Errorf("%w: %w", ErrNotAQuantity, cause)
+	if what, ok := ec.declaredCollection(n.Operand); ok {
+		return fmt.Errorf("%w; `[…]` is the quantity notation `num [unit]`, index %s with `#(…)`", err, what)
+	}
+	return err
+}
+
+// declaredCollection names the collection an operand's declaration makes it:
+// an Array, a vector, or a feature of more than one value.
+func (ec *EvalContext) declaredCollection(operand ast.Node) (string, bool) {
+	var qn *ast.QualifiedName
+	switch node := operand.(type) {
+	case *ast.QualifiedName:
+		qn = node
+	case *ast.FeatureReference:
+		qn = node.Name
+	}
+	if qn == nil || ec.ctx.resolver == nil {
+		return "", false
+	}
+	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
+	if !ok || sym == nil || !semantics.IsShapeFeature(sym) {
+		return "", false
+	}
+	if typ := ec.ctx.extractType(sym); typ != nil {
+		for _, lib := range []struct{ fqn, what string }{{vectorTypeFQN, "a vector"}, {arrayTypeFQN, "an array"}} {
+			if libSym := ec.ctx.librarySymbol(lib.fqn); libSym != nil && ec.ctx.model.Conforms(typ, libSym) {
+				return lib.what, true
+			}
+		}
+	}
+	if !ec.ctx.occursOnce(sym) {
+		return "a sequence", true
+	}
+	return "", false
+}
+
+// unitOne is the unit a bare number is read in: no named unit, scale one.
+func unitOne() Unit {
+	return Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
 }
 
 // asQuantity views a value as a quantity: a quantity as itself, and a bare
@@ -119,7 +173,7 @@ func asQuantity(val Value) (*Quantity, bool) {
 		return val.Quantity(), true
 	case ValConst:
 		if val.Const.IsNumeric() {
-			return &Quantity{Num: val.Const, Unit: Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}}, true
+			return &Quantity{Num: val.Const, Unit: unitOne()}, true
 		}
 	}
 	return nil, false
@@ -128,11 +182,14 @@ func asQuantity(val Value) (*Quantity, bool) {
 // inUnit is a magnitude in the unit of a quantity asQuantity read; the unit a bare
 // number was read with is no unit at all, so the result is a bare number again.
 func inUnit(num semantics.Value, unit Unit) (Value, error) {
-	if unit.Text == "" && unit.Product.IsEmpty() {
+	if unit.none() {
 		return dimensionlessValue(num, unit.Term)
 	}
 	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }
+
+// none reports the unit a bare number is read with, which names nothing.
+func (u Unit) none() bool { return u.Text == "" && u.Product.IsEmpty() }
 
 // quantityOperands views both operands of an operation as quantities, reporting
 // false when neither is one — then the operation is ordinary arithmetic.

@@ -285,30 +285,69 @@ func TestRewriteDerivedLinesRestatesTheSummary(t *testing.T) {
 	}
 }
 
-// TestCheckDocumentRejectsDrift covers the three drifts the gate exists for:
-// a row the baseline lacks, a baseline name without a row, a hand-edited figure.
+// writeTestRepo lays out the corpus, rejection record and Go sources a census
+// document under test cites. Each entry of files is repository-relative.
+func writeTestRepo(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for rel, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestCheckDocumentRejectsDrift covers the drifts the gate exists for: a row the
+// baseline lacks, a baseline name without a row, a hand-edited figure, an
+// implementation location that resolves to nothing, and a negative case that
+// does not exist, is attributed elsewhere, or is bucketed against its row.
 func TestCheckDocumentRejectsDrift(t *testing.T) {
 	root := t.TempDir()
-	corpus := filepath.Join(root, filepath.FromSlash(negativeCorpusDir))
-	if err := os.MkdirAll(filepath.Join(corpus, "kerml", "dir.kerml"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(negativeCorpusDir), "kerml", "dir.kerml"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(corpus, "kerml", "a.kerml"), []byte("package P;\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestRepo(t, root, map[string]string{
+		negativeCorpusDir + "/kerml/a.kerml":      "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/b.kerml":      "// Invalid: b (KerML 7.2; pilot validateB).\npackage P;\n",
+		negativeCorpusDir + "/kerml/other.kerml":  "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/prose.kerml":  "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/spec.kerml":   "// Invalid: a (KerML 7.1 validateA; pilot Fixture_invalid.kerml.xt).\npackage P;\n",
+		negativeCorpusDir + "/xpect/x.kerml":      "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/xpect/bare.kerml":   "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
+		negativeCorpusDir + "/kerml/d.kerml":      "// Invalid: d (KerML 7.4; pilot validateD).\npackage P;\n",
+		negativeCorpusDir + "/kerml/d-open.kerml": "// Invalid: d (KerML 7.4 validateD; pilot Fixture_open.kerml.xt).\npackage P;\n",
+		negativeCorpusDir + "/kerml/d-odd.kerml":  "// Invalid: d (KerML 7.4 validateD; pilot Fixture_odd.kerml.xt).\npackage P;\n",
+		rejectionBaselinePath: `{"cases": [
+			{"path": "kerml/a.kerml", "bucket": "both-reject"},
+			{"path": "kerml/b.kerml", "bucket": "pilot-only-rejects"},
+			{"path": "kerml/other.kerml", "bucket": "both-reject"},
+			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
+			{"path": "kerml/spec.kerml", "bucket": "both-reject"},
+			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"},
+			{"path": "xpect/bare.kerml", "bucket": "both-reject"},
+			{"path": "kerml/d.kerml", "bucket": "pilot-only-rejects"},
+			{"path": "kerml/d-open.kerml", "bucket": "both-accept"},
+			{"path": "kerml/d-odd.kerml", "bucket": "rejected"}]}`,
+		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n\ntype Arena[T any] struct{}\n\nfunc (a *Arena[T]) Take() {}\n",
+	})
 	base := testBaseline(
 		Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful},
 		Constraint{Name: "validateB", Source: "sysml", Status: StatusNotImplemented},
 		Constraint{Name: "validateC", Source: "sysml", Status: StatusUnknown},
+		Constraint{Name: "validateD", Source: "kerml", Status: StatusApproximate},
 	)
 	doc := testProvenance + strings.Join([]string{
-		"**Census:** 1 of 3 named constraints are reported by OpenSysML — 1 ✅ faithful and 0 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.",
+		"**Census:** 2 of 4 named constraints are reported by OpenSysML — 1 ✅ faithful and 1 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.",
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
-		"| `validateA` | KerML | a | `x.go:f` | same | `kerml/a.kerml` | ✅ faithful |",
-		"| `validateB` | SysML | b | — | — | none | ❌ not implemented |",
+		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take). | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `kerml/spec.kerml`, `xpect/x.kerml` | ✅ faithful |",
+		"| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |",
 		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
+		"| `validateD` | KerML | d | internal/core/passes/a.go:helper | same | `kerml/d.kerml` | ⚠️ approximate |",
 		"",
 	}, "\n")
 	if err := checkDocument(root, doc, base); err != nil {
@@ -320,19 +359,19 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 	}{
 		"extra row": {
 			mutate: func(s string) string {
-				row := "| `validateB` | SysML | b | — | — | none | ❌ not implemented |\n"
-				return strings.Replace(s, row, row+"| `validateD` | SysML | d | — | — | none | ❌ not implemented |\n", 1)
+				row := "| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |\n"
+				return strings.Replace(s, row, row+"| `validateE` | SysML | e | — | — | none | ❌ not implemented |\n", 1)
 			},
-			want: "validateD is in the table but not in",
+			want: "validateE is in the table but not in",
 		},
 		"missing row": {
 			mutate: func(s string) string {
-				return strings.Replace(s, "| `validateB` | SysML | b | — | — | none | ❌ not implemented |\n", "", 1)
+				return strings.Replace(s, "| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |\n", "", 1)
 			},
 			want: "validateB is in docs/project/validation-constraints-baseline.json but has no row",
 		},
 		"hand-edited figure": {
-			mutate: func(s string) string { return strings.Replace(s, "1 of 3", "2 of 3", 1) },
+			mutate: func(s string) string { return strings.Replace(s, "2 of 4", "3 of 4", 1) },
 			want:   "line is stale",
 		},
 		"stale release": {
@@ -404,6 +443,130 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"negative case doubles a backtick": {
 			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "``kerml/a.kerml`", 1) },
 			want:   "neither `none` nor a backticked corpus path",
+		},
+		"implementation file is missing": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:APass.Run", "internal/core/passes/gone.go:APass.Run", 1)
+			},
+			want: "implementation: internal/core/passes/gone.go does not exist",
+		},
+		"implementation method is missing": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "a.go:APass.Run", "a.go:APass.Check", 1)
+			},
+			want: "internal/core/passes/a.go declares no APass.Check",
+		},
+		"implementation function is missing": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper", "a.go:renamed", 1) },
+			want:   "internal/core/passes/a.go declares no renamed",
+		},
+		"implementation cites no location": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take).", "internal/core/passes/a.go (APass)", 1)
+			},
+			want: "validateA implementation \"internal/core/passes/a.go (APass)\" cites no internal/<file>.go:<function> location",
+		},
+		"implementation cites a file by name only": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:helper,", "a.go:helper,", 1)
+			},
+			want: "validateA implementation a.go:helper is not a repository-relative internal/<file>.go location",
+		},
+		"implementation cites a missing symbol in a file by name only": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:helper,", "a.go:renamed,", 1)
+			},
+			want: "validateA implementation a.go:renamed is not a repository-relative internal/<file>.go location",
+		},
+		"implementation continues past the method": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:APass.Run ", "a.go:APass.Run.extra ", 1) },
+			want:   "internal/core/passes/a.go:APass.Run.extra is not a <function> or <Type>.<method> location",
+		},
+		"implementation continues past the function with a dash": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper-extra,", 1) },
+			want:   "internal/core/passes/a.go:helper-extra is not a <function> or <Type>.<method> location",
+		},
+		"implementation continues past the function with a slash": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper/extra,", 1) },
+			want:   "internal/core/passes/a.go:helper/extra is not a <function> or <Type>.<method> location",
+		},
+		"implementation continues past the function with a colon": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper:extra,", 1) },
+			want:   "internal/core/passes/a.go:helper:extra is not a <function> or <Type>.<method> location",
+		},
+		"generic method is missing": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:Arena.Take", "a.go:Arena.Put", 1) },
+			want:   "internal/core/passes/a.go declares no Arena.Put",
+		},
+		"negative case attributed to another constraint": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/a.kerml` | ❌", 1)
+			},
+			want: "validateA negative case kerml/b.kerml is attributed to validateB, not to this constraint",
+		},
+		"negative case names the constraint in prose but its pilot token names another": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, ", `kerml/prose.kerml`", "", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/prose.kerml` | ❌", 1)
+			},
+			want: "validateB negative case kerml/prose.kerml is attributed to validateA, not to this constraint",
+		},
+		"negative case cites the constraint in its specification citation only and another row lists it": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, ", `kerml/spec.kerml`", "", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/spec.kerml` | ❌", 1)
+			},
+			want: "validateB negative case kerml/spec.kerml is attributed to validateA, not to this constraint",
+		},
+		"negative case names no constraint in its header": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`xpect/x.kerml` | ✅", "`xpect/x.kerml`, `xpect/bare.kerml` | ✅", 1)
+			},
+			want: "validateA negative case xpect/bare.kerml names no constraint in its header",
+		},
+		"faithful row lists a pilot-only case": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/a.kerml` | ❌", 1)
+			},
+			want: "validateA is recorded faithful but docs/project/pilot-rejection-baseline.json records its negative case kerml/b.kerml as pilot-only-rejects",
+		},
+		"not-implemented row lists a case we reject": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `xpect/x.kerml` | ❌", 1)
+			},
+			want: "validateB is recorded not-implemented but docs/project/pilot-rejection-baseline.json records its negative case xpect/x.kerml as ours-only-rejects",
+		},
+		"approximate row lists a case both validators accept": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`kerml/d.kerml` | ⚠️", "`kerml/d.kerml`, `kerml/d-open.kerml` | ⚠️", 1)
+			},
+			want: "validateD negative case kerml/d-open.kerml is recorded as both-accept in docs/project/pilot-rejection-baseline.json, which is not a rejection",
+		},
+		"approximate row lists a case with an unknown bucket": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`kerml/d.kerml` | ⚠️", "`kerml/d.kerml`, `kerml/d-odd.kerml` | ⚠️", 1)
+			},
+			want: "validateD negative case kerml/d-odd.kerml is recorded as rejected in docs/project/pilot-rejection-baseline.json, which is not a rejection",
+		},
+		"faithful row lists a case both validators accept": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, "`kerml/d.kerml` | ⚠️", "none | ⚠️", 1)
+				s = strings.Replace(s, "`xpect/x.kerml` | ✅", "`xpect/x.kerml`, `kerml/d-open.kerml` | ✅", 1)
+				return s
+			},
+			want: "validateA negative case kerml/d-open.kerml is recorded as both-accept in docs/project/pilot-rejection-baseline.json, which is not a rejection",
+		},
+		"unknown row lists a case": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "| — | — | none | ❔", "| — | — | `xpect/x.kerml` | ❔", 1)
+			},
+			want: "validateC is recorded unknown but lists negative case xpect/x.kerml",
+		},
+		"attributed case is listed nowhere": {
+			mutate: func(s string) string { return strings.Replace(s, ", `kerml/other.kerml`", "", 1) },
+			want:   "kerml/other.kerml attributes its rejection to validateA, whose row does not list it",
 		},
 	}
 	for name, tc := range cases {

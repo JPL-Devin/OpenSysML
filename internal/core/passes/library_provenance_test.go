@@ -45,23 +45,30 @@ func TestW7GLibraryObjectiveIsNotACompetingObjective(t *testing.T) {
 	}
 }
 
-// A model's own inherited objective still competes: provenance decides, not
-// inheritance.
-func TestW7GModelObjectiveStillCompetesWithAnInheritedOne(t *testing.T) {
+// Where a case owns no objective, provenance decides which inherited objectives
+// compete: two library ones are the frame, two of the model's own are a defect.
+func TestW7GInheritedObjectivesCompeteByProvenance(t *testing.T) {
 	const frame = `package Frame {
 		case def FramedCase {
 			objective frameObj;
 		}
+		case def AlsoFramed :> FramedCase {
+			objective otherFrameObj;
+		}
 	}`
+	if diags := only(constraintDiagsOverLibrary(t, frame, `package C {
+		case def Analysis :> Frame::AlsoFramed;
+	}`), "only-one-objective"); len(diags) != 0 {
+		t.Fatalf("library objectives competed with each other, got %v", diags)
+	}
 	diags := only(constraintDiagsOverLibrary(t, frame, `package C {
 		case def Base {
 			objective inheritedObj;
+			objective anotherObj;
 		}
-		case def Analysis :> Base {
-			objective own;
-		}
+		case def Analysis :> Base;
 	}`), "only-one-objective")
-	if len(diags) != 1 {
-		t.Fatalf("expected the model's own objective to be diagnosed once, got %v", diags)
+	if len(diags) != 2 {
+		t.Fatalf("expected the owned excess and the inherited conflict, got %v", diags)
 	}
 }

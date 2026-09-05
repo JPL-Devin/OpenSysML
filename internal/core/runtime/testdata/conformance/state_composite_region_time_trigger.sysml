@@ -2,6 +2,8 @@
 // region-local: the deeper substate and the composite are exited, and the
 // sibling region keeps its own active state.
 package test {
+	private import SI::*;
+
 	state Machine {
 		attribute log : Integer = 0;
 
@@ -12,16 +14,16 @@ package test {
 				entry; then lstart;
 				state lstart;
 				state Grouping {
-					exit { log = log * 10 + 2; }
+					exit { assign log := log * 10 + 2; }
 
 					state Step1 {
-						exit { log = log * 10 + 1; }
+						exit { assign log := log * 10 + 1; }
 					}
 
-					accept after 5 then Recovered;
+					accept after 5 [s] then Recovered;
 				}
 				state Recovered {
-					entry { log = log * 10 + 3; }
+					entry { assign log := log * 10 + 3; }
 				}
 
 				transition first lstart then Step1;

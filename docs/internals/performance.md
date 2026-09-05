@@ -61,6 +61,76 @@ Beyond the standard figures they report:
 before it holds anything, so reading a size against it separates the model's cost
 from the session's.
 
+`internal/core/parser/bench_test.go` times the parser alone over a real model: it
+parses every `.sysml` and `.kerml` file under the directory `OPENSYSML_BENCH_MODEL`
+names, with no library, no name resolution and no validation, and skips when the
+variable is unset:
+
+```bash
+OPENSYSML_BENCH_MODEL=/path/to/model go test ./internal/core/parser -run '^$' -bench ParseModel -benchmem
+```
+
+`internal/perfbench/model_bench_test.go` times the whole load of the same directory
+as one REPL session — library, resolution and validation included — and fails if the
+model has errors, so the measured load is a clean one:
+
+```bash
+OPENSYSML_BENCH_MODEL=/path/to/model go test ./internal/perfbench -run '^$' -bench REPLLoadModel -benchmem
+```
+
+## A real model: Apollo 11
+
+The synthetic models below scale one shape; a model written by systems engineers
+leans on the quantity and unit libraries, nests deeply, and exercises constructs the
+generator never emits. The largest public one is Airbus's
+[Apollo 11 SysML v2 model](https://github.com/airbus/apollo-11-sysml-v2)
+(Mozilla Public License 2.0): at commit `6e9c93f`, **28 files, 7,221 lines,
+347 KB** of SysML v2 spanning the program, its requirements, the logical and
+technical architectures, operations, and the trajectory calculations.
+
+```bash
+git clone https://github.com/airbus/apollo-11-sysml-v2 && git -C apollo-11-sysml-v2 checkout 6e9c93f
+OPENSYSML_BENCH_MODEL=apollo-11-sysml-v2 go test ./internal/core/parser -run '^$' -bench ParseModel -benchmem
+sysml -validate -memstats $(find apollo-11-sysml-v2 -name '*.sysml')
+```
+
+| what | wall | allocated |
+| ---- | ---- | --------- |
+| parse all 28 files | **8.2 ms** | 4.9 MiB in 31 000 allocations |
+| `sysml -validate`: load the standard library, resolve, validate, report | **0.37 s** | 186 MiB, about 155 MiB taken from the OS |
+
+Parsing is a little over 2% of the whole run — 880 lines a millisecond, 42 MB/s —
+so the cost of loading a model is name resolution and validation, and that is
+where the work described in the rest of this page goes. The largest single share
+of the remainder is the lookups made through the model's wildcard imports of the
+quantity libraries (`import ISQ::*`, `import SI::*`), which is why those are
+answered by name (below).
+
+### What it reports
+
+The run reports **3 errors and 34 warnings**, and every one of them is a finding
+about the model. The three errors are calculation invocations that supply fewer
+arguments than the calculation declares inputs, all in
+`Analysis/CalculationsPackage.sysml`:
+
+| Line | Expression as published | Finding |
+|---|---|---|
+| 111 | `return deltaV :> ISQ::speed = isp * g0 * ln(m0 / mf);` | `ln` is the alias of `CoSMAQuantitiesAndUnitsPackage::naturalLogarithm`, declared `calc <ln> naturalLogarithm { in x: DataValue[1]; in y: DataValue[1]; return : DataValue[1]; }` — two inputs, one argument. A natural logarithm takes one argument; the second `in` is the slip |
+| 124 and 135 | `return deltaV :> ISQ::speed = calculateDeltaV(isp, initialMass, finalMass);` | `calculateDeltaV` declares `in isp`, `in g0`, `in m0`, `in mf` — four inputs, three arguments, so `g0` (standard gravity) is never supplied |
+
+Of the warnings, 33 are the crew declarations in `Program/ProgramPackage.sysml`
+written `individual part : 'Eugene Cernan' :> crew;`, where `part` is read as the
+kind of the usage rather than its name, so the usage is unnamed; the last is
+dimensional: `calculateLoiDeltaV` declares the Moon's gravitational parameter
+`in mu_Moon :> ISQ::force`, so `v_inf^2 + 2*mu_Moon/r_periapsis` adds a
+velocity squared (L²·T⁻²) to a force over a length (M·T⁻²). A gravitational
+parameter is L³·T⁻².
+
+The pinned OMG pilot validator over the same files reports nothing: it does not
+check an invocation's argument count against the invoked calculation, a gap
+[omg-issues.md](../project/omg-issues.md#defects-in-the-pilot-implementation)
+records. Nothing has been filed against the model's repository.
+
 ## What a large model costs
 
 Loading is parse, scope building, name resolution and the validation passes —
@@ -163,9 +233,13 @@ load's wall time follows. The load's major allocation sources include:
   sparse ones.
 - A wildcard import surfaces a name by enumerating the target namespace's direct
   children (`symbols.Index.LookupDirectChildren`), which rebuilt and re-sorted
-  that list on every unqualified lookup made through the import. The index now
-  keeps the list per namespace and visibility, and drops what it kept whenever a
-  write lands in any of its tables, so a lookup after an edit is recomputed.
+  that list on every unqualified lookup made through the import, and then
+  compared the name against every member — the whole of `ISQ` for each name a
+  model reaching `import ISQ::*` resolves. The index now keeps the list per
+  namespace and visibility and indexes it by leaf and short name
+  (`LookupDirectChildrenNamed`), so a lookup costs its matches rather than the
+  namespace; it drops what it kept whenever a write lands in any of its tables, so
+  a lookup after an edit is recomputed.
 
 The scope representation is shaped by the actual models. In the standard
 library, 10,666 scopes contain no named members 70.5% of the time, 99.3% contain

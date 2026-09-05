@@ -107,6 +107,19 @@ func TestFeatureValueOverridingImplicitParameterRedefinition(t *testing.T) {
 	overridingDiags(t, src, "= 2", "= 5", "= 3")
 }
 
+// An unnamed result parameter is named by its owner, not by a dangling `::`.
+func TestFeatureValueOverridingUnnamedResult(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Real;
+		calc def Base { in x : Real; return : Real = x; }
+		calc def Own :> Base { return : Real = x + 1.0; }
+	}`
+	diags := overridingDiags(t, src, "= x + 1.0")
+	if msg := diags[0].Message; !strings.Contains(msg, "of the unnamed feature of P::Base:") {
+		t.Errorf("message %q does not name the result by its owner", msg)
+	}
+}
+
 // Nested and named-redefinition shapes reach the same binding.
 func TestFeatureValueOverridingNestedAndRenamed(t *testing.T) {
 	const src = `package P {
@@ -243,4 +256,25 @@ func TestFeatureValueOverridingAnonymousOwnedConstraint(t *testing.T) {
 			t.Errorf("message %q does not name P::R::c2", d.Message)
 		}
 	}
+}
+
+// The parameters of a require/assume constraint redefine the parameters of the
+// constraint it redefines by position, as those of any step do: a lone `in limit`
+// overrides the first parameter's binding, whatever its name (pilot 2026-07 agrees).
+func TestFeatureValueOverridingOwnedConstraintParameters(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Real;
+		constraint def Below { in x : Real; in limit : Real; x < limit }
+		requirement def Base {
+			attribute m : Real = 300.0;
+			require constraint n : Below { in x = m; in limit default = 400.0; }
+			assume constraint a : Below { in x = m; in limit = 400.0; }
+		}
+		requirement def S1 :> Base { require constraint :>> n { in limit = 200.0; } }
+		requirement def S2 :> Base { assume constraint :>> a { in x = m; in limit = 200.0; } }
+		requirement def S3 :> Base { require constraint :>> n { in x; in limit = 200.0; } }
+		requirement def S4 :> Base { require constraint :>> n { in :>> x; in :>> limit = 200.0; } }
+		requirement def S5 :> Base { require constraint :>> n { in x = m; in limit = 200.0; } }
+	}`
+	overridingDiags(t, src, "= 200.0", "= m", "= 200.0", "= m")
 }

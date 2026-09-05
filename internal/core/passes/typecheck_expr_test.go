@@ -243,7 +243,7 @@ func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
 				transition first a when temp + 1 then b;
 			}
 		}
-	}`, "change event condition must be Boolean, found Integer")
+	}`, "a 'when' trigger's condition must be Boolean, found Integer")
 }
 
 func TestExprChangeEventConditionOK(t *testing.T) {
@@ -286,7 +286,7 @@ func TestExprAcceptWhenConditionMustBeBoolean(t *testing.T) {
 				state b;
 			}
 		}
-	}`, "change event condition must be Boolean, found Integer")
+	}`, "a 'when' trigger's condition must be Boolean, found Integer")
 }
 
 func TestExprTransitionGuardComparisonOK(t *testing.T) {
@@ -724,4 +724,74 @@ func TestExprScalarSpecializationUsesLattice(t *testing.T) {
 		attribute def Mass specializes ScalarValues::Integer;
 		part def Car { attribute m : Mass = 5.5; }
 	}`, "cannot bind Rational value to a feature typed by Integer")
+}
+
+// A body `{ … }` written as a value is the Expression itself, whatever its
+// result would be, so it binds to no scalar and to no data type; the pilot
+// reports each binding below. A body a type accepts, or an untyped feature,
+// is left alone.
+func TestExprBodyValueIsTheExpression(t *testing.T) {
+	const prelude = `package P {
+		private import ScalarValues::*;
+		private import ISQ::*;
+		private import SI::*;
+		attribute def Temp;
+		calc def KT { in t : Temp; return : Integer = 1; }
+		calc def KA { in a : Base::Anything; return : Integer = 1; }
+		calc def KE { in e : Performances::Evaluation; return : Integer = 1; }
+		calc def KF { in calc f : Performances::Evaluation; return : Integer = 1; }
+		calc def KC { in c : Base::Anything[0..*]; return : Integer = 1; }
+		package A { calc def K { in t : Temp; return : Integer = 1; } }
+		package B { calc def K { in e : Performances::Evaluation; return : Integer = 2; } }
+		part def Box { attribute inner : Temp; }
+		part def H {
+			private import A::*;
+			private import B::*;
+			attribute flag : Boolean;
+			attribute n : Integer;
+			%s
+		}
+	}`
+	for _, tc := range []struct{ decl, want string }{
+		{"attribute b : Boolean = { 5 };", "cannot bind Expression value to a feature typed by Boolean"},
+		{"attribute b : Boolean = { true };", "cannot bind Expression value to a feature typed by Boolean"},
+		{"attribute i : Integer = { 5 };", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute i : Integer = { true };", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute s : String = { 5 };", "cannot bind Expression value to a feature typed by String"},
+		{"attribute d : DurationValue = { 5 [s] };", "cannot bind Expression value to a feature typed by DurationValue"},
+		{"attribute t : Temp = { 5 };", "cannot bind Expression value to a feature typed by Temp"},
+		{"attribute i : Integer = 1 + { 5 };", "operator '+' is not defined for Natural and Expression"},
+		{"attribute i : Integer = -{ 5 };", "operator '-' requires a numeric operand, found Expression"},
+		{"attribute b : Boolean = 5 < { 5 };", "operator '<' is not defined for Natural and Expression"},
+		{"attribute b : Boolean = not { true };", "operator 'not' requires a Boolean operand, found Expression"},
+		{"attribute b : Boolean = { true } and flag;", "operator 'and' requires Boolean operands, found Expression and Boolean"},
+		{"attribute b : Boolean = { true } == true;", "comparing Expression with Boolean is always false"},
+		{"attribute a : Base::Anything = { \"x\" + 1 };", "operator '+' is not defined for String and Natural"},
+		{"action a { assign n := { 5 }; }", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute i : Integer = KT({ 5 });", "argument 1 of KT expects Temp, found Evaluation"},
+		{"attribute i : Integer = KT(t = { 5 });", "argument t of KT expects Temp, found Evaluation"},
+		{"attribute i : Integer = KT(({ 5 }, { 6 }));", "argument 1 of KT expects Temp, found Evaluation"},
+		{"part b : Box = new Box({ 5 });", "inner of Box is typed by Temp; cannot bind a value of type Evaluation"},
+	} {
+		diags := libraryTypeDiags(t, fmt.Sprintf(prelude, tc.decl))
+		if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.want) {
+			t.Errorf("%s: want one diagnostic containing %q, got %v", tc.decl, tc.want, diags)
+		}
+	}
+	for _, decl := range []string{
+		"attribute a : Base::Anything = { 5 };",
+		"expr e = { 5 };",
+		"attribute u = { 5 };",
+		"attribute b : Boolean = flag.{in f; f};",
+		"calc def K { in expr f; return : Integer = f(); } attribute i : Integer = K({ 5 });",
+		"attribute i : Integer = KA({ 5 });",
+		"attribute i : Integer = KE({ 5 });",
+		"attribute i : Integer = KF({ 5 });",
+		"attribute i : Integer = KC({ 5 });",
+		"attribute i : Integer = K({ 5 });",
+	} {
+		if diags := libraryTypeDiags(t, fmt.Sprintf(prelude, decl)); len(diags) != 0 {
+			t.Errorf("%s: want no diagnostics, got %v", decl, diags)
+		}
+	}
 }

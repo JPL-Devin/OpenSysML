@@ -42,6 +42,11 @@ type Condition struct {
 	// Required distinguishes a required condition from an assumption, which is
 	// trusted rather than required to hold.
 	Required bool
+
+	// Constraints are the named constraint usages stating the condition through
+	// their types, outermost first: each one's parameter values mask the
+	// enclosing ones', which mask the checked element's. Empty reads the latter alone.
+	Constraints []*symbols.Symbol
 }
 
 // Label renders the condition as written, negation and grouping included.
@@ -75,6 +80,22 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 type scopedExpr struct {
 	expr  ast.Node
 	scope *symbols.Scope
+	decl  *symbols.Symbol // feature the expression was written on
+
+	// env is the environment the expression's names resolve in when it is a
+	// named constraint's parameter value; nil for a feature read in place.
+	env *conditionEnv
+}
+
+// conditionEnv is what a condition's names resolve to: the features in scope
+// and the values the checked element binds by name (subject, actors).
+type conditionEnv struct {
+	features map[string]scopedExpr
+	bindings map[string]Value
+
+	// enclosing marks the environment around a constraint usage, which its
+	// arguments read: `in v = v` names the outer v, not the parameter it binds.
+	enclosing bool
 }
 
 // conditionsOf returns the conditions sym's members state, inherited ones first.
@@ -193,13 +214,25 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
 	if owner := ctx.namedConstraintOf(scopedMember{node: member, scope: scope}); owner != nil {
-		return ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+		start := len(out)
+		out = ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+		setConstraint(out[start:], owner)
+		return out
 	}
 	bodyScope := symbols.ConstraintBodyScope(scope, member)
 	for _, nested := range body {
 		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
 	return out
+}
+
+// setConstraint marks conds as stated by owner, enclosing any nested named
+// constraint already marked: the innermost usage's parameter values win.
+func setConstraint(conds []Condition, owner *symbols.Symbol) {
+	for i := range conds {
+		conds[i].Constraints = append([]*symbols.Symbol{owner}, conds[i].Constraints...)
+		setConstraint(conds[i].Group, owner)
+	}
 }
 
 // unexecutedStatement returns the first statement conds state, groups included,
@@ -577,22 +610,23 @@ type heldObject struct {
 
 // nestedObjects returns the objects the object-valued features of inst hold,
 // materializing a lazy one as reading its feature value does. A feature value that cannot be read
-// yields no object: one that is not there is no subject either.
+// yields no object: one that is not there is no subject either. The names a redefinition
+// chain gives one feature value hold its objects once, under the first.
 func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
-	features := ctx.FeaturesOf(inst.Type)
 	var out []heldObject
-	for i := range features {
-		feat := &features[i]
-		if feat.Name == "" || !holdsObjects(feat) {
+	read := map[*FeatureValue]bool{}
+	for _, of := range ctx.FeaturesOfObject(inst) {
+		if of.Name == "" || !holdsObjects(of.Feature) {
 			continue
 		}
-		fv, err := inst.GetFeatureValue(ctx, feat.Name)
-		if err != nil || fv == nil {
+		fv, err := inst.GetFeatureValue(ctx, of.Name)
+		if err != nil || fv == nil || read[fv] {
 			continue
 		}
+		read[fv] = true
 		for _, id := range heldObjects(fv.HeldValue()) {
 			if child, ok := ctx.instances[id]; ok {
-				out = append(out, heldObject{feature: feat.Name, instance: child})
+				out = append(out, heldObject{feature: of.Name, instance: child})
 			}
 		}
 	}
@@ -721,6 +755,9 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+	for _, constraint := range cond.Constraints {
+		features, bindings = ctx.constraintScope(features, bindings, constraint)
+	}
 	holds := true
 	if cond.Group != nil {
 		for _, sub := range cond.Group {
@@ -791,7 +828,63 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 			// uninitialized rather than the value materializing replaces.
 			expr = nil
 		}
-		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope()}
+		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope(), decl: feat.DefaultDecl}
+	}
+	return out
+}
+
+// constraintScope overlays a named constraint usage's features on those in scope:
+// its parameters mask same-named ones (subject and actors included). The
+// arguments binding them (`in v = v`) read the enclosing environment; a default
+// its definition wrote (`in y default = x`) reads the usage's own parameters.
+func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings map[string]Value, constraint *symbols.Symbol) (map[string]scopedExpr, map[string]Value) {
+	own := ctx.conditionFeatures(constraint)
+	if len(own) == 0 {
+		return features, bindings
+	}
+	enclosing := &conditionEnv{features: features, bindings: bindings, enclosing: true}
+	out := make(map[string]scopedExpr, len(features)+len(own))
+	for name, feat := range features {
+		out[name] = feat
+	}
+	inner := &conditionEnv{features: out, bindings: unmasked(bindings, own)}
+	for name, feat := range own {
+		feat.env = inner
+		if isArgument(feat.decl) {
+			feat.env = enclosing
+		}
+		out[name] = feat
+	}
+	return out, inner.bindings
+}
+
+// isArgument reports whether a parameter value was written on a usage rather
+// than on the definition declaring the parameter.
+func isArgument(decl *symbols.Symbol) bool {
+	if decl == nil || decl.OwnerScope == nil || decl.OwnerScope.Owner() == nil {
+		return false
+	}
+	_, definition := decl.OwnerScope.Owner().Decl.(*ast.Definition)
+	return !definition
+}
+
+// unmasked returns bindings without the names features declare.
+func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[string]Value {
+	masked := false
+	for name := range bindings {
+		if _, ok := features[name]; ok {
+			masked = true
+			break
+		}
+	}
+	if !masked {
+		return bindings
+	}
+	out := make(map[string]Value, len(bindings))
+	for name, value := range bindings {
+		if _, ok := features[name]; !ok {
+			out[name] = value
+		}
 	}
 	return out
 }

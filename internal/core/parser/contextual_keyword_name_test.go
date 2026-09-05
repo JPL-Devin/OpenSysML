@@ -84,6 +84,32 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 	}
 }
 
+// A namespace member takes the prefix as a body member does: KerML.xtext's
+// FeatureMember appears in both positions.
+func TestParseVarPrefixStartsANamespaceMember(t *testing.T) {
+	for _, src := range []string{
+		"package P { class C; var feature v : C; }",
+		"class C; var feature v : C;",
+		"package P { class C; derived var feature v : C; }",
+		"package P { class C; var #M feature v : C; metaclass M; }",
+	} {
+		p := New(source.New("test.kerml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Errorf("%s\nerrors = %v, want none", src, p.Diagnostics)
+			continue
+		}
+		members := root.Members
+		if pkg, ok := members[0].(*ast.Membership).Member.(*ast.Package); ok {
+			members = pkg.Members
+		}
+		u, ok := members[1].(*ast.Membership).Member.(*ast.Usage)
+		if !ok || u.Ident.Name != "v" || !u.IsVariable || u.PrefixKeyword != "var" {
+			t.Errorf("%s\nmember = %+v, want a variable feature v", src, members[1])
+		}
+	}
+}
+
 // `chain` is the feature chain modifier only when a name follows it; before
 // `=`, `:`, `;`, `[` or a word the grammar reserves — one that continues the
 // declaration (`default`, `ordered`, `subsets`, `specializes`) or ends it
@@ -196,4 +222,52 @@ func firstUsage(t *testing.T, n ast.Node) *ast.Usage {
 	}
 	t.Fatalf("member parsed to %T, want a usage", n)
 	return nil
+}
+
+// A KerML connector's ends may be named by words only SysML reserves, so
+// `connector frame to state` states two ends and names no connector.
+func TestParseKerMLConnectorEndsNamedByOtherLanguageKeywords(t *testing.T) {
+	for _, src := range []string{
+		"package P { feature frame; feature state; connector frame to state; }",
+		"package P { feature frame; feature state; connector [0..1] frame to [1] state; }",
+		"package P { feature frame; feature state; connector e references frame to state; }",
+		"package P { feature frame; feature state; connector e ::> frame to state; }",
+		"package P { feature part; feature state; connector part.frame to state.action; }",
+	} {
+		p := New(source.New("test.kerml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 || len(p.Warnings) != 0 {
+			t.Errorf("%s\nerrors = %v, warnings = %v, want none", src, p.Diagnostics, p.Warnings)
+			continue
+		}
+		pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[len(pkg.Members)-1].(*ast.Membership).Member)
+		if u.Ident.Name == "frame" || u.Ident.Name == "part" || len(u.ConnectorEnds) != 2 {
+			t.Errorf("%s\ndeclared %q with %d ends, want two ends and no end taken as the name", src, u.Ident.Name, len(u.ConnectorEnds))
+		}
+	}
+}
+
+// A KerML connector's first end may be a global `$::`-qualified name, which
+// cannot be the connector's name either.
+func TestParseKerMLConnectorEndsGloballyQualified(t *testing.T) {
+	for _, src := range []string{
+		"package P { feature a; feature b; connector $::P::a to b; }",
+		"package P { feature a; feature b; connector [0..1] $::P::a to [1] b; }",
+		"package P { feature a; feature b; connector e references $::P::a to $::P::b; }",
+		"package P { feature a; feature b; connector e ::> $::P::a to b; }",
+		"package P { feature a; feature b; connector $::P::a.x to b.y; }",
+	} {
+		p := New(source.New("test.kerml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 || len(p.Warnings) != 0 {
+			t.Errorf("%s\nerrors = %v, warnings = %v, want none", src, p.Diagnostics, p.Warnings)
+			continue
+		}
+		pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[len(pkg.Members)-1].(*ast.Membership).Member)
+		if u.Ident.Name == "a" || u.Ident.Name == "P" || len(u.ConnectorEnds) != 2 {
+			t.Errorf("%s\ndeclared %q with %d ends, want two ends and no end taken as the name", src, u.Ident.Name, len(u.ConnectorEnds))
+		}
+	}
 }

@@ -1,5 +1,6 @@
 {
   "type": "state",
+  "libraries": true,
   "finalState": "away",
   "outputs": {
     "deepEntries": {

@@ -392,7 +392,7 @@ the *documented* claims by running them:
   `ClearField("experimental")`. That is the only way to simulate an older service without touching
   the Go side.
 - **Guide transcripts go stale silently.** `docs/guide/07-saving-and-rdf.md` and
-  `docs/guide/09-python.md` embed real byte counts and refusal messages. Re-run each fenced command:
+  `docs/guide/09-clients.md` embed real byte counts and refusal messages. Re-run each fenced command:
   the `%save` pair (guide 2's `MyModel` file → `181 bytes of sysml` / `1872 bytes of ttl`) and
   `examples/rdf-interop-demo.sysml` (`7937` ttl / `877` sysml bytes) still hold at 493693a3, but the
   page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the
@@ -5678,3 +5678,43 @@ then `git worktree remove --force /tmp/wt-old`. The CLI form `./bin/sysml -insta
 Konsole `clear` wipes the scrollback, so a `%state` result that scrolls off before the screenshot is
 gone; take the screenshot before the next long `%features`, or start the next REPL without `clear`
 and use <kbd>Shift</kbd>+<kbd>PageUp</kbd>.
+
+## Structured runtime values: Array, vector, vector quantity (PR #883)
+
+- **Package-level attributes are the surface for Array/vector-quantity values.** `%eval P::grid` on
+  `attribute grid : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }` (with
+  `private import Collections::*; private import ScalarValues::*;`) prints
+  `Array(2, 3)[1, 2, 3, 4, 5, 6]`, and `.rank`/`.flattenedSize`/`.dimensions`/`.elements`,
+  `P::grid#(2, 1)` and `CollectionFunctions::'array#'(P::grid, (2, 1))` all read from it. On an
+  **instantiated part**, the same Array attribute renders as `grid = Instance(ID: n)` with nested
+  `dimensions`/`elements` lines in `%features`, and `%eval Def::grid` on the instance answers
+  `Instance(ID: n)` — not `Array(2, 2)[…]`. Do not read that as the Array kind being broken; it is
+  the instance-materialisation path, unchanged from before, and worth flagging as a gap rather than
+  a regression. Vector (`⟨1.0, 0.0, 0.0⟩`) and vector-quantity (`⟨2.0, 4.0⟩ [m]`) attributes do
+  render structured in `%features`.
+- **A qualified package attribute inside a compound `%eval` does not resolve** (`%eval V::vq * 2`
+  → `unresolved reference: V::vq`) on both the new and the merge-base binary, while `%eval V::vq`
+  alone works and `%eval P::grid#(1, 3)` works. Put arithmetic on quantities/vectors into an
+  attribute's own `= expr` and `%eval` the attribute, or write the operands inline
+  (`%eval 3 * VectorFunctions::VectorOf((1.0, 2.0))`).
+- Vector quantities need `private import Quantities::*; private import SI::*;` (ISQ optional) for
+  `2 [m]`; `VectorFunctions::cartesianZeroVector` needs `VectorValues::*` imported. A vector is
+  `==`-distinct from a sequence (`VectorOf((1, 2, 3)) == (1, 2, 3)` is `false`) — a cheap on-camera
+  proof that `⟨…⟩` is not a pretty-printed `[…]`.
+- Adversarial Array probes that must stay typed errors: `#(0, 0)`, `#(3, 1)`, `#(1, 2147483648)`
+  (index out of range), one index into rank 2 (multiplicity violation), a literal past int64
+  (arithmetic overflow), `elements` shorter than `dimensions` (multiplicity violation naming the
+  flattenedSize), `dimensions = (0, 3)` / a negative dimension (Positive typing). Dimensions whose
+  product overflows int64 (`(4611686018427387904, 4)`) must say "flattenedSize … exceeds the Integer
+  range" (arithmetic overflow), never a wrapped `flattenedSize 0`. Writing a two-component vector to
+  a feature typed `CartesianThreeVectorValue` (or a def specializing it) must refuse with
+  `it declares dimension = 3`; `grid.label` on an `attribute def … :> Array` with its own members
+  must answer the member, not `array has no feature label`.
+- gRPC: a vector/vector-quantity feature crosses as `kind=null` with
+  `unsupported: vector ⟨1.0, 0.0, 0.0⟩` / `unsupported: vector quantity ⟨2.0, 4.0⟩ [m]`; assert on
+  `inst.get_feature(name).value.WhichOneof('kind') == 'null'` and the text, since the Python
+  attribute access (`inst.dir`) raises `FeatureValueError` by design. `m.eval('2 [m] * 3')` on the
+  model fails with `unresolved unit m` (model-scope eval sees no SI import) — use unitless
+  expressions (`m.eval('3 * 4')`) as the service-survival check. A throwaway venv
+  (`python3 -m venv ~/pr-venv && ~/pr-venv/bin/pip install -e clients/python`) is ~1 min; drive the
+  freshly built `./bin/sysml-grpc -port 50123` with `auto_start=False`.

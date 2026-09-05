@@ -380,7 +380,7 @@ package mine {
 // built-in of the same name does not answer in its place.
 func TestLibraryFunctionDoesNotHijackAnOutputAssignedInABody(t *testing.T) {
 	ctx, idx := contextForSource(t, `package RealFunctions {
-	calc sqrt { in x : Real; out r : Real; r = 42.0; }
+	calc sqrt { in x : Real; out r : Real; assign r := 42.0; }
 }`)
 
 	sym := lookupOne(t, idx, "RealFunctions::sqrt")
@@ -464,21 +464,13 @@ func lookupOne(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
 	return syms[0]
 }
 
-// vectorValues is the elements of a vector result, which is the sequence of its
-// elements.
+// vectorValues is the elements of a vector result, which is a vector value.
 func vectorValues(t *testing.T, val Value) []semantics.Value {
 	t.Helper()
-	if val.Kind != ValSequence {
-		t.Fatalf("result is %s, want a vector (a sequence of its elements)", val.Kind)
+	if val.Kind != ValVector {
+		t.Fatalf("result is %s, want a vector", val.Kind)
 	}
-	out := make([]semantics.Value, 0, val.Sequence().Size())
-	for _, elem := range val.Sequence().Elements() {
-		if elem.Kind != ValConst {
-			t.Fatalf("vector element is %s, want a constant", elem.Kind)
-		}
-		out = append(out, elem.Const)
-	}
-	return out
+	return val.Vector().Elements
 }
 
 func realConsts(reals ...float64) []semantics.Value {
@@ -585,6 +577,44 @@ func TestVectorFunctionScalarValues(t *testing.T) {
 			}
 			if got.Kind != ValConst || got.Const != tc.want {
 				t.Fatalf("%s = %+v, want %+v", tc.fn, got, tc.want)
+			}
+		})
+	}
+}
+
+// A norm is finite whenever it is in the Real range, even where the squares of
+// the components are not, and the angle is defined for any two non-zero vectors
+// of finite components, even ones whose norms leave the Real range.
+func TestVectorNormAndAngleOfLargeComponents(t *testing.T) {
+	norm, err := applyLibrary(t, "VectorFunctions::norm", realVec(3e200, 4e200))
+	if err != nil {
+		t.Fatalf("norm = error %v", err)
+	}
+	if got := norm.Const.Real; math.Abs(got-5e200) > 1e185 {
+		t.Fatalf("norm = %g, want 5e200", got)
+	}
+	cases := []struct {
+		name string
+		v, w Value
+		want float64
+	}{
+		{"orthogonal", realVec(1e200, 0), realVec(0, 1e200), math.Pi / 2},
+		{"parallel", realVec(1e200, 2e200), realVec(2e200, 4e200), 0},
+		{"opposite", realVec(1e200, 0), realVec(-1e200, 0), math.Pi},
+		{"parallel, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1e308, 1e308), 0},
+		{"orthogonal, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1.5e308, -1.5e308), math.Pi / 2},
+		{"opposite, norms beyond the Real range", realVec(1.5e308, 1.5e308), realVec(-1.5e308, -1.5e308), math.Pi},
+		{"one norm beyond the Real range", realVec(1.5e308, 1.5e308), realVec(1, 1), 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := applyLibrary(t, "VectorFunctions::angle", tc.v, tc.w)
+			if err != nil {
+				t.Fatalf("angle = error %v", err)
+			}
+			// The arc cosine magnifies a rounding of the cosine near ±1 to ~1e-8.
+			if got.Kind != ValConst || math.Abs(got.Const.Real-tc.want) > 1e-7 {
+				t.Fatalf("angle = %s, want %g", FormatValue(got), tc.want)
 			}
 		})
 	}
@@ -898,7 +928,7 @@ func TestVectorAndComplexFunctionErrors(t *testing.T) {
 		{"two components of a three-vector", "VectorFunctions::CartesianThreeVectorOf", []Value{realVec(1, 2)}, ErrMultiplicityViolation},
 		{"division of a vector by zero", "VectorFunctions::vectorScalarDiv", []Value{realVec(1, 2), constReal(0)}, ErrDivisionByZero},
 		{"the angle to a zero vector", "VectorFunctions::angle", []Value{realVec(0, 0), realVec(1, 0)}, semantics.ErrArithmeticDomain},
-		{"a norm beyond the Real range", "VectorFunctions::norm", []Value{realVec(1e200, 1e200)}, semantics.ErrArithmeticOverflow},
+		{"a norm beyond the Real range", "VectorFunctions::norm", []Value{realVec(1.5e308, 1.5e308)}, semantics.ErrArithmeticOverflow},
 		{"a sum beyond the Real range", "VectorFunctions::cartesian+", []Value{realVec(1e308, 1), realVec(1e308, 1)}, semantics.ErrArithmeticOverflow},
 		{"a difference beyond the Real range", "VectorFunctions::cartesian-", []Value{realVec(1e308, 1), realVec(-1e308, 1)}, semantics.ErrArithmeticOverflow},
 		{"a scaled element beyond the Real range", "VectorFunctions::scalarVectorMult", []Value{constReal(1e300), realVec(1e300)}, semantics.ErrArithmeticOverflow},
@@ -1058,12 +1088,9 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		fn   string
 		args []Value
 	}{
-		{"VectorFunctions::sum", []Value{realVec(1, 2, 3)}},
-		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
 		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
 		{"BaseFunctions::ToString", []Value{cx(1, 2)}},
-		{"CollectionFunctions::array#", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::[", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::all", nil},
 		{"BaseFunctions::as", []Value{constInt(1)}},
@@ -1371,30 +1398,38 @@ func TestLibraryFeatureValueLeavesAModelsOwnFeatureAlone(t *testing.T) {
 	}
 }
 
-// A library feature this runtime has no representation for the value of reports
-// itself, rather than a value of another shape.
-func TestLibraryFeatureValueUnrepresentable(t *testing.T) {
+// The zero-vector features are vectors, not flat sequences of Reals:
+// cartesianZeroVector groups the 1-, 2- and 3-dimensional zero vectors, and
+// every read builds its own value, so no reader can change another's.
+func TestLibraryFeatureZeroVectors(t *testing.T) {
 	ctx, idx := libraryContextForSource(t, `package VectorFunctions {
-	feature cartesianZeroVector : Real[3];
-	feature cartesian3DZeroVector : Real[3];
+	feature cartesianZeroVector : CartesianVectorValue[3];
+	feature cartesian3DZeroVector : CartesianThreeVectorValue;
 }`)
 
-	if _, _, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesianZeroVector")); !errors.Is(err, ErrUnevaluableLibraryFunction) {
-		t.Fatalf("cartesianZeroVector error = %v, want %v", err, ErrUnevaluableLibraryFunction)
+	grouped, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesianZeroVector"))
+	if err != nil || !ok || grouped.Kind != ValSequence {
+		t.Fatalf("cartesianZeroVector = %+v, %v, %v; want a sequence of vectors", grouped, ok, err)
+	}
+	if rendered := FormatValue(grouped); rendered != "[⟨0.0⟩, ⟨0.0, 0.0⟩, ⟨0.0, 0.0, 0.0⟩]" {
+		t.Fatalf("cartesianZeroVector = %s, want the zero vectors of dimension 1, 2 and 3", rendered)
+	}
+	for i, zero := range grouped.Sequence().Elements() {
+		if elements := vectorValues(t, zero); len(elements) != i+1 {
+			t.Fatalf("cartesianZeroVector#(%d) has dimension %d, want %d", i+1, len(elements), i+1)
+		}
 	}
 
-	// The three-dimensional zero vector does have a representation, and every
-	// read builds its own sequence: no reader can change another's value.
 	first, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
 	if err != nil || !ok {
 		t.Fatalf("cartesian3DZeroVector = %+v, %v, %v", first, ok, err)
 	}
 	if elements := vectorValues(t, first); len(elements) != 3 || elements[0].Real != 0 {
-		t.Fatalf("cartesian3DZeroVector = %v, want (0.0, 0.0, 0.0)", first)
+		t.Fatalf("cartesian3DZeroVector = %v, want ⟨0.0, 0.0, 0.0⟩", first)
 	}
 	second, _, _ := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
-	if first.Sequence() == second.Sequence() {
-		t.Fatalf("two reads of cartesian3DZeroVector share one sequence")
+	if first.Vector() == second.Vector() {
+		t.Fatalf("two reads of cartesian3DZeroVector share one vector")
 	}
 }
 
@@ -1494,9 +1529,72 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
 		}
 	}
-	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorFunctions::sum", "ComplexFunctions::ToString"} {
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorCalculations::transform", "ComplexFunctions::ToString"} {
 		if b, ok := listed[absent]; ok {
 			t.Errorf("%s is listed as %+v, want it left out", absent, b)
 		}
+	}
+}
+
+// TestArraySpecializationKeepsOwnMembers: an attribute def specializing Array
+// answers Array's features from its shape and its own members from the object,
+// directly and after the value passed through a calc, a parameter or an attribute.
+func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			attribute def LabeledGrid :> Array {
+				attribute label : String;
+				attribute scale : Real = 0.5;
+			}
+			attribute def OtherGrid :> Array;
+			attribute grid : LabeledGrid {
+				:>> dimensions = (2, 2);
+				:>> elements = (1, 2, 3, 4);
+				:>> label = "grid";
+			}
+			calc def pick { return : LabeledGrid = grid; }
+			calc def labelOf { in g : LabeledGrid; return : String = g.label; }
+			attribute copy : LabeledGrid = grid;
+			attribute plain : Array = grid;
+			attribute other : OtherGrid = grid;
+		}
+	`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"grid.rank", "2"},
+		{"grid.flattenedSize", "4"},
+		{"grid.dimensions", "[2, 2]"},
+		{"grid.elements#(3)", "3"},
+		{"grid.label", `"grid"`},
+		{"grid.scale", "0.5"},
+		{"pick()", "Array(2, 2)[1, 2, 3, 4]"},
+		{"pick().label", `"grid"`},
+		{"pick().scale", "0.5"},
+		{"pick().rank", "2"},
+		{"CollectionFunctions::'array#'(pick(), (2, 1))", "3"},
+		{"labelOf(grid)", `"grid"`},
+		{"copy.label", `"grid"`},
+		{"plain.label", `"grid"`},
+	} {
+		got, err := evalIn(t, ctx, pkg.Scope, tc.src)
+		if err != nil {
+			t.Errorf("%s: %v", tc.src, err)
+			continue
+		}
+		if rendered := FormatValue(got); rendered != tc.want {
+			t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
+		}
+	}
+	if _, err := evalIn(t, ctx, pkg.Scope, "grid.missing"); err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Errorf("grid.missing = %v, want an error naming the member", err)
+	}
+	// The value stays a LabeledGrid, which no OtherGrid feature can hold.
+	if got, err := evalIn(t, ctx, pkg.Scope, "other"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("other = (%s, %v), want %v", FormatValue(got), err, ErrTypeMismatch)
 	}
 }

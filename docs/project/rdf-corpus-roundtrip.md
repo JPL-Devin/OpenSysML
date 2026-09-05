@@ -59,21 +59,26 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 303 |
+| `stable` | 305 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
 | `unwritable` | 0 |
 | `unparseable` | 0 |
-| `refused` | 42 |
+| `refused` | 40 |
 | **total** | **345** |
 
-So 303 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
+So 305 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
 byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
 it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
 back up to whitespace, as a different graph, or that could not be written back or re-read from
-canonical notation all moved to `stable` when it landed. The refusals by class: 22
-`feature-declaration`, 10 `event-declaration`, 3 each of `duplicate-declaration`,
-`snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`. No file
+canonical notation all moved to `stable` when it landed. The refusals by class: 23
+`feature-declaration`, 10 `event-declaration`, 3 each of `snapshot-declaration` and
+`assert-declaration`, and 1 `timeslice-declaration`. Three files were once refused as a
+`duplicate-declaration` because the parser read the anonymous binary connector `connector a to b;`
+as a connector *named* `a`; two of them (`parser_features_demo_advanced_connectors.kerml`,
+`Named Collection Members Example/VehicleTanks.kerml`) convert now that the ends are read as
+ends, and the third (`Simple Tests/ArgumentResolution.kerml`) meets the standing refusal of an
+anonymous `feature` declaration. No file
 is refused for an expression any longer: a body's result expression is mapped
 ([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
 took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an

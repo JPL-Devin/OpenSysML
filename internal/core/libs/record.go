@@ -10,7 +10,7 @@ import (
 // formatVersion is the on-disk record format version. Bump it whenever the
 // persisted shape changes; a change to what a record captures needs no bump,
 // since the build ID in the cache key already invalidates records (see buildid.go).
-const formatVersion = 25
+const formatVersion = 26
 
 // factRecord is the derived analysis persisted for one library symbol, named by
 // the fully-qualified name it is declared under. It holds no declaration and no
@@ -199,6 +199,11 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, mode
 		superFQN := idx.GetFQN(super)
 		if superFQN == "" {
 			return nil, false
+		}
+		// A nameless target — an unnamed result parameter — has no name to
+		// restore it by, so the whole edge set is derived on load.
+		if idx.Declaring(superFQN) != super {
+			return nil, complete
 		}
 		if seen[superFQN] {
 			continue

@@ -142,6 +142,10 @@ var (
 	// reported rather than passed through as if the instant had arrived.
 	ErrNoClock = errors.New("no clock to wait on")
 
+	// ErrTimeTriggerType is returned when a time trigger's argument is declared as
+	// no value of the type the trigger takes — the judgement validation makes of it.
+	ErrTimeTriggerType = errors.New("time trigger argument of the wrong type")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// the run's calc depth budget, which an unbounded recursion would otherwise
 	// do until the process ran out of stack.
@@ -348,9 +352,9 @@ var (
 	// that feature value rather than deciding anything about the model.
 	ErrFeatureValueMaterialization = errors.New("feature value could not be materialized")
 
-	// ErrNoSuchFeature is returned when a chained assignment reaches an object
-	// whose type declares no feature of the name the target's last segment
-	// writes: the object has nowhere to hold the value.
+	// ErrNoSuchFeature is returned when a member read, a write, or a chained
+	// assignment reaches an object whose type declares no feature of that name:
+	// the object has nothing to answer with and nowhere to hold the value.
 	ErrNoSuchFeature = errors.New("object has no such feature")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names

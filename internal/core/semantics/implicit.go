@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -96,52 +98,78 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefUseCase:          "UseCases::UseCase",
 }
 
+// implicitKerMLBinaryBases maps a KerML association keyword to the base a
+// declaration with exactly two ends specializes (KerML 1.1 §8.3.3.5): the binary
+// link rather than the n-ary one of its kind.
+var implicitKerMLBinaryBases = map[string]string{
+	"assoc":        binaryConnectorBaseFQN,
+	"association":  binaryConnectorBaseFQN,
+	"assoc struct": "Objects::BinaryLinkObject",
+	"interaction":  binaryConnectorBaseFQN,
+}
+
+// implicitKerMLBinaryFeatureBases maps a KerML connector keyword to the base
+// feature a connector with exactly two ends subsets (KerML 1.1 §8.3.4.7).
+var implicitKerMLBinaryFeatureBases = map[string]string{
+	"connector": "Links::binaryLinks",
+}
+
+// implicitKerMLBehaviorBases is the behavior base a kind that is also an
+// association specializes: an interaction is a Performance and a Link (KerML 1.1 §7.4.10.2).
+var implicitKerMLBehaviorBases = map[string]string{
+	"interaction": "Performances::Performance",
+}
+
 var implicitKerMLBases = map[string]string{
-	"classifier":  anythingFQN,
-	"class":       occurrenceFQN,
-	"struct":      "Objects::Object",
-	"assoc":       "Links::Link",
-	"association": "Links::Link",
-	"behavior":    "Performances::Performance",
-	"function":    "Performances::Evaluation",
-	"predicate":   "Performances::BooleanEvaluation",
-	"interaction": "Transfers::Transfer",
-	"metaclass":   "Metaobjects::Metaobject",
-	"datatype":    dataValueFQN,
-	"type":        anythingFQN,
+	"classifier":   anythingFQN,
+	"class":        occurrenceFQN,
+	"struct":       "Objects::Object",
+	"assoc":        "Links::Link",
+	"association":  "Links::Link",
+	"assoc struct": "Objects::LinkObject",
+	"behavior":     "Performances::Performance",
+	"function":     "Performances::Evaluation",
+	"predicate":    "Performances::BooleanEvaluation",
+	"interaction":  "Links::Link",
+	"metaclass":    "Metaobjects::Metaobject",
+	"datatype":     dataValueFQN,
+	"type":         anythingFQN,
 }
 
 // implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
 // every feature of that kind subsets (KerML 1.1 §8.4.2).
 var implicitKerMLFeatureBases = map[string]string{
-	"type":        baseUsageFQN,
-	"classifier":  baseUsageFQN,
-	"feature":     baseUsageFQN,
-	"class":       "Occurrences::occurrences",
-	"struct":      "Objects::objects",
-	"datatype":    "Base::dataValues",
-	"assoc":       linksFQN,
-	"association": linksFQN,
-	"connector":   linksFQN,
-	"binding":     "Links::selfLinks",
-	"bind":        "Links::selfLinks",
-	"succession":  "Occurrences::happensBeforeLinks",
-	"behavior":    "Performances::performances",
-	"step":        "Performances::performances",
-	"function":    "Performances::evaluations",
-	"expr":        "Performances::evaluations",
-	"predicate":   "Performances::booleanEvaluations",
-	"bool":        "Performances::booleanEvaluations",
-	"inv":         "Performances::trueEvaluations",
-	"interaction": "Transfers::transfers",
-	"flow":        "Transfers::flowTransfers",
-	"metaclass":   "Metaobjects::metaobjects",
+	"":             baseUsageFQN, // a member declared with no kind keyword (`end a;`) is a feature
+	"type":         baseUsageFQN,
+	"classifier":   baseUsageFQN,
+	"feature":      baseUsageFQN,
+	"class":        "Occurrences::occurrences",
+	"struct":       "Objects::objects",
+	"datatype":     "Base::dataValues",
+	"assoc":        linksFQN,
+	"association":  linksFQN,
+	"assoc struct": "Objects::linkObjects",
+	"connector":    linksFQN,
+	"binding":      "Links::selfLinks",
+	"bind":         "Links::selfLinks",
+	"succession":   "Occurrences::happensBeforeLinks",
+	"behavior":     "Performances::performances",
+	"step":         "Performances::performances",
+	"function":     "Performances::evaluations",
+	"expr":         "Performances::evaluations",
+	"predicate":    "Performances::booleanEvaluations",
+	"bool":         "Performances::booleanEvaluations",
+	"inv":          "Performances::trueEvaluations",
+	"interaction":  "Transfers::transfers",
+	"flow":         "Transfers::flowTransfers",
+	"metaclass":    "Metaobjects::metaobjects",
 }
 
-// KindBaseFQN returns the standard-library base every declaration of sym's
-// kind conforms to, implicitly or through its declared chain.
-func KindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
-	return kindBaseFQN(sym, isKerML)
+// KindBaseFQNs returns the standard-library bases every declaration of sym's
+// kind conforms to, implicitly or through its declared chain: one for most
+// kinds, an association and a behavior base for an interaction.
+func (m *Model) KindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	return m.kindBaseFQNs(sym, isKerML)
 }
 
 // FeatureBaseFQN returns the standard-library element a feature declaration
@@ -166,7 +194,17 @@ func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
 		// usage does, which is what types it (SysML v2 §7.3.2).
 		return baseUsageFQN, true
 	}
-	fqn, ok := implicitKerMLFeatureBases[keywordOf(sym)]
+	return m.kermlFeatureBaseFQN(sym)
+}
+
+// kermlFeatureBaseFQN returns the base feature a KerML feature declaration
+// subsets by its keyword, taking the binary base when it has two ends.
+func (m *Model) kermlFeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
+	keyword := keywordOf(sym)
+	if fqn, ok := implicitKerMLBinaryFeatureBases[keyword]; ok && m.declaredEndCount(sym) == 2 {
+		return fqn, true
+	}
+	fqn, ok := implicitKerMLFeatureBases[keyword]
 	return fqn, ok
 }
 
@@ -175,13 +213,34 @@ func (m *Model) RelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *
 	return m.relationshipTarget(sym, rel)
 }
 
-func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+func (m *Model) kindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	fqn, ok := m.kindBaseFQN(sym, isKerML)
+	if !ok {
+		return nil
+	}
+	out := []string{fqn}
+	if isKerML {
+		if behavior, ok := implicitKerMLBehaviorBases[keywordOf(sym)]; ok {
+			out = append(out, behavior)
+		}
+	}
+	return out
+}
+
+// kindBaseFQN returns the base a declaration of sym's kind specializes for the
+// kind itself; kindBaseFQNs adds the further bases a kind with two facets has.
+// A KerML association is binary by its effective ends, a SysML connection or
+// interface by its owned ones (KerML 1.1 §7.4.8, SysML v2 §7.13.2).
+func (m *Model) kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	if sym == nil {
 		return "", false
 	}
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		if isKerML {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && m.declaredEndCount(sym) == 2 {
+				return fqn, true
+			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
@@ -208,6 +267,9 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		return fqn, ok
 	case *ast.Definition:
 		if isKerML {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && m.declaredEndCount(sym) == 2 {
+				return fqn, true
+			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
@@ -235,6 +297,15 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// RequirementConstraintUsage), so it takes a constraint's base.
 		fqn, ok := implicitUsageBases[ast.UsageConstraint]
 		return fqn, ok
+	// A control node is the action usage of its ControlAction (SysML v2 §8.3.17).
+	case *ast.ForkNode:
+		return "Actions::ForkAction", true
+	case *ast.JoinNode:
+		return "Actions::JoinAction", true
+	case *ast.MergeNode:
+		return "Actions::MergeAction", true
+	case *ast.DecisionNode:
+		return "Actions::DecisionAction", true
 	}
 	return "", false
 }
@@ -248,17 +319,10 @@ func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
 	return m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
 }
 
-// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not a declaration of a kind with a known base.
-func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	isKerML := m.isKerMLDoc(sym)
-	fqn, ok := kindBaseFQN(sym, isKerML)
-	if !ok || m.resolver == nil || m.resolver.Index() == nil {
-		return nil
-	}
-	// A declaration keeps its kind's base unless a declared chain already reaches
-	// it — the same rule for a usage and in either language (KerML §8.4.2).
-	if m.declaredGeneralizationReaches(sym, fqn, nil) {
+// implicitBases returns the stdlib definitions sym is implicitly typed by, or
+// nil when sym is not a declaration of a kind with a known base.
+func (m *Model) implicitBases(sym *symbols.Symbol) []*symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
 	// A conjugated type takes its supertypes from what it conjugates rather than
@@ -266,12 +330,21 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if declaresConjugation(sym) {
 		return nil
 	}
-	for _, base := range m.resolver.Index().LookupQualified(fqn) {
-		if base != nil && base != sym {
-			return base
+	var out []*symbols.Symbol
+	for _, fqn := range m.kindBaseFQNs(sym, m.isKerMLDoc(sym)) {
+		// A declaration keeps its kind's base unless a declared chain already
+		// reaches it — the same rule for a usage and in either language (KerML §8.4.2).
+		if m.declaredGeneralizationReaches(sym, fqn, nil) {
+			continue
+		}
+		for _, base := range m.resolver.Index().LookupQualified(fqn) {
+			if base != nil && base != sym {
+				out = append(out, base)
+				break
+			}
 		}
 	}
-	return nil
+	return out
 }
 
 // declaresConjugation reports whether sym conjugates a type.
@@ -312,7 +385,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —
 			// except back through a cycle, which reaches nothing new.
-			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want && !m.declaredReaches(target, sym, nil) {
+			if slices.Contains(m.kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !m.declaredReaches(target, sym, nil) {
 				sameBase = true
 			}
 		}
@@ -379,6 +452,9 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	if typed, tok := m.declaredTypeFeatureBase(sym); tok {
 		fqn, ok = typed, true
 	}
+	if binary, bok := implicitKerMLBinaryFeatureBases[usage.Keyword]; bok && m.declaredEndCount(sym) == 2 {
+		fqn, ok = binary, true
+	}
 	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
@@ -392,7 +468,7 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // relationshipTarget resolves the element rel names from sym's scope, following
-// an alias to what it names.
+// an alias to what it names; a chain target (`subsets b.f`) is its final feature.
 func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
 	if m.resolver == nil {
 		return nil
@@ -400,6 +476,13 @@ func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *
 	node := rel.Target
 	if fr, ok := node.(*ast.FeatureReference); ok {
 		node = fr.Name
+	}
+	if fc, ok := node.(*ast.FeatureChainExpr); ok {
+		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc)
+		if !ok || target == nil {
+			return nil
+		}
+		return target
 	}
 	qn, ok := node.(*ast.QualifiedName)
 	if !ok {
@@ -492,7 +575,7 @@ func (m *Model) ImplicitGenerals(sym *symbols.Symbol) []*symbols.Symbol {
 		return nil
 	}
 	var out []*symbols.Symbol
-	for _, base := range []*symbols.Symbol{m.implicitBase(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)} {
+	for _, base := range append(m.implicitBases(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)) {
 		if base != nil && base != sym {
 			out = append(out, base)
 		}

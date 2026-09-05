@@ -888,7 +888,14 @@ expr:P__Car___402.end0
 
 `sysx:relatedFeature` points at one expression node per end, each carrying
 `sysx:endIndex` and — for a flow — `sysx:endRole` (`source`, `target`,
-`payload`). The forms and what each writes:
+`payload`). An end written behind a multiplicity (`connect [1] a to [0..1] b`,
+`bind [0..1] a = [0..1] b`) carries its bounds on that node as `sysml:lowerBound`
+and `sysml:upperBound` expression nodes, the way a feature carries its own; the
+decoder writes them back ahead of the end. A `bind` head's second end is the
+value node the head already states as `sysml:value`, so a `bind a = b` relates
+`sysml:references` and `sysml:value` as its two ends without a copy of either
+(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). The forms
+and what each writes:
 
 | `sysx:endForm` | Notation | Head |
 |----------------|----------|------|
@@ -912,9 +919,9 @@ source, whitespace and comments aside, before recording it — a head written ov
 several lines, or with a note inside it, records its form like any other
 (`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
 cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
-more than their ends: an end with a multiplicity or a `references` clause, an
-inline payload declaration (`flow of x : P from a to b`), or a satisfy that
-declares a name of its own (`satisfy s : R by v`).
+more than their ends: an end with a `references` clause, an inline payload
+declaration (`flow of x : P from a to b`), or a satisfy that declares a name of
+its own (`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).

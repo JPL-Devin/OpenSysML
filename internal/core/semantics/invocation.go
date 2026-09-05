@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -13,7 +14,7 @@ type Argument struct {
 	Prim  PrimType
 	Type  *symbols.Symbol // the declared type of the feature or result named, nil when none
 	Exact bool
-	Name  string // the parameter a named argument binds to; "" for positional
+	Name  *ast.QualifiedName // the name a named argument binds, as written; nil for positional
 }
 
 // known reports whether the checker knows anything about the argument's type.
@@ -54,10 +55,35 @@ func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs
 	if m == nil || e == nil {
 		return &InvocationSelection{}
 	}
-	if m.arguments != nil {
-		return m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e), performs)
+	if m.typingArgs[e] {
+		// Typing an argument of e led back to e: select on arity alone, unmemoized,
+		// so the typed selection is not answered from this provisional one.
+		if e.Type == nil {
+			return &InvocationSelection{}
+		}
+		return m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), untypedArguments(e), performs)
 	}
-	return m.SelectInvocation(scope, e, untypedArguments(e), performs)
+	return m.SelectInvocation(scope, e, m.callArguments(scope, e), performs)
+}
+
+// SelectCallAmong is SelectCall were e's name to denote named, in that order, as a
+// trial spelling would: an alias stands for its target. Not memoized.
+func (m *Model) SelectCallAmong(scope *symbols.Scope, e *ast.InvocationExpr, named []*symbols.Symbol, performs Performs) *InvocationSelection {
+	if m == nil || e == nil {
+		return &InvocationSelection{}
+	}
+	return m.selectAmong(scope, named, m.callArguments(scope, e), performs)
+}
+
+// callArguments types e's arguments as the checker does when its typing is
+// installed, else lists them untyped.
+func (m *Model) callArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument {
+	if m.arguments == nil || m.typingArgs[e] {
+		return untypedArguments(e)
+	}
+	m.typingArgs[e] = true
+	defer delete(m.typingArgs, e)
+	return m.arguments.InvocationArguments(scope, e)
 }
 
 // untypedArguments lists e's arguments, the receiver first, with nothing known of their types.
@@ -70,8 +96,8 @@ func untypedArguments(e *ast.InvocationExpr) []Argument {
 		args = append(args, Argument{})
 	}
 	for _, arg := range e.NamedArgs {
-		if arg.Name != nil && len(arg.Name.Parts) == 1 {
-			args = append(args, Argument{Name: arg.Name.Parts[0].Text})
+		if arg.Name != nil && len(arg.Name.Parts) > 0 {
+			args = append(args, Argument{Name: arg.Name})
 		}
 	}
 	return args
@@ -88,6 +114,15 @@ const (
 	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
 	PerformsAction
 )
+
+// CallSite is the kind of call site a reference is: an action performance when
+// the call is an action usage's value, else an expression.
+func CallSite(ref resolve.Reference) Performs {
+	if ref.Performed {
+		return PerformsAction
+	}
+	return PerformsBehavior
+}
 
 // Performable reports whether a call site of kind p can run sym: a behavior, or for an
 // evaluated call a feature typed by one, which performs that behavior.
@@ -178,7 +213,7 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	if sel, ok := m.invocations[key]; ok {
 		return sel
 	}
-	sel := m.selectInvocation(scope, e, args, performs)
+	sel := m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), args, performs)
 	m.resolver.Journal(e, func() { delete(m.invocations, key) })
 	m.invocations[key] = sel
 	return sel
@@ -189,9 +224,10 @@ func (m *Model) MemoSize() int {
 	return len(m.invocations)
 }
 
-func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {
+// selectAmong selects among the declarations named, in lookup order.
+func (m *Model) selectAmong(scope *symbols.Scope, named []*symbols.Symbol, args []Argument, performs Performs) *InvocationSelection {
 	sel := &InvocationSelection{}
-	for _, sym := range m.resolver.InvocationCandidates(scope, e.Type) {
+	for _, sym := range named {
 		target, ok := m.resolver.ResolveAliasTarget(sym)
 		if !ok || target == nil {
 			continue
@@ -234,14 +270,21 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	}
 	// Candidates the arguments conform to are preferred; failing any, the ones
 	// they may fit at run time are kept, and no tie among those is reported.
-	applicable, sigs, fits := m.filterApplicable(behaviors, signatures, args, bindStrict)
+	applicable, sigs, fits := m.filterApplicable(scope, behaviors, signatures, args, bindStrict)
 	strict := len(applicable) > 0
 	if !strict {
-		applicable, sigs, fits = m.filterApplicable(behaviors, signatures, args, bindLoose)
+		applicable, sigs, fits = m.filterApplicable(scope, behaviors, signatures, args, bindLoose)
 	}
 	sel.Applicable = applicable
 	switch len(applicable) {
 	case 0:
+		// None fits: the one every written name identifies a parameter of reports the mismatch.
+		for i, sig := range signatures {
+			if m.namesParameters(scope, sig, args) {
+				sel.callable = behaviors[i]
+				break
+			}
+		}
 		return sel
 	case 1:
 		sel.Selected = applicable[0]
@@ -265,12 +308,12 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	for i, k := range decisive {
 		decisiveSigs[i] = sigs[k]
 	}
-	if best := m.mostSpecific(decisiveSigs, args); best >= 0 {
+	if best := m.mostSpecific(scope, decisiveSigs, args); best >= 0 {
 		sel.Selected = applicable[decisive[best]]
 		return sel
 	}
 	sel.Ambiguous = true
-	for _, k := range m.unbeaten(decisiveSigs, args) {
+	for _, k := range m.unbeaten(scope, decisiveSigs, args) {
 		sel.Tied = append(sel.Tied, applicable[decisive[k]])
 	}
 	return sel
@@ -296,12 +339,12 @@ const (
 
 // filterApplicable keeps the candidates whose signature args bind to, with how
 // surely each takes them.
-func (m *Model) filterApplicable(cands []*symbols.Symbol, sigs []invocationSignature, args []Argument, mode bindMode) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
+func (m *Model) filterApplicable(scope *symbols.Scope, cands []*symbols.Symbol, sigs []invocationSignature, args []Argument, mode bindMode) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
 	var outCands []*symbols.Symbol
 	var outSigs []invocationSignature
 	var outFits []bindFit
 	for i, sig := range sigs {
-		if fit, ok := m.applicable(sig, args, mode); ok {
+		if fit, ok := m.applicable(scope, sig, args, mode); ok {
 			outCands = append(outCands, cands[i])
 			outSigs = append(outSigs, sig)
 			outFits = append(outFits, fit)
@@ -326,11 +369,13 @@ func containsFit(fits []bindFit, want bindFit) bool {
 
 // invocationSignature is the input parameters a candidate is invoked with.
 type invocationSignature struct {
+	owner  *symbols.Symbol // the candidate the parameters belong to
 	params []signatureParameter
 	known  bool // false when the parameters cannot be determined, so anything fits
 }
 
 type signatureParameter struct {
+	sym      *symbols.Symbol
 	name     string
 	typ      *symbols.Symbol // the declared type, nil when untyped or unresolved
 	prim     PrimType
@@ -340,7 +385,7 @@ type signatureParameter struct {
 
 // signatureOf returns sym's effective input parameters, in signature order.
 func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
-	var sig invocationSignature
+	sig := invocationSignature{owner: sym}
 	for _, p := range m.BehaviorParametersOf(sym) {
 		if p.IsResult || (p.Direction != ast.DirIn && p.Direction != ast.DirInOut) {
 			continue
@@ -353,6 +398,7 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 			}
 		}
 		param := signatureParameter{
+			sym:      p.Symbol,
 			name:     name,
 			typ:      m.featureType(p.Symbol),
 			prim:     m.PrimTypeOf(p.Symbol),
@@ -409,7 +455,7 @@ func (m *Model) ParameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbo
 		chain = append(chain, sym)
 		redefined := m.RedefinedFeatures(sym)
 		if len(redefined) == 0 {
-			redefined = m.implicitParameterRedefinitions(sym)
+			redefined = m.ImplicitParameterRedefinitions(sym)
 		}
 		if len(redefined) != 1 {
 			break
@@ -427,12 +473,12 @@ func (m *Model) declaresType(sym *symbols.Symbol) bool {
 			return true
 		}
 	}
-	return len(m.implicitParameterRedefinitions(sym)) > 0
+	return len(m.ImplicitParameterRedefinitions(sym)) > 0
 }
 
 // applicable reports whether args bind to sig by count, name and type, and
 // how surely.
-func (m *Model) applicable(sig invocationSignature, args []Argument, mode bindMode) (bindFit, bool) {
+func (m *Model) applicable(scope *symbols.Scope, sig invocationSignature, args []Argument, mode bindMode) (bindFit, bool) {
 	if !sig.known {
 		return fitOpen, true
 	}
@@ -441,11 +487,11 @@ func (m *Model) applicable(sig invocationSignature, args []Argument, mode bindMo
 	fit := fitExact
 	for _, arg := range args {
 		var i int
-		if arg.Name == "" {
+		if arg.Name == nil {
 			i = positional
 			positional++
 		} else {
-			i = sig.index(arg.Name)
+			i = m.parameterIndex(scope, sig, arg.Name)
 		}
 		if i < 0 || i >= len(sig.params) || bound[i] {
 			return fitOpen, false
@@ -467,9 +513,35 @@ func (m *Model) applicable(sig invocationSignature, args []Argument, mode bindMo
 	return fit, true
 }
 
-func (sig invocationSignature) index(name string) int {
+// namesParameters reports whether every named argument identifies a parameter of sig.
+func (m *Model) namesParameters(scope *symbols.Scope, sig invocationSignature, args []Argument) bool {
+	if !sig.known {
+		return false
+	}
+	for _, arg := range args {
+		if arg.Name != nil && m.parameterIndex(scope, sig, arg.Name) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// parameterIndex is the parameter in sig a named argument binds, or -1: the one
+// named as written, else the one the name resolves to within the candidate.
+func (m *Model) parameterIndex(scope *symbols.Scope, sig invocationSignature, name *ast.QualifiedName) int {
+	if len(name.Parts) == 1 {
+		for i, p := range sig.params {
+			if p.name == name.Parts[0].Text {
+				return i
+			}
+		}
+	}
+	target, ok := m.LookupBinding(scope, sig.owner, name)
+	if !ok {
+		return -1
+	}
 	for i, p := range sig.params {
-		if p.name == name {
+		if p.sym == target || (p.sym.Decl != nil && p.sym.Decl == target.Decl) {
 			return i
 		}
 	}
@@ -520,12 +592,12 @@ func argumentsKnown(args []Argument) bool {
 
 // mostSpecific returns the index of the one signature at least as specific as
 // every other at the bound parameters, or -1 when none or several are.
-func (m *Model) mostSpecific(sigs []invocationSignature, args []Argument) int {
+func (m *Model) mostSpecific(scope *symbols.Scope, sigs []invocationSignature, args []Argument) int {
 	best := -1
 	for i := range sigs {
 		leads := true
 		for j := range sigs {
-			if i != j && !m.atLeastAsSpecific(sigs[i], sigs[j], args) {
+			if i != j && !m.atLeastAsSpecific(scope, sigs[i], sigs[j], args) {
 				leads = false
 				break
 			}
@@ -543,12 +615,12 @@ func (m *Model) mostSpecific(sigs []invocationSignature, args []Argument) int {
 
 // unbeaten returns the indices of the signatures no other is strictly more specific
 // than at the bound parameters; every index when each is beaten by another.
-func (m *Model) unbeaten(sigs []invocationSignature, args []Argument) []int {
+func (m *Model) unbeaten(scope *symbols.Scope, sigs []invocationSignature, args []Argument) []int {
 	var out []int
 	for i := range sigs {
 		beaten := false
 		for j := range sigs {
-			if i != j && m.atLeastAsSpecific(sigs[j], sigs[i], args) && !m.atLeastAsSpecific(sigs[i], sigs[j], args) {
+			if i != j && m.atLeastAsSpecific(scope, sigs[j], sigs[i], args) && !m.atLeastAsSpecific(scope, sigs[i], sigs[j], args) {
 				beaten = true
 				break
 			}
@@ -567,7 +639,7 @@ func (m *Model) unbeaten(sigs []invocationSignature, args []Argument) []int {
 
 // atLeastAsSpecific reports whether a's parameter types conform to b's at every
 // parameter the arguments bind; an unknown signature is the most general.
-func (m *Model) atLeastAsSpecific(a, b invocationSignature, args []Argument) bool {
+func (m *Model) atLeastAsSpecific(scope *symbols.Scope, a, b invocationSignature, args []Argument) bool {
 	if !b.known {
 		return true
 	}
@@ -577,11 +649,11 @@ func (m *Model) atLeastAsSpecific(a, b invocationSignature, args []Argument) boo
 	positional := 0
 	for _, arg := range args {
 		var pa, pb int
-		if arg.Name == "" {
+		if arg.Name == nil {
 			pa, pb = positional, positional
 			positional++
 		} else {
-			pa, pb = a.index(arg.Name), b.index(arg.Name)
+			pa, pb = m.parameterIndex(scope, a, arg.Name), m.parameterIndex(scope, b, arg.Name)
 		}
 		if pa < 0 || pb < 0 || pa >= len(a.params) || pb >= len(b.params) {
 			return false

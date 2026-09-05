@@ -12,12 +12,12 @@ package Test {
 		entry; then start;
 		state start;
 		state running parallel {
-			entry { runningEntries = runningEntries + 1; }
+			entry { assign runningEntries := runningEntries + 1; }
 
 			state left {
 				entry; then ls;
 				state ls;
-				state lidle { exit { lidleExits = lidleExits + 1; } }
+				state lidle { exit { assign lidleExits := lidleExits + 1; } }
 				state lstate;
 
 				succession first ls then lidle;
@@ -26,12 +26,12 @@ package Test {
 				entry; then rs;
 				state rs;
 				state wrapper parallel {
-					exit { wrapperExits = wrapperExits + 1; }
+					exit { assign wrapperExits := wrapperExits + 1; }
 
 					state inner {
 						entry; then is;
 						state is;
-						state ideep { exit { deepExits = deepExits + 1; } }
+						state ideep { exit { assign deepExits := deepExits + 1; } }
 
 						succession first is then ideep;
 						transition first ideep if lidleExits == 0 then lstate;

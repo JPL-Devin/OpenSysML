@@ -8,16 +8,16 @@ package Test {
 		entry; then start;
 		state start;
 		state Outer {
-			exit { log = log * 10 + 3; }
+			exit { assign log := log * 10 + 3; }
 			state Middle {
-				exit { log = log * 10 + 2; }
+				exit { assign log := log * 10 + 2; }
 				state Inner {
-					exit { log = log * 10 + 1; }
+					exit { assign log := log * 10 + 1; }
 				}
 			}
 		}
 		state Done {
-			entry { log = log * 10 + 5; }
+			entry { assign log := log * 10 + 5; }
 		}
 
 		succession first start then Inner;

@@ -29,7 +29,7 @@
     {
       "name": "validateActorMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAllocationUsageType",
@@ -56,7 +56,7 @@
     {
       "name": "validateAssertConstraintUsageReference",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAssignmentActionUsageArguments",
@@ -66,7 +66,7 @@
     {
       "name": "validateAssignmentActionUsageReferent",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateAssignmentActionUsageReferentIsTimeVarying",
@@ -76,7 +76,7 @@
     {
       "name": "validateAssociationBinarySpecialization",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateAssociationEndTypes",
@@ -86,7 +86,7 @@
     {
       "name": "validateAssociationRelatedTypes",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAssociationStructureIntersection",
@@ -217,7 +217,7 @@
     {
       "name": "validateConnectorBinarySpecialization",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateConnectorRelatedFeatures",
@@ -242,17 +242,17 @@
     {
       "name": "validateControlNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateControlNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateControlNodeOwningType",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateCrossSubsettingCrossedFeature",
@@ -262,7 +262,7 @@
     {
       "name": "validateCrossSubsettingCrossingFeature",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDataTypeSpecialization",
@@ -272,12 +272,12 @@
     {
       "name": "validateDecisionNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDecisionNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDefinitionVariationIsAbstract",
@@ -363,7 +363,7 @@
     {
       "name": "validateFeatureChainExpressionFeatureConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureChainExpressionOperator",
@@ -383,7 +383,7 @@
     {
       "name": "validateFeatureChainingFeaturesNotSelf",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureConstantIsVariable",
@@ -439,7 +439,7 @@
     {
       "name": "validateFeatureOwnedCrossSubsetting",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureOwnedReferenceSubsetting",
@@ -469,7 +469,7 @@
     {
       "name": "validateFeatureValueOverriding",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFlowDefinitionConnectionEnds",
@@ -525,7 +525,7 @@
     {
       "name": "validateForkNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFramedConcernMembershipConstraintKind",
@@ -598,7 +598,7 @@
     {
       "name": "validateInvocationExpressionNoDuplicateParameterRedefinition",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateInvocationExpressionOwnedFeatures",
@@ -619,7 +619,7 @@
     {
       "name": "validateJoinNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateLibraryPackageNotStandard",
@@ -630,12 +630,12 @@
     {
       "name": "validateMergeNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateMergeNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateMetadataFeatureAnnotatedElement",
@@ -687,7 +687,7 @@
     {
       "name": "validateObjectiveMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOccurrenceUsageIndividualDefinition",
@@ -909,7 +909,7 @@
     {
       "name": "validateStakeholderMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateDefinitionParallelSubactions",
@@ -924,7 +924,7 @@
     {
       "name": "validateStateSubactionMembershioOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateUsageParallelSubactions",
@@ -950,12 +950,12 @@
     {
       "name": "validateSubjectMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSubsettingConstantConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateSubsettingFeaturingTypes",
@@ -1005,7 +1005,7 @@
     {
       "name": "validateTransitionUsageSuccession",
       "source": "sysml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateTransitionUsageTriggerActions",
@@ -1015,17 +1015,17 @@
     {
       "name": "validateTriggerInvocationActionAfterArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionAtArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionWhenArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeAtMostOneConjugator",
@@ -1061,7 +1061,7 @@
       "name": "validateUsageType",
       "raw": "validateUsageType_",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateUsageVariationIsAbstract",
@@ -1108,7 +1108,7 @@
     {
       "name": "validateViewRenderingMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateViewUsageOnlyOneRendering",

@@ -10,9 +10,36 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// stateActionFQN names the library state every state specializes, whose
+// content (self, substates, transitions) the executor carries natively.
+const stateActionFQN = "States::StateAction"
+
+// stateTypes resolves the names a state machine is lowered with, withholding
+// the content of States::StateAction: materializing it would only recurse.
+type stateTypes struct {
+	*resolve.Resolver
+	frame *symbols.Symbol
+}
+
+func (ctx *Context) stateTypes() lower.EndpointResolver {
+	if ctx.resolver == nil {
+		return nil
+	}
+	return &stateTypes{Resolver: ctx.resolver, frame: ctx.librarySymbol(stateActionFQN)}
+}
+
+func (s *stateTypes) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
+	decl, body, ok := s.Resolver.TypeDecl(scope, qn)
+	if !ok || (s.frame != nil && decl == s.frame.Decl) {
+		return nil, nil, false
+	}
+	return decl, body, true
+}
 
 // StateConfiguration represents the active state configuration (simple or multi-region).
 type StateConfiguration struct {
@@ -75,6 +102,9 @@ type StateExecutor struct {
 	// timerScheduled holds the time-triggered transitions whose timer is already
 	// running, so a state's timer is not restarted while it stays active.
 	timerScheduled map[*lower.Transition]bool
+	// timeTriggerVerdict caches, per time-triggered transition, whether its
+	// argument's static type was accepted (nil) or the error refusing it.
+	timeTriggerVerdict map[*lower.Transition]error
 
 	// changeFired holds the change-triggered transitions already taken on a
 	// condition that has stayed true, so an unchanged one does not re-fire.
@@ -133,33 +163,30 @@ func newStateExecutorForOccurrence(
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
 	// Endpoints come from the name-resolution tier, which reported on them already.
-	var endpoints lower.EndpointResolver
-	if ctx.resolver != nil {
-		endpoints = ctx.resolver
-	}
-	graph, err := lower.ToStateGraphWithEndpoints(stateMachine.Decl, declScope(stateMachine), endpoints)
+	graph, err := lower.ToStateGraphWithEndpoints(stateMachine.Decl, declScope(stateMachine), ctx.stateTypes())
 	if err != nil {
 		return nil, fmt.Errorf("lower state machine: %w", err)
 	}
 
 	exec := &StateExecutor{
-		ctx:            ctx,
-		stateMachine:   stateMachine,
-		self:           self,
-		occurrence:     occurrence,
-		state:          StateReady,
-		graph:          graph,
-		currentTime:    0.0,
-		nextEventID:    1,
-		eventQueue:     NewEventQueue(),
-		stateData:      make(map[string]Value),
-		stateAttrs:     make(map[*ast.StateNode]map[string]Value),
-		stateVisits:    make([]string, 0),
-		stateStack:     make([]*ast.StateNode, 0),
-		history:        make(map[*ast.StateNode]*historyRecord),
-		deferred:       make([]Event, 0),
-		timerScheduled: make(map[*lower.Transition]bool),
-		changeFired:    make(map[*lower.Transition]bool),
+		ctx:                ctx,
+		stateMachine:       stateMachine,
+		self:               self,
+		occurrence:         occurrence,
+		state:              StateReady,
+		graph:              graph,
+		currentTime:        0.0,
+		nextEventID:        1,
+		eventQueue:         NewEventQueue(),
+		stateData:          make(map[string]Value),
+		stateAttrs:         make(map[*ast.StateNode]map[string]Value),
+		stateVisits:        make([]string, 0),
+		stateStack:         make([]*ast.StateNode, 0),
+		history:            make(map[*ast.StateNode]*historyRecord),
+		deferred:           make([]Event, 0),
+		timerScheduled:     make(map[*lower.Transition]bool),
+		timeTriggerVerdict: make(map[*lower.Transition]error),
+		changeFired:        make(map[*lower.Transition]bool),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -454,6 +481,9 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 		if trans.Trigger == nil {
 			continue // a completion transition, scheduled once the do behavior ends
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
+			if err := e.checkTimeTriggerType(trans, timeEvent); err != nil {
+				return err
+			}
 			// Evaluate duration expression in the scope the transition was written
 			// in, the machine's data shadowing it.
 			durationVal, err := e.evalStepOf(trans.Source, timeEvent.Duration, trans.Scope)
@@ -2082,15 +2112,9 @@ func (e *StateExecutor) AcceptsMessage(m Message) (accepted bool, err error) {
 	return accepted, err
 }
 
-// preview runs fn as a probe of the context, discarding the objects it
-// materializes and the behaviors they start along with what beginProbe restores.
+// preview runs fn as a probe of the context, which beginProbe undoes whole.
 func (e *StateExecutor) preview(fn func()) {
 	defer e.ctx.beginProbe()()
-	mark, attached := len(e.ctx.created), len(e.ctx.objectBehaviors)
-	defer func() {
-		e.ctx.forgetBehaviorsFrom(attached)
-		e.ctx.abandonInstancesSince(mark)
-	}()
 	fn()
 }
 

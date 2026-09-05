@@ -8,10 +8,10 @@ package Debug {
 		state init;
 		state working {
 			do {
-				count = count + 1;
-				count = count + 1;
+				assign count := count + 1;
+				assign count := count + 1;
 			}
-			accept after 100 then done;
+			accept after 100 [SI::s] then done;
 		}
 
 		succession first init then working;

@@ -392,7 +392,7 @@ func blockMemberStatement(member ast.Node, scope *symbols.Scope, nodeBody bool) 
 // rather than a step of it, so that reaching the block does not reach it.
 func statesNoStep(member ast.Node) bool {
 	switch member.(type) {
-	case *ast.Documentation, *ast.Comment, *ast.Definition, *ast.Import:
+	case *ast.Documentation, *ast.Comment, *ast.Definition, *ast.Import, *ast.Alias:
 		return true
 	default:
 		return false

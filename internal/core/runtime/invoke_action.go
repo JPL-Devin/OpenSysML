@@ -87,7 +87,7 @@ func invocationArguments(
 	}
 	in, _ := parameterNames(ctx.actionParametersOf(sym))
 	arguments := make(map[string]Value, len(inv.args)+len(inv.named))
-	if err := bindArgumentList(ec, inv, in, arguments); err != nil {
+	if err := bindArgumentList(ec, inv, sym, in, arguments); err != nil {
 		return nil, err
 	}
 	return arguments, nil
@@ -228,7 +228,7 @@ func resolveActionSymbol(
 // bindArgumentList binds an invocation's arguments into inputs by the callee's parameter
 // order (positional) or names (named); arguments are evaluated in ec, the caller's context.
 // A parameter two arguments would bind is rejected rather than taking the later one.
-func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs map[string]Value) error {
+func bindArgumentList(ec *EvalContext, inv actionInvocation, callee *symbols.Symbol, in []string, inputs map[string]Value) error {
 	if len(inv.args) > len(in) {
 		return fmt.Errorf(
 			"%w: action %s takes %d input parameter(s), got %d argument(s)",
@@ -245,11 +245,15 @@ func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs
 		bound[in[i]] = true
 	}
 
-	for _, named := range inv.named {
-		if named.Name == nil || len(named.Name.Parts) == 0 {
+	names, unbound := ec.ctx.boundParameterNames(ec.scope, callee, inv.named)
+	for i, named := range inv.named {
+		name := names[i]
+		if name == "" {
 			return fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
 		}
-		name := named.Name.Parts[len(named.Name.Parts)-1].Text
+		if err := unbound[i]; err != nil {
+			return err
+		}
 		if !contains(in, name) {
 			return fmt.Errorf(
 				"%w: action %s has no input parameter %q",

@@ -10,8 +10,7 @@
 **Status:** advisory only — nothing here gates CI, and the harness reads the corpora without writing to them
 
 **Labels:** this is an engineering record, and the short labels in it are internal cross-references, not
-specification or product terms. A "wave" (and a "slice" within one) is a numbered development round of
-this project, chronological and with no external meaning; `F<n>` is a row of the [follow-up table](#follow-ups-not-fixed-here--this-pr-is-advisory)
+specification or product terms. `F<n>` is a row of the [follow-up table](#follow-ups-not-fixed-here--this-pr-is-advisory)
 below, `K<n>` and `S<n>` are the KerML and SysML diagnostic classes the adjudications group findings
 into, and `P<n>` is a probe of the reference. A reader who only wants the verdicts can ignore them.
 
@@ -292,6 +291,9 @@ What remains is adjudicated as extension notation this project supports delibera
   expression to improve — since the feature-value overriding round below we report it too, so
   those nine rows are agreement, not divergence — and it admits one objective per analysis case
   where we improve several lexicographically: 1 + 1 `unmapped` rows that stay the reference's.
+  The exemption is the analysis case alone; a `case`, `verification` or `use case` declaration
+  with a second objective is reported as the reference reports it, since no other case kind has
+  the lexicographic semantics.
 - **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
   a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
   in the view because that is what `%view` evaluates the exposed elements against. Declaring the
@@ -474,104 +476,6 @@ Its only-ours counts remain `training` 0, `pilot-examples` 8, `pilot-validation`
 populated and unchanged: 122 diagnostics total, 66 pilot-only. Step 3's two semantic recoveries are
 Xpect assertions not present in these seven differential roots.
 
-**Wave 12A moves the agreement column and nothing else.** Narrowing tier gating from the document to
-the element (roadmap L2) turns 7 pilot-only rows into agreed ones: agreement 25 → **32**, only-pilot
-73 → **66**, our diagnostics 168 → **175**, only-ours unmoved at **119** and no root other than
-`testdata` touched. All 7 are a higher-tier rule that used to be silenced by an unrelated
-name-resolution error in the same file: `parse/expressions.sysml` lines 2–6, `passes/errors.sysml`
-line 3 and `resolve/errors.sysml` line 3. Lines 3–6 of `expressions.sysml` are wording-only
-agreement in category, not in rule — we say `Must be model-level evaluable` where the pilot says
-`Must have a Boolean result` — so they are counted as agreement by category and remain listed as an
-open wording divergence below.
-
-**Four of the 23 are a measurement correction, not a fix, and the distinction is the point.** The
-142 this page previously reported was measured with a stale on-disk library index cache, whose records
-outlived the implementation that wrote them; a fresh-cache run of the same pre-wave-11 tree measures
-138. The cache defect is fixed by keying records by build identity and making a library index-only on
-every load path, so a cache hit can no longer report different diagnostics than a miss. Wave 11's own
-work accounts for the remaining 138 → **119**.
-
-The `Vehicle` diamond false positive this page recorded is gone: `pilot-examples/Vehicle
-Example/Annex_A_VehicleViews.sysml` 14 → 6, all 8 `Duplicate of inherited member name '<x>' from
-Vehicle, vehicle_b` rows retired by 11F canonicalizing redefinition in the resolver's
-`checkInheritedAmbiguity`, which is where they came from rather than the pass tier 11A fixed. What
-remains on the OMG roots is 8 `unresolved-reference`, 5 `unmapped`, 1 `kind-mismatch` and 2
-`units` of ours on `pilot-examples`, 1 `unresolved-reference` on `pilot-validation`, and on
-`kerml-examples` only K5's three one-sided specialization cycles on `Circular.kerml`.
-
-This table is a clean fresh-cache full run on the merged wave-11 tree at `3bc81ce3` — #492 (11G
-annotation-body scope), #494 (11D metadata and evaluability), #493 (11F usage rules, the use-case
-analogues and the diamond fix) and #484 (11E KerML structural residue) — with wave 10 before it — #450 (9A implicit
-members), #454 (9D visibility and resolver residue), #455 (9C silent errors and warnings), #452 (9B
-the only-pilot column classified, and the two example models it rewrote to the spec spelling), #451
-(9F the negative corpus) and #449 (9E behaviour evidence) — on top of the wave-8 round and, before
-it, #424 (wave 7A: metaclass reflection
-answered from the element, and an implied base for transition members) merged on top of the wave-6
-round — #409 (F90's conjugation check scoped to SysML typings), #415 (the reference's name-distinguishability rule, and
-the duplicate-owned-member-name warning P4 named), #410/#413 (alias identity), #411 (a state
-transitioning to itself), #412 (the expression referee) and #408 (the guard extended over
-`.agents/skills/`) — on top of wave 5 (#403 the KerML declaration grammar, #405 cached-library
-specialization edges, #397 F6 batch loading, #396 the unified corpus gates, #398 the doc-count
-guard), wave 4 (#383 F65, #391 F68/F72/F52, #387 F99, #388 F100/F53, #382 F9), the F60–F69 round
-(#358–#364) and the round after it (#372 symbols/typecheck, #373 fixtures, #374 KerML grammar, #375
-behavior parser, #376 F21–F23). It is the run the committed baseline was regenerated from, and two
-consecutive runs produce byte-identical JSON and text, so the numbers are not order- or
-timing-dependent.
-
-**Wave 7A closes both of the cross-package handovers wave 6 left open**, and it is the larger of the
-two moves recorded here: only-ours 161 → **147**, fully agreeing 297 → **300**.
-
-- **F93 is closed at every tier.** Metaclass reflection now answers from the element, so the
-  element-filter false positives are gone: `kerml-examples/Simple Tests/Filtering.kerml` 3 → 0 (the
-  file is fully agreeing now) and the two `testdata/passes/f93_element_filter.{kerml,sysml}`
-  reproducers 4 → 0. Those four fixtures were committed by #409 to *record* an open gap; they now
-  record a closed one, and `testdata` only-ours falls 7 → 3.
-- **F68's implicit transition members close 9 rows on `pilot-examples`.** `Interaction Sequencing
-  Examples/ServerSequenceRealization-2.sysml` 7 → 1 and `ServerSequenceOutsideRealization-2.sysml`
-  4 → 1: the members implied by a transition are now present, so references to them resolve.
-- **One new finding, and it is ours, not the reference's.** `Simple Tests/PartTest.sysml` goes 1 → 3:
-  the single `unresolved-reference` at line 25 disappeared and **unmasked three
-  `participates in a specialization cycle` errors** at lines 49–51, where the file really does
-  declare `part p1 :> p2; part p2 :> p3; part p3 :> p1;`. The reference is silent on all three,
-  which is K5's known one-sided cycle check. What is new is an internal inconsistency this exposes:
-  line 53 of the same file declares `part p4 :> p4;` and we say **nothing** about it, so our own
-  cycle check catches a three-element cycle and misses a self-loop. That is a defect in our check
-  rather than a divergence from the reference, and it is unowned as of this rebaseline.
-
-The wave-6 numbers below are kept as recorded, because the round-by-round movement table is only
-readable if each round's column stays what that round measured.
-
-**Why this page was stale, and the guard that did not catch it.** It stated 309 / 119 / 157 through
-all of wave 10, because its counts are compared against the committed baseline rather than a fresh
-run — the same failure mode the Xpect oracle had, where the baseline drifted 94 rows behind `main`
-while CI stayed green. Wave 10 moved this oracle without any wave-10 slice owning it: 10C's D1/D2
-conformance modes made the notation warnings above fire by default, and 10B's and 10F's rule work
-retired false positives on the pilot corpora. Neither shows up until the baseline is regenerated,
-which is what this round does.
-
-**Wave 6 is a small move on this page and a large one elsewhere, and the two should not be
-conflated.** Only-ours falls 167 → 161 and fully agreeing rises 291 → 297, which is a tenth of what
-wave 5 moved. The round's principal result is not here at all: it is the pilot's own Xpect
-expectations, where `linkedName` went 151/194 to **194/194** — see
-[pilot-xpect.md](pilot-xpect.md). Alias identity is a *resolution* fix, and no corpus file in these
-roots resolves a name through an alias, so a fix that closed 43 declared expectations of the
-reference's authors moves this table by zero. That is a property of the corpora, not of the fix, and
-it is the clearest example so far of why this page cannot be read as a compliance measure on its own.
-
-Two things did move here, and one is a first:
-
-- **Agreement rose, 20 → 22** — the first time in five rounds that a disagreement *converged*
-  instead of one of our diagnostics disappearing. #415 implemented the reference's
-  `Duplicate of other owned member name` warning, so `testdata/passes/corpus_notation.sysml:33,34`
-  turns from two pilot-only rows into two agreed ones. That is the P4 row #402 rewrote from
-  "wrapper artifact" to "a real reference rule we do not implement", now implemented.
-- **`testdata` gained 4 files and 4 only-ours diagnostics, deliberately.** #409 committed
-  `testdata/passes/f93_element_filter.{kerml,sysml}` as the reproducer for the F93 element-filter
-  false positives it root-caused but did not own, so the fixtures **record an open gap**: all four
-  diagnostics are ours, the reference is silent on all four, and the ratchet is supposed to carry
-  them until F93 is fixed in `semantics/`. A ratchet reading of "only-ours went up on `testdata`"
-  is correct and expected here.
-
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
@@ -610,12 +514,12 @@ only-pilot total as "one file the reference has no library for, plus the 48 rows
 carry", not as a conformance movement.
 
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
-resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — wave 10D
+resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — the parser now
 parses notation we used to reject. But `unresolved-reference` rises 27 → 36, `unmapped` 5 → 17 and
 `kind-mismatch` 4 → 9 in the same root, because a file we now parse runs the later tiers for the
 first time. **Parsing more exposes more, and the net −5 in this root hides 31 syntax rows retired
 against 26 newly surfaced** (`pilot-validation`'s 7 are its own row); a reader who takes the total as
-"five defects fixed" has the wave backwards.
+"five defects fixed" has it backwards.
 
 Batch loading is why `pilot-examples` has no pilot-only diagnostic at all: the reference reads
 `SysML v2 Spec Annex A SimpleVehicleModel.sysml` and its importer, `Annex_A_VehicleViews.sysml`,
@@ -631,59 +535,27 @@ The headline is the first row: on the 100-file OMG training corpus the pilot rep
 **nothing at all**, and so do we. That is the corpus written to be valid, and it is the row
 that most directly answers "are we right?".
 
-What has moved since the adjudication, and why. Every fix PR measured its own movement from
-whichever baseline it branched from, so their individually reported deltas do not sum; the two
-columns below are the only combined measurements. "At #356" is the state the adjudications were
-written against, "F60–F69" the round of #358–#364, "wave 3" the round of #372–#376, "wave 4" the
-round of #383/#391/#387/#388/#382, "wave 5" the round of #403/#405/#397/#396/#398, "wave 6" the
-round of #408–#415, "wave 7A" #424, "wave 8" everything landed on `main` between 7A and 8G (#438),
-"wave 9" the round of #449–#455, "wave 12A" #500, and the last column the member-leading-succession diagnostic round (#526) — every column of that table, including its last, is the figure measured at its own round and none of them is the current measurement, which is the Results table above. The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
+The figures above are the current run. Earlier runs' numbers were each measured against the tree of
+their own day and none is comparable to the table above, so this page keeps only what the current
+run states; what a movement *meant* survives in the per-class adjudications below and in this
+page's history.
 
-For round 3, the fresh control column is the `1af78d94` base, before the wave-12F changes:
+**Where the current counts stand:**
 
-| Count | Base after wave 12D (`1af78d94`) | Now |
-|---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **338 / 20 / 65** |
-| `pilot-examples`: only ours | **43** | **7** |
-| `pilot-validation`: only ours | **1** | **0** |
-| `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **276** |
-| `examples`: fully agreeing | **15** | **25** |
-| `unmapped`, our side | **20** | **28** |
-
-The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
-our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
-shorthands went first (only ours 84 → **34**, our diagnostics 141 → **50**); removing
-`initial <state>;` and `transition <source> to <target>;` took it to **27** and 68. The
-demos are now written in the standard spellings, so the warning that fired on 57 of their lines
-has nothing left to report there. `examples`: only pilot rose 39 → 56 and severity-only fell
-25 → 9 for the same reason and without either tool changing what it detects: the pilot errors on
-those lines either way, and the rows it errors on are no longer paired with a warning of ours.
-Since then two further changes land in this column: `action-executor-demo.sysml` stopped binding a
-computed result with `bind`, which retires 21 of the pilot's syntax-and-cascade rows on the
-`examples` root (only pilot 56 → **35**, severity-only 9 → **8**), and the interface-flow pairing
-below retires one only-ours row on `pilot-examples` (only ours 27 → **26**, our diagnostics
-68 → **66**, fully agreeing 324 → **325**). Agreement (**32**) is unmoved throughout.
-
-This control is measured independently from the wave-12F head: its Xpect result is **1287 agree,
-248 wording-only, 36 disagree**, and its rejection result is **116 both reject / 4 only pilot
-rejects / 0 only ours rejects / 0 both accept**. The head is the last measured column below.
-
-| Count | At #356 | After F60–F69 | After wave 3 | After wave 4 | After wave 5 | After wave 6 | After wave 7A | After wave 8 | After wave 9 | After wave 10 | After wave 11 | After wave 12A | At wave 12F (`bbd3b2ec`) — **historical snapshot**, not the current figure | Reason for the wave-12F move | Reason for the wave-12A move | Reason for the wave-11 move | Reason for the wave-10 move | Reason for the wave-9 move | Reason for the 8G move | Reason for the wave-6 move |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| overall: fully agreeing / only ours / our diagnostics | 221 / 560 / 596 | 254 / 343 / 379 | 273 / 281 / 317 | 283 / 232 / 268 | 291 / 167 / 203 | **297 / 161 / 199** | 300 / 147 / 185 | 308 / 119 / 157 | 309 / 119 / 157 | 311 / 142 / 191 | **317 / 119 / 168** | **317 / 119 / 175** | **321 / 92 / 148** | Wave 12F closes 27 only-ours diagnostics on the reference's own corpora: fully agreeing 317 → **321**, only ours 119 → **92**, our diagnostics 175 → **148**. The pilot's columns (122 diagnostics, 66 only-pilot), agreement (**32**) and severity-only (**24**) are all unmoved, so every movement this round is a false positive of ours disappearing: 23 rows are the connector-end parser fix, 4 the anonymous-`enum`-value parse fix. No only-ours row was added, and no remaining row changed bucket because of 12A's `must have` → `kind-mismatch` mapping. | Wave 12A narrows tier gating from the document to the element: agreement 25 → **32** and only-pilot 73 → **66**, our diagnostics 168 → **175**, with only-ours unmoved at **119**. Every one of the seven is a pilot row we now also report on a subject whose own resolution failed, on `testdata` (`parse/expressions.sysml` ×5, `passes/errors.sysml`, `resolve/errors.sysml`). | Wave 11 with the fresh-cache correction: fully agreeing 311 → **317**, only ours 142 → **119**, our diagnostics 191 → **168**. Four of the 23 retired rows are the stale-library-cache measurement correction (a fresh-cache run of the pre-wave-11 tree measures 138 only-ours, not 142); the other 19 are 11F's resolver work — the `Vehicle` diamond family and the redefinition canonicalization — plus 11E's and 11D's rules. The pilot's columns (122 diagnostics, 73 only-pilot), agreement (25) and severity-only (24) are all unmoved, so every movement this round is a false positive of ours disappearing. | No wave-10 slice owned this oracle and it moved anyway: 10C's conformance modes made the non-standard-notation warning fire by default on our own `examples/` demos (+35 only-ours, all true positives about those models), while 10B's and 10D's rule and parser work retired 12 rows on the reference's own corpora (82 → 70). Fully agreeing 309 → **311**, agreement 23 → **25**, severity-only 15 → **24** and only-pilot 85 → **73**, the last two because a line the pilot errors on and we now warn on leaves only-pilot for severity-only. **Read the 119 → 142 by root**: our diagnostics against the reference corpora fell; our warnings about our own examples rose. | Wave 9 moves this oracle by exactly one file, and moves the reference's column instead: only-pilot **137 → 85**. Both are 9B's: its notation warnings added 34 only-ours rows, and rewriting the two example models that provoked them to the spec spelling retired the same 34 — so our column returns to 119 rather than staying at 153 — while the pilot's parse of `examples/repl-behavioral-demo.sysml` now completes (the file becomes fully agreeing, the +1) and its parse of `examples/phase-c-behavioral-bodies.sysml` reaches line 147 instead of stopping at line 60, retiring 52 of its rows. 9A, 9C and 9D moved the Xpect and scope oracles, not this one; 9F moved the rejection oracle. | 8G (#438) measured its own delta against a clean rerun of its merge-base, 306 / 125 / 163 → **308 / 119 / 157**: prefix metadata on `require`/`assume` retires 5 only-ours rows on `Metadata Examples/RequirementMetadataExample.sysml` and a leading `not satisfy` the last one on `Simple Tests/RequirementTest.sysml`, so both files are now fully agreeing. `Simple Tests/DecisionTest.sysml` keeps 2 rows that change category, syntax → `kind-mismatch`: a guarded succession now parses as the transition it is, and `resolve.isVertex` rejects its action-node ends (pinned for wave 8A). The rest of this column is the waves that landed between 7A and 8G. Earlier 7A (#424): −14 only-ours and +3 fully-agreeing files. F93's metaclass-reflection fix removes 3 on `kerml-examples` and 4 on `testdata`, and F68's implied transition members remove 9 on `pilot-examples`, against +3 new `unmapped` specialization-cycle rows on `Simple Tests/PartTest.sysml` that a since-removed error of ours had been masking. The reference's column (137 / 175), agreement (22) and severity-only (16) are all unchanged, so every movement in this round is a false positive of ours disappearing. | Wave 6: −6 only-ours and +6 fully-agreeing files, from #409 (F90, −7 on `kerml-examples`) and #415 (F69's three metadata name conflicts, −3 on `pilot-examples`), against +4 only-ours that #409 deliberately added as committed F93 reproducers on `testdata`. **Agreement moves for the first time, 20 → 22**, because #415 implemented the reference's duplicate-owned-member-name warning (P4) and two pilot-only rows became agreed ones; the reference's diagnostic total (175) is unchanged, and its only-pilot column falls 139 → 137 by exactly those two. Severity-only (16) is unchanged for the fifth round. The round's real result is the Xpect `linkedName` column, not this one. |
-| `pilot-examples`: only ours | 314 | 167 | 138 | 109 | 101 | **98** | 91 | 68 | 68 | 63 | **43** | **43** | **16** | −27, all of it here: the n-ary connector ends of `AHFSequences.sysml` and `CauseAndEffectExample.sysml` now parse, so their end names resolve, and `SimpleVehicleModel.sysml`'s `enum = 60 [mm];` members are no longer read as a member named `enum`. `unresolved-reference` 32 → **9** and `unmapped` 9 → **5**. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | −20: `Annex_A_VehicleViews.sysml` 14 → 6 (all 8 duplicate-inherited-name rows, 11F) and `SysML v2 Spec Annex A SimpleVehicleModel.sysml` 10 → 5, with `unmapped` 17 → 9 and `kind-mismatch` 9 → 1. `unresolved-reference` 36 → 32, of which 4 are the cache correction rather than a fix. | −5, and the mix is almost entirely new: all 31 syntax rows are gone (10D parses them), against `unresolved-reference` 27 → 36, `unmapped` 5 → 17 and `kind-mismatch` 4 → 9 unmasked in files that now reach the later tiers. `Annex_A_VehicleViews.sysml` +8 (two groups of four `Duplicate of inherited member name … from Vehicle, vehicle_b` — a false positive of ours where one feature arrives through two supertypes) against `SimpleVehicleModel.sysml` 24 → 10. | Unchanged — no wave-9 item touched this root's diagnostics. | −23 since 7A; 8G's own share is 5, the `RequirementMetadataExample.sysml` prefix-metadata rows. Earlier −7: `Interaction Sequencing Examples/ServerSequenceRealization-2.sysml` 7 → 1 and `ServerSequenceOutsideRealization-2.sysml` 4 → 1 on F68's implied transition members (−9), against the +3 `unmapped` cycle rows unmasked on `Simple Tests/PartTest.sysml`. `unresolved-reference` 37 → 27; the 57 syntax rows are unmoved and are 7C's. | −3, all `unmapped`, all #415: the three `name conflict: … is already the name of the inherited feature ModelingMetadata::…` rows on `Metadata Examples/IssueMetadataExample.sysml` (1) and `RationaleMetadataExample.sysml` (2). Both files are now fully agreeing, which is the +2 in this root's fully-agreeing column. This page previously called those three a **deliberate one-sided check of ours (F69) that stays**; #415 read the reference's `checkMembershipDistinguishability` and found our version wrong in both severity and scope, so the claim that they were intentional is withdrawn. Every other category in this root is unmoved — its 57 syntax and 37 `unresolved-reference` rows are wave 7's. |
-| `pilot-validation`: only ours | 59 | 37 | 22 | 10 | 10 | **10** | 10 | 10 | 10 | 3 | **1** | **1** | **1** | Unchanged — its one `unresolved-reference` row is categorized as our defect in wave 12F's census and remains owned by the Step 2 implicit-typing resolver mechanism. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | 3 → 1: the 2 `kind-mismatch` rows are gone with 11F's usage-typing work, leaving 1 `unresolved-reference` on `9-Verification-simplified.sysml`. | **10 → 3**, the first movement in five rounds: the 7 syntax rows are gone with 10D's parser work, leaving 2 `kind-mismatch` and 1 `unresolved-reference`. | Unchanged for the fourth round. | Unchanged in 8G, and its 7 syntax rows are 1 fewer than at 7A. Earlier, unchanged for the third round: 8 syntax and 2 `kind-mismatch`, none of them reflection or transition shapes. | Unchanged for the second round: these 8 syntax and 2 `kind-mismatch` rows are neither KerML-declaration shapes nor conjugation or name-conflict rows. |
-| `kerml-examples`: only ours | 150 | 98 | 80 | 72 | 15 | **8** | 5 | 4 | 4 | 4 | **3** | **3** | **3** | Unchanged — the three rows are K5's one-sided specialization-cycle check; 12F re-derived the rule, found the cycles real, and kept them as adjudicated divergences. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | 4 → 3: the `MetadataTest.kerml` `unresolved-reference` row closes with 11G's annotation-body scope. What is left is K5's three one-sided specialization cycles on `Circular.kerml`, so this root now carries nothing unadjudicated. | Unchanged for the third round — wave 10's KerML work shows up in the Xpect oracle, not here. | Unchanged — 9A's and 9D's resolver work shows up in the Xpect oracle's scope rows, not here. | −1 since 7A, none of it 8G's. Earlier −3, all F93: `Simple Tests/Filtering.kerml` 3 → 0 and fully agreeing, which is the +1 in this root. **F93 is now closed at every tier.** The 5 that remain are K5's three specialization cycles on `Circular.kerml` (one-sided by design), 1 `multiplicity` on `Associations.kerml` and 1 `unresolved-reference` on `MetadataTest.kerml`. | −7, all #409 (F90): the `'~' names the conjugated port definition of a port definition, found attributeUsage` check was applying to KerML typings, where `~` is a legal conjugation of any type. `Simple Tests/Conjugation.kerml` 2 → 0 (fully agreeing now, the +1 in this root's column), `Types.kerml` 4 → 0, `Features.kerml` 1 → 0 — the last two still carry the reference's own `do not refer to each other` disjoining rows, so they are not fully agreeing. `kind-mismatch` reaches **0** in this root and `unmapped` 5 → 3. The 8 that remain are unchanged and adjudicated: 3 F93 element-filter false positives on `Filtering.kerml` (the reference is silent; root-caused by #409 to metaclass reflection in `semantics/`, and now also committed as a `testdata` reproducer), K5's 3 specialization cycles on `Circular.kerml` (one-sided by design), 1 `multiplicity` on `Associations.kerml` and 1 `unresolved-reference` on `MetadataTest.kerml`. So F90 is closed at every tier, and F93 is closed in the parser and in `passes/` and open in `semantics/`. |
-| `examples`: only pilot | 109 | 423 | 106 | 104 | 104 | **104** | 104 | 104 | 52 | 40 | **40** | **40** | **40** | Unchanged — 12F retires only-ours rows and moves no pilot row. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | Unchanged — no wave-11 item touched our own demo fixtures, and their non-spec notation is still the subject of this column. | −12, none of it a fix: the pilot still errors on the same lines, but we now warn on 12 of them, so the pairs move to severity-only (12 → 23). Our own demos' non-spec notation is the subject of both columns. | −52, all of it the two models 9B rewrote to the spec spelling: `repl-behavioral-demo.sysml` draws nothing from either tool now, and the pilot reads 87 more lines of `phase-c-behavioral-bodies.sysml` before giving up. The 52 that remain are 24 syntax, 15 `unmapped`, 6 `kind-mismatch`, 5 `unresolved-reference` and 2 `multiplicity`, and 16 of them are the `transition … to …` of F3 in that same file. | Unchanged — no wave-8 item touched our own demo fixtures either. Earlier, unchanged — 7A worked in `semantics/`, not on our own demo fixtures. Still the rejection question, now measured by the rejection oracle. | Unchanged — no wave-6 item touched our own demo fixtures either. These 104 are the rejection question, not the agreement one, and they are wave 7's rejection-oracle work. |
-| `examples`: fully agreeing | 4 | 4 | 12 | 12 | 12 | 12 | 12 | 14 | 15 | 15 | **15** | **15** | **15** | Unchanged — 12F retires only-ours rows and moves no pilot row. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | Unchanged at 15. | Unchanged at 15 — every file that moved was already non-agreeing, and the notation warnings landed in files that stay non-agreeing. | +1: `repl-behavioral-demo.sysml`, once its calc, constraint and requirement bodies used the spec spelling. | +2 since 7A, none of it 8G's. | Unchanged. |
-| `unmapped`, our side | 13 | 13 | 16 | 15 | 17 | **14** | 17 | 16 | 18 | 30 | **22** | **22** | **18** | −4: the `Duplicate of other owned member name` rows on `SimpleVehicleModel.sysml`, which were our parse defect rather than a name conflict. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | 30 → **22**: the 8 `Duplicate of inherited member name` rows of the `Vehicle` diamond, retired by 11F. The remaining 22 are the specialization-cycle family, the 5 `Duplicate of other owned member name` agreements-by-message-class and the `interface Mounting` conjugation row. | 18 → **30**: +12 rows, no new message class beyond the duplicate-inherited-name family — the `Vehicle` diamond rows above plus 3 more `Duplicate of other owned member name`. The cell counts diagnostics, not distinct messages. | Unchanged: no wave-9 item added an `unmapped` diagnostic of ours. The cell counts diagnostics, not distinct messages — the baseline lists 16 `unmapped` messages of ours summing to 18 rows, and the wave-8 column recorded the message count by mistake against the same 18. | +1 since 7A, none of it 8G's. Earlier +3: the `participates in a specialization cycle` rows on `Simple Tests/PartTest.sysml:49–51`, unmasked rather than newly emitted. The same file's `part p4 :> p4;` at line 53 draws nothing from us, so this round also exposes that our cycle check misses a self-loop. | −5 and +2. Gone: F90's two `'~' names the conjugated port definition` rows (#409) and F69's three `name conflict … ModelingMetadata::…` rows (#415). Added: two `Duplicate of other owned member name` rows of **ours** on `testdata/passes/corpus_notation.sysml:33,34` — which are not a disagreement at all but the two new **agreements**, counted here because the message maps to no category. The remaining 12 are K5/F4's 11 specialization cycles and the `interface Mounting` conjugation row. |
-| new checks of ours | — | — | +3 rules | −2 rules relaxed | none | +1 rule, 1 narrowed | none | none | +1 rule, 1 relaxed | +1 rule, 1 relaxed | +6 rules | +6 rules | +6 rules | none — 12F adds no check. It fixes two parse defects and one resolver defect, and re-derives three existing rules (interface arity from `Links::BinaryLink` conformance, related-element counting through semantic supertypes, event occurrences as referential) so they stop firing on models the pilot accepts. | none — 12A changed when existing checks may speak, not what they check. | 11F adds the two use-case rules and the interface-end implicit `Ports::Port` base, 11E the KerML structural residue, 11D the model-level evaluability predicate and 11G annotation-body resolution. None of them adds a diagnostic to any OMG root; training stays 0/0. | 10C makes the wave-9B notation warning an error/warning by conformance mode rather than adding a rule, 10E removes the specialization relaxation from qualified-tail resolution, and 10A bounds scope re-entry. No new check of ours reaches an OMG root; training stays 0/0. | 9B adds the notation warning that names our non-conformant spellings, and 9D relaxes visibility so protected and private members are visible where the reference makes them visible — which is why the Xpect `noErrors` column improves and the declared-`errors` silence worsens in the same wave. | 8G adds no check: it accepts four notations the reference accepts and moves two classification residues into the export, so agreement did not move. | 7A adds no check. It removes false positives and supplies implied members, which is why agreement did not move. | #415 implements the reference's `Duplicate of other owned member name` warning (P4) — the only new check of wave 6, and the first check we have added that produced an **agreement** rather than a one-sided row. It also narrows the pre-existing name-conflict check to the reference's scope and severity: a warning, not an error, and not applied to imported memberships, automatically-constructed expressions, binding connectors or synthetic successions. Neither change adds a diagnostic to any OMG root, and training stays 0/0. |
+| Count | Now |
+|---|---:|
+| overall: fully agreeing / only ours / our diagnostics | **338 / 20 / 65** |
+| only pilot | **302** |
+| pilot diagnostics | **347** |
+| severity-only | **2** |
+| unmapped, our side | **28** |
+| kerml-examples: only ours | **3** |
+| pilot-examples: only ours | **7** |
+| examples: only pilot | **276** |
 
 The KerML root is now the *cleanest* of the three OMG roots in proportion: **3** only-ours against 6
 only-pilot — the only root where the reference reports more than we do — with 50 of 58 files fully
-agreeing (439 / 6 and 10 / 58 when the root was added, 72 and 39 before wave 5, 15 and 47 before
-wave 6, 8 and 48 before 7A). None of the 3 is a syntax or `kind-mismatch` diagnostic — the notation
+agreeing (439 / 6 and 10 / 58 when the root was added, and 72 / 39, 15 / 47 and 8 / 48 at earlier rounds). None of the 3 is a syntax or `kind-mismatch` diagnostic — the notation
 the reference accepts, we parse, and the checks we applied to KerML typings that it does not apply
 are gone. What is left is K5's three specialization cycles, all adjudicated. The class tables below
 are kept as measured when each class was adjudicated, so they describe the root at 150 rather than at 3.
@@ -1016,7 +888,7 @@ Eight files, one diagnostic each, and the only class where the verdict splits.
 | `Vehicle Example/VehicleDefinitions.sysml:47` | `interface … ports … are not conjugate` (warning) | clean | **One-sided**: our own advice, reproduced by `i7`; the reference has no conjugation check |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `operator '+' combines incommensurable quantities` (`units`) | clean | **One-sided**: probed directly — `attribute s = a + t;` over `LengthValue` and `TemperatureValue` draws our dimension warning and *nothing* from the reference, which has no dimensional analysis at all. Like F4/K5, our extension |
 
-The five "ours" rows are the honest count of semantic false positives in this historical slice:
+The five "ours" rows are the honest count of semantic false positives in this historical section:
 five, out of 373. Its three one-sided rows stay, on the F4 precedent — a check the reference lacks
 is not a disagreement. `VehicleGeometryAndCoordinateFrames.sysml:38` later joins Turbojet's units
 row in the same adjudicated quantity-commensurability family; the current census above supersedes
@@ -1847,7 +1719,7 @@ What each rule requires, at the pin
 | `validateElementFilterMembershipIsModelLevelEvaluable` — `Must be model-level evaluable` | `condition.isModelLevelEvaluable` (plus `condition.result.specializesFromLibrary('ScalarValues::Boolean')`). Evaluability is **not** "is a constant": an invocation is evaluable when its function is a model-level-evaluable library function *and* every argument is; a feature reference is evaluable when its referent is a self-reference, or owned by a `Metaclass`/`MetadataFeature`, or has **no featuring type** and its value expression (if any) is evaluable — and inevaluable when the referent is featured within a type (an instance-level feature) or the reference is circular. So `filter p.n > 1` over a top-level `part p : P` is *accepted* by the pilot (no featuring type), while `filter P::n > 0` is not, and `filter Twice(2) > 3` over a user `calc` is not (a user function is not model-level evaluable). | `passes/filter.go` `ElementFilterPass` (`filter-not-boolean`, `filter-not-evaluable`, and the non-blocking `filter-not-evaluated` warning, `LevelType`) over `semantics/filter.go` `Model.CheckElementFilter`; compiled predicates retain semantic result type and distinguish specification faults from evaluator limitations. | Focused semantics and pass tests cover metaclass-owned Boolean and non-Boolean chains, comparisons, user-struct chains, library chains, and package-level feature chains. Real model-level-evaluability faults remain errors; evaluator-only limitations warn and keep all candidates, while the type tier can still suppress constraint diagnostics for chain-shaped conditions. |
 | `validateInvocationExpressionInstantiatedType` — `Must invoke a behavior or a behavioral feature` | `instantiatedType.oclIsKindOf(Behavior) or (instantiatedType.oclIsKindOf(Feature) and instantiatedType.type->exists(oclIsKindOf(Behavior)) and instantiatedType.type->size(1))` — what is invoked must be a behavior (`calc def`, `action def`, `function`), or a feature typed by exactly one behavior. | `LevelConstraint`, or the invocation checking already in `passes/typecheck_expr.go` (`inferInvocation`/`effectiveInParameters`), which today infers argument types and arity but never asks what kind of thing is being invoked. | An invocation of a library function reached through an alias or an index record with no parsed declaration, a feature typed by a behavior *through* a specialization chain, constructor-like invocations of a definition (which the notation does allow in other positions), and metadata-annotation invocations. Reporting only when the invoked symbol resolves to a declaration we can classify is the safe shape. |
 
-### Only the pilot — the wave-9B row-by-row sweep (137)
+### Only the pilot — the row-by-row sweep (137)
 
 P1–P7 above group this column by cause and adjudicate P6 diagnostic by diagnostic. This pass sweeps
 the whole column and gives **every** row exactly one of three outcomes: **our defect** — a rule the
@@ -1921,7 +1793,7 @@ package R { private import ScalarValues::*; calc c { in a : Real; return a * 2.0
 We accepted all four in silence. Three of the four are now warned; `return (a);` stays silent, and
 deliberately: our parser collapses a single parenthesized expression to its inner node, so the pass
 cannot tell it from the legal `return a;` without carrying parenthesis syntax in the AST, which is
-not this slice's to change. No corpus row depends on it — `examples/repl-behavioral-demo.sysml:26` is
+not this record's to change. No corpus row depends on it — `examples/repl-behavioral-demo.sysml:26` is
 `return (x * x + y * y);`, whose inner node is an operator expression and is warned.
 
 `passes/nonstandard_notation.go` now warns on the computed form — `LevelSyntax`, the existing
@@ -2100,7 +1972,7 @@ each segment of a chain whose head is already unresolved adds no information abo
 
 #### W16 — the six `kerml-examples` rows, checked one by one (6, defect of the pilot)
 
-The wave brief asks whether all six really fall to F80 if upstream fixes it. They do, and each was
+The question asked was whether all six really fall to F80 if upstream fixes it. They do, and each was
 checked on its own rather than by family: every one of the six files contributes **exactly one**
 pilot-only row, each row is EMF's unpaired-bidirectional-reference diagnostic over the
 `Disjoining::owningType` / `Type::ownedDisjoining` pair, and each line is a `disjoint from` clause
@@ -2248,11 +2120,11 @@ one.
 | ~~F62~~ | **Done** (#363, #374, #462). Re-measured on current main before any further work: every one of the seven files reports zero diagnostics and all six constructs parse clean, so nothing was left to fix. `then S2.S3;`, the transition and succession bodies and the `send`/`accept` bodies came from reading a node's declaration and body in one place (#363); the dotted `exhibit` reference with a body from #374; the chained succession ends from #462, which also scoped a succession body to the action target succession — `entry; then starting { … }` stays refused, because `EntryTransitionMember` (`SysML.xtext:1796`) ends in `;` and not in a body. S3, 65 diagnostics over 7 files. Bodies and dotted references in state/occurrence behavior: `then S2.S3;`, `then starting { … }`, `action a send x via p { … }`, multi-line `accept c : C via p`, `first start then continue { … }`, `exhibit vehicleStates.on { … }`. `TransitionUsage`, `TargetTransitionUsage`, `SendNode` and `AcceptNode` all end in `ActionBody`; `ExhibitStateUsage` takes `OwnedReferenceSubsetting` plus `StateUsageBody`. |
 | ~~F63~~ | **Done** (#363, #374, #462). Re-measured on current main before any further work: all five files report zero diagnostics and all five constructs parse clean, so nothing was left to fix. The control-node name and body, `decide 'test x';`, the typed `for` variable and the redefining body parameter came with #363; `ref patient { … }` with #374; the action nodes in a case body with #462. S4, 33 diagnostics over 5 files. Action nodes: a body on any `ControlNode` (`then fork F { … }`), a named `decide 'test x';`, a typed `for` variable (`for n : ScalarValues::Integer in (1, 2, 3)`), a body parameter that only redefines (`in :>> payload = s;`), and a body on a bare `ref` (`ref patient { … }`). |
 | ~~F64~~ | **Done** (#375). A `return` is a usage when its declaration specializes, and a body expression is a calculation body that may declare features. A body-expression declaration parses but its name is not yet in scope for the result expression — F99. S5, 19 diagnostics over 6 files. `ReturnParameterMember` is `'return' UsageElement` (`:1961`), so `return selectedEngine :> engine;` and `return attribute accelerationProfile :> ISQ::acceleration[*] := ();` are usages, not expressions; a `private attribute` declaration inside an expression body is legal; and `assert not c { … }` is an `OperatorExpression`, so `not` must not be forced to name a constraint. |
-| ~~F65~~ | **Done** (#383). All three forms discriminated against the reference once corpus-faithful fixtures were built — ours errors, the pilot is silent — so this was a real gap rather than a fixture artifact. `pilot-validation` syntax 20 → 8 (`17a`/`17b-Sequence-Modeling` 6 → 0 each) and `pilot-examples` syntax 75 → 65. Note the one increase in the wave: `Arrowhead Framework Example/AHFSequences.sysml` goes 6 → 15, because recovery was previously swallowing whole connection bodies and nine `unresolved reference` findings were masked behind the unparsed member. S6, 22 diagnostics over 5 files. `binding ab1 : AB bind a = b;` (`BindingConnectorAsUsage` allows a `UsageDeclaration` before `bind`), `message m of Publish[1] …` (the `Payload` after `of` is `OwnedFeatureTyping ( OwnedMultiplicity )?`), `event e = m.start;` (`EventOccurrenceUsage` ends in `ValuePart? UsageBody`). The `binding` and `event` reproducers draw a *different* pilot diagnostic, so both need a corpus-faithful fixture before a fix is validated against the reference rather than the grammar alone. |
+| ~~F65~~ | **Done** (#383). All three forms discriminated against the reference once corpus-faithful fixtures were built — ours errors, the pilot is silent — so this was a real gap rather than a fixture artifact. `pilot-validation` syntax 20 → 8 (`17a`/`17b-Sequence-Modeling` 6 → 0 each) and `pilot-examples` syntax 75 → 65. Note the one increase in that round: `Arrowhead Framework Example/AHFSequences.sysml` goes 6 → 15, because recovery was previously swallowing whole connection bodies and nine `unresolved reference` findings were masked behind the unparsed member. S6, 22 diagnostics over 5 files. `binding ab1 : AB bind a = b;` (`BindingConnectorAsUsage` allows a `UsageDeclaration` before `bind`), `message m of Publish[1] …` (the `Payload` after `of` is `OwnedFeatureTyping ( OwnedMultiplicity )?`), `event e = m.start;` (`EventOccurrenceUsage` ends in `ValuePart? UsageBody`). The `binding` and `event` reproducers draw a *different* pilot diagnostic, so both need a corpus-faithful fixture before a fix is validated against the reference rather than the grammar alone. |
 | ~~F66~~ | **Done** (#375). `assume`/`require constraint` owns a declaration, not only a body. S7, 25 diagnostics over 5 files. `assume constraint c1 : C;` and `assume constraint c { … }` (`RequirementConstraintMember`, `:2057`, whose body is optional), `verify r :>> massRequirement;` (`RequirementVerificationUsage`), `variant use case uc11;` (`UseCaseUsage` is reachable from `VariantUsageElement`), and multiplicity after a redefinition (`ref redefines cylinderBR[4];` — six identical lines × 2 diagnostics = that file's 12). |
 | ~~F67~~ | **Done before this round, and re-verified rather than re-fixed.** Measured on `main` with a fresh `cmd/pilot-diff` run over the pinned `2026-05` validators: all 12 files are fully agreeing, `pilot-examples` only-ours stands at 8 with no `unresolved-reference` among them, and the per-file corpus ratchet records no row for any of them. Each shape carries a committed regression test rather than only the corpus: the import-of-an-imported-name and feature-chain-subsetting shapes, plus the `include` actor redefinition and the bare `variant` reference, in `internal/core/resolve/f67_import_reexport_test.go`; the `item :>> shape : Box [1] { … }` shape against the real `SpatialItems`/`ShapeItems` library context — the corpus-faithful fixture this row asked for — in `internal/core/model/f67_inherited_shape_test.go`. As adjudicated: S8, 43 `unresolved-reference` over 12 files, all resolved by the reference. Two shapes reproduce and are ours: a name introduced into a namespace *by an import* and then wildcard-imported onward (`private import RiskLevelEnum::*;`), and subsetting a feature reachable by feature chain (`part aa subsets a;`). The largest shape, `item :>> shape : Box [1] { … }` (12 diagnostics), is the inherited-member lookup #331 fixed for `length`/`width`/`height`, still failing when the redefinition itself introduces the type — it needs a fixture built from the corpus's library context, since the minimal form agrees. |
 | ~~F68~~ | **Done** (#391). Two rules, both from the corpus files rather than minimal forms: a transition's trigger fills a parameter slot of the transition itself, so a sibling names the payload through the transition; and a feature that takes its name from what it *redefines* is a reference-subsetting target, unlike a name borrowed from a reference. `pilot-examples` `unresolved-reference` 56 → 37. S9, 39 `unresolved member`/`unresolved reference` over 6 files, all in files the reference validates cleanly, all reaching through a behavioral usage into what it implicitly parameterizes (`subscribing.sub`, `producer.publish_request`, `succession flow x.p to a1.aa.receiver`). The minimal forms agree, so the corpus files are the evidence and a faithful fixture has to come from them. 3 of the 39 are `rep inOCL language "ocl"` — the same textual-representation gap as F70, on the SysML side, and they went with it: `Simple Tests/TextualRepresentationTest.sysml` validates clean. |
-| ~~F69~~ | **Done** (ours half). #362 widened the usage-typing kind table to the reference's occurrence/case/behavior taxonomy and made bind conformance accept a value type conforming in either direction, and wave 10B (#467) recast the rules in the reference's wording — re-verified on `main`: all five ours files are clean and draw no only-ours row in `cmd/pilot-diff`. The 3 one-sided checks stay as adjudicated. Was handed to wave-10 slice 10B, which owns `internal/core/passes`: all 5 ours rows are that package's (`typecheck.go` `compatMessage`/kind table, `typecheck_value.go`). S10, 8 diagnostics over 8 files, one each — **5 ours, 3 one-sided.** Ours: `part x : ItemDef` and `use case uc : UseCaseDef` (the kind table is narrower than the reference's `An occurrence, item or part must be typed by occurrence definitions`; see F53 and F32 for the rest of that class), a bind whose value type specializes the feature's, and `action d : OccurrenceFunctions::destroy` resolving to a calc usage. One-sided (kept, on the F4 precedent): the inherited-name conflict on a metadata body's `text`, the interface-conjugation warning, and the units check — probed directly, the reference has no dimensional analysis at all. |
+| ~~F69~~ | **Done** (ours half). #362 widened the usage-typing kind table to the reference's occurrence/case/behavior taxonomy and made bind conformance accept a value type conforming in either direction, and #467 recast the rules in the reference's wording — re-verified on `main`: all five ours files are clean and draw no only-ours row in `cmd/pilot-diff`. The 3 one-sided checks stay as adjudicated. Was handed to the owner of `internal/core/passes`: all 5 ours rows are that package's (`typecheck.go` `compatMessage`/kind table, `typecheck_value.go`). S10, 8 diagnostics over 8 files, one each — **5 ours, 3 one-sided.** Ours: `part x : ItemDef` and `use case uc : UseCaseDef` (the kind table is narrower than the reference's `An occurrence, item or part must be typed by occurrence definitions`; see F53 and F32 for the rest of that class), a bind whose value type specializes the feature's, and `action d : OccurrenceFunctions::destroy` resolving to a calc usage. One-sided (kept, on the F4 precedent): the inherited-name conflict on a metadata body's `text`, the interface-conjugation warning, and the units check — probed directly, the reference has no dimensional analysis at all. |
 | ~~F31~~ | **Done.** All three shapes were ours, and none was cascade: measured on merged `origin/main` the class is 123 of the root's 269 only-ours, and 116 of the 123 are four genuine resolution defects — implicit generalization missing from inherited-member traversal (58), import visibility (15), a declaration's header not seeing its own body (39), and the implicit base suppressed by any declared generalization rather than only by one that already reaches it (4). The root falls **269 → 150** and the class **123 → 7**, with the four `.sysml` roots byte-identical per file and the committed baseline untouched. The 7 remaining are F70–F72. |
 | ~~F70~~ | **Done** (#374). The identifier and the language string are preserved on `ast.TextualRepresentation`. `rep inOCL language "ocl"` (`Simple Tests/TextualRepresentation.kerml:7`, 3 diagnostics): a textual-representation member is not parsed, so `rep`, `inOCL` and `language` are read as names to resolve. Parser-owned, alongside F50. Re-verified on current `main`: both corpus files (`Simple Tests/TextualRepresentation.kerml` and `TextualRepresentationTest.sysml`, the SysML residue of the behavioral-member row) validate clean, the anonymous `language "alf" /* … */` spelling parses in both file kinds, and the member is adopted by the namespace it represents, so a sibling and a qualified name reach it. One residue closed with the re-verification: the identification may be a short name (`rep <ocl> inOCL language "ocl"`, `Identification` is `'<' Name '>' Name?`), which was still rejected. Represented text is carried, never interpreted — recorded as the boundary in `spec-compliance.md`. |
 | ~~F71~~ | **Done** (#375). The cause was narrower than stated: `snapshot`/`timeslice` are SysML-only literals (`SysML.xtext:864`), so in a `.kerml` file they are names. A parameter's name is lost for `in timeslice : Timeslice;` inside `expr while { … }` (`Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml:27`): the AST carries `Usage{Keyword: "timeslice", Ident: ""}`, so no symbol is built and `at(timeslice.interval)` cannot resolve. The name never reaches symbols, so this is a parser representation gap, not resolution — the shape it belongs to is F30's `at`/`while` work. |
@@ -2272,16 +2144,16 @@ one.
 | ~~F90~~ | **Done**: parser #403, downstream #409, which scoped the conjugated-port-typing rule to SysML typings — a KerML conjugation relates any two Types and demands no port — retiring all seven diagnostics; re-verified on `main`, the three `.kerml` files are clean and draw no only-ours row in `cmd/pilot-diff`. The declarations parse, and the seven diagnostics they reached were `passes/typecheck.go`'s conjugation check firing where the reference is silent: `'~' names the conjugated port definition of a port definition, found kermlType` on `Simple Tests/Conjugation.kerml:6` and `Types.kerml:25,26,28,29` (5 `kind-mismatch`) and `… found attributeUsage` on `Conjugation.kerml:8` and `Features.kerml:36` (2 `unmapped`). In KerML a conjugation relates any two Types, so the check must not require a port definition on a `.kerml` document — that is `passes/` work #403 did not own. K13, 6 diagnostics (`Simple Tests/Conjugation.kerml:6,8`, `Features.kerml:36`). Conjugation in a declaration: `ClassifierConjugationPart` in `ClassifierDeclaration` (`KerML.xtext:468`) and `FeatureConjugationPart` = `( '~' \| 'conjugates' ) …` (`:730`). |
 | ~~F91~~ | **Done** (#403). K14, 2 diagnostics (`Simple Tests/Associations.kerml:16,17`). `EndFeaturePrefix` is `( isConstant ?= 'const' )? isEnd ?= 'end'` (`KerML.xtext:511`); `end feature b;` parses, `const end feature b;` does not. |
 | ~~F92~~ | **Done** (#403). K15, 2 diagnostics (`Simple Tests/Comments.kerml:25,43`). Two annotating-element gaps: `Comment`'s whole head is optional so `locale "en_US" /* … */` is an anonymous comment (`KerML.xtext:94`), and `Documentation` takes an `Identification` so `doc <a> /* … */` is legal (`:103`). |
-| ~~F93~~ | **Done at every tier** (parser #403, downstream wave 7A), and re-verified rather than re-fixed: on a fresh `cmd/pilot-diff` run `Simple Tests/Filtering.kerml` is fully agreeing, `kerml-examples` only-ours is 3 and all of it the one-sided specialization-cycle check, and the two `testdata/passes/f93_element_filter.{kerml,sysml}` fixtures analyse clean under `internal/core/passes/f93_element_filter_scope_test.go`. The repeated brackets conjoin into one `and` in `parser/namespace.go`, so both conditions reach the filter judge (`parser/f84_f95_kerml_declarations_test.go`, case `f93_two_filters`). K16, 2 diagnostics (`Simple Tests/Filtering.kerml:35`). `FilterPackage` is `FilterPackageImport ( FilterPackageMember )+` (`KerML.xtext:200`); we accept exactly one filter bracket where the grammar says one or more. |
+| ~~F93~~ | **Done at every tier** (parser #403, downstream #424), and re-verified rather than re-fixed: on a fresh `cmd/pilot-diff` run `Simple Tests/Filtering.kerml` is fully agreeing, `kerml-examples` only-ours is 3 and all of it the one-sided specialization-cycle check, and the two `testdata/passes/f93_element_filter.{kerml,sysml}` fixtures analyse clean under `internal/core/passes/f93_element_filter_scope_test.go`. The repeated brackets conjoin into one `and` in `parser/namespace.go`, so both conditions reach the filter judge (`parser/f84_f95_kerml_declarations_test.go`, case `f93_two_filters`). K16, 2 diagnostics (`Simple Tests/Filtering.kerml:35`). `FilterPackage` is `FilterPackageImport ( FilterPackageMember )+` (`KerML.xtext:200`); we accept exactly one filter bracket where the grammar says one or more. |
 | ~~F94~~ | **Done** (#403). K17, 1 diagnostic (`Simple Tests/MetadataTest.kerml:33`). `Feature` is `FeaturePrefix ( 'feature' \| ownedRelationship += PrefixMetadataMember ) FeatureDeclaration?` (`KerML.xtext:538`) — the annotation replaces the keyword, so `abstract #Classified z2;` is a feature. The KerML twin of S1/F60. |
 | ~~F95~~ | **Done** (#403). K18, 1 diagnostic (`Simple Tests/Expressions.kerml:23`). A *named* `expr` whose body is a brace-enclosed expression (`in expr whileTest {v > 3}`); F30 unreserved `expr at`/`expr while` but the named form with an expression body is still unparsed. |
 | ~~F34~~ | **Done** (#358). Compares our own 11 `.kerml` fixtures (`testdata/lex/basic.kerml`, `examples/parser_features_demo_*.kerml`) too: a root carries one language today, so they are collected as SysML and excluded (see the known limitation above). Needs per-file language dispatch within a root, and a second pilot invocation per root. |
 | ~~F96~~ | **Done** (#373, whose title mislabels it "F84" — F84 is K7). Our own 10 `.kerml` demo fixtures carried SysML notation under a `.kerml` suffix, which is why F34 drew 314 pilot diagnostics on them. Two were SysML demos and were renamed (`parser_features_demo_connectors`, `parser_features_demo_messages_events`); the other eight were corrected to notation the KerML grammar accepts. The `examples` root now has **no** `.kerml` pilot diagnostic. F97/F98 were the two further fixture gaps #358 proposed under the same renumbering. |
 | ~~F99~~ | **Done** (#387), in `internal/core/symbols/` and the evaluator: a declaration in an expression body is in scope for the body's result expression, with shadowing preserved, and the runtime evaluates it instead of returning `ErrUnsupportedBodyDeclaration`. `Analysis Examples/Vehicle Analysis Demo.sysml` 6 → 0 and `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` 2 → 1. A declaration inside an expression body parses (#375, F64b) but its name is not visible to the body's result expression: `Analysis Examples/Vehicle Analysis Demo.sysml:214-218` now reports 6 `unresolved reference: nextSample`/`thisSample` diagnostics over 5 report lines (line 214 carries `x2`) where it previously reported 2 syntax errors, and the evaluator returns the typed `ErrUnsupportedBodyDeclaration` rather than a wrong result. The scope member is `internal/core/symbols/` work, which #375 did not own. Strictly an unmasking: the reference is silent on the file, and the diagnostic count rose because parsing advanced. |
-| ~~F100~~ | **Done** (#388). It was a false positive of ours, as suspected: a redefinition target that is separately `featured by` need not be an inherited member of the immediately enclosing feature, and the check now falls back to the KerML accessibility rule cited in `internal/core/passes/`. Our `unmapped` total drops 16 → 15; the other two wave-3 unmaskings (F69's `Rationale` name conflicts) are a deliberate one-sided check and stay. `member feature isLicensed1 :>> Person1_::isLicensed featured by …` (`Variable Feature Examples/TimeVaryingCarDriver.kerml:93`, 1 `unmapped`) draws `isLicensed1 redefines isLicensed, but isLicensed is not an inherited member of driver`; the reference is silent. The line only parses now that F50 (#374) accepts `member abstract feature`, so this is unmasked, not new — but unlike F99 it looks like a **false positive of ours**: the redefinition target is *qualified* (`Person1_::isLicensed`) and separately `featured by`, so requiring it to be an inherited member of the immediately enclosing feature is too strict. Confirm against the reference on a reduced fixture before widening the check. |
-| ~~F101~~ | **Done** (wave 10F). Re-measured on `main` before the fix, **2** of the 12 remained — both `no scope for member lookup in Actions::TransitionAction::effect`, on `ServerSequenceOutsideRealization-2.sysml:91` and `ServerSequenceRealization-2.sysml:96`; the `accepter`, `acceptedMessage` and `PartTest.sysml:25` `receiver` rows had already been retired by waves 7–9, so the count below is stale rather than wrong when written. The cause was not implicit typing: `kindBaseFQN` already gives `*ast.TransitionMember` the `Actions::TransitionAction` base, and the chain resolved to the library's abstract `effect` feature, which comes back from the library cache without a scope. A transition's own effect action *is* the `effect` it redefines (SysML v2 §7.19.2), so `symbols/builder.go` names it in the transition's scope and the chain reads that action; a `send` written as an action node is a SendActionUsage in its own right, so `semantics/model.go` types it by `Actions::SendAction` whether or not a usage declares it, which is what supplies `sentMessage`. Both files' rows go to 0 and `ServerSequenceRealization-2.sysml` becomes fully agreeing. **Unmasking:** with the name-resolution error gone the constraint tier now runs on `ServerSequenceOutsideRealization-2.sysml` and surfaces 3 `Must be a valid feature` rows on `:>> incomingTransferSort = Occurrences::earlierFirstIncomingTransferSort` (lines 18, 32, 57) — a KerML `bool` expression *is* a feature, so these are false positives of `passes/w8c_feature_reference.go`, they reproduce on `main` when nothing masks the tier, and they are handed to slice 10B with F69. Net on this oracle: fully agreeing 309 → 310, only ours 119 → 120. As handed back in wave 4: **12** of F68's 39 diagnostics remained, all implicit `Actions::TransitionAction` members. 11 are in the two files #391 measured — `ServerSequenceOutsideRealization-2.sysml` 10 → 4 and `ServerSequenceRealization-2.sysml` 13 → 7 — and name `accepter` (6), `effect` (3) and `acceptedMessage` (2); the twelfth is `Simple Tests/PartTest.sysml:25`'s `unresolved member: receiver`, unchanged at 1. `semantics/implicit.go` `kindBaseFQN` must give `*ast.TransitionMember` the base its usage kind already has — a layer #391 did not own. **Residue closed:** the two `effect` cases needed a cached library symbol to carry a scope, and fact-only library records (a library document is parsed on every load path) leave every restored symbol its declaration and scope, so both files are clean and the chain resolves identically cold and warm (`model/w8g_f68_effect_member_test.go`). |
-| ~~F102~~ | **Done** (#428), re-verified on `main`: all three forms parse clean, pinned by the `w7c_f66_generalized_usage_declarations` golden fixture and the two neighbouring negative cases. Wave-4 handback from F66 (#375): `verify r :>> massRequirement;`, `variant use case uc11;` and `ref redefines cylinderBR[4];` stay rejected. All three are the generalized usage-declaration path in `parser/defusage.go` `parseUsage`, which #375 did not own; #383 owned that file but scoped itself to F65's three forms. |
-| ~~F103~~ | **Done** (#428), re-verified on `main` and pinned by the `assert_not_named_constraint` golden fixture: `not` before a named constraint negates the asserted expression instead of modifying a declaration, and `Simple Tests/ConstraintTest.sysml` is clean. Wave-4 handback from F64 (#375): `assert not c { … }` stays rejected. `parser/defusage.go` `parseDefUsage` treats `not` as a negation only when a *kind keyword* follows it, so a named constraint after `not` is still read as a declaration where the grammar makes the argument an `OperatorExpression`. |
+| ~~F100~~ | **Done** (#388). It was a false positive of ours, as suspected: a redefinition target that is separately `featured by` need not be an inherited member of the immediately enclosing feature, and the check now falls back to the KerML accessibility rule cited in `internal/core/passes/`. Our `unmapped` total drops 16 → 15; the other two unmaskings of that round (F69's `Rationale` name conflicts) are a deliberate one-sided check and stay. `member feature isLicensed1 :>> Person1_::isLicensed featured by …` (`Variable Feature Examples/TimeVaryingCarDriver.kerml:93`, 1 `unmapped`) draws `isLicensed1 redefines isLicensed, but isLicensed is not an inherited member of driver`; the reference is silent. The line only parses now that F50 (#374) accepts `member abstract feature`, so this is unmasked, not new — but unlike F99 it looks like a **false positive of ours**: the redefinition target is *qualified* (`Person1_::isLicensed`) and separately `featured by`, so requiring it to be an inherited member of the immediately enclosing feature is too strict. Confirm against the reference on a reduced fixture before widening the check. |
+| ~~F101~~ | **Done**. Re-measured on `main` before the fix, **2** of the 12 remained — both `no scope for member lookup in Actions::TransitionAction::effect`, on `ServerSequenceOutsideRealization-2.sysml:91` and `ServerSequenceRealization-2.sysml:96`; the `accepter`, `acceptedMessage` and `PartTest.sysml:25` `receiver` rows had already been retired by earlier rounds, so the count below is stale rather than wrong when written. The cause was not implicit typing: `kindBaseFQN` already gives `*ast.TransitionMember` the `Actions::TransitionAction` base, and the chain resolved to the library's abstract `effect` feature, which comes back from the library cache without a scope. A transition's own effect action *is* the `effect` it redefines (SysML v2 §7.19.2), so `symbols/builder.go` names it in the transition's scope and the chain reads that action; a `send` written as an action node is a SendActionUsage in its own right, so `semantics/model.go` types it by `Actions::SendAction` whether or not a usage declares it, which is what supplies `sentMessage`. Both files' rows go to 0 and `ServerSequenceRealization-2.sysml` becomes fully agreeing. **Unmasking:** with the name-resolution error gone the constraint tier now runs on `ServerSequenceOutsideRealization-2.sysml` and surfaces 3 `Must be a valid feature` rows on `:>> incomingTransferSort = Occurrences::earlierFirstIncomingTransferSort` (lines 18, 32, 57) — a KerML `bool` expression *is* a feature, so these are false positives of `passes/w8c_feature_reference.go`, they reproduce on `main` when nothing masks the tier, and they are handed to the passes owner with F69. Net on this oracle: fully agreeing 309 → 310, only ours 119 → 120. As handed back: **12** of F68's 39 diagnostics remained, all implicit `Actions::TransitionAction` members. 11 are in the two files #391 measured — `ServerSequenceOutsideRealization-2.sysml` 10 → 4 and `ServerSequenceRealization-2.sysml` 13 → 7 — and name `accepter` (6), `effect` (3) and `acceptedMessage` (2); the twelfth is `Simple Tests/PartTest.sysml:25`'s `unresolved member: receiver`, unchanged at 1. `semantics/implicit.go` `kindBaseFQN` must give `*ast.TransitionMember` the base its usage kind already has — a layer #391 did not own. **Residue closed:** the two `effect` cases needed a cached library symbol to carry a scope, and fact-only library records (a library document is parsed on every load path) leave every restored symbol its declaration and scope, so both files are clean and the chain resolves identically cold and warm (`model/w8g_f68_effect_member_test.go`). |
+| ~~F102~~ | **Done** (#428), re-verified on `main`: all three forms parse clean, pinned by the `w7c_f66_generalized_usage_declarations` golden fixture and the two neighbouring negative cases. Handback from F66 (#375): `verify r :>> massRequirement;`, `variant use case uc11;` and `ref redefines cylinderBR[4];` stay rejected. All three are the generalized usage-declaration path in `parser/defusage.go` `parseUsage`, which #375 did not own; #383 owned that file but scoped itself to F65's three forms. |
+| ~~F103~~ | **Done** (#428), re-verified on `main` and pinned by the `assert_not_named_constraint` golden fixture: `not` before a named constraint negates the asserted expression instead of modifying a declaration, and `Simple Tests/ConstraintTest.sysml` is clean. Handback from F64 (#375): `assert not c { … }` stays rejected. `parser/defusage.go` `parseDefUsage` treats `not` as a negation only when a *kind keyword* follows it, so a named constraint after `not` is still read as a declaration where the grammar makes the argument an `OperatorExpression`. |
 | ~~F104~~ | **Done** (#464), then superseded: the spelling was removed outright — an expression right end is now a parse error and the warning is gone, its one occurrence rewritten as the declaration's value (`out result : Real = x * 2.0;`). Feature-reference bindings remain silent. |
 | ~~F105~~ | **Done.** Named `done`, `then <source> <target>;` and the member-leading `<source> then <target>;` form are nonstandard-notation findings, while the pilot-accepted one-ended `then <target>;` stays silent. |
 | ~~F106~~ | **Done** (#464). A one-ended `first <node>;` is diagnosed outside an action body and remains silent inside one. |
@@ -2294,7 +2166,7 @@ F6 is done, and it is the case for testing harness assumptions rather than reaso
 it changed nothing about what either implementation says, but it turned 25 diagnostics that this
 page dismissed as wrapper noise into a reference rule we do not implement.
 
-After wave 5 the adjudicated syntax debt is **empty on the KerML side**: F84–F95 (K7–K18) all
+After #403–#405 the adjudicated syntax debt is **empty on the KerML side**: F84–F95 (K7–K18) all
 landed in #403 and `kerml-examples` carries no syntax diagnostic at all, moving to 47 of 58 files
 fully agreeing with 15 diagnostics of ours — against `pilot-examples` at 76 of 98 and
 `pilot-validation` at 52 of 56. One of the twelve is closed in the parser and open downstream,
@@ -2355,10 +2227,69 @@ fetches. Together they bound how long a stale figure can survive to about a day.
 
 ---
 
+### Multiplicity bound result types round
+
+`validateMultiplicityRangeResultTypes` (KerML 1.1 8.3.3.6) is now a constraint-tier rule of ours
+(`passes/w8c_multiplicity_bounds.go`): a bound that is not evaluated at model level must still
+have an Integer-conforming result, read from the referenced feature's declared type or, for
+arithmetic, from its operands. The rule moves no row of the reference corpora — the only
+non-literal bounds in the four OMG roots (`Simple Tests/MultiplicityTest.sysml`,
+`Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`) name Integer- or Natural-typed
+sibling features, which both sides accept — and moves
+`semantic/k37-multiplicity-bound-not-natural.kerml` to both-reject. Two points where
+`KerMLValidator.checkMultiplicityRange` (`KerMLValidator.xtend:1333`) and our rule part are
+adjudicated toward the specification rather than the referee:
+
+- **A bound naming a package-level feature is judged by that feature's type.** The pilot treats
+  a reference to a feature with no featuring type and no value as model-level evaluable, evaluates
+  it to the feature itself rather than a literal, and reports the `-2` null result, so
+  `feature k : Natural; feature d [k];` at package level draws `Must have a Natural value` from
+  the pilot and nothing from us; the same pair inside a class is judged by `k`'s type on both
+  sides. The specification asks for the result's type, which for a feature reference is the
+  referent's wherever it is owned;
+  [omg-issues.md](omg-issues.md#a-bound-naming-a-package-level-feature-is-rejected-whatever-its-type-pilot-2026-07)
+  drafts the question.
+- **`**` and `^` keep an Integer whole only under a Natural exponent.** The pilot's
+  `isIntegerOperator` lists both alongside `+`, `-`, `*` and `%`, so `2 ** n` with `n : Integer`
+  passes its check. `IntegerFunctions::'**'` is declared `in y : Natural`, and an Integer
+  exponent resolves to `RationalFunctions::'**'`, whose result is Rational; we accept the
+  exponentiation only when the exponent is Natural-conforming (`k : Natural`, `p : Positive`, a
+  literal, or `+`/`*`/`%` over such). The pilot's grammar admits only a literal or a feature
+  reference as a bound (`MultiplicityExpressionMember`), so no arithmetic bound reaches its
+  validator and the difference has no referee row; it is a reading of the library.
+
+### Binary-link specialization round
+
+`validateAssociationBinarySpecialization` and `validateConnectorBinarySpecialization`
+(KerML 1.1 8.3.4.4.2, 8.3.4.5.3) are constraint-tier rules of ours (`passes/constraint.go`,
+`semantics/connector.go`): an association or connector that conforms to `Links::BinaryLink` with
+more than two effective ends — owned, positional and inherited ends together — is reported at
+each end past the second. Which base a declaration takes implicitly follows the same effective
+count (`semantics/implicit.go`): KerML 1.1 asks that an association with
+`associationEnd->size() = 2` specialize `Links::BinaryLink` and a connector with
+`connectorEnd->size() = 2` subset `Links::binaryLinks`, and both derived properties include the
+inherited ends. One point where the pilot's `ConnectorAdapter.getDefaultSupertype`
+(`org.omg.sysml.adapter`, pinned `c7fc737`) and our rule part is adjudicated toward the
+specification:
+
+- **A connector owning two ends that redefine two of an n-ary general's ends stays n-ary.**
+  `connector m : N { end redefines a references x; end redefines b references y; }` with
+  `assoc N { end a; end b; end c; }` has three connector ends — the two it owns and the `c` it
+  inherits — so the specification implies no binary base, and we give it `Links::links`. The
+  pilot's adapter counts owned end features only, gives `m` `Links::binaryLinks`, and its
+  `checkConnectorBinarySpecialization` then reports `Cannot have more than two ends` on a
+  connector the specification's own implication never made binary; its `AssociationAdapter`
+  counts the same way, yet the association check inspects owned ends alone, so the association
+  spelling of the same shape (`assoc B specializes N { end redefines a; end redefines b; }`) is
+  accepted by both sides. The corpus has no such row — its binary-ends cases (`k24`, `k26`) declare
+  the binary base — and the four OMG roots contain no connector of that shape;
+  [omg-issues.md](omg-issues.md#a-connector-inheriting-a-third-end-is-given-the-binary-base-pilot-2026-07)
+  drafts the question.
+
 ## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
-after the merged wave-11 changes and before the remaining wave-11F changes. The
+after the merged resolver and rules changes and before the remaining resolver work. The
 branch movement is measured from
 `build/pilot-diff/pilot-diff.json`, keyed by corpus root, file, diagnostic line,
 severity and category:
@@ -2391,10 +2322,10 @@ branch.
 
 The three rows at
 `pilot-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml:18,32,57`
-are explicitly excluded from this branch's claim. The merged wave-11 PRs
+are explicitly excluded from this branch's claim. The earlier merged PRs
 closed those `kind-mismatch` rows before `ae4fdf9e`; they explain the stale
 `311 / 142 / 73` documentation-era comparison and are not movement produced by
-wave 11F.
+the resolver work measured here.
 
 ### Remaining Xpect adjudications
 
@@ -2404,15 +2335,15 @@ disagreements.
 * **Query syntax the pinned pilot does not parse:** `queryx/failing/QPE-Qualifier`,
   `QPE-Traversal`, and `QPE-Wildcard` declare file-wide silence, but the pinned
   pilot's own validator rejects them too (`no viable alternative at input '/'`),
-  which is what `queryx/failing/` records. Wave 12D reclassifies these as a
-  **pilot limitation**. See [wave12d-decisions.md](wave12d-decisions.md).
+  which is what `queryx/failing/` records. These are reclassified as a
+  **pilot limitation**. See [adjudications.md](adjudications.md).
 * **Parallel state syntax:** `TransitionUsage_invalid.sysml:45, 54, 68` closed in
-  wave 12D, which parses `state … parallel { … }` and retains it in the AST so
+  the parser, which reads `state … parallel { … }` and retains it in the AST so
   “A parallel state cannot have successions or transitions” and the
   accepter-source rule can be evaluated. Line 60 now reports
   `transition guard must be Boolean, found String` on the declared model line;
   its expression-only span keeps the Xpect row in `same-line`. See
-  [wave12d-decisions.md](wave12d-decisions.md).
+  [adjudications.md](adjudications.md).
 * **Fixture environment:** `Feature_invalid_noType.sysml:18,20` has no library
   resource in `XPECT_SETUP`. The pilot consequently lacks `Parts::Part`, so the
   implicit specialization has nothing to specialize and the feature has no
@@ -2453,7 +2384,7 @@ Narrowing the tier gate from the document to the element moves this oracle only:
 **32**, only-pilot 73 → **66**, our diagnostics 168 → **175**, only-ours unmoved at **119**, and the
 Xpect and rejection oracles are byte-identical. The design, the control run with the gate removed
 entirely (only-ours 119 → **166**), and the rows the gate turned out *not* to be hiding are in
-[wave 12A](wave12a-element-gating.md).
+[element-scoped tier gating](element-scoped-tier-gating.md).
 
 The seven rows that became agreement are all on `testdata`, and six of them are now word-for-word:
 
@@ -2474,7 +2405,7 @@ behavioral feature.
 One category mapping moved with this and no count did on the base tree: `must have` now maps to
 `kind-mismatch` on our side as it already did on the pilot's (`cmd/pilot-diff/category.go`), so our
 own `Must have a Boolean result` can agree with the pilot's identical string instead of sitting in
-`unmapped`. No diagnostic of ours in the corpus carried that wording before wave 12A.
+`unmapped`. No diagnostic of ours in the corpus carried that wording before element-scoped gating landed.
 
 
 ## The remaining only-ours rows
@@ -2696,7 +2627,7 @@ one is ever added, this is the clause to revisit.
 
 ## The declared errata overlay
 
-Every root is compared a second time with the [declared errata](wave14-errata.md) applied to a
+Every root is compared a second time with the [declared errata](errata-overlay.md) applied to a
 **copy** of it, so the published corpus stays byte-identical on disk. The as-published census above
 is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
 

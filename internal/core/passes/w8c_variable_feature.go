@@ -24,6 +24,9 @@ type VariableFeaturePass struct{}
 
 func (VariableFeaturePass) Level() PassLevel { return LevelConstraint }
 
+// ElementScoped: each feature gates on its own head and its owner's.
+func (VariableFeaturePass) ElementScoped() {}
+
 func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
@@ -52,7 +55,7 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
-		if !ok {
+		if !ok || w8cVariabilityDownstream(ctx, sym, u) {
 			return
 		}
 		if derivable && u.ValueIsInitial && u.Value != nil && !model.FeatureIsVariable(sym) {
@@ -61,7 +64,8 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 		if derivable && u.IsConstant && !model.FeatureIsVariable(sym) {
 			report(u.Span(), msgConstantNotVariable, "constant-feature-not-variable")
 		}
-		if !u.IsVariable {
+		// KerML `const` declares a variable feature too; SysML's `constant` does not.
+		if !u.IsVariable && !(u.IsConstant && ctx.Kind == source.KindKerML) {
 			return
 		}
 		if u.IsPortion {
@@ -77,6 +81,74 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 		report(u.Span(), msgVariableFeatureOwner, "variable-feature-owner")
 	})
 	return diags
+}
+
+// w8cVariabilityDownstream reports a lower-tier failure in what u's variability
+// rests on: its own head before the value, or its owner's typing head in this document.
+func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) bool {
+	if ctx.downstreamSpan(w8cUsageHead(u)) {
+		return true
+	}
+	if sym.OwnerScope == nil {
+		return false
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || owner.Decl == nil {
+		return false
+	}
+	ownerHead, typed := w8cOwnerHead(owner.Decl)
+	if !typed {
+		return false
+	}
+	doc := symbols.DocNameOf(owner.OwnerScope)
+	if doc == "" {
+		doc = owner.DocName
+	}
+	return (doc == "" || doc == ctx.Name) && ctx.downstreamSpan(ownerHead)
+}
+
+// w8cOwnerHead is the owner's head before its first body member, which fixes its type.
+// typed is false for owners whose notation alone fixes it (package, namespace, state node).
+func w8cOwnerHead(node ast.Node) (head source.Span, typed bool) {
+	switch d := node.(type) {
+	case *ast.Usage:
+		return w8cUsageHead(d), true
+	case *ast.Definition:
+		return w8cHeadBefore(d, d.Members), true
+	case *ast.SubjectMember:
+		return w8cHeadBefore(d, d.Body), true
+	case *ast.PrefixMetadata:
+		return w8cHeadBefore(d, d.Body), true
+	case *ast.MultiplicityDecl:
+		return w8cHeadBefore(d, d.Members), true
+	case *ast.AssumeMember, *ast.RequireMember:
+		if oc, ok := ast.OwnedConstraintOf(d); ok {
+			return w8cHeadBefore(d, oc.Body), true
+		}
+	}
+	return source.Span{}, false
+}
+
+// w8cUsageHead is a usage's head before its value and its first body member.
+func w8cUsageHead(u *ast.Usage) source.Span {
+	head := w8cHeadBefore(u, u.Members)
+	if u.Value != nil {
+		if at := u.Value.Span().Offset; at > head.Offset && at < head.End() {
+			head.Len = at - head.Offset
+		}
+	}
+	return head
+}
+
+// w8cHeadBefore is a declaration's span before the first of its body members.
+func w8cHeadBefore(node ast.Node, body []ast.Node) source.Span {
+	span := node.Span()
+	if len(body) > 0 {
+		if at := body[0].Span().Offset; at > span.Offset && at < span.End() {
+			span.Len = at - span.Offset
+		}
+	}
+	return span
 }
 
 // w8cValueSpan is the span of a usage's feature value, operator through expression.

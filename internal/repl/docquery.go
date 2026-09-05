@@ -262,6 +262,15 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 			return nil, nil
 		}
 		return queryValueList(value.Set().Elements())
+	case runtime.ValArray:
+		return queryValueList(value.Array().Elements)
+	case runtime.ValVector:
+		components := value.Vector().Elements
+		elements := make([]runtime.Value, len(components))
+		for i, c := range components {
+			elements[i] = runtime.Value{Kind: runtime.ValConst, Const: c}
+		}
+		return queryValueList(elements)
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}

@@ -410,3 +410,106 @@ func TestConnectorEndAttachments(t *testing.T) {
 		t.Fatalf("tri: %d attachments, want three", len(got))
 	}
 }
+
+// TestEndsInheritedThroughSeveralGenerals covers a connector that specializes
+// two connectors: its ends redefine the end at their position in each general,
+// and an inherited end that another inherited end redefines counts once.
+func TestEndsInheritedThroughSeveralGenerals(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A;
+		part def B;
+		connection def Base {
+			end [1] part a : A;
+			end [1] part b : B;
+		}
+		connection def Refined :> Base {
+			end [1] part a2 : A :>> Base::a;
+			end [1] part b2 : B :>> Base::b;
+		}
+		connection def Both :> Refined, Base;
+		part w {
+			part x : A;
+			part y : B;
+			connection : Both connect x to y;
+		}
+	}`)
+	p := sym(t, root, "P")
+	both := nested(t, p.Scope, "Both")
+	refined := nested(t, p.Scope, "Refined")
+	if ends := m.endsOf(both); len(ends) != 2 ||
+		ends[0] != nested(t, refined.Scope, "a2") || ends[1] != nested(t, refined.Scope, "b2") {
+		t.Fatalf("endsOf(Both) = %v, want [Refined::a2 Refined::b2]", ends)
+	}
+	conn := connector(t, nested(t, p.Scope, "w").Scope)
+	atts := m.ConnectorEndAttachments(conn)
+	if len(atts) != 2 || atts[0].Name != "a2" || atts[1].Name != "b2" {
+		t.Fatalf("ConnectorEndAttachments = %+v, want ends named a2 and b2", atts)
+	}
+}
+
+// An unnamed `from`/`to` end inherited along two paths of a diamond is one
+// effective end, so the leaf has two ends, not four; a leaf restating the pair
+// redefines both by position.
+func TestEndsInheritedThroughDiamondCountOnce(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		feature x;
+		feature y;
+		connector base : Links::BinaryLink from x to y;
+		connector mid1 :> base;
+		connector mid2 :> base;
+		connector leaf :> mid1, mid2;
+		connector leaf2 :> mid1, mid2 from x to y;
+	}`)
+	p := sym(t, root, "P")
+	for _, name := range []string{"leaf", "leaf2"} {
+		if n := m.ConnectorEndCount(nested(t, p.Scope, name)); n != 2 {
+			t.Errorf("ConnectorEndCount(%s) = %d, want 2", name, n)
+		}
+	}
+	// One referenced end reached through two abstract intermediates relates one feature.
+	m, root = buildModel(t, `package Q {
+		feature x;
+		abstract connector base { end feature e references x; }
+		abstract connector mid1 :> base;
+		abstract connector mid2 :> base;
+		connector leaf :> mid1, mid2;
+	}`)
+	q := sym(t, root, "Q")
+	if n := m.RelatedFeatureCount(nested(t, q.Scope, "leaf")); n != 1 {
+		t.Errorf("RelatedFeatureCount(leaf) = %d, want 1", n)
+	}
+}
+
+// An owned end claims what it redefines: the ends its `:>>` clauses name, or the
+// positional end when it names nothing — so naming an end of one general leaves
+// the other general's end at that position effective.
+func TestEndsClaimedAcrossSeveralGenerals(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def T;
+		connection def A { end [1] part a1 : T; end [1] part a2 : T; }
+		connection def B { end [1] part b1 : T; end [1] part b2 : T; }
+		connection def OneSide :> A, B {
+			end [1] part c1 : T :>> A::a1;
+			end [1] part c2 : T :>> A::a2;
+		}
+		connection def Positional :> A, B { end [1] part d1 : T; end [1] part d2 : T; }
+		connection def BothSides :> A, B {
+			end [1] part e1 : T :>> A::a1, B::b1;
+			end [1] part e2 : T :>> A::a2, B::b2;
+		}
+		connection def Swapped :> A { end [1] part f1 : T :>> A::a2; end [1] part f2 : T :>> A::a1; }
+	}`)
+	p := sym(t, root, "P")
+	b := nested(t, p.Scope, "B")
+	oneSide := nested(t, p.Scope, "OneSide")
+	if ends := m.endsOf(oneSide); len(ends) != 4 ||
+		ends[0] != nested(t, oneSide.Scope, "c1") || ends[1] != nested(t, oneSide.Scope, "c2") ||
+		ends[2] != nested(t, b.Scope, "b1") || ends[3] != nested(t, b.Scope, "b2") {
+		t.Errorf("endsOf(OneSide) = %v, want [c1 c2 B::b1 B::b2]", ends)
+	}
+	for _, name := range []string{"Positional", "BothSides", "Swapped"} {
+		if n := m.ConnectorEndCount(nested(t, p.Scope, name)); n != 2 {
+			t.Errorf("ConnectorEndCount(%s) = %d, want 2", name, n)
+		}
+	}
+}

@@ -4,18 +4,27 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
+// ExprWalker walks declarations and their expressions down to every member list
+// they own (a declaration's body, a `{ … }` value's members), each with its scope.
+type ExprWalker struct {
+	// Body returns the scope a body expression's members and result resolve in.
+	Body func(parent *Scope, body *ast.BodyExpr) *Scope
+	// Members is called for each member list reached, with its scope.
+	Members func(scope *Scope, members []ast.Node)
+}
+
 // buildBodyScopes links the scope each body expression declares its parameters
 // into (`c->forAll { in i : Positive; f(i) }`) into the document scope tree.
 // Body expressions sit inside expressions, which the declaration builder does
-// not walk, so this second pass mirrors resolve/document.go's traversal: a form
-// handled there but not here leaves its parameters out of the tree.
+// not walk, so this second pass walks them once the declarations exist.
 func buildBodyScopes(scope *Scope, members []ast.Node) {
+	w := ExprWalker{Body: newBodyExprScope, Members: buildBodyScopes}
 	for _, m := range members {
 		decl, _ := unwrapMember(m)
 		if decl == nil {
 			continue
 		}
-		bodyScopesInDecl(scope, decl)
+		w.Decl(scope, decl)
 	}
 }
 
@@ -75,163 +84,132 @@ func nodeBodyScope(scope *Scope, node ast.Node) *Scope {
 	return scope
 }
 
-// bodyScopesInDecl walks the expressions a declaration carries, descending into
-// the child scopes its body resolves against.
-func bodyScopesInDecl(scope *Scope, decl ast.Node) {
-	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
-		for _, prefix := range prefixes {
-			if prefix == nil || len(prefix.Body) == 0 {
-				continue
-			}
-			if child := bodyScopeChild(scope, prefix); child != nil {
-				buildBodyScopes(child, prefix.Body)
-			}
+// Decl walks the expressions a declaration carries and the member lists it
+// owns, each in the child scope it resolves against.
+func (w ExprWalker) Decl(scope *Scope, decl ast.Node) {
+	for _, prefix := range prefixMetadataOf(decl) {
+		if prefix != nil && len(prefix.Body) > 0 {
+			w.Members(nodeBodyScope(scope, prefix), prefix.Body)
 		}
 	}
 	switch d := decl.(type) {
 	case *ast.Package:
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Members)
-		}
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.Namespace:
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Members)
-		}
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.FilterMember:
-		bodyScopesInExpr(scope, d.Condition)
+		w.Expr(scope, d.Condition)
 	case *ast.PrefixMetadata:
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Body)
-		}
+		w.Members(nodeBodyScope(scope, d), d.Body)
 	case *ast.Definition:
-		bodyScopesInRelationships(scope, d.Relationships)
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Members)
-		}
+		w.relationships(scope, d.Relationships)
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.Usage:
-		bodyScopesInRelationships(scope, d.Relationships)
-		bodyScopesInMultiplicity(scope, d.Multiplicity)
+		w.relationships(scope, d.Relationships)
+		w.multiplicity(scope, d.Multiplicity)
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
-			bodyScopesInTrigger(scope, d.Value)
+			w.Trigger(scope, d.Value)
 		} else {
-			bodyScopesInExpr(scope, d.Value)
+			w.Expr(scope, d.Value)
 		}
 		for _, end := range d.ConnectorEnds {
 			if end == nil {
 				continue
 			}
-			bodyScopesInExpr(scope, end.Target)
-			bodyScopesInExpr(scope, end.Reference)
+			w.Expr(scope, end.Target)
+			w.Expr(scope, end.Reference)
 		}
 		if d.FlowEnds != nil {
-			bodyScopesInExpr(scope, d.FlowEnds.From)
-			bodyScopesInExpr(scope, d.FlowEnds.To)
-			bodyScopesInExpr(scope, d.FlowEnds.Payload)
+			w.Expr(scope, d.FlowEnds.From)
+			w.Expr(scope, d.FlowEnds.To)
+			w.Expr(scope, d.FlowEnds.Payload)
 		}
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Members)
-		}
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.SubjectMember:
-		bodyScopesInMultiplicity(scope, d.Multiplicity)
-		bodyScopesInExpr(scope, d.BindingExpr)
-		if child := bodyScopeChild(scope, d); child != nil {
-			buildBodyScopes(child, d.Body)
-		}
+		w.multiplicity(scope, d.Multiplicity)
+		w.Expr(scope, d.BindingExpr)
+		w.Members(nodeBodyScope(scope, d), d.Body)
 	case *ast.InitialNode:
-		bodyScopesInExpr(scope, d.Guard)
-		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+		w.Expr(scope, d.Guard)
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		buildBodyScopes(nodeBodyScope(scope, d), ast.NodeBodyMembers(d))
+		w.Members(nodeBodyScope(scope, d), ast.NodeBodyMembers(d))
 	case *ast.ConstraintMember:
-		bodyScopesInExpr(scope, d.Expression)
-		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
+		w.Expr(scope, d.Expression)
+		w.Members(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.AssumeMember:
-		bodyScopesInExpr(scope, d.Expression)
-		bodyScopesInMultiplicity(scope, d.Multiplicity)
-		bodyScopesInExpr(scope, d.Value)
-		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
+		w.Expr(scope, d.Expression)
+		w.multiplicity(scope, d.Multiplicity)
+		w.Expr(scope, d.Value)
+		w.Members(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
-		bodyScopesInExpr(scope, d.Expression)
-		bodyScopesInMultiplicity(scope, d.Multiplicity)
-		bodyScopesInExpr(scope, d.Value)
-		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
+		w.Expr(scope, d.Expression)
+		w.multiplicity(scope, d.Multiplicity)
+		w.Expr(scope, d.Value)
+		w.Members(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
-		buildBodyScopes(scope, d.Actions)
+		w.Members(scope, d.Actions)
 	case *ast.DoMember:
-		buildBodyScopes(scope, d.Actions)
+		w.Members(scope, d.Actions)
 	case *ast.ExitMember:
-		buildBodyScopes(scope, d.Actions)
+		w.Members(scope, d.Actions)
 	case *ast.DeferMember:
 		for _, trigger := range d.Triggers {
-			bodyScopesInTrigger(scope, trigger)
+			w.Trigger(scope, trigger)
 		}
 	case *ast.StateNode:
-		body := scope
-		if child := bodyScopeChild(scope, d); child != nil {
-			body = child
-		}
-		buildBodyScopes(body, d.Entry)
-		buildBodyScopes(body, d.Do)
-		buildBodyScopes(body, d.Exit)
-		buildBodyScopes(body, d.Substates)
+		body := nodeBodyScope(scope, d)
+		w.Members(body, d.Entry)
+		w.Members(body, d.Do)
+		w.Members(body, d.Exit)
+		w.Members(body, d.Substates)
 		for _, region := range d.Regions {
-			bodyScopesInDecl(body, region)
+			w.Decl(body, region)
 		}
 	case *ast.StateRegion:
-		states := scope
-		if child := bodyScopeChild(scope, d); child != nil {
-			states = child
-		}
-		buildBodyScopes(states, d.States)
+		w.Members(nodeBodyScope(scope, d), d.States)
 	case *ast.TransitionMember:
-		bodyScopesInTrigger(scope, d.Trigger)
+		w.Trigger(scope, d.Trigger)
 		// The parameters a trigger declares are visible to the transition's own
 		// guard, effect and body, and nowhere else.
 		body := TriggerScope(scope, d)
-		bodyScopesInExpr(body, d.Guard)
-		buildBodyScopes(body, d.Effect)
-		buildBodyScopes(body, d.Members)
+		w.Expr(body, d.Guard)
+		w.Members(body, d.Effect)
+		w.Members(body, d.Members)
 	case *ast.SendStatement:
-		bodyScopesInExpr(scope, d.Message)
-		bodyScopesInExpr(scope, d.Target)
-		bodyScopesInExpr(scope, d.Receiver)
-		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+		w.Expr(scope, d.Message)
+		w.Expr(scope, d.Target)
+		w.Expr(scope, d.Receiver)
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.SuccessionEdge:
-		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+		w.Members(nodeBodyScope(scope, d), d.Members)
 	case *ast.TerminateStatement:
-		bodyScopesInExpr(scope, d.Target)
+		w.Expr(scope, d.Target)
 	case *ast.AssignmentActionNode:
-		bodyScopesInExpr(scope, d.Target)
-		bodyScopesInExpr(scope, d.Value)
+		w.Expr(scope, d.Target)
+		w.Expr(scope, d.Value)
 	case *ast.ActionExecutionNode:
-		bodyScopesInExpr(scope, d.Expression)
+		w.Expr(scope, d.Expression)
 	case *ast.PerformActionNode:
-		bodyScopesInExpr(scope, d.ActionRef)
+		w.Expr(scope, d.ActionRef)
 	case *ast.WhileLoopActionNode:
-		body := scope
-		if child := bodyScopeChild(scope, d); child != nil {
-			body = child
-		}
-		bodyScopesInExpr(scope, d.Collection)
-		bodyScopesInExpr(body, d.Condition)
-		bodyScopesInExpr(body, d.Until)
-		buildBodyScopes(body, d.Body)
+		body := nodeBodyScope(scope, d)
+		w.Expr(scope, d.Collection)
+		w.Expr(body, d.Condition)
+		w.Expr(body, d.Until)
+		w.Members(body, d.Body)
 	case *ast.IfActionNode:
-		bodyScopesInExpr(scope, d.Condition)
+		w.Expr(scope, d.Condition)
 		for _, branch := range d.Branches() {
-			bodyScopesInDecl(scope, branch)
+			w.Decl(scope, branch)
 		}
 	case *ast.IfBranchNode:
 		// A branch owns the scope its body declares into (see builder.buildDecl).
-		body := scope
-		if child := bodyScopeChild(scope, d); child != nil {
-			body = child
-		}
-		buildBodyScopes(body, d.Body)
+		w.Members(nodeBodyScope(scope, d), d.Body)
 	default:
 		// Bare expression members can contain nested body expressions.
-		bodyScopesInExpr(scope, decl)
+		w.Expr(scope, decl)
 	}
 }
 
@@ -314,85 +292,85 @@ func payloadParameterDefiner(payload *ast.Usage) func(*Scope) {
 	}
 }
 
-// bodyScopesInTrigger mirrors resolve's trigger handling: only the payload
-// expressions of time and change events can hold a body expression.
-func bodyScopesInTrigger(scope *Scope, trigger ast.Node) {
+// Trigger walks the expression a trigger carries: only the payload expressions
+// of time and change events can hold a body expression.
+func (w ExprWalker) Trigger(scope *Scope, trigger ast.Node) {
 	switch t := trigger.(type) {
 	case nil:
 		return
 	case *ast.TimeEvent:
-		bodyScopesInExpr(scope, t.Duration)
+		w.Expr(scope, t.Duration)
 	case *ast.ChangeEvent:
-		bodyScopesInExpr(scope, t.Condition)
+		w.Expr(scope, t.Condition)
 	case *ast.QualifiedName, *ast.FeatureReference, *ast.AcceptEvent, *ast.CallEvent:
 		// Event names, not expressions.
 	default:
-		bodyScopesInExpr(scope, trigger)
+		w.Expr(scope, trigger)
 	}
 }
 
-func bodyScopesInRelationships(scope *Scope, rels []*ast.Relationship) {
+func (w ExprWalker) relationships(scope *Scope, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil {
-			bodyScopesInExpr(scope, rel.Target)
+			w.Expr(scope, rel.Target)
 		}
 	}
 }
 
-func bodyScopesInMultiplicity(scope *Scope, m *ast.Multiplicity) {
+func (w ExprWalker) multiplicity(scope *Scope, m *ast.Multiplicity) {
 	if m == nil {
 		return
 	}
-	bodyScopesInExpr(scope, m.Lower)
-	bodyScopesInExpr(scope, m.Upper)
+	w.Expr(scope, m.Lower)
+	w.Expr(scope, m.Upper)
 }
 
-// bodyScopesInExpr walks an expression subtree, creating a scope for every body
-// expression that declares parameters and nesting inner bodies within it.
-func bodyScopesInExpr(scope *Scope, e ast.Node) {
+// Expr walks an expression subtree, entering every body expression it holds:
+// the body's members through Members, its result in the scope Body returns.
+func (w ExprWalker) Expr(scope *Scope, e ast.Node) {
 	switch v := e.(type) {
 	case nil:
 		return
 	case *ast.OperatorExpr:
 		for _, op := range v.Operands {
-			bodyScopesInExpr(scope, op)
+			w.Expr(scope, op)
 		}
 	case *ast.FeatureChainExpr:
-		bodyScopesInExpr(scope, v.Operand)
+		w.Expr(scope, v.Operand)
 	case *ast.IndexExpr:
-		bodyScopesInExpr(scope, v.Operand)
-		bodyScopesInExpr(scope, v.Index)
+		w.Expr(scope, v.Operand)
+		w.Expr(scope, v.Index)
 	case *ast.InvocationExpr:
-		bodyScopesInExpr(scope, v.Operand)
+		w.Expr(scope, v.Operand)
 		for _, a := range v.Args {
-			bodyScopesInExpr(scope, a)
+			w.Expr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			bodyScopesInExpr(scope, na.Value)
+			w.Expr(scope, na.Value)
 		}
 	case *ast.CollectExpr:
-		bodyScopesInExpr(scope, v.Operand)
-		bodyScopesInExpr(scope, v.Body)
+		w.Expr(scope, v.Operand)
+		w.Expr(scope, v.Body)
 	case *ast.SelectExpr:
-		bodyScopesInExpr(scope, v.Operand)
-		bodyScopesInExpr(scope, v.Body)
+		w.Expr(scope, v.Operand)
+		w.Expr(scope, v.Body)
 	case *ast.ConstructorExpr:
 		for _, a := range v.Args {
-			bodyScopesInExpr(scope, a)
+			w.Expr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			bodyScopesInExpr(scope, na.Value)
+			w.Expr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
-			bodyScopesInExpr(scope, v.Params[i].Value)
+			w.Expr(scope, v.Params[i].Value)
 		}
-		body := newBodyExprScope(scope, v)
-		buildBodyScopes(body, v.Members)
-		bodyScopesInExpr(body, v.Result)
+		body := w.Body(scope, v)
+		w.Members(body, v.Members)
+		w.Expr(body, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
-			bodyScopesInExpr(scope, el)
+			w.Expr(scope, el)
 		}
 	}
 }

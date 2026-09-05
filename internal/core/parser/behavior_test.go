@@ -240,6 +240,51 @@ func TestParseResultMember_ExpressionRefused(t *testing.T) {
 	}
 }
 
+// A result declaration may open with a multiplicity, or end in a body right
+// after its identification; a value or body alone declares nothing.
+func TestParseResultMember_AnonymousAndBodiedForms(t *testing.T) {
+	for _, tt := range []struct {
+		src            string
+		name           string
+		mult, body, ok bool
+	}{
+		{"return [*] = xs;", "", true, false, true},
+		{"return [*] : Real = xs;", "", true, false, true},
+		{"return [*] :> xs;", "", true, false, true},
+		{"return r { doc /* r */ }", "r", false, true, true},
+		{"return <r> { doc /* r */ }", "", false, true, true},
+		{"return = xs;", "", false, false, false},
+		{"return { doc /* r */ }", "", false, false, false},
+	} {
+		t.Run(tt.src, func(t *testing.T) {
+			p, nodes := parseCalcBodyTest(t, "{\n\t\t"+tt.src+"\n\t\treturn q : Real;\n\t}")
+			if len(nodes) != 2 {
+				t.Fatalf("nodes = %d, want 2", len(nodes))
+			}
+			if !tt.ok {
+				if _, isErr := nodes[0].(*ast.ErrorNode); !isErr || len(p.Diagnostics) != 1 {
+					t.Errorf("node 0 = %T with diagnostics %v, want an ErrorNode with one diagnostic", nodes[0], p.Diagnostics)
+				}
+				if _, isUsage := nodes[1].(*ast.Usage); !isUsage {
+					t.Errorf("node 1 = %T, want the following *ast.Usage", nodes[1])
+				}
+				return
+			}
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("diagnostics = %v, want none", p.Diagnostics)
+			}
+			u, isUsage := nodes[0].(*ast.Usage)
+			if !isUsage {
+				t.Fatalf("node 0 = %T, want *ast.Usage", nodes[0])
+			}
+			if !u.IsResult || u.Ident.Name != tt.name || (u.Multiplicity != nil) != tt.mult || u.HasBody != tt.body {
+				t.Errorf("result %q multiplicity %v body %v (isResult %v), want %q multiplicity %v body %v",
+					u.Ident.Name, u.Multiplicity != nil, u.HasBody, u.IsResult, tt.name, tt.mult, tt.body)
+			}
+		})
+	}
+}
+
 func TestParseConstraintBody_Condition(t *testing.T) {
 	input := `{
 		x > 0
@@ -367,7 +412,8 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 
 // Phase C2: Requirement Body Tests
 
-// parseRequirementBodyTest is a helper that parses a requirement body from test input.
+// parseRequirementBodyTest is a helper that parses a requirement body from test
+// input, in the body context the requirement declaration would have entered.
 func parseRequirementBodyTest(t *testing.T, input string) []ast.Node {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
@@ -378,6 +424,7 @@ func parseRequirementBodyTest(t *testing.T, input string) []ast.Node {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
+	defer p.pushBodyContext(bodyRequirement)()
 	return p.parseRequirementBody()
 }
 

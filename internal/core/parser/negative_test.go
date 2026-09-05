@@ -42,6 +42,19 @@ func TestNegative(t *testing.T) {
 		{"state_member_then", "state s { state start; state finish; start then finish; }"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
+		// A specialization after `return` names what the result subsets.
+		{"calc_return_subsets_no_target", "calc def C { return :> = 1; }"},
+		{"calc_return_named_subsets_no_target", "calc def C { return r :> = 1; }"},
+		{"calc_return_short_name_unclosed", "calc def C { return <r result : Real = 1; }"},
+		{"calc_return_short_name_empty", "calc def C { return <> = 1; }"},
+		// A result declares something: a value or a body alone is no FeatureDeclaration.
+		{"calc_return_value_only", "calc def C { in n : Real; return = n; }"},
+		{"calc_return_body_only", "calc def C { return { doc /* r */ } }"},
+		{"calc_return_multiplicity_unclosed", "calc def C { in xs : Real[*]; return [* = xs; }"},
+		// A short name must be closed before the member's declaration tail.
+		{"calc_short_name_unclosed", "calc def C { <s x = 1; }"},
+		{"calc_short_name_empty", "calc def C { <> x = 1; }"},
+		{"part_short_name_unclosed", "part def P { <s :> x = 1; }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
 		{"calc_while_unclosed_body", "calc def C { while i < 2 { i = i + 1; }"},
 		{"calc_for_no_variable", "calc def C { for in xs { } }"},
@@ -282,6 +295,12 @@ func TestNegative(t *testing.T) {
 		// Only a transition effect is closed by the transition's next clause, so
 		// a statement in an action body still needs its ';'.
 		{"body_assignment_no_semicolon", "action def A { attribute x; action b; assign x := 1 then b; }"},
+		// An assignment target names a feature or ends in one (SysML.xtext
+		// TargetParameter), so a literal, an operator or an invocation is not one.
+		{"assignment_target_literal", "action def A { assign 1 := 2; }"},
+		{"assignment_target_operator", "action def A { attribute x; assign x + 1 := 2; }"},
+		{"assignment_target_invocation", "action def A { calc def f { return : Integer = 1; } assign f() := 2; }"},
+		{"assignment_target_index", "action def A { attribute xs : Integer[0..*]; assign xs[1] := 2; }"},
 		{"body_send_no_semicolon", "action def A { action b; part self; send Data() to self then b; }"},
 		// A transition takes exactly one ';', which its effect statement shares
 		// (SysML.xtext TransitionUsage ends with ActionBody); a second one is not
@@ -445,6 +464,50 @@ func TestBindingEndFailuresAreDistinguishable(t *testing.T) {
 	}
 }
 
+// An expression assignment target is rejected with its own message, while a
+// name or a chain ending in a feature stays accepted (SysML.xtext TargetParameter).
+func TestAssignmentTargetMustNameFeature(t *testing.T) {
+	const expressionMessage = "an assignment target names a feature or a feature chain, not an expression"
+	tests := []struct {
+		name     string
+		src      string
+		wantDiag bool
+	}{
+		{"name", "action def A { attribute x; assign x := 2; }", false},
+		{"qualified", "package P { attribute x; action def A { assign P::x := 2; } }", false},
+		{"chain", "action def A { part m { part n { attribute x; } } assign m.n.x := 2; }", false},
+		{"indexed_chain", "action def A { part ms[0..*] { attribute x; } assign ms[1].x := 2; }", false},
+		{"invocation_chain", "action def A { calc def pick { return : Leaf; } assign pick().x := 2; }", false},
+		{"transition_effect", "state def S { attribute x; state a; state b; transition first a do assign x := 1 then b; }", false},
+		{"literal", "action def A { assign 1 := 2; }", true},
+		{"operator", "action def A { attribute x; assign x + 1 := 2; }", true},
+		{"invocation", "action def A { calc def f { return : Integer = 1; } assign f() := 2; }", true},
+		{"index", "action def A { attribute xs : Integer[0..*]; assign xs[1] := 2; }", true},
+		{"transition_effect_literal", "state def S { state a; state b; transition first a do assign 1 := 1 then b; }", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if !tt.wantDiag {
+				if len(p.Diagnostics) != 0 {
+					t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+				}
+				if strings.Contains(ast.Dump(root), "ErrorNode") {
+					t.Fatalf("unexpected ErrorNode:\n%s", ast.Dump(root))
+				}
+				return
+			}
+			if len(p.Diagnostics) != 1 || !strings.Contains(p.Diagnostics[0].Message, expressionMessage) {
+				t.Fatalf("want exactly the expression-target diagnostic, got %v", p.Diagnostics)
+			}
+		})
+	}
+}
+
 // The standard binding forms stay accepted: unqualified, chained, qualified
 // and indexed ends (`bind [0..*] base.edges = [0..*] be;` in the Geometry library).
 func TestStandardBindingFormsRemainValid(t *testing.T) {
@@ -525,6 +588,11 @@ func TestNegativeKerML(t *testing.T) {
 		{"nary_connector_empty", "package P { connector c (); }"},
 		{"nary_connector_one_end", "package P { feature a; connector c (a); }"},
 		{"nary_connector_end_no_target", "package P { feature a; connector c ([1], a); }"},
+
+		// A binary connector states both ends around `to` (KerML.xtext:836).
+		{"binary_connector_no_second_end", "package P { feature a; connector a to ; }"},
+		{"binary_connector_named_end_no_target", "package P { feature a; feature b; connector e ::> to b; }"},
+		{"binary_connector_name_without_from", "package P { feature a; feature b; connector c : L a to b; }"},
 
 		// A succession states both ends around `then` (KerML.xtext:891).
 		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},

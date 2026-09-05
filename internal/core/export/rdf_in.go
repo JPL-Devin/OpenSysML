@@ -2210,6 +2210,11 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 func (d *decoder) multiplicityText(el *element) string {
 	lower, hasLower := d.stringOf(el, rdf.SysML+pLowerBound)
 	upper, hasUpper := d.stringOf(el, rdf.SysML+pUpperBound)
+	return multiplicityNotation(lower, upper, hasLower, hasUpper)
+}
+
+// multiplicityNotation writes the bounds a subject states, or "" for none.
+func multiplicityNotation(lower, upper string, hasLower, hasUpper bool) string {
 	switch {
 	case hasLower && hasUpper:
 		return "[" + lower + ".." + upper + "]"
@@ -2219,6 +2224,16 @@ func (d *decoder) multiplicityText(el *element) string {
 		return "[" + lower + "..*]"
 	}
 	return ""
+}
+
+// boundText renders the bound expression a node states under property, if any.
+func (d *decoder) boundText(node rdf.Term, property string, in *element) (string, bool, error) {
+	bound, ok := d.graph.Object(node, property)
+	if !ok {
+		return "", false, nil
+	}
+	text, err := d.expressionNodeText(bound, in)
+	return text, err == nil, err
 }
 
 // referenceText renders a single reference property: an element IRI becomes the

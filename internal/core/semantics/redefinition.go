@@ -28,7 +28,7 @@ import (
 
 // behaviorLike reports whether sym declares a behavior or step — the only
 // owning types whose directed features are parameters, and the only general
-// types whose parameters are implicitly redefined.
+// types whose parameters are implicitly redefined. An interaction is a behavior.
 func behaviorLike(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
@@ -47,9 +47,12 @@ func behaviorLike(sym *symbols.Symbol) bool {
 		case ast.UsageAction, ast.UsageState, ast.UsageCalc, ast.UsageExpr,
 			ast.UsageConstraint, ast.UsageRequirement, ast.UsageCase,
 			ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
-			ast.UsageStep, ast.UsageBehavior, ast.UsagePredicate, ast.UsageBool:
+			ast.UsageStep, ast.UsageBehavior, ast.UsagePredicate, ast.UsageBool,
+			ast.UsageInteraction:
 			return true
 		}
+	case *ast.AssumeMember, *ast.RequireMember:
+		return true // owns a constraint usage
 	}
 	return false
 }
@@ -62,6 +65,10 @@ func declMembers(sym *symbols.Symbol) []ast.Node {
 		return d.Members
 	case *ast.Usage:
 		return d.Members
+	case *ast.AssumeMember:
+		return d.Body
+	case *ast.RequireMember:
+		return d.Body
 	default:
 		return nil
 	}
@@ -142,9 +149,8 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 		}
 	}
 	if len(generals) > 1 {
-		if base := m.implicitBase(sym); base != nil {
-			generals = slices.DeleteFunc(generals, func(sup *symbols.Symbol) bool { return sup == base })
-		}
+		bases := m.implicitBases(sym)
+		generals = slices.DeleteFunc(generals, func(sup *symbols.Symbol) bool { return slices.Contains(bases, sup) })
 	}
 	if len(generals) == 1 {
 		general := m.parametersOf(generals[0])
@@ -275,12 +281,12 @@ func memberSymbol(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 	return found
 }
 
-// implicitParameterRedefinitions returns the features sym implicitly redefines
+// ImplicitParameterRedefinitions returns the features sym implicitly redefines
 // as a parameter of its owning behavior or step: the parameter at the same
 // position of each general behavior or step, or, for a result parameter, their
 // result parameters. It returns nothing for a feature that is not a parameter,
 // or whose declaration redefines something explicitly.
-func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+func (m *Model) ImplicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	return m.implicitParameterTargets(sym, true)
 }
 

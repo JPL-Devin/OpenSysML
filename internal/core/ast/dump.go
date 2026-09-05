@@ -191,11 +191,11 @@ func dumpExpression(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *InvocationExpr:
 		fmt.Fprintf(b, `(InvocationExpr type=%q`, qnString(v.Type))
-		writeChildren(b, depth, invocationChildren(v))
+		writeArgChildren(b, depth, invocationChildren(v), v.NamedArgs)
 		return true
 	case *ConstructorExpr:
 		fmt.Fprintf(b, `(ConstructorExpr type=%q`, qnString(v.Type))
-		writeConstructorArgs(b, depth, v)
+		writeArgChildren(b, depth, v.Args, v.NamedArgs)
 		return true
 	case *SequenceExpr:
 		b.WriteString(`(SequenceExpr`)
@@ -481,6 +481,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.Target != nil {
 			kids = append(kids, v.Target)
 		}
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
 		writeChildren(b, depth, kids)
 		return true
 	case *Multiplicity:
@@ -755,6 +758,26 @@ func writeChildren(b *strings.Builder, depth int, kids []Node) {
 	b.WriteString(")")
 }
 
+// writeArgChildren is writeChildren for an argument list, each named argument
+// appearing as `(NamedArg name="n" <value>)` after the positional ones.
+func writeArgChildren(b *strings.Builder, depth int, kids []Node, named []NamedArg) {
+	if len(named) == 0 {
+		writeChildren(b, depth, kids)
+		return
+	}
+	for _, k := range kids {
+		b.WriteString("\n")
+		dumpNode(b, k, depth+1)
+	}
+	for _, na := range named {
+		b.WriteString("\n")
+		indent(b, depth+1)
+		fmt.Fprintf(b, `(NamedArg name=%q`, qnString(na.Name))
+		writeChildren(b, depth+1, []Node{na.Value})
+	}
+	b.WriteString(")")
+}
+
 func operandsWithTypeRef(v *OperatorExpr) []Node {
 	kids := append([]Node{}, v.Operands...)
 	if v.TypeRef != nil {
@@ -770,22 +793,6 @@ func invocationChildren(v *InvocationExpr) []Node {
 	}
 	kids = append(kids, v.Args...)
 	return kids
-}
-
-// writeConstructorArgs writes the arguments of `new T(…)`, each named one as
-// `(NamedArg name="n" …)` so a golden locks which feature the value fills.
-func writeConstructorArgs(b *strings.Builder, depth int, v *ConstructorExpr) {
-	for _, a := range v.Args {
-		b.WriteString("\n")
-		dumpNode(b, a, depth+1)
-	}
-	for _, na := range v.NamedArgs {
-		b.WriteString("\n")
-		indent(b, depth+1)
-		fmt.Fprintf(b, `(NamedArg name=%q`, qnString(na.Name))
-		writeChildren(b, depth+1, []Node{na.Value})
-	}
-	b.WriteString(")")
 }
 
 func visibilityString(v Visibility) string {
@@ -910,6 +917,9 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)
+	}
+	if v.ValueMultiplicity != nil {
+		kids = append(kids, v.ValueMultiplicity)
 	}
 	for _, ce := range v.ConnectorEnds {
 		kids = append(kids, ce)

@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 50;
+        attribute passCount : Integer = 51;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -188,6 +188,10 @@ package OpenSysMLPipeline {
         part typeCheck : TypeCheck { attribute :>> goType = "TypeCheckPass"; }
         part transitionGuards : TypeCheck {
             attribute :>> goType = "TransitionGuardPass";
+            attribute :>> elementScoped = true;
+        }
+        part triggerArguments : TypeCheck {
+            attribute :>> goType = "TriggerArgumentPass";
             attribute :>> elementScoped = true;
         }
         part sendActions : TypeCheck {
@@ -219,7 +223,10 @@ package OpenSysMLPipeline {
         part referenceSubsetting : ConstraintCheck { attribute :>> goType = "ReferenceSubsettingPass"; }
         part topLevelImports : ConstraintCheck { attribute :>> goType = "TopLevelImportPass"; }
         part associationEndTypes : ConstraintCheck { attribute :>> goType = "AssociationEndTypesPass"; }
-        part variableFeatures : ConstraintCheck { attribute :>> goType = "VariableFeaturePass"; }
+        part variableFeatures : ConstraintCheck {
+            attribute :>> goType = "VariableFeaturePass";
+            attribute :>> elementScoped = true;
+        }
         part assignmentReferents : ConstraintCheck {
             attribute :>> goType = "AssignmentReferentPass";
             attribute :>> elementScoped = true;
@@ -242,7 +249,7 @@ package OpenSysMLPipeline {
         part portionOwners : ConstraintCheck { attribute :>> goType = "W10BPortionOwnerPass"; }
         part verificationCases : ConstraintCheck { attribute :>> goType = "W8DVerificationPass"; }
         part viewRenderings : ConstraintCheck { attribute :>> goType = "W8DViewRenderingPass"; }
-        part metadataUsages : ConstraintCheck { attribute :>> goType = "W8DMetadataUsagePass"; }
+        part metadataUsages : TypeCheck { attribute :>> goType = "W8DMetadataUsagePass"; }
         part identityMetadata : ConstraintCheck { attribute :>> goType = "IdentityMetadataPass"; }
         part redefinitionConformance : ConstraintCheck { attribute :>> goType = "RedefinitionConformancePass"; }
         part shortNameDistinguishability : NameResolutionCheck { attribute :>> goType = "W9CShortNameDistinguishabilityPass"; }

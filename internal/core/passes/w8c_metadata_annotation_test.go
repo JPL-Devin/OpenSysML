@@ -232,6 +232,63 @@ func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 	}
 }
 
+// A feature merely named annotatedElement, specializing nothing, is a duplicate
+// member rather than an alternative: it neither restricts nor admits anything.
+// Matches the pinned pilot validators on both spellings.
+func TestMetadataAnnotatedElementIsReadByIdentityNotByName(t *testing.T) {
+	kerml := `package P {
+	metaclass Named { feature annotatedElement : KerML::Class; }
+	metaclass Sub :> Named;
+	metaclass Alt { feature annotatedElement : KerML::Class; feature other :> Metaobjects::Metaobject::annotatedElement : KerML::Package; }
+	class C { feature f; }
+	package Q;
+	@Named about Q, C;
+	@Sub about Q, C;
+	@Alt about Q, C, C::f;
+}`
+	var got []string
+	for _, f := range findingsWithCode(metadataDiags(t, kerml), "metadata-annotated-element") {
+		got = append(got, strings.TrimSpace(f.Text)+" => "+f.Msg)
+	}
+	want := []string{
+		"@Alt about Q, C, C::f; => Cannot annotate Class",
+		"@Alt about Q, C, C::f; => Cannot annotate Feature",
+	}
+	sort.Strings(got)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("KerML findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+
+	sysml := `package P {
+	metadata def Named { ref annotatedElement : SysML::PartDefinition; }
+	#Named part def PD;
+	#Named part p;
+	#Named attribute def AD;
+}`
+	if found := only(w8cLibraryDiagnostics(t, "meta-named.sysml", sysml), "metadata-annotated-element"); len(found) != 0 {
+		t.Errorf("SysML: want no annotated-element finding, got %v", found)
+	}
+}
+
+// A model declaring the library feature's qualified name does not hide the
+// library feature: the restriction is still read from the bundled declaration.
+func TestMetadataAnnotatedElementSurvivesAShadowingDeclaration(t *testing.T) {
+	kerml := `package P {
+	metaclass M { :>> annotatedElement : KerML::Class; }
+	class C { feature f; }
+	@M about C, C::f;
+}
+package Metaobjects { metaclass Metaobject { feature annotatedElement; } }`
+	var got []string
+	for _, f := range findingsWithCode(metadataDiags(t, kerml), "metadata-annotated-element") {
+		got = append(got, strings.TrimSpace(f.Text)+" => "+f.Msg)
+	}
+	want := []string{"@M about C, C::f; => Cannot annotate Feature"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 // The SysML spelling reads the same feature, redefined to a SysML metaclass.
 func TestMetadataAnnotatedElementInSysML(t *testing.T) {
 	src := `package P {

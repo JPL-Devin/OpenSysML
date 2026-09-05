@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "evaluate": "test::tags",
+  "result": {"type": "Sequence", "elements": [
+    {"type": "String", "value": "v"},
+    {"type": "String", "value": "v"},
+    {"type": "String", "value": "named"}
+  ]}
+}

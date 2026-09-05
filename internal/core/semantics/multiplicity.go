@@ -98,6 +98,8 @@ func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 		return decl.Multiplicity
 	case *ast.SubjectMember:
 		return decl.Multiplicity
+	case *ast.CrossFeatureMember:
+		return decl.Multiplicity
 	}
 	return nil
 }

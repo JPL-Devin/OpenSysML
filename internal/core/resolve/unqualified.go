@@ -134,7 +134,7 @@ func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, targ
 		return false
 	}
 	for _, part := range chain.Member.Parts {
-		if cur, ok = r.chainMember(cur, part.Text); !ok {
+		if cur, ok = r.chainMember(cur, part.Text, nil); !ok {
 			return false
 		}
 	}
@@ -431,22 +431,14 @@ func (r *Resolver) eachImportMatch(scope *symbols.Scope, imp *ast.Import, name s
 		targetFQN := r.registeredFQN(target)
 		var children []*symbols.Symbol
 		if importAllowsPrivate(imp) {
-			children = r.idx.LookupDirectChildren(targetFQN)
+			children = r.idx.LookupDirectChildrenNamed(targetFQN, name)
 		} else {
-			children = r.idx.LookupDirectChildrenFrom(targetFQN, r.ReferringNamespaceFQN(scope))
+			children = r.idx.LookupDirectChildrenNamedFrom(targetFQN, r.ReferringNamespaceFQN(scope), name)
 		}
 		// The import names one namespace, so a same-named other namespace's
 		// members registered under the same path are not what it surfaces.
 		children = notConflatedWith(target, children)
 		for _, sym := range children {
-			// Extract short name from FQN for comparison
-			symName := sym.Name
-			if idx := strings.LastIndex(symName, "::"); idx >= 0 {
-				symName = symName[idx+2:]
-			}
-			if symName != name && (sym.ShortName == "" || sym.ShortName != name) {
-				continue
-			}
 			// The target may itself have surfaced the name through an import of
 			// its own, filtered by its `filter` members: what it re-exports
 			// onward is what those select.

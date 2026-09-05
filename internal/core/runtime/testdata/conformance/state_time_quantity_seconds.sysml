@@ -1,5 +1,5 @@
-// A time trigger carrying a unit schedules the delay the unit measures, so
-// `accept after 5 [s]` waits as the unitless `accept after 5` does.
+// A time trigger carrying a unit schedules the delay the unit measures:
+// `accept after 5 [s]` waits five clock seconds.
 package test {
 	private import SI::*;
 
@@ -12,7 +12,7 @@ package test {
 			accept after 5 [s] then done;
 		}
 		state done {
-			entry { log = log * 10 + 1; }
+			entry { assign log := log * 10 + 1; }
 		}
 
 		succession first start then waiting;

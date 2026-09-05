@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "type mismatch: cannot write ⟨1.0, 2.0⟩ [m] (vector quantity) to a feature typed by Velocity3: it declares num : Real[3], got 2 element(s)"
+}

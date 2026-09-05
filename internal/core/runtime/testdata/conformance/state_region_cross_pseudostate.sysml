@@ -20,7 +20,7 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state ridle;
-				state rtarget { entry { crossed = 1; } }
+				state rtarget { entry { assign crossed := 1; } }
 
 				succession first rstart then ridle;
 			}
