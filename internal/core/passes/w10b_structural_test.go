@@ -186,6 +186,27 @@ func TestW10BVariantPortMustBeReferential(t *testing.T) {
 	}
 }
 
+// Only a port that restates `variation` is a variation to the pilot: a variant under
+// a plain redefinition of one is reported as misplaced instead, never as composite.
+func TestW10BVariantPortUnderRedefinedVariation(t *testing.T) {
+	const src = `package P {
+		port def PD;
+		port def Q { variation port vp : PD { variant ref port a : PD; } }
+		port def R :> Q { port :>> vp { variant port b : PD; } }
+		port def S :> Q { variation port :>> vp { variant port c : PD; } }
+		part holder { port q : Q { port :>> vp { variant port d : PD; } } }
+	}`
+	var got []int
+	for _, d := range typeDiags(t, src) {
+		if d.Message == msgVariantPortComposite {
+			got = append(got, 1+strings.Count(src[:d.Span.Offset], "\n"))
+		}
+	}
+	if want := []int{5}; !slices.Equal(got, want) {
+		t.Errorf("variant port diagnostics on lines %v, want %v", got, want)
+	}
+}
+
 // Malformed input must not panic the pass.
 func TestW10BStructuralMalformed(t *testing.T) {
 	for _, src := range []string{
