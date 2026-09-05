@@ -351,13 +351,16 @@ func formatQueryValue(value queryexec.Value) string {
 		return strconv.FormatInt(integer, 10)
 	}
 	if real, ok := value.Real(); ok {
-		return runtime.FormatReal(real)
+		return semantics.FormatReal(real)
 	}
 	if boolean, ok := value.Boolean(); ok {
 		return strconv.FormatBool(boolean)
 	}
 	if value.Kind() == queryexec.ValueInfinity {
 		return "∞"
+	}
+	if quantity, ok := value.Quantity(); ok {
+		return quantity.String()
 	}
 	return string(value.Kind())
 }

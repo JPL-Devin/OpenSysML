@@ -362,7 +362,8 @@ func destination(target string) string {
 
 // valueText renders one typed value as plain, unescaped text: elements by
 // qualified name (falling back to declared name), strings as their text,
-// integers in base 10, reals in shortest 'g' form, booleans, and infinity as "*".
+// integers in base 10, reals in shortest 'g' form, booleans, infinity as "*",
+// and quantities as their magnitude in the unit written: `2290000 [kg]`.
 func valueText(value queryexec.Value) string {
 	if element, ok := value.Element(); ok {
 		if fqn := symbols.FQNOf(element); fqn != "" {
@@ -384,6 +385,10 @@ func valueText(value queryexec.Value) string {
 	}
 	if value.Kind() == queryexec.ValueInfinity {
 		return "*"
+	}
+	if quantity, ok := value.Quantity(); ok {
+		magnitude, _ := value.Magnitude()
+		return quantity.TextWithMagnitude(valueText(magnitude))
 	}
 	return ""
 }

@@ -81,7 +81,8 @@ it: the content kind and name, the query behind a table, list or
 definitions block, the group-by column, each row's, item's or entry's
 selected element with its element kind
 (`partUsage`, `requirementDef`, …), each cell's projected column and value
-kind, and a diagram's view, kind and flow direction.
+kind (a `quantity` value also carries its `data-magnitude` and `data-unit`
+apart), and a diagram's view, kind and flow direction.
 
 ```html
 <tr class="sysml-row" data-element="Observatory::telescope::mount"

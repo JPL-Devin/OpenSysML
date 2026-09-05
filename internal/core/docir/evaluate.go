@@ -745,5 +745,9 @@ func (e *evaluator) valueText(value queryexec.Value) string {
 	if value.Kind() == queryexec.ValueInfinity {
 		return "*"
 	}
+	if quantity, ok := value.Quantity(); ok {
+		magnitude, _ := value.Magnitude()
+		return quantity.TextWithMagnitude(e.valueText(magnitude))
+	}
 	return ""
 }

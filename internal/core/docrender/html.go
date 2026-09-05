@@ -396,7 +396,18 @@ func (w *htmlWriter) writeValue(value queryexec.Value) {
 		classes += " sysml-element"
 	}
 	w.b.WriteString("<span class=\"" + classes + "\"" + attr("data-value-kind", string(value.Kind())) +
-		elementAttrs(value) + ">" + htmlText(valueText(value)) + "</span>")
+		elementAttrs(value) + quantityAttrs(value) + ">" + htmlText(valueText(value)) + "</span>")
+}
+
+// quantityAttrs carries a quantity's magnitude and unit apart, so a theme or a
+// script reads them without parsing the cell text.
+func quantityAttrs(value queryexec.Value) string {
+	quantity, ok := value.Quantity()
+	if !ok {
+		return ""
+	}
+	magnitude, _ := value.Magnitude()
+	return attr("data-magnitude", valueText(magnitude)) + attr("data-unit", quantity.Unit.String())
 }
 
 // writeList writes one bullet or numbered list, one item per query row, each

@@ -129,6 +129,38 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 	}
 }
 
+// TestMarkdownQuantityReportGolden locks the rendering of tables over
+// quantity-valued attributes: projected, ordered across commensurable units,
+// filtered by bare magnitude, and computed, each cell keeping its unit.
+func TestMarkdownQuantityReportGolden(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "quantity_report.sysml"),
+		"Launcher::MassReport")
+	golden := filepath.Join("testdata", "quantity_report.golden.md")
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create): %v", err)
+	}
+	if got != string(want) {
+		t.Errorf("rendered Markdown differs from %s (run with -update after intentional changes)\ngot:\n%s", golden, got)
+	}
+	for _, want := range []string{
+		"| name | mass | tonnes |\n| --- | --- | --- |\n",
+		"| s1 | 2290000 \\[kg\\] | 2290 \\[kg\\] |\n| s2 | 119000 \\[kg\\] | 119 \\[kg\\] |\n| probe | 500000 \\[g\\] | 500 \\[g\\] |\n",
+		"| name | mass |\n| --- | --- |\n| s1 | 2290000 \\[kg\\] |\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+}
+
 // TestMarkdownDefaultedQueryParameters renders content that omits defaulted
 // query parameters: element, inherited, and redefining defaults all apply.
 func TestMarkdownDefaultedQueryParameters(t *testing.T) {

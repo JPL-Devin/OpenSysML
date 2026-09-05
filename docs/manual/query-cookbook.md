@@ -342,6 +342,35 @@ whose identifier shares a prefix, and `feature = "documentation"` with
 `contains` selects the elements whose `doc` text mentions a word — any one of
 an element's several bodies matching is enough.
 
+### Quantities
+
+An attribute declared with a unit — `attribute :>> mass = 2290000 [kg];` — is
+a *quantity*: a magnitude carried with its unit, never a bare number. The
+filter's `value` is a bare number, and it compares against the magnitude **in
+the attribute's own unit**: `mass >= "1000000"` matches `2290000 [kg]`, and
+would match `1500000 [g]` too, because the threshold is read in each element's
+unit. Choose the threshold for the unit your model declares, or normalize the
+unit in the model. A `value` carrying a unit of its own (`"1000 [kg]"`) is
+not a number and is refused as a typed `invalid-argument` error.
+
+```sysml
+calc def HeavyStages :> Query {
+	in root : Element;
+	WhereFeature(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		'feature' = "mass",
+		operator = ">=",
+		value = "1000000"
+	)
+}
+```
+
+```console
+$ sysml units.sysml -run-query "UnitsRepro::HeavyStages root=UnitsRepro::rocket"
+✓ Query UnitsRepro::HeavyStages returned 1 row
+  Row 1: UnitsRepro::rocket::s1
+```
+
 ## Sorting
 
 `OrderBy` sorts by a property with every policy explicit — there are no
@@ -355,6 +384,14 @@ defaults to guess:
 
 The sort is stable, so equal keys keep their declaration order. Mixing
 incomparable value types across elements is a typed `invalid-order` error.
+
+Quantities sort by converted magnitude when their units are commensurable:
+`500000 [g]` orders below `119000 [kg]`. Two Integer magnitudes compare
+exactly, so neighbours a Real cannot tell apart (`9007199254740993 [kg]`
+against `9007199254740992 [kg]`) keep their order. Quantities of different dimensions
+(`2290000 [kg]` against `42 [m]`) are not ordered — that is an
+`invalid-order` error naming both units, never a silent comparison of the
+bare magnitudes.
 
 ```sysml
 calc def PartsByMass :> Query {
@@ -441,6 +478,62 @@ $ sysml cookbook.sysml -run-query "Cookbook::MassTable root=Cookbook::telescope"
 A cell for a property the element lacks is empty (`(none)` in the CLI's row
 listing, an empty table cell in a document).
 
+### Quantity cells
+
+A quantity-valued attribute projects as the runtime prints it — magnitude,
+then the unit in brackets — in the CLI row listing, a Markdown cell (brackets
+escaped as `\[kg\]`, so they read as text) and an HTML cell, whose
+`<span class="sysml-value" data-value-kind="quantity">` also carries
+`data-magnitude` and `data-unit` apart. The unit is the one the model spelt
+(`kg`, `km/h`), not a reduction to base units.
+
+```sysml
+part def Stage {
+	attribute mass :> ISQ::mass;
+}
+part def FirstStage :> Stage {
+	attribute :>> mass = 2290000 [kg];
+}
+part def UpperStage :> Stage {
+	attribute :>> mass = 119000 [kg];
+}
+part rocket {
+	part s1 : FirstStage;
+	part s2 : UpperStage;
+}
+
+calc def Masses :> Query {
+	in root : Element;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		properties = ("name", "mass")
+	)
+}
+```
+
+```console
+$ sysml units.sysml -run-query "UnitsRepro::Masses root=UnitsRepro::rocket"
+✓ Query UnitsRepro::Masses returned 2 rows
+  Columns: name, mass
+  Row 1: UnitsRepro::rocket::s1
+    name = "s1"
+    mass = 2290000 [kg]
+  Row 2: UnitsRepro::rocket::s2
+    name = "s2"
+    mass = 119000 [kg]
+```
+
+The value read is the attribute's *constant* value: a literal, a quantity, or
+an expression over those that folds without evaluating the model —
+`2 [kg] * 3` is `6 [kg]`, `1 [km] + 500 [m]` is `1.5 [km]`. An attribute
+whose value depends on other features (`mass = dryMass + propellantMass`) has
+no constant value; projecting it is a typed `unevaluable-feature` error naming
+the query, the property and the row element, so a table never shows a wrong
+number or a silently empty cell for a value the model does declare. A `??`
+default does not cover it either — the feature is present, not absent. Narrow
+the source to the elements whose value is constant, or bind the value in the
+model, to render the table.
+
 ## Computed columns
 
 A projection may also derive columns: each `Column(name, expression)` entry
@@ -488,6 +581,16 @@ identifier. A column is one value per row: an element carrying two `doc`
 bodies fails a column over `Element::documentation` with a typed
 `column-cardinality` error, where the plain `"documentation"` projection
 above carries both.
+
+Quantities take part in column arithmetic with the runtime's rules, so a
+column keeps its unit: `Stage::mass * 2` is `4580000 [kg]`, `Stage::mass /
+1000` is `2290 [kg]`, `Stage::mass / Stage::length` is `54523.8… [kg/m]`,
+and a ratio of like quantities (`Stage::length / Stage::length`) is a bare
+number. Adding or subtracting quantities converts the right operand into the
+left operand's unit (`1 [km] + 500 [m]` is `1.5 [km]`); operands of
+different dimensions — `Stage::mass +
+Stage::length`, or a quantity plus a bare number — are a typed
+`column-incommensurable` error naming the column, the row and both units.
 
 ## Query invokes query
 
