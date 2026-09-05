@@ -1,1 +1,0 @@
-- **A usage's unresolved value no longer hides its members' variability diagnostics.** Only the owner's typing head gates a nested feature's `Initialized feature must be variable` and `Only a variable feature can be constant`, matching how the feature's own head is gated.
