@@ -231,7 +231,12 @@ name. An empty result still renders the header and delimiter rows, so the
 document shows *that* the table is empty rather than omitting it. Cell values
 render faithfully: strings unquoted, integers in base 10, reals in shortest
 notation, booleans as `true`/`false`, unbounded multiplicity as `*`, elements
-by qualified name.
+by qualified name, and quantities as the magnitude followed by the unit the
+model spelt in brackets — `2290000 [kg]`, escaped in Markdown as
+`2290000 \[kg\]` so the brackets read as text. An attribute whose value is
+not a constant (`mass = dryMass + propellantMass`) is a typed error naming
+the query, the property and the row, not an empty cell; see the [query
+cookbook](query-cookbook.md#quantity-cells).
 
 ### Grouped tables
 
@@ -295,6 +300,69 @@ part heavyItems : List {
 
 An empty result renders as nothing — unlike a table, an empty list leaves no
 trace.
+
+## Definitions — query rows as prose
+
+A `Definitions` block renders each query row as one prose entry: a **term**
+followed by its **description**, both taken from projected columns the block
+names. It is how model-authored text — a requirement's short name and its
+`doc` body, a part's identifier and its description — reads as sentences
+rather than as cells. `term` and `description` are required and name
+projected columns of the bound query; either may be a property (`shortName`,
+`name`, `documentation`, …) or a computed `Column`:
+
+```sysml
+calc def Reqs :> Query {
+	in root : Element;
+	Project(
+		source = RelatedElements(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "RequirementUsage"),
+			relationshipKind = "typing", direction = "outgoing", maxDepth = 1
+		),
+		properties = ("shortName", "name", "documentation")
+	)
+}
+
+part requirementText : Definitions {
+	attribute redefines term = "shortName";
+	attribute redefines description = "documentation";
+	calc rows : Reqs {
+		in root = spec;
+	}
+}
+```
+
+```markdown
+**HLR-R001** — The mission shall safely return all three crew members to Earth.
+
+**HLR-R002** — The mission shall achieve a soft landing on the lunar surface.
+```
+
+Markdown writes one paragraph per row: the term in strong emphasis, an em
+dash, then the description. HTML writes a description list — `<dl>` with one
+`<dt>`/`<dd>` group per row, each group carrying the row's element — so a
+theme can style terms and descriptions apart; PDF follows the Markdown form.
+A cell with several values (an element with two `doc` comments) joins them
+with spaces, as a list item does. A row whose term is absent renders its
+description alone and vice versa; a row with neither writes nothing in
+Markdown and an empty group in HTML. An empty result follows a list's: it
+leaves no trace in Markdown, while HTML keeps the empty `<dl>` — as it keeps
+an empty `<ul>` — so the block stays addressable by name and query.
+
+Both column names are checked against the query's statically-known
+projection at planning time; a name the query does not project is a typed
+error there, or at evaluation when the projection is only known then. A
+`Definitions` block without a query, or one nesting other content, is a typed
+planning error.
+
+The complete model is [`examples/requirements.sysml`](examples/requirements.sysml)
+and its rendered output [`examples/requirements.md`](examples/requirements.md):
+
+```console
+$ sysml docs/manual/examples/requirements.sysml -run-query "Requirements::Reqs root=Requirements::spec"
+$ sysml docs/manual/examples/requirements.sysml -render-document Requirements::RequirementsReport
+$ sysml docs/manual/examples/requirements.sysml -render-document Requirements::RequirementsReport -doc-form html
+```
 
 ## Diagrams
 

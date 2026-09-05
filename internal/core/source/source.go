@@ -18,6 +18,24 @@ type Pos struct {
 	Col  int
 }
 
+// Lookup answers the text a span of the named document covers, or "" for a
+// document it does not hold.
+type Lookup func(doc string, span Span) string
+
+// TextOf answers spans from files by document name, shadowing next; a name not
+// among files goes to next, "" when next is nil.
+func TextOf(files map[string]*SourceFile, next Lookup) Lookup {
+	return func(doc string, span Span) string {
+		if sf, ok := files[doc]; ok {
+			return sf.Text(span)
+		}
+		if next == nil {
+			return ""
+		}
+		return next(doc, span)
+	}
+}
+
 // SourceFile owns the raw bytes of one source file.
 type SourceFile struct {
 	name    string

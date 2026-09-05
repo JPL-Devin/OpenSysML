@@ -114,6 +114,56 @@
 </tr>
 </tbody>
 </table>
+<table class="sysml-table" data-content="table" data-name="notesTable" data-query="Observatory::SubsystemNotes">
+<caption class="sysml-caption">Subsystem notes</caption>
+<thead>
+<tr>
+<th scope="col" data-column="shortName">shortName</th>
+<th scope="col" data-column="name">name</th>
+<th scope="col" data-column="documentation">documentation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="sysml-row" data-element="Observatory::telescope::baffle|shroud *tricky*" data-element-kind="partUsage">
+<td class="sysml-cell" data-column="shortName"></td>
+<td class="sysml-cell" data-column="name" data-value-kind="string"><span class="sysml-value" data-value-kind="string">baffle|shroud *tricky*</span></td>
+<td class="sysml-cell" data-column="documentation"></td>
+</tr>
+<tr class="sysml-row" data-element="Observatory::telescope::mount" data-element-kind="partUsage">
+<td class="sysml-cell" data-column="shortName" data-value-kind="string"><span class="sysml-value" data-value-kind="string">M3|*</span></td>
+<td class="sysml-cell" data-column="name" data-value-kind="string"><span class="sysml-value" data-value-kind="string">mount</span></td>
+<td class="sysml-cell" data-column="documentation"></td>
+</tr>
+<tr class="sysml-row" data-element="Observatory::telescope::optics" data-element-kind="partUsage">
+<td class="sysml-cell" data-column="shortName" data-value-kind="string"><span class="sysml-value" data-value-kind="string">M1</span></td>
+<td class="sysml-cell" data-column="name" data-value-kind="string"><span class="sysml-value" data-value-kind="string">optics</span></td>
+<td class="sysml-cell" data-column="documentation" data-value-kind="string"><span class="sysml-value" data-value-kind="string">The primary mirror assembly.</span><span class="sysml-separator">, </span><span class="sysml-value" data-value-kind="string">Collects light | not *heat* from the target.</span></td>
+</tr>
+<tr class="sysml-row" data-element="Observatory::telescope::segmentControl" data-element-kind="partUsage">
+<td class="sysml-cell" data-column="shortName"></td>
+<td class="sysml-cell" data-column="name" data-value-kind="string"><span class="sysml-value" data-value-kind="string">segmentControl</span></td>
+<td class="sysml-cell" data-column="documentation" data-value-kind="string"><span class="sysml-value" data-value-kind="string">Actuators that phase the mirror segments.</span></td>
+</tr>
+</tbody>
+</table>
+<dl class="sysml-definitions" data-content="definitions" data-name="notes" data-query="Observatory::SubsystemNotes">
+<div class="sysml-entry" data-element="Observatory::telescope::baffle|shroud *tricky*" data-element-kind="partUsage">
+<dt class="sysml-term"></dt>
+<dd class="sysml-description"></dd>
+</div>
+<div class="sysml-entry" data-element="Observatory::telescope::mount" data-element-kind="partUsage">
+<dt class="sysml-term">M3|*</dt>
+<dd class="sysml-description"></dd>
+</div>
+<div class="sysml-entry" data-element="Observatory::telescope::optics" data-element-kind="partUsage">
+<dt class="sysml-term">M1</dt>
+<dd class="sysml-description">The primary mirror assembly. Collects light | not *heat* from the target.</dd>
+</div>
+<div class="sysml-entry" data-element="Observatory::telescope::segmentControl" data-element-kind="partUsage">
+<dt class="sysml-term"></dt>
+<dd class="sysml-description">Actuators that phase the mirror segments.</dd>
+</div>
+</dl>
 <section class="sysml-section" id="breakdown-heavy" data-content="section" data-name="heavy">
 <h3><span class="sysml-section-number">1.1</span> Heavy Subsystems</h3>
 <p class="sysml-paragraph" data-content="paragraph" data-name="summary" data-query="Observatory::HeavySubsystemNames">mount segmentControl</p>
@@ -141,6 +191,8 @@
 </table>
 <ul class="sysml-list" data-content="list" data-name="missingItems" data-query="Observatory::MissingSubsystems">
 </ul>
+<dl class="sysml-definitions" data-content="definitions" data-name="missingNotes" data-query="Observatory::MissingSubsystems">
+</dl>
 </section>
 </section>
 <section class="sysml-section" id="diagrams" data-content="section" data-name="diagrams">

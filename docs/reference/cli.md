@@ -345,12 +345,14 @@ sysml model.sysml -render-document Reports::MassReport -doc-form html \
 
 The structure is ordinary semantic HTML — `<article>`, nested `<section>` whose heading levels
 follow the nesting, `<p>`, `<table>` with `<caption>`, `<thead>` and `<th scope="col">`,
-`<ul>`/`<ol>`, `<figure>` with `<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`,
-`<code>`, `<a>` inline. Styling hooks are a small `sysml-` class vocabulary (`sysml-document`,
-`sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
-`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin), and the
-model facts ride alongside on `data-` attributes: the content kind and name, the query behind a
-table or list, the group-by column, each row's or item's selected element and its element kind
+`<ul>`/`<ol>`, `<dl>` with `<dt>`/`<dd>`, `<figure>` with `<figcaption>`, `<nav>` for the
+contents, and `<em>`, `<strong>`, `<code>`, `<a>` inline. Styling hooks are a small `sysml-` class
+vocabulary (`sysml-document`, `sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`,
+`sysml-value`, `sysml-list`, `sysml-item`, `sysml-definitions`, `sysml-entry`, `sysml-term`,
+`sysml-description`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin),
+and the model facts ride alongside on `data-` attributes: the content kind and name, the query
+behind a table, list or definitions block, the group-by column, each row's, item's or entry's
+selected element and its element kind
 (`partUsage`, `requirementDef`, …), each cell's projected column and value kind, and a diagram's
 view, kind and flow direction. Identifiers are anchors only, matching the Markdown anchors, so a
 `Ref` resolves within a page and across a rendered set.

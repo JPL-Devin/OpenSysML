@@ -135,35 +135,11 @@ func (s *Server) hoverContents(signature string, comments []string) protocol.Mar
 func docCommentProse(comments []string) string {
 	var paragraphs []string
 	for _, comment := range comments {
-		if prose := commentBody(comment); prose != "" {
+		if prose := lexer.CommentBody(comment); prose != "" {
 			paragraphs = append(paragraphs, strings.ReplaceAll(prose, "\n", "  \n"))
 		}
 	}
 	return strings.Join(paragraphs, "\n\n")
-}
-
-// commentBody is one comment's text without its delimiters and per-line
-// decoration.
-func commentBody(comment string) string {
-	comment = strings.TrimSpace(comment)
-	for _, open := range []string{"//*", "/*"} {
-		if rest, ok := strings.CutPrefix(comment, open); ok {
-			comment = strings.TrimSuffix(rest, "*/")
-			break
-		}
-	}
-	var lines []string
-	for _, line := range strings.Split(comment, "\n") {
-		line = strings.TrimSpace(line)
-		line = strings.TrimPrefix(line, "//")
-		// A doubled star opens Markdown emphasis the author wrote; a single one
-		// is the decoration a block comment runs down its left edge.
-		if !strings.HasPrefix(line, "**") {
-			line = strings.TrimPrefix(line, "*")
-		}
-		lines = append(lines, strings.TrimSpace(line))
-	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // symbolAtOffset finds the innermost symbol whose DeclSpan contains offset.

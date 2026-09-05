@@ -483,7 +483,7 @@ HTTP/1.1 400 Bad Request
 
 $ … /Query -d '{"modelHash":"2af5…dea2","query":{"where":{"primitive":{"property":"colour","operator":"PRIMITIVE_OPERATOR_EQUAL","value":["red"]}}}}'
 HTTP/1.1 400 Bad Request
-{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, type"}
+{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, declaredShortName, documentation, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, shortName, type"}
 
 $ … /ApplyEdits -d '{"modelHash":"b4e0…ded9","operations":[{"setValue":{"target":"Demo::sedan::mass","value":"1300.0"}}]}'
 HTTP/1.1 400 Bad Request
@@ -833,6 +833,12 @@ arm says what was bound:
 - **`stringValue`, `intValue` (string), `realValue`, `boolValue`, `infinity`** bind a literal;
   the query treats it as a value, not a name. A string that happens to be a qualified name
   bound as `stringValue` is a string.
+- **`quantity`** binds a magnitude with a unit, the same object a `Value` carries (`unit`,
+  `unitTerm` and one of `intMagnitude`/`realMagnitude`); it is how a projected
+  `attribute :>> mass = 2290000 [kg];` is answered. Bound, it conforms to a parameter typed
+  by a quantity value type of the same dimension (`MassValue` for a mass, any for
+  `ScalarQuantityValue`); a parameter of another dimension or of a scalar type such as
+  `String` refuses it with `invalid_argument`.
 
 Model `7e6a…a687` is `conformance/fixtures/document.sysml`; `HeavySubsystemNames` takes
 `root : Element` and `threshold : String`:
@@ -855,8 +861,8 @@ The answer is a table: `columns` in order, and `rows` each with `element` (the r
 a `DocumentValue`, here always `elementId` plus `elementType`) and `cells` **positionally
 aligned with `columns`**. A cell holds `values`, a list of `DocumentValue`s (several for a
 multi-valued property, none for a missing one, in which case `values` is absent). A
-`DocumentValue` decodes like a `Value` — one arm present — but its arms are the six above and
-never a nested sequence, quantity or enum. `SubsystemTable` projects two columns and shows a
+`DocumentValue` decodes like a `Value` — one arm present — but its arms are the seven above and
+never a nested sequence or enum. `SubsystemTable` projects two columns and shows a
 `realValue` cell:
 
 ```console

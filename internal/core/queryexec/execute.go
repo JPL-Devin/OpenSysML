@@ -251,6 +251,17 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 			}
 		}
 		return expected == "Element" || expected == "KerML::Root::Element"
+	case ValueQuantity:
+		quantity, ok := value.Quantity()
+		if !ok {
+			return false
+		}
+		for _, target := range e.context.Index.LookupQualified(expected) {
+			if c := e.context.Model.QuantityConforms(quantity.Unit.Term, target); c.Known && c.Holds {
+				return true
+			}
+		}
+		return false
 	default:
 		actual, ok := scalarValueType(value)
 		if !ok {

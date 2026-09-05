@@ -41,6 +41,19 @@ func (r *PropertyReader) Values(sym *symbols.Symbol, property string) ([]string,
 			return nil, false
 		}
 		return presentValues(sym.Name)
+	case PropertyShortName:
+		if r.semantics != nil {
+			return presentValues(r.semantics.EffectiveShortNameOf(sym))
+		}
+		return presentValues(sym.ShortName)
+	case PropertyDeclaredShortName:
+		return presentValues(sym.ShortName)
+	case PropertyDocumentation:
+		if r.semantics == nil {
+			return nil, false
+		}
+		bodies := r.semantics.DocumentationOf(sym)
+		return bodies, len(bodies) > 0
 	case PropertyOwner:
 		if sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil {
 			return presentValues(r.index.GetFQN(sym.OwnerScope.Owner()))

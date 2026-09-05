@@ -15,6 +15,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -43,6 +44,7 @@ type Model struct {
 	params        map[*symbols.Symbol]behaviorParameters
 	invocations   map[invocationKey]*InvocationSelection
 	arguments     ArgumentTyper // the checker's argument typing, nil when no checker runs
+	sourceText    source.Lookup // notation of the loaded documents, nil when unavailable
 	// typingArgs holds the calls whose arguments are being typed, so an argument
 	// whose type leads back to its own call is not typed again.
 	typingArgs map[*ast.InvocationExpr]bool

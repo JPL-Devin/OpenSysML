@@ -19,6 +19,7 @@ var htmlClassVocabulary = map[string]bool{
 	"sysml-group-column": true, "sysml-group-key": true,
 	"sysml-row": true, "sysml-cell": true, "sysml-value": true, "sysml-element": true,
 	"sysml-separator": true, "sysml-list": true, "sysml-item": true,
+	"sysml-definitions": true, "sysml-entry": true, "sysml-term": true, "sysml-description": true,
 	"sysml-diagram": true, "sysml-caption": true, "sysml-link": true, "sysml-ref": true,
 	"mermaid": true,
 }
@@ -96,6 +97,25 @@ func TestHTMLSemanticStructure(t *testing.T) {
 	// Sections nest as elements, so every one that opens is closed.
 	if open, close := strings.Count(got, "<section "), strings.Count(got, "</section>"); open != close {
 		t.Errorf("%d sections opened, %d closed", open, close)
+	}
+}
+
+// TestHTMLQuantityCells checks that a quantity cell keeps its unit in the text
+// and carries magnitude and unit apart as data attributes.
+func TestHTMLQuantityCells(t *testing.T) {
+	got := renderFixtureHTML(t, filepath.Join("testdata", "quantity_report.sysml"),
+		"Launcher::MassReport", HTMLOptions{})
+	for _, want := range []string{
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290000" data-unit="kg">2290000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="500000" data-unit="g">500000 [g]</span></td>`,
+		`<td class="sysml-cell" data-column="tonnes" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290" data-unit="kg">2290 [kg]</span></td>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Count(got, `data-column="mass" data-value-kind="quantity"`) != 4 {
+		t.Errorf("rendering does not carry four mass cells\n%s", got)
 	}
 }
 

@@ -24,8 +24,9 @@ const captionMarker = "<!-- caption -->"
 // Markdown renders an evaluated document as deterministic CommonMark: the
 // title as a level-1 ATX heading, each section one level deeper (saturating
 // at 6), paragraphs from space-joined text runs, GitHub-flavored pipe tables
-// with projected column headers, bullet or numbered lists, and diagrams as
-// fenced Mermaid blocks (table-kind views as pipe tables). Metacharacters
+// with projected column headers, bullet or numbered lists, definitions as one
+// "**term** — description" paragraph per entry, and diagrams as fenced
+// Mermaid blocks (table-kind views as pipe tables). Metacharacters
 // in content are escaped so no value can corrupt the document structure.
 func Markdown(document *docir.Document) (string, error) {
 	if document == nil {
@@ -75,6 +76,8 @@ func renderNode(node docir.Content, level int) ([]string, error) {
 		return renderTable(node), nil
 	case docir.ContentList:
 		return renderList(node), nil
+	case docir.ContentDefinitions:
+		return renderDefinitions(node), nil
 	case docir.ContentDiagram:
 		return renderDiagram(node)
 	default:
@@ -211,6 +214,40 @@ func renderList(node docir.Content) []string {
 	return []string{strings.Join(lines, "\n")}
 }
 
+// definitionSeparator joins an entry's term to its description.
+const definitionSeparator = " — "
+
+// renderDefinitions writes one paragraph per entry: the term in strong
+// emphasis, an em dash, then the description. An entry lacking one side
+// writes the other alone; one lacking both, like an empty block, writes nothing.
+func renderDefinitions(node docir.Content) []string {
+	var blocks []string
+	for _, entry := range node.Definitions() {
+		term := strings.TrimSpace(strongText(entry.Term()))
+		description := strings.TrimSpace(itemText(entry.Description()))
+		switch {
+		case term == "" && description == "":
+			continue
+		case term == "":
+			blocks = append(blocks, blockStart(description))
+		case description == "":
+			blocks = append(blocks, term)
+		default:
+			blocks = append(blocks, term+definitionSeparator+description)
+		}
+	}
+	return blocks
+}
+
+// strongText renders runs joined by single spaces inside one strong span.
+func strongText(runs []docir.TextRun) string {
+	parts := make([]string, len(runs))
+	for i, run := range runs {
+		parts[i] = run.Text()
+	}
+	return delimited("**", strings.Join(parts, " "))
+}
+
 // blockText renders a paragraph's runs joined by single spaces, escaped so the
 // first character cannot open a heading, list, or quote.
 func blockText(runs []docir.TextRun) string {
@@ -325,7 +362,8 @@ func destination(target string) string {
 
 // valueText renders one typed value as plain, unescaped text: elements by
 // qualified name (falling back to declared name), strings as their text,
-// integers in base 10, reals in shortest 'g' form, booleans, and infinity as "*".
+// integers in base 10, reals in shortest 'g' form, booleans, infinity as "*",
+// and quantities as their magnitude in the unit written: `2290000 [kg]`.
 func valueText(value queryexec.Value) string {
 	if element, ok := value.Element(); ok {
 		if fqn := symbols.FQNOf(element); fqn != "" {
@@ -347,6 +385,10 @@ func valueText(value queryexec.Value) string {
 	}
 	if value.Kind() == queryexec.ValueInfinity {
 		return "*"
+	}
+	if quantity, ok := value.Quantity(); ok {
+		magnitude, _ := value.Magnitude()
+		return quantity.TextWithMagnitude(valueText(magnitude))
 	}
 	return ""
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -354,7 +355,7 @@ func (s *Session) runStateMachine(name string, duration *float64, performer []st
 	exec := s.stateExec.executor
 	values := []NamedValue{
 		{Name: "state", Value: currentStateName(exec)},
-		{Name: "time", Value: runtime.FormatReal(s.stateExec.now)},
+		{Name: "time", Value: semantics.FormatReal(s.stateExec.now)},
 	}
 	values = append(values, namedValues(s.stateExec.contextOf(), exec.StateData())...)
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})

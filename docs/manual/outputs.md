@@ -67,19 +67,22 @@ $ sysml report.sysml -render-document Observatory::MassReport \
 The structure is ordinary semantic HTML — `<article>`, nested `<section>`
 whose heading levels follow the nesting, `<p>`, `<table>` with `<caption>`,
 `<thead>` and `<th scope="col">`, `<ul>`/`<ol>`, `<figure>` with
-`<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`, `<code>`,
+`<figcaption>`, `<dl>` for definitions, `<nav>` for the contents, and `<em>`, `<strong>`, `<code>`,
 `<a>` inline — so a reader, a screen reader and a static-site generator all
 see a document rather than a grid of `<div>`s.
 
 The model rides alongside the structure. A small `sysml-` class vocabulary
 names each part of the document (`sysml-document`, `sysml-section`,
 `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
-`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref`
-and their kin), and `data-` attributes carry the facts behind it: the
-content kind and name, the query behind a table or list, the group-by
-column, each row's or item's selected element with its element kind
+`sysml-item`, `sysml-definitions`, `sysml-entry`, `sysml-term`,
+`sysml-description`, `sysml-diagram`, `sysml-caption`, `sysml-link`,
+`sysml-ref` and their kin), and `data-` attributes carry the facts behind
+it: the content kind and name, the query behind a table, list or
+definitions block, the group-by column, each row's, item's or entry's
+selected element with its element kind
 (`partUsage`, `requirementDef`, …), each cell's projected column and value
-kind, and a diagram's view, kind and flow direction.
+kind (a `quantity` value also carries its `data-magnitude` and `data-unit`
+apart), and a diagram's view, kind and flow direction.
 
 ```html
 <tr class="sysml-row" data-element="Observatory::telescope::mount"

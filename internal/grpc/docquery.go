@@ -9,11 +9,13 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/docir"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
@@ -46,7 +48,7 @@ func (s *Service) RunDocumentQuery(ctx context.Context, req *pb.RunDocumentQuery
 	if err != nil {
 		return nil, documentStatus(err)
 	}
-	bindings, err := documentBindings(sc.Index, req.Bindings)
+	bindings, err := documentBindings(sc.Index, sc.Semantics, req.Bindings)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func documentSymbol(idx *symbols.Index, id string) (*symbols.Symbol, error) {
 
 // documentBindings converts a request's typed bindings into the engine's.
 // Repeated parameters append, as %run-query's repeated bindings do.
-func documentBindings(idx *symbols.Index, bindings []*pb.DocumentQueryBinding) (queryexec.Bindings, error) {
+func documentBindings(idx *symbols.Index, sem *semantics.Model, bindings []*pb.DocumentQueryBinding) (queryexec.Bindings, error) {
 	if len(bindings) == 0 {
 		return nil, nil
 	}
@@ -121,7 +123,7 @@ func documentBindings(idx *symbols.Index, bindings []*pb.DocumentQueryBinding) (
 			return nil, statusError(connect.CodeInvalidArgument, "a binding must name the parameter it binds")
 		}
 		for _, value := range binding.GetValues() {
-			bound, err := boundValue(idx, binding.GetParameter(), value)
+			bound, err := boundValue(idx, sem, binding.GetParameter(), value)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +135,7 @@ func documentBindings(idx *symbols.Index, bindings []*pb.DocumentQueryBinding) (
 
 // boundValue converts one request value. An element is bound by qualified name;
 // infinity is only ever answered, so binding it is refused.
-func boundValue(idx *symbols.Index, parameter string, value *pb.DocumentValue) (queryexec.Value, error) {
+func boundValue(idx *symbols.Index, sem *semantics.Model, parameter string, value *pb.DocumentValue) (queryexec.Value, error) {
 	switch kind := value.GetKind().(type) {
 	case *pb.DocumentValue_ElementId:
 		syms := lookupNamed(idx, kind.ElementId)
@@ -153,6 +155,16 @@ func boundValue(idx *symbols.Index, parameter string, value *pb.DocumentValue) (
 	case *pb.DocumentValue_Infinity:
 		return queryexec.Value{}, statusErrorf(connect.CodeInvalidArgument,
 			"binding %s: infinity is answered by queries, not bound to them", parameter)
+	case *pb.DocumentValue_Quantity:
+		bound, err := ProtoToQuantity(kind.Quantity, idx, sem)
+		if err != nil {
+			return queryexec.Value{}, statusErrorf(connect.CodeInvalidArgument, "binding %s: %v", parameter, err)
+		}
+		quantity := bound.Quantity()
+		if quantity == nil {
+			return queryexec.Value{}, statusErrorf(connect.CodeInvalidArgument, "binding %s carries no quantity", parameter)
+		}
+		return queryexec.QuantityValue(*quantity), nil
 	default:
 		return queryexec.Value{}, statusErrorf(connect.CodeInvalidArgument,
 			"binding %s carries no value", parameter)
@@ -216,6 +228,9 @@ func documentValue(idx *symbols.Index, value queryexec.Value) *pb.DocumentValue 
 		return &pb.DocumentValue{Kind: &pb.DocumentValue_BoolValue{BoolValue: boolean}}
 	case queryexec.ValueInfinity:
 		return &pb.DocumentValue{Kind: &pb.DocumentValue_Infinity{Infinity: true}}
+	case queryexec.ValueQuantity:
+		quantity, _ := value.Quantity()
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_Quantity{Quantity: QuantityToProto(&quantity)}}
 	default:
 		return &pb.DocumentValue{}
 	}
@@ -296,7 +311,8 @@ func docPlanCode(kind docplan.ErrorKind) connect.Code {
 }
 
 // cachedSourceText reads notation from whichever of the model's documents a span
-// belongs to, for the labels a diagram rendering takes verbatim.
+// belongs to, and behind them from the library files its index holds, for the
+// labels a diagram rendering takes verbatim.
 func cachedSourceText(model *CachedModel) view.SourceText {
 	sources := make(map[string]*source.SourceFile, len(model.Documents))
 	for _, doc := range model.Documents {
@@ -304,16 +320,10 @@ func cachedSourceText(model *CachedModel) view.SourceText {
 			sources[doc.Source.Name()] = doc.Source
 		}
 	}
-	if len(sources) == 0 {
+	if len(sources) == 0 && model.Library == nil {
 		return nil
 	}
-	return func(name string, span source.Span) string {
-		sf, ok := sources[name]
-		if !ok {
-			return ""
-		}
-		return sf.Text(span)
-	}
+	return source.TextOf(sources, libs.Text(model.Library))
 }
 
 // docIRCode is the status a document-evaluation failure reports as: a failed

@@ -40,15 +40,22 @@ func fixtureDocument(t *testing.T, path, name string) *docir.Document {
 		t.Fatalf("read fixture: %v", err)
 	}
 	index := libs.NewModelIndex()
-	p := parser.New(source.New(filepath.Base(path), []byte(content)))
+	sf := source.New(filepath.Base(path), []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
 	}
-	index.AddDocument(filepath.Base(path), root)
+	index.AddDocument(sf.Name(), root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
 	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != sf.Name() {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	matches := symbols.PreferDeclared(index.LookupQualified(name))
 	if len(matches) != 1 {
 		t.Fatalf("lookup %s: got %d symbols", name, len(matches))
@@ -118,6 +125,38 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 	for _, line := range lines {
 		if strings.HasPrefix(line, "| ") && strings.Contains(line, "\\|") && !strings.HasSuffix(line, " |") {
 			t.Errorf("table row not terminated: %q", line)
+		}
+	}
+}
+
+// TestMarkdownQuantityReportGolden locks the rendering of tables over
+// quantity-valued attributes: projected, ordered across commensurable units,
+// filtered by bare magnitude, and computed, each cell keeping its unit.
+func TestMarkdownQuantityReportGolden(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "quantity_report.sysml"),
+		"Launcher::MassReport")
+	golden := filepath.Join("testdata", "quantity_report.golden.md")
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create): %v", err)
+	}
+	if got != string(want) {
+		t.Errorf("rendered Markdown differs from %s (run with -update after intentional changes)\ngot:\n%s", golden, got)
+	}
+	for _, want := range []string{
+		"| name | mass | tonnes |\n| --- | --- | --- |\n",
+		"| s1 | 2290000 \\[kg\\] | 2290 \\[kg\\] |\n| s2 | 119000 \\[kg\\] | 119 \\[kg\\] |\n| probe | 500000 \\[g\\] | 500 \\[g\\] |\n",
+		"| name | mass |\n| --- | --- |\n| s1 | 2290000 \\[kg\\] |\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
 		}
 	}
 }

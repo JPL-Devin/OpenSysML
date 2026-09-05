@@ -1,11 +1,14 @@
 package queryexec
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -108,7 +111,7 @@ func (e *executor) evaluateColumnExpression(
 		if declaringIsElement(declaring) {
 			values, present, err := e.propertyValues(sym, property)
 			if err != nil {
-				return nil, e.featureError(expression, property)
+				return nil, e.featureError(expression, property, sym)
 			}
 			tracker.record(property, present)
 			return values, nil
@@ -126,7 +129,7 @@ func (e *executor) evaluateColumnExpression(
 		}
 		values, _, err := e.declaredFeatureValues(sym, property)
 		if err != nil {
-			return nil, e.featureError(expression, property)
+			return nil, e.featureError(expression, property, sym)
 		}
 		return values, nil
 	case queryplan.OperationLiteral:
@@ -173,18 +176,19 @@ func (e *executor) reflectiveFeatureValues(
 	property string,
 	sym *symbols.Symbol,
 ) ([]Value, error) {
-	value, ok := e.context.Model.ReflectiveFeatureValue(sym, property)
+	values, ok := e.context.Model.ReflectiveFeatureValues(sym, property)
 	if !ok {
-		return nil, e.featureError(expression, property)
+		return nil, e.featureError(expression, property, sym)
 	}
-	if value.Kind == symbols.FilterValueEmpty {
-		return nil, nil
+	result := make([]Value, 0, len(values))
+	for _, value := range values {
+		converted, ok := filterValue(value, sym)
+		if !ok {
+			return nil, e.featureError(expression, property, sym)
+		}
+		result = append(result, converted)
 	}
-	converted, ok := filterValue(value, sym)
-	if !ok {
-		return nil, e.featureError(expression, property)
-	}
-	return []Value{converted}, nil
+	return result, nil
 }
 
 // rowConformsTo reports whether the row conforms to a feature's declaring
@@ -256,6 +260,9 @@ func (e *executor) applyColumnOperator(
 		}
 		return e.columnError(ErrorColumnOperandType, column, sym, expression.Origin(), operator, kinds)
 	}
+	if hasQuantity(values) {
+		return e.applyQuantityOperator(expression, column, sym, operator, values, mismatch)
+	}
 	if len(values) == 1 {
 		// Unary + and - require one numeric operand.
 		switch values[0].Kind() {
@@ -323,6 +330,102 @@ func (e *executor) applyColumnOperator(
 
 func arithmeticKind(kind ValueKind) bool {
 	return kind == ValueInteger || kind == ValueReal
+}
+
+func hasQuantity(values []Value) bool {
+	for _, value := range values {
+		if value.Kind() == ValueQuantity {
+			return true
+		}
+	}
+	return false
+}
+
+// applyQuantityOperator computes with at least one quantity operand under the
+// runtime's unit rules: sums need commensurable units, products compose them.
+func (e *executor) applyQuantityOperator(
+	expression queryplan.Expression,
+	column string,
+	sym *symbols.Symbol,
+	operator string,
+	values []Value,
+	mismatch func() error,
+) (Value, error) {
+	op, ok := columnOperatorKind(operator, len(values) == 1)
+	if !ok {
+		return Value{}, e.operatorError(expression, operator)
+	}
+	operands := make([]semantics.Quantity, len(values))
+	for i, value := range values {
+		quantity, ok := quantityOperand(value)
+		if !ok {
+			return Value{}, mismatch()
+		}
+		operands[i] = quantity
+	}
+	var result semantics.Quantity
+	var err error
+	if len(operands) == 1 {
+		result, err = semantics.QuantityUnary(op, operands[0])
+	} else {
+		result, err = semantics.QuantityBinary(op, operands[0], operands[1])
+	}
+	switch {
+	case err == nil:
+	case errors.Is(err, semantics.ErrDivisionByZero):
+		return Value{}, e.columnError(ErrorColumnDivisionByZero, column, sym, expression.Origin(), operator, "")
+	case errors.Is(err, semantics.ErrIncommensurableUnits):
+		units := operands[0].Unit.String() + " and " + operands[1].Unit.String()
+		return Value{}, e.columnError(ErrorColumnIncommensurable, column, sym, expression.Origin(), operator, units)
+	case errors.Is(err, semantics.ErrQuantityOperand):
+		return Value{}, mismatch()
+	default:
+		return Value{}, e.columnError(ErrorColumnArithmetic, column, sym, expression.Origin(), operator, err.Error())
+	}
+	if result.Unit.None() {
+		value, ok := constantValue(result.Num)
+		if !ok {
+			return Value{}, mismatch()
+		}
+		return value, nil
+	}
+	return QuantityValue(result), nil
+}
+
+// quantityOperand reads a column operand as a quantity, a bare number being one
+// in no unit.
+func quantityOperand(value Value) (semantics.Quantity, bool) {
+	switch value.Kind() {
+	case ValueQuantity:
+		return value.Quantity()
+	case ValueInteger:
+		integer, _ := value.Integer()
+		return semantics.Quantity{Num: semantics.Value{Kind: semantics.ValInt, Int: integer}, Unit: semantics.UnitOne()}, true
+	case ValueReal:
+		real, _ := value.Real()
+		return semantics.Quantity{Num: semantics.Value{Kind: semantics.ValReal, Real: real}, Unit: semantics.UnitOne()}, true
+	}
+	return semantics.Quantity{}, false
+}
+
+func columnOperatorKind(operator string, unary bool) (ast.OperatorKind, bool) {
+	switch operator {
+	case "+":
+		if unary {
+			return ast.OpPos, true
+		}
+		return ast.OpAdd, true
+	case "-":
+		if unary {
+			return ast.OpNeg, true
+		}
+		return ast.OpSub, true
+	case "*":
+		return ast.OpMul, true
+	case "/":
+		return ast.OpDiv, true
+	}
+	return 0, false
 }
 
 func realOperand(value Value) float64 {

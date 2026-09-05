@@ -6,6 +6,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // Token represents a control token in action execution. It carries no values of
@@ -114,7 +115,7 @@ type Event struct {
 }
 
 func (e Event) String() string {
-	return fmt.Sprintf("Event{ID:%d, Type:%s, Time:%s}", e.ID, e.Type, FormatReal(e.Timestamp))
+	return fmt.Sprintf("Event{ID:%d, Type:%s, Time:%s}", e.ID, e.Type, semantics.FormatReal(e.Timestamp))
 }
 
 // EventQueue is a priority queue of events sorted by timestamp (min-heap).

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -281,7 +282,7 @@ func (e *executor) evaluateWhereFeature(expression queryplan.Expression) (sequen
 		sym, _ := value.Element()
 		values, present, valueErr := e.propertyValues(sym, property)
 		if valueErr != nil {
-			return sequence{}, e.featureError(expression, property)
+			return sequence{}, e.featureError(expression, property, sym)
 		}
 		known = known || present
 		for _, actual := range values {
@@ -354,7 +355,7 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 	}
 	items := make([]sortable, len(source.values))
 	known := false
-	var orderedKind ValueKind
+	var firstKey Value
 	for i, value := range source.values {
 		sym, _ := value.Element()
 		var values []Value
@@ -366,7 +367,7 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 			var valueErr error
 			values, present, valueErr = e.propertyValues(sym, property)
 			if valueErr != nil {
-				return sequence{}, e.featureError(expression, property)
+				return sequence{}, e.featureError(expression, property, sym)
 			}
 		}
 		known = known || present
@@ -377,14 +378,14 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 		switch len(values) {
 		case 0:
 			if missing == "error" {
-				return sequence{}, e.featureError(expression, property)
+				return sequence{}, e.featureError(expression, property, sym)
 			}
 		case 1:
 			items[i].key = values[0]
 			items[i].set = true
 		default:
 			if multiple == "error" {
-				return sequence{}, e.featureError(expression, property)
+				return sequence{}, e.featureError(expression, property, sym)
 			}
 			index := 0
 			if multiple == "last" {
@@ -394,22 +395,18 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 			items[i].set = true
 		}
 		if items[i].set {
-			if orderedKind == "" {
-				orderedKind = items[i].key.Kind()
-			} else if !orderedKindsCompatible(orderedKind, items[i].key.Kind()) {
-				return sequence{}, &Error{
-					Kind:      ErrorInvalidOrder,
-					Query:     e.definition.Name(),
-					Operation: expression.Operation(),
-					Property:  property,
-					Origin:    expression.Origin(),
-				}
+			if firstKey.Kind() == "" {
+				firstKey = items[i].key
+			} else if !orderedKeysCompatible(firstKey, items[i].key) {
+				return sequence{}, e.invalidOrder(expression, property, firstKey, items[i].key)
 			}
 		}
 	}
 	if !known {
 		return sequence{}, e.unknownProperty(expression, property)
 	}
+	var sortErr error
+	var sortKeys [2]Value
 	sort.SliceStable(items, func(i, j int) bool {
 		left, right := items[i], items[j]
 		if left.set != right.set {
@@ -421,12 +418,20 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 		if !left.set {
 			return false
 		}
-		comparison := compareOrdered(left.key, right.key)
+		comparison, err := compareOrdered(left.key, right.key)
+		if err != nil {
+			sortErr = err
+			sortKeys = [2]Value{left.key, right.key}
+			return false
+		}
 		if direction == "descending" {
 			comparison = -comparison
 		}
 		return comparison < 0
 	})
+	if sortErr != nil {
+		return sequence{}, e.invalidOrder(expression, property, sortKeys[0], sortKeys[1])
+	}
 	result := sequence{columns: append([]Column(nil), source.columns...)}
 	for _, item := range items {
 		result.values = append(result.values, item.value)
@@ -487,7 +492,7 @@ func (e *executor) evaluateProject(expression queryplan.Expression) (sequence, e
 		for column, property := range properties {
 			values, present, valueErr := e.propertyValues(sym, property)
 			if valueErr != nil {
-				return sequence{}, e.featureError(expression, property)
+				return sequence{}, e.featureError(expression, property, sym)
 			}
 			known[column] = known[column] || present
 			result.cells[row][column] = Cell{
@@ -547,7 +552,7 @@ func (e *executor) declaredFeatureValues(sym *symbols.Symbol, property string) (
 			if value.Kind == symbols.FilterValueEmpty {
 				continue
 			}
-			return nil, true, e.featureError(queryplan.Expression{}, property)
+			return nil, true, e.featureError(queryplan.Expression{}, property, sym)
 		}
 		result = append(result, converted)
 	}
@@ -560,6 +565,9 @@ func isQueryableProperty(property string) bool {
 		query.PropertyType,
 		query.PropertyName,
 		query.PropertyDeclaredName,
+		query.PropertyShortName,
+		query.PropertyDeclaredShortName,
+		query.PropertyDocumentation,
 		query.PropertyQualifiedName,
 		query.PropertyOwner,
 		query.PropertyElementType,
@@ -604,6 +612,12 @@ func filterValue(value symbols.FilterValue, sym *symbols.Symbol) (Value, bool) {
 		result = StringValue(value.Str)
 	case symbols.FilterValueRef:
 		result = StringValue(value.RefFQN)
+	case symbols.FilterValueQuantity:
+		quantity, ok := semantics.QuantityOf(value)
+		if !ok {
+			return Value{}, false
+		}
+		result = QuantityValue(*quantity)
 	default:
 		return Value{}, false
 	}
@@ -697,6 +711,10 @@ func compareValue(actual Value, operator, expected string) (bool, error) {
 			return false, err
 		}
 		return compareOrdinal(compareNumeric(actual, want), operator)
+	case ValueQuantity:
+		// A bare number compares against the magnitude in the quantity's own unit.
+		magnitude, _ := actual.Magnitude()
+		return compareValue(magnitude, operator, expected)
 	default:
 		return false, errComparison
 	}
@@ -736,29 +754,35 @@ func compareOrdinal(comparison int, operator string) (bool, error) {
 	}
 }
 
-func compareOrdered(left, right Value) int {
+// compareOrdered orders two keys orderedKeysCompatible admitted; quantities
+// compare in the left key's unit.
+func compareOrdered(left, right Value) (int, error) {
 	if numericKind(left.Kind()) && numericKind(right.Kind()) {
-		return compareNumeric(left, right)
+		return compareNumeric(left, right), nil
 	}
 	if left.Kind() != right.Kind() {
-		return strings.Compare(string(left.Kind()), string(right.Kind()))
+		return strings.Compare(string(left.Kind()), string(right.Kind())), nil
 	}
 	switch left.Kind() {
+	case ValueQuantity:
+		l, _ := left.Quantity()
+		r, _ := right.Quantity()
+		return semantics.CompareMagnitudes(l, r)
 	case ValueString:
 		l, _ := left.String()
 		r, _ := right.String()
-		return strings.Compare(l, r)
+		return strings.Compare(l, r), nil
 	case ValueBoolean:
 		l, _ := left.Boolean()
 		r, _ := right.Boolean()
 		if !l && r {
-			return -1
+			return -1, nil
 		}
 		if l && !r {
-			return 1
+			return 1, nil
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 func compareNumeric(left, right Value) int {
@@ -820,11 +844,18 @@ func compareFloat(left, right float64) int {
 	return 0
 }
 
-func orderedKindsCompatible(left, right ValueKind) bool {
-	if left == right {
+// orderedKeysCompatible reports whether two sort keys are comparable: values of
+// one kind, numbers of any kind, or quantities in commensurable units.
+func orderedKeysCompatible(left, right Value) bool {
+	if left.Kind() == ValueQuantity && right.Kind() == ValueQuantity {
+		l, _ := left.Quantity()
+		r, _ := right.Quantity()
+		return l.Unit.Term.Commensurable(r.Unit.Term)
+	}
+	if left.Kind() == right.Kind() {
 		return true
 	}
-	return numericKind(left) && numericKind(right)
+	return numericKind(left.Kind()) && numericKind(right.Kind())
 }
 
 func numericKind(kind ValueKind) bool {
@@ -901,12 +932,32 @@ func (e *executor) unknownProperty(expression queryplan.Expression, property str
 	}
 }
 
-func (e *executor) featureError(expression queryplan.Expression, property string) error {
+// invalidOrder reports sort keys that cannot be ordered; two quantity keys name
+// their incommensurable units.
+func (e *executor) invalidOrder(expression queryplan.Expression, property string, first, other Value) error {
+	err := &Error{
+		Kind:      ErrorInvalidOrder,
+		Query:     e.definition.Name(),
+		Operation: expression.Operation(),
+		Property:  property,
+		Origin:    expression.Origin(),
+	}
+	if l, ok := first.Quantity(); ok {
+		if r, ok := other.Quantity(); ok {
+			err.Expected = l.Unit.String()
+			err.Actual = r.Unit.String()
+		}
+	}
+	return err
+}
+
+func (e *executor) featureError(expression queryplan.Expression, property string, sym *symbols.Symbol) error {
 	return &Error{
 		Kind:      ErrorUnevaluableFeature,
 		Query:     e.definition.Name(),
 		Operation: expression.Operation(),
 		Property:  property,
+		Target:    symbols.FQNOf(sym),
 		Origin:    expression.Origin(),
 	}
 }

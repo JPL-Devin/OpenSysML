@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -28,7 +29,7 @@ var (
 
 	// ErrDivisionByZero is returned when a division or remainder has a zero
 	// divisor. It is the answer to the expression, not a missing declaration.
-	ErrDivisionByZero = errors.New("division by zero")
+	ErrDivisionByZero = semantics.ErrDivisionByZero
 
 	// ErrMultiplicityViolation is returned when a feature value access/assignment violates multiplicity bounds.
 	ErrMultiplicityViolation = errors.New("multiplicity violation")
@@ -224,9 +225,8 @@ var (
 	ErrNotAQuantity = errors.New("not a quantity expression")
 
 	// ErrIncommensurableUnits is returned when an operation combines quantities
-	// whose units measure different things, or whose conversion is not derivable
-	// from the library. It is never answered by comparing magnitudes.
-	ErrIncommensurableUnits = errors.New("incommensurable units")
+	// whose units measure different things; see semantics.ErrIncommensurableUnits.
+	ErrIncommensurableUnits = semantics.ErrIncommensurableUnits
 
 	// ErrUnitRoot is returned when the root of a quantity is taken whose unit
 	// has none: `sqrt(9 [m])`, since no unit squares to a metre.
