@@ -959,8 +959,8 @@ is all. The vendored OMG files stay byte-identical, so the missing signatures ar
 declared in a clearly non-normative OpenSysML extension instead:
 `internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. It
 is bundled by the same `embed.FS` as the vendored tree and enters the same
-gates — the current bundled-library gate reports 97/97 clean, including this, the
-`DocumentQueries` extension and the `IdentityMetadata` extension. It is OpenSysML code under
+gates — the current bundled-library gate reports 98/98 clean, including this, the
+`DocumentQueries`, `IdentityMetadata` and `OOSEM` extensions. It is OpenSysML code under
 Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
 the subdirectory out of the OMG notice.
 
@@ -1746,7 +1746,7 @@ per-prefix conformance breakdown and the trace, fixture, negative and robustness
 there, and every other page links here rather than restating them (CONTRIBUTING.md).
 
 **Quality Gates:**
-- Parser: 97/97 stdlib files clean (94 vendored OMG, 3 OpenSysML extensions)
+- Parser: 98/98 stdlib files clean (94 vendored OMG, 4 OpenSysML extensions)
 - Execution conformance: every case passing, with `known_failures.txt` empty
 - Training examples: 100/100 clean (no files recorded in `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
