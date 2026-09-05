@@ -89,7 +89,7 @@ func TestInteractionInheritsLinkAndPerformanceMembers(t *testing.T) {
 		step redefines subperformances;
 	}
 	interaction Three {
-		end a : T; end b : T; end c : T;
+		end a : T[1]; end b : T[1]; end c : T[1];
 		feature redefines participant : T[3];
 		step redefines subperformances;
 	}

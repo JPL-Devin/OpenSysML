@@ -9,9 +9,11 @@ import (
 
 // TestEndFeatureKeepsItsEndModifier covers the `end` features a connection or
 // interface definition declares (SysML v2 7.13.2): every spelling of the
-// modifier — with or without an early multiplicity, with or without a kind
+// modifier — with or without a crossing multiplicity, with or without a kind
 // keyword — yields a usage marked as an end, since the semantic tier matches
-// the ends of a connect clause against them by position.
+// the ends of a connect clause against them by position. The `[m]` right after
+// `end` is the anonymous cross feature's (SysML.xtext OwnedCrossFeatureMember),
+// not the end's own multiplicity.
 func TestEndFeatureKeepsItsEndModifier(t *testing.T) {
 	code := `
 connection def PressureSeat {
@@ -33,9 +35,9 @@ connection def PressureSeat {
 		t.Fatalf("expected a Definition, got %T", file.Members[0].(*ast.Membership).Member)
 	}
 	want := []string{"bead", "rim", "supplierPort", "shortNamed", "consumerPort"}
-	// The two ends written with an early multiplicity must keep it, whether or
-	// not a kind keyword follows it.
-	withMultiplicity := map[string]bool{"bead": true, "rim": true}
+	// The two ends written with a crossing multiplicity must keep it on their
+	// cross feature, whether or not a kind keyword follows it.
+	withCrossing := map[string]bool{"bead": true, "rim": true}
 	if len(def.Members) != len(want) {
 		t.Fatalf("expected %d members, got %d", len(want), len(def.Members))
 	}
@@ -50,8 +52,12 @@ connection def PressureSeat {
 		if !u.IsEnd {
 			t.Fatalf("%s: IsEnd = false, want true", name)
 		}
-		if got := u.Multiplicity != nil; got != withMultiplicity[name] {
-			t.Fatalf("%s: has multiplicity = %v, want %v", name, got, withMultiplicity[name])
+		if u.Multiplicity != nil {
+			t.Fatalf("%s: has an own multiplicity, want none", name)
+		}
+		got := u.CrossFeature != nil && u.CrossFeature.Ident.Name == "" && u.CrossFeature.Multiplicity != nil
+		if got != withCrossing[name] {
+			t.Fatalf("%s: has an anonymous cross feature with a multiplicity = %v, want %v", name, got, withCrossing[name])
 		}
 	}
 	if bead := def.Members[0].(*ast.Membership).Member.(*ast.Usage); bead.Kind != ast.UsagePart {

@@ -348,7 +348,9 @@ elmt:EndPrefixMetadata__Derivation__cause
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:type elmt:EndPrefixMetadata__Req1 ;
-    sysml:upperBound expr:EndPrefixMetadata__Derivation__cause_pupperBound ;
+    sysml:ownedMember elmt:EndPrefixMetadata__Derivation__cause___400 ;
+    sysml:ownedMembership elmt:EndPrefixMetadata__Derivation__cause___400_om ;
+    sysml:ownedRelationship elmt:EndPrefixMetadata__Derivation__cause___400_om ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        end [*] ref cause : Req1;\n" .
 
@@ -364,10 +366,31 @@ elmt:EndPrefixMetadata__Derivation__cause_om
     sysml:ownedMemberFeature elmt:EndPrefixMetadata__Derivation__cause ;
     sysml:owningType elmt:EndPrefixMetadata__Derivation .
 
-expr:EndPrefixMetadata__Derivation__cause_pupperBound
+elmt:EndPrefixMetadata__Derivation__cause___400
+    a sysml:ReferenceUsage ;
+    sysml:qualifiedName "EndPrefixMetadata::Derivation::cause::@0" ;
+    sysml:elementId "EndPrefixMetadata__Derivation__cause___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:EndPrefixMetadata__Derivation__cause ;
+    sysml:owner elmt:EndPrefixMetadata__Derivation__cause ;
+    sysml:owningRelationship elmt:EndPrefixMetadata__Derivation__cause___400_om ;
+    sysml:owningMembership elmt:EndPrefixMetadata__Derivation__cause___400_om ;
+    sysml:upperBound expr:EndPrefixMetadata__Derivation__cause___400_pupperBound .
+
+elmt:EndPrefixMetadata__Derivation__cause___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "EndPrefixMetadata__Derivation__cause___400_om" ;
+    sysml:owner elmt:EndPrefixMetadata__Derivation__cause ;
+    sysml:memberElement elmt:EndPrefixMetadata__Derivation__cause___400 ;
+    sysml:ownedMemberElement elmt:EndPrefixMetadata__Derivation__cause___400 ;
+    sysml:ownedRelatedElement elmt:EndPrefixMetadata__Derivation__cause___400 ;
+    sysml:owningRelatedElement elmt:EndPrefixMetadata__Derivation__cause ;
+    sysml:membershipOwningNamespace elmt:EndPrefixMetadata__Derivation__cause .
+
+expr:EndPrefixMetadata__Derivation__cause___400_pupperBound
     a sysml:LiteralInfinity ;
     sysx:sourceText "*" ;
-    sysml:elementId "EndPrefixMetadata__Derivation__cause_pupperBound" .
+    sysml:elementId "EndPrefixMetadata__Derivation__cause___400_pupperBound" .
 
 elmt:EndPrefixMetadata__Derivation__effect
     a sysml:AttributeUsage ;

@@ -1330,6 +1330,17 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		if d.boolOf(el, rdf.SysML+flag.property) {
 			words = append(words, flag.keyword)
 		}
+		// The cross feature an end owns is written right after `end`
+		// (SysML.xtext EndUsagePrefix `'end' OwnedCrossFeatureMember?`).
+		if flag.property == "isEnd" {
+			if cross := d.ownedCrossFeature(el); cross != nil {
+				crossWords, err := d.crossFeatureWords(cross)
+				if err != nil {
+					return "", err
+				}
+				words = append(words, crossWords...)
+			}
+		}
 	}
 	// Prefix metadata ends the usage prefix, ahead of the kind keyword
 	// (SysML.xtext UsagePrefix `UnextendedUsagePrefix UsageExtensionKeyword*`);
@@ -2079,15 +2090,69 @@ func (d *decoder) unwrittenPrefix(el *element) error {
 }
 
 // bodyChildren returns the members written in an element's body: every child
-// but the prefix annotations its head writes.
+// but the prefix annotations and the cross feature its head writes.
 func (d *decoder) bodyChildren(el *element) []*element {
+	cross := d.ownedCrossFeature(el)
 	var out []*element
 	for _, child := range el.children {
-		if d.metadataSigil(child) != "#" {
+		if child != cross && d.metadataSigil(child) != "#" {
 			out = append(out, child)
 		}
 	}
 	return out
+}
+
+// ownedCrossFeature is the feature an end owns through a plain OwningMembership
+// (KerML.xtext OwnedCrossingFeatureMember), as FeatureUtil.getOwnedCrossFeatureOf finds it.
+func (d *decoder) ownedCrossFeature(el *element) *element {
+	if !d.boolOf(el, rdf.SysML+"isEnd") || !ontology.IsAncestorOrSelf(el.metaclass, "Feature") {
+		return nil
+	}
+	for _, child := range el.children {
+		if child.metaclass == usageMetaclass[ast.UsageMetadata] || !ontology.IsAncestorOrSelf(child.metaclass, "Feature") {
+			continue
+		}
+		if m, owned := d.owningMembership[child.iri]; owned && d.metaclass(rdf.IRI(m.iri)) == mOwningMembership {
+			return child
+		}
+	}
+	return nil
+}
+
+// crossFeatureWords writes an end's cross feature after `end`: name, multiplicity
+// and specializations, typing spelled `typed by` since `:` there is the end's own.
+func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
+	if len(cross.children) > 0 || d.boolOf(cross, rdf.OpenSysML+xHasBody) || len(identityAnnotations(cross)) > 0 {
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
+			Note: "it is written in the head of the end that owns it, which has no place for a body or an identity annotation",
+		}
+	}
+	words := d.identWords(cross)
+	mult := d.multiplicityText(cross)
+	switch {
+	case len(words) > 0:
+		words[len(words)-1] += mult
+	case mult != "":
+		words = append(words, mult)
+	default:
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
+			Note: "it declares neither a name nor a multiplicity, and one or the other introduces a cross feature ahead of its end",
+		}
+	}
+	typed, err := d.referenceList(cross, rdf.SysML+relationshipProperty[ast.RelTyping])
+	if err != nil {
+		return nil, err
+	}
+	if len(typed) > 0 {
+		words = append(words, "typed by", strings.Join(typed, ", "))
+	}
+	relationships, err := d.relationshipWords(cross, "", ast.RelTyping)
+	if err != nil {
+		return nil, err
+	}
+	return append(words, relationships...), nil
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the

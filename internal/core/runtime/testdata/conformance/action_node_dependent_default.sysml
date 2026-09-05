@@ -9,10 +9,10 @@ package test {
 		in a : Integer;
 		in b : Integer = a * 2;
 		in c : Integer = a + b;
-		return total : Integer;
+		out result : Integer;
 
 		first step;
-		action step { assign total := a + b + c; }
+		action step { assign result := a + b + c; }
 	}
 
 	action outer {

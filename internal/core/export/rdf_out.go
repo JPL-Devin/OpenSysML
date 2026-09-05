@@ -385,8 +385,43 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 		if err := e.collectPrefixes(node, fqn, len(e.kept(children))); err != nil {
 			return err
 		}
+		if err := e.collectCrossFeature(node, fqn); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// collectCrossFeature records the name of the cross feature an end declares
+// ahead of itself (`end x1 [m] feature x`), which it owns after its prefixes.
+func (e *encoder) collectCrossFeature(node ast.Node, owner string) error {
+	u, ok := node.(*ast.Usage)
+	if !ok || u.CrossFeature == nil {
+		return nil
+	}
+	cross := u.CrossFeature
+	fqn := qualify(owner, cross.Ident.Name, e.crossFeatureIndex(u))
+	if e.declared[fqn] {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the cross feature at %s", e.where(cross)),
+			Note: fmt.Sprintf("it is identified as %s, which a body member is named too, and merging two elements into one subject would be a different model", fqn),
+		}
+	}
+	e.fqn[cross] = fqn
+	e.declared[fqn] = true
+	return nil
+}
+
+// crossFeatureIndex is the position an end's cross feature takes among the
+// members it owns: after its kept body members and its prefix annotations.
+func (e *encoder) crossFeatureIndex(u *ast.Usage) int {
+	index := len(e.kept(bodyMembers(u)))
+	for _, prefix := range u.Prefixes {
+		if prefix != nil && !e.ids.skip(prefix) {
+			index++
+		}
+	}
+	return index
 }
 
 // collectPrefixes records the names of a declaration's `#M` prefix annotations,
@@ -543,7 +578,8 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 		if !isRelationship(e.metaclassOf(ownerTerm)) {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
 		}
-		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm))
+		_, crossing := node.(*ast.CrossFeatureMember)
+		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm), crossing)
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {
 		// The membership states the visibility a member is declared with; a
@@ -681,8 +717,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, owner, ast.OwnRelationships(n))
 		e.multiplicity(subject, owner, n.Multiplicity)
+		if err := e.crossFeature(subject, fqn, n); err != nil {
+			return err
+		}
 		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage states its ends
@@ -877,8 +916,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 // membership stands between the two. The API's payloads reach a member through
 // its membership, so a compact owner triple alone leaves a client walking down
 // from a root with nothing to follow. result marks a body's result expression,
-// which a ResultExpressionMembership owns; variant a usage a VariantMembership owns.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant bool) rdf.Term {
+// which a ResultExpressionMembership owns; variant a usage a VariantMembership
+// owns; crossing the cross feature an end owns through a plain OwningMembership.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant, crossing bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	// A metadata usage annotates its owner through an OwningMembership whatever
 	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
@@ -918,8 +958,9 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
 	// A variant is a member of its variation, not a feature of it: the metamodel
-	// owns it through a VariantMembership, which is an OwningMembership.
-	if variant {
+	// owns it through a VariantMembership, which is an OwningMembership. An end's
+	// cross feature is owned the same way (KerML.xtext OwnedCrossingFeatureMember).
+	if variant || crossing {
 		feature = false
 	}
 	metaclass := mOwningMembership
@@ -1241,6 +1282,31 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 		}
 		index++
 	}
+	return nil
+}
+
+// crossFeature maps the cross feature an end declares ahead of itself as a feature
+// it owns through an OwningMembership (KerML.xtext OwnedCrossingFeature).
+func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error {
+	cross := n.CrossFeature
+	if cross == nil {
+		return nil
+	}
+	crossFQN := e.fqn[cross]
+	crossSubject, err := e.mint(cross, crossFQN)
+	if err != nil {
+		return err
+	}
+	metaclass := "Feature"
+	if e.file.Kind() != source.KindKerML {
+		metaclass = keywordMetaclass["ref"]
+	}
+	// The cross feature is written in the end's head, so its text is the end's.
+	e.head(crossSubject, memberHead{node: cross, visibility: ast.VisibilityDefault, fqn: crossFQN,
+		owner: subject, index: e.crossFeatureIndex(n), metaclass: rdf.SysMLTerm(metaclass), inline: true})
+	e.ident(crossSubject, cross.Ident)
+	e.relationships(crossSubject, fqn, cross.Relationships)
+	e.multiplicity(crossSubject, fqn, cross.Multiplicity)
 	return nil
 }
 

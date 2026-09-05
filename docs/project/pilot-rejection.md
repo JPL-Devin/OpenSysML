@@ -111,7 +111,7 @@ systematically from four sources, one subdirectory each:
    pilot's grammar rejects before its validator would), and a constructed payload whose `new`
    names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 234
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 239
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-253 case(s): 244 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+256 case(s): 247 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 89 | 89 | 0 | 0 | 0 |
-| semantic | 121 | 112 | 0 | 9 | 0 |
+| semantic | 124 | 115 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -190,7 +190,9 @@ second result expression under the same one-result rule), and to 246 with `s85` 
 requirement and so a constraint, inheriting result expressions from two generals), and to 253 with the seven KerML census cases (`k45`–`k49`, `s86`, `s87`:
 an annotating element annotating itself, a three-ended binding, a conjugated feature or structure
 without its type or default supertype, a chain through an alias to another type's feature, and
-an `end` with a direction or a derived/abstract modifier), all landing both-reject.
+an `end` with a direction or a derived/abstract modifier), all landing both-reject, and to 256 with the end-feature rules (`k50`, an end that declares its
+cross feature inline and also `crosses` another; `k51`, a `return` parameter owned by a classifier;
+`k52`, a type with two conjugators).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
@@ -233,7 +235,7 @@ when it was first written, six were closed by the validation work itself — `p0
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 234 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 239 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -317,16 +319,21 @@ isolate it. The reason is recorded so a later round does not repeat the search.
   `validateAnnotationAnnotatedElementOwnership` (the grammar produces annotations only in the
   owned-or-owning shapes the constraints require), `validateFeatureHasType` (with the library
   loaded every feature gets an implicit type; the library-less Xpect negative is noted under
-  `xpect/` above), `validateTypeAtMostOneConjugator`, and the operator-name constraints for
+  `xpect/` above), and the operator-name constraints for
   collect, select, index and feature-chain expressions (the parser fixes the operator name).
+  `validateTypeAtMostOneConjugator` was listed here until `k45` (`classifier C ~A ~B;`): the
+  pilot grammar rejects the second `~` as a syntax error, so the named constraint never fires
+  there, while OpenSysML parses the form and reports it as a constraint error.
 - Guarded by the grammar: `validateFlowItemFeature` (a flow declaration admits one payload),
   `validateEndFeatureMembershpIsEnd` (the pilot's spelling), `validateFeatureEndNoDirection`,
   `validateFeatureEndNotDerivedAbstractCompositeOrPortion` (an `end` prefix excludes the
   conflicting prefixes), `validateMultiplicityRangeBounds` (bound order and ownership),
   `validateParameterMembershipOwningType`, `validateParameterMembershipDirection`,
-  `validateReturnParameterMembershipOwningType`, `validateResultExpressionMembershipOwningType`
+  `validateResultExpressionMembershipOwningType`
   (parameter and result memberships cannot be spelled outside a behavior, step, function or
-  expression), `validateConstructorExpressionOwnedFeatures`,
+  expression; `validateReturnParameterMembershipOwningType` was listed with them until `k44`,
+  `return` in a classifier body, which the pilot rejects at the grammar and OpenSysML parses and
+  reports as a constraint error), `validateConstructorExpressionOwnedFeatures`,
   `validateInvocationExpressionOwnedFeatures`, `validateInstantiationExpressionInstantiatedType`,
   `validateInstantiationExpressionResult`, `validateFeatureReferenceExpressionResult`,
   `validateFlowEndIsEnd`, `validateFlowEndNestedFeature` and `validateFlowEndOwningType` (the

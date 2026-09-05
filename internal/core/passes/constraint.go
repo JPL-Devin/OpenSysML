@@ -92,6 +92,9 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
 	cc.checkAtMostOneMember(sym)
+	cc.checkReturnParameterOwner(sym)
+	cc.checkAtMostOneConjugator(sym)
+	cc.checkFeatureEndFeatureMultiplicity(sym)
 }
 
 // checkFlowEndSubsetting requires each declared flow end to name a payload

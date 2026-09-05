@@ -191,6 +191,43 @@ func (e *ActionExecutor) validateSubflows(graph *lower.ActionGraph) error {
 	return nil
 }
 
+// checkResultParameters refuses an action, or a node of its flow, declaring a
+// `return` parameter — only a function or expression owns one.
+func (e *ActionExecutor) checkResultParameters() error {
+	for _, param := range e.ctx.model.BehaviorParametersOf(e.action) {
+		if param.IsResult {
+			return fmt.Errorf("%w: action %s declares `return %s`; write `out %s`",
+				ErrActionResultParameter, symbolText(e.action), param.Symbol.Name, param.Symbol.Name)
+		}
+	}
+	return e.checkNodeResultParameters(e.graph)
+}
+
+func (e *ActionExecutor) checkNodeResultParameters(graph *lower.ActionGraph) error {
+	if graph == nil {
+		return nil
+	}
+	for _, node := range graph.Nodes {
+		for _, f := range graph.Features[node] {
+			if f.IsResult {
+				return fmt.Errorf("%w: action node %s declares `return %s`; write `out %s`",
+					ErrActionResultParameter, ActionNodeName(node), f.Name, f.Name)
+			}
+		}
+		if sub, owns := e.subflowOf(graph, node); owns && sub.Graph != nil {
+			if err := e.checkNodeResultParameters(sub.Graph); err != nil {
+				return err
+			}
+		}
+		for _, block := range lower.BlockFlows(graph.Bodies[node]) {
+			if err := e.checkNodeResultParameters(block); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // subflowNodeNames returns the names of the nodes of every flow nested under
 // graph — the flows its nodes own and the block flows their bodies state — so
 // a debugger can break on a step of a nested flow.

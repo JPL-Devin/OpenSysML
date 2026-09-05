@@ -403,7 +403,7 @@
     {
       "name": "validateFeatureEndFeatureMultiplicity",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureEndIsConstant",
@@ -878,7 +878,7 @@
     {
       "name": "validateReturnParameterMembershipOwningType",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSatisfyRequirementUsageReference",
@@ -1030,7 +1030,7 @@
     {
       "name": "validateTypeAtMostOneConjugator",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeDifferencingTypesNotSelf",
