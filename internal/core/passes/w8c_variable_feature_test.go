@@ -14,7 +14,7 @@ func w8cVariableFeatureMessages(t *testing.T, name, src string) map[string]int {
 	got := make(map[string]int)
 	for _, d := range w8cLibraryDiagnostics(t, name, src) {
 		switch d.Message {
-		case msgInitialValueNotVariable, msgConstantNotVariable, msgVariableFeatureOwner:
+		case msgInitialValueNotVariable, msgConstantNotVariable, msgVariableFeatureOwner, msgPortionFeatureVariable:
 			got[d.Message]++
 		}
 	}
@@ -124,12 +124,31 @@ func TestW8CConstantIsVariableKerML(t *testing.T) {
 	class C {
 		const feature k : C;
 		const feature j : C := null;
+		portion const feature pc : C;
+		portion feature pp : C;
 	}
+	datatype D {
+		const feature a : D;
+		const feature b : D = null;
+		const feature c : D := null;
+	}
+	struct S { const feature s : S; }
+	assoc struct AS { const end feature a; const end feature b; var feature v : C; }
+	assoc A { end feature a; end feature b; var feature v : C; }
+	behavior B { in const feature p : C; }
+	const feature top : C;
 }`
-	// KerML `const` implies `var`, so a constant feature is never non-variable.
+	// KerML `const` implies `var`: a constant feature is never non-variable, and it
+	// is owned by an occurrence type and is no portion like any variable feature.
 	got := w8cVariableFeatureMessages(t, "<t>.kerml", src)
-	if len(got) != 0 {
-		t.Errorf("want silence, got %v", got)
+	if got[msgVariableFeatureOwner] != 5 {
+		t.Errorf("want five %q (D::a, D::b, D::c, A::v, top), got %v", msgVariableFeatureOwner, got)
+	}
+	if got[msgPortionFeatureVariable] != 1 {
+		t.Errorf("want one %q (C::pc), got %v", msgPortionFeatureVariable, got)
+	}
+	if got[msgConstantNotVariable] != 0 || got[msgInitialValueNotVariable] != 0 {
+		t.Errorf("unexpected constant or initial messages in %v", got)
 	}
 }
 

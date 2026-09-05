@@ -64,7 +64,8 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 		if derivable && u.IsConstant && !model.FeatureIsVariable(sym) {
 			report(u.Span(), msgConstantNotVariable, "constant-feature-not-variable")
 		}
-		if !u.IsVariable {
+		// KerML `const` declares a variable feature too; SysML's `constant` does not.
+		if !u.IsVariable && !(u.IsConstant && ctx.Kind == source.KindKerML) {
 			return
 		}
 		if u.IsPortion {
