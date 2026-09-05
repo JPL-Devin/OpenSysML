@@ -190,6 +190,43 @@ func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 	}
 }
 
+// TestW7GACastAndBodyEnumeratedValuesAreTyped: `x as T` types the value as T
+// (through an alias too) and an expression body `{ … }` as an Evaluation, so
+// neither escapes the check as Anything (pilot 2026-07 agrees line for line).
+func TestW7GACastAndBodyEnumeratedValuesAreTyped(t *testing.T) {
+	const src = `package T {
+		private import ScalarValues::*;
+		attribute def A;
+		attribute a0 : A;
+		attribute r0 : Real;
+		alias Rl for Real;
+		enum def Wrong {
+			a = {in r : Real; r > 1.0};
+			b = r0 as Real;
+			c = a0 as A;
+			d = r0 as Integer;
+			e = r0 as Rl;
+		}
+		enum def Num :> Real {
+			ok1 = r0 as Real;
+			ok2 = r0 as Rl;
+			f = r0 as Integer;
+			g = {in r : Real; r > 1.0};
+		}
+	}`
+	var got []string
+	for _, d := range only(libraryTypeDiags(t, src), "one-type") {
+		if d.Message != oneTypeUsageMessages[ast.UsageEnumeration] {
+			t.Fatalf("unexpected message %q", d.Message)
+		}
+		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
+	}
+	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("cast/body enumerated values typed outside their enumeration: got %v, want %v", got, want)
+	}
+}
+
 // TestW7GASelectedEnumeratedValueKeepsItsOperandType: `xs.?{…}` keeps the
 // elements of xs, so it types the value as xs is typed — through a chain, an
 // alias, a feature typed only by its own value or subsetting/redefining one, a
