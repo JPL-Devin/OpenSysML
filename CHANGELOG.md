@@ -50,6 +50,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- Fully-qualified names no longer carry empty segments for unnamed enclosing elements (`Mid::inner`, never `Mid::::inner`), so name resolution stops re-normalizing every name it looks up: loading a real 28-file model allocates about 37% fewer objects and 8% less memory.
+
 - **The validation-constraint census gate now verifies the evidence each row cites, not only that the cited files exist.** `go run ./cmd/validation-census -check` requires every implemented row's `Implementation` cell to cite at least one `internal/….go:function` location and fails when a citation is not repository-relative (`file.go:function`), when the named Go file declares no such function or method (methods on generic receivers count) or when the citation runs past the method (`Type.method.extra`); it reads every listed negative case and fails when its header names no constraint or when the header's `pilot validate…` token (or the specification constraint cited before it) attributes the rejection to a different constraint, when the case's pilot-rejection bucket is not a rejection at all (`both-accept`, or a value the referee does not record) or contradicts the row's status (a faithful row citing a case only the pilot rejects, a not-implemented row citing a case only OpenSysML rejects, an unknown row citing any case), or when a corpus case attributed to a constraint is missing from that constraint's row. Two stale implementation references and fourteen rows whose evidence had never been recorded were corrected by the first run; three pilot-suite cases (`p13`, `p17`, `p19`) listed under a neighbouring constraint moved to the row the pinned pilot actually reports, and five pilot-suite headers now name that constraint beside the fixture they derive from.
 
 - **The conformance records under `docs/project/` are consolidated and renamed.** Seven historical
@@ -78,6 +80,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   links to the guide chapter and lists every client's API reference beside it.
 
 ### Fixed
+
+- State machines with time-triggered transitions (`accept after d`, `accept at t`) ran about three times slower than before the trigger argument's type was checked at runtime: the check re-derived the argument's static type on every state entry. The verdict is now judged once per transition the first time its state is entered and reused thereafter, restoring the previous execution speed and allocation volume; a wrong-typed argument is still refused on state entry exactly as before.
 
 - **An alias declared in a calc or action body is not executed.** `alias b for a;` inside a behavior body was lowered as a statement and failed the calculation with "not executable"; it is now a declaration like any other.
 
