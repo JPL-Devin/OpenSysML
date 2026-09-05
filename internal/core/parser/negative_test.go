@@ -45,6 +45,10 @@ func TestNegative(t *testing.T) {
 		// A specialization after `return` names what the result subsets.
 		{"calc_return_subsets_no_target", "calc def C { return :> = 1; }"},
 		{"calc_return_named_subsets_no_target", "calc def C { return r :> = 1; }"},
+		// A short name must be closed before the member's declaration tail.
+		{"calc_short_name_unclosed", "calc def C { <s x = 1; }"},
+		{"calc_short_name_empty", "calc def C { <> x = 1; }"},
+		{"part_short_name_unclosed", "part def P { <s :> x = 1; }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
 		{"calc_while_unclosed_body", "calc def C { while i < 2 { i = i + 1; }"},
 		{"calc_for_no_variable", "calc def C { for in xs { } }"},

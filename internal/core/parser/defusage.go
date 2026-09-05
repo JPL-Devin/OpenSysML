@@ -546,11 +546,20 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 
 // keywordlessFeatureAt reports whether the tokens from offset off declare a
 // feature with no kind keyword (KerML.xtext Feature over BasicFeaturePrefix
-// FeatureDeclaration): a name followed by a specialization, a multiplicity, a
-// body, or nothing at all.
+// FeatureDeclaration): an identification (`<s>`? name?, at least one of them)
+// followed by a specialization, a multiplicity, a body, or nothing at all.
 func (p *Parser) keywordlessFeatureAt(off int) bool {
+	if p.peekN(off).Kind == lexer.Lt {
+		if !isNameToken(p.peekN(off+1).Kind) || p.peekN(off+2).Kind != lexer.Gt {
+			return false
+		}
+		off += 3
+		if !isNameToken(p.peekN(off).Kind) {
+			return p.keywordlessDeclarationTailAt(off)
+		}
+	}
 	t := p.peekN(off)
-	if t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+	if !isNameToken(t.Kind) {
 		return false
 	}
 	// KerML reserves `var`, so it prefixes a declaration and never names one.
@@ -558,11 +567,17 @@ func (p *Parser) keywordlessFeatureAt(off int) bool {
 		p.src.Text(t.Span) == varPrefixWord {
 		return false
 	}
-	switch next := p.peekN(off + 1); next.Kind {
+	return p.keywordlessDeclarationTailAt(off + 1)
+}
+
+// keywordlessDeclarationTailAt reports whether the token off positions ahead
+// continues a keyword-less feature declaration after its identification.
+func (p *Parser) keywordlessDeclarationTailAt(off int) bool {
+	switch next := p.peekN(off); next.Kind {
 	case lexer.LBracket, lexer.Semicolon, lexer.LBrace:
 		return true
 	default:
-		return beginsDeclarationTail(next, p.peekN(off+2))
+		return beginsDeclarationTail(next, p.peekN(off+1))
 	}
 }
 

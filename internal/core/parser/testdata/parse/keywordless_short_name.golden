@@ -1,0 +1,110 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ShortNamedDefaultReferenceUsages" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<a> alpha" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<b>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=alpha
+            (*ast.QualifiedName))
+          (LiteralInteger value="2")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Tank"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="level" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<l> limit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="10.0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<f>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=limit
+                (*ast.QualifiedName))
+              (LiteralReal value="5.0")))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="bounded" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+              (Membership visibility="default"
+                (Usage kind="attribute" name="<c> ceiling" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (FeatureReference name="limit")))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="<g>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="subsets" target=ceiling
+                    (*ast.QualifiedName))
+                  (OperatorExpr operator="+"
+                    (FeatureReference name="ceiling")
+                    (LiteralReal value="1.0"))))
+              (ConstraintMember assert=true negated=false
+                (OperatorExpr operator="<"
+                  (FeatureReference name="level")
+                  (FeatureReference name="ceiling")))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Affine"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<t> twice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="*"
+                (FeatureReference name="n")
+                (LiteralInteger value="2"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<o> offset" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<u>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=twice
+                (*ast.QualifiedName))
+              (LiteralInteger value="4")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<v>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
+              (Relationship kind="subsets" target=offset
+                (*ast.QualifiedName))
+              (LiteralInteger value="2")))
+          (OperatorExpr operator="+"
+            (FeatureReference name="twice")
+            (FeatureReference name="offset"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Sum"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="1")))
+          (WhileLoopActionNode kind="while" variable=""
+            (OperatorExpr operator="<="
+              (FeatureReference name="i")
+              (FeatureReference name="n"))
+            (Usage kind="attribute" name="<d> doubled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="*"
+                (FeatureReference name="i")
+                (LiteralInteger value="2")))
+            (Usage kind="attribute" name="<e>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=doubled
+                (*ast.QualifiedName))
+              (FeatureReference name="doubled"))
+            (*ast.AssignmentActionNode)
+            (*ast.AssignmentActionNode))
+          (FeatureReference name="total")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Step"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<z> z" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<w>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=z
+                (*ast.QualifiedName))
+              (LiteralInteger value="2"))))))))
