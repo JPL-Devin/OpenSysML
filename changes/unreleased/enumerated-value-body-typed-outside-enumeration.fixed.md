@@ -1,0 +1,1 @@
+- **An enumerated value whose value is an expression body is typed outside its enumeration.** `enum def E { a = { 1 + 2 }; }` types `a` by `Performances::Evaluation`, a second type beside `E`, and is now reported as the reference implementation reports it; the body was previously invisible to the one-type rule.
