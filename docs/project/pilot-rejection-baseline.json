@@ -28,7 +28,7 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 234,
-        "digest": "sha256:61c9fd1f7ea5f1cdce45f9544587756ca368657736b3fd08e9170d2998640027"
+        "digest": "sha256:bf10876d5dd3cdfcdc7cdca28724117b5f9a11795c1fbcb9a599fdd6e54f4e2e"
       }
     ],
     "recorded": "2026-09-05"
@@ -1416,7 +1416,7 @@
     {
       "path": "semantic/k40-metadata-typed-by-class.kerml",
       "source": "semantic",
-      "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
+      "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadataNotAbstract, because its grammar links `@M` only to a metaclass (KerML.xtext MetadataTyping), so the unlinked feature keeps only the implicit abstract Metaobject type).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
