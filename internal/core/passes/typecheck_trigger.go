@@ -62,6 +62,10 @@ func (c *triggerArgumentChecker) walk(scope *symbols.Scope, members []ast.Node) 
 			}
 		case *ast.TransitionMember:
 			c.check(scope, n.Trigger)
+		case *ast.DeferMember:
+			for _, trigger := range n.Triggers {
+				c.check(scope, trigger)
+			}
 		}
 		w.Decl(scope, node)
 	}
