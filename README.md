@@ -345,9 +345,56 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
-binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
-Windows binaries are not Authenticode signed; see
-[docs/project/macos-distribution.md](docs/project/macos-distribution.md).
+binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized; see
+[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries are
+Authenticode signed through [SignPath Foundation](https://signpath.org) once the project's
+application is approved; the signed files are published as separate `*-signed*` assets beside
+the unsigned ones that `SHA256SUMS.txt` covers. See the [Code signing policy](#code-signing-policy).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+The Windows binaries (`sysml.exe`, `sysml-lsp.exe`, `sysml-grpc.exe`) of a tagged release are
+built by the GitHub Actions workflow
+[`.github/workflows/release-windows.yml`](.github/workflows/release-windows.yml) from the
+tagged commit of this repository and submitted to SignPath for signing from that workflow, so
+every signed file traces back to a public commit and a public build log. The signed files are
+published on the GitHub release as `sysml-windows-amd64-signed.zip`,
+`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe` and
+`opensysml-windows-amd64-signed.zip`, with their digests in `SHA256SUMS-windows-signed.txt`.
+Every signed executable carries `ProductName` `OpenSysML` and the release tag as
+`ProductVersion`/`FileVersion`. Signing is not in effect until the project's SignPath
+application is approved; releases made before that carry only unsigned Windows assets.
+
+**Team roles**
+
+- **Authors** may commit to this repository without additional review:
+  [`@Open-MBEE/opensysml-authors`](https://github.com/orgs/Open-MBEE/teams/opensysml-authors).
+- **Reviewers** review all pull requests from non-committers before they are merged:
+  [`@Open-MBEE/opensysml-reviewers`](https://github.com/orgs/Open-MBEE/teams/opensysml-reviewers).
+- **Approvers** approve each signing request in SignPath before a certificate is applied; a
+  release ships no signed Windows binaries without that manual approval:
+  [`@Open-MBEE/opensysml-approvers`](https://github.com/orgs/Open-MBEE/teams/opensysml-approvers)
+  and the [owners of the Open-MBEE organization](https://github.com/orgs/Open-MBEE/people?query=role%3Aowner).
+
+All Authors, Reviewers and Approvers must have multi-factor authentication enabled on their
+GitHub accounts and on their SignPath accounts.
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it.
+
+In particular, none of `sysml`, `sysml-lsp` and `sysml-grpc` checks for updates, collects
+telemetry or downloads anything on its own. The only network activity any of them performs is
+what the operator asks for by name: `sysml-lsp` speaks only over its standard input and output,
+`sysml-grpc` serves the address it is started with and answers only the clients that connect to
+it, and `sysml -sync-diff` / `sysml -sync-apply` contact a SysML v2 API / Flexo MMS repository
+only when the operator names that endpoint's `http://` or `https://` URL on the command line.
+The OMG pilot corpora and reference tools used by the test suite are fetched by developer
+scripts under `scripts/`, which are not part of the shipped binaries.
 
 ## Building
 
