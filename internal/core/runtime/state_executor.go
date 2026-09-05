@@ -102,6 +102,9 @@ type StateExecutor struct {
 	// timerScheduled holds the time-triggered transitions whose timer is already
 	// running, so a state's timer is not restarted while it stays active.
 	timerScheduled map[*lower.Transition]bool
+	// timeTriggerVerdict caches, per time-triggered transition, whether its
+	// argument's static type was accepted (nil) or the error refusing it.
+	timeTriggerVerdict map[*lower.Transition]error
 
 	// changeFired holds the change-triggered transitions already taken on a
 	// condition that has stayed true, so an unchanged one does not re-fire.
@@ -166,23 +169,24 @@ func newStateExecutorForOccurrence(
 	}
 
 	exec := &StateExecutor{
-		ctx:            ctx,
-		stateMachine:   stateMachine,
-		self:           self,
-		occurrence:     occurrence,
-		state:          StateReady,
-		graph:          graph,
-		currentTime:    0.0,
-		nextEventID:    1,
-		eventQueue:     NewEventQueue(),
-		stateData:      make(map[string]Value),
-		stateAttrs:     make(map[*ast.StateNode]map[string]Value),
-		stateVisits:    make([]string, 0),
-		stateStack:     make([]*ast.StateNode, 0),
-		history:        make(map[*ast.StateNode]*historyRecord),
-		deferred:       make([]Event, 0),
-		timerScheduled: make(map[*lower.Transition]bool),
-		changeFired:    make(map[*lower.Transition]bool),
+		ctx:                ctx,
+		stateMachine:       stateMachine,
+		self:               self,
+		occurrence:         occurrence,
+		state:              StateReady,
+		graph:              graph,
+		currentTime:        0.0,
+		nextEventID:        1,
+		eventQueue:         NewEventQueue(),
+		stateData:          make(map[string]Value),
+		stateAttrs:         make(map[*ast.StateNode]map[string]Value),
+		stateVisits:        make([]string, 0),
+		stateStack:         make([]*ast.StateNode, 0),
+		history:            make(map[*ast.StateNode]*historyRecord),
+		deferred:           make([]Event, 0),
+		timerScheduled:     make(map[*lower.Transition]bool),
+		timeTriggerVerdict: make(map[*lower.Transition]error),
+		changeFired:        make(map[*lower.Transition]bool),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -477,7 +481,7 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 		if trans.Trigger == nil {
 			continue // a completion transition, scheduled once the do behavior ends
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
-			if err := e.checkTimeTriggerType(trans.Scope, timeEvent); err != nil {
+			if err := e.checkTimeTriggerType(trans, timeEvent); err != nil {
 				return err
 			}
 			// Evaluate duration expression in the scope the transition was written

@@ -45,9 +45,8 @@ func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 	}
 }
 
-// checkAtMostOneObjective applies the case objective cardinality rule across
-// owned and inherited members. Local objectives compete with an inherited
-// objective, while multiple inherited objectives are reported on the owner.
+// checkAtMostOneObjective judges a case on the objectives a single type owns,
+// since an objective redefines the objective role of the types above it.
 func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, members []ast.Node) {
 	var local []ast.Node
 	for _, member := range members {
@@ -55,7 +54,7 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 			local = append(local, member)
 		}
 	}
-	inherited := 0
+	inheritedPerOwner := map[*symbols.Scope]int{}
 	for _, member := range cc.model.MembersOf(sym) {
 		if member == nil || member.OwnerScope == sym.Scope {
 			continue
@@ -66,16 +65,33 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 			continue
 		}
 		if isObjectiveDecl(member.Decl) {
-			inherited++
+			inheritedPerOwner[member.OwnerScope]++
 		}
 	}
-	if inherited == 0 {
+	// MembersOf enumerates by name, so an inherited `objective : R;` is only
+	// reachable through the scope of the type declaring it.
+	for _, src := range cc.model.MemberSources(sym) {
+		if src == nil || src.Scope == nil || src.Scope == sym.Scope {
+			continue
+		}
+		for _, member := range src.Scope.AnonymousMembers() {
+			if member == nil || cc.libraryDeclared(member) {
+				continue
+			}
+			if isObjectiveDecl(member.Decl) {
+				inheritedPerOwner[src.Scope]++
+			}
+		}
+	}
+	if len(local) > 0 {
 		cc.reportExtraMembers(local, msgOnlyOneObjective, codeOnlyOneObjective)
 		return
 	}
-	if len(local) > 0 {
-		cc.reportEachMember(local, msgOnlyOneObjective, codeOnlyOneObjective)
-		return
+	inherited := 0
+	for _, count := range inheritedPerOwner {
+		if count > inherited {
+			inherited = count
+		}
 	}
 	if inherited > 1 {
 		cc.diags = append(cc.diags, Diagnostic{
@@ -270,12 +286,14 @@ func subjectOwnerDecl(decl ast.Node) bool {
 	return false
 }
 
+// objectiveOwnerDecl reports whether a case declaration is judged by the objective
+// cardinality rule; analysis cases are exempt, see internal/core/solve.
 func objectiveOwnerDecl(decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		return d.Kind == ast.DefCase
+		return isCaseDefKind(d.Kind) && d.Kind != ast.DefAnalysisCase
 	case *ast.Usage:
-		return d.Kind == ast.UsageCase
+		return isCaseUsageKind(d.Kind) && d.Kind != ast.UsageAnalysisCase
 	}
 	return false
 }

@@ -289,6 +289,9 @@ What remains is adjudicated as extension notation this project supports delibera
   (`internal/core/solve/doc.go`): 1 + 1 `unmapped` rows that stay the reference's. The objective's
   value itself draws no row since the objective-evaluation round below: it is stated as the
   library's `eval` calculation, which both sides accept.
+  The exemption is the analysis case alone; a `case`, `verification` or `use case` declaration
+  with a second objective is reported as the reference reports it, since no other case kind has
+  the lexicographic semantics.
 - **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
   a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
   in the view because that is what `%view` evaluates the exposed elements against. Declaring the
