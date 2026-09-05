@@ -44,4 +44,13 @@ package ShortNamedDefaultReferenceUsages {
 		<z> z = 1;
 		<w> :> z = 2;
 	}
+
+	// A KerML-only keyword is an ordinary name in SysML, as a short name or a name.
+	<chains> links = 3;
+	<s> featured = 1;
+	calc def Linked {
+		in n : Integer;
+		<inv> chains = n;
+		chains + 1
+	}
 }

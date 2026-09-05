@@ -548,16 +548,16 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 // no kind keyword: an identification (`<s>`? name?) followed by a declaration tail.
 func (p *Parser) keywordlessFeatureAt(off int) bool {
 	if p.peekN(off).Kind == lexer.Lt {
-		if !isNameToken(p.peekN(off+1).Kind) || p.peekN(off+2).Kind != lexer.Gt {
+		if !p.atNameAt(off+1) || p.peekN(off+2).Kind != lexer.Gt {
 			return false
 		}
 		off += 3
-		if !isNameToken(p.peekN(off).Kind) {
+		if !p.atNameAt(off) {
 			return p.keywordlessDeclarationTailAt(off)
 		}
 	}
 	t := p.peekN(off)
-	if !isNameToken(t.Kind) {
+	if !p.atNameAt(off) {
 		return false
 	}
 	// KerML reserves `var`, so it prefixes a declaration and never names one.

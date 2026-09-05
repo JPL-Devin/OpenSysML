@@ -1,0 +1,37 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="KeywordlessShortNames" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<a> alpha" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<b>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=alpha
+            (*ast.QualifiedName))
+          (LiteralInteger value="2")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<s> part" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<attribute> y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="2")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<action>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=alpha
+            (*ast.QualifiedName))
+          (LiteralInteger value="3")))
+      (Membership visibility="default"
+        (Usage kind="class" name="Tank" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<l> limit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ScalarValues::Real
+                (*ast.QualifiedName))
+              (LiteralReal value="10.0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<t> perform" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ScalarValues::Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="4")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<v> port" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variable=true prefix="var"
+              (LiteralInteger value="5"))))))))

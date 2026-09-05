@@ -377,6 +377,42 @@ func TestF61AssignmentStaysAssignment(t *testing.T) {
 	})
 }
 
+// A keyword of the other language names a short-named keyword-less feature,
+// as a short name or a name, in either file kind.
+func TestF61ShortNamedFeatureOtherLanguageKeywordNames(t *testing.T) {
+	for _, tt := range []struct {
+		file, src string
+		want      []ast.Identification
+	}{
+		{"b.sysml", "package B { <chains> links = 3; <s> featured = 1; <inv> :> links = 2; }",
+			[]ast.Identification{{ShortName: "chains", Name: "links"}, {ShortName: "s", Name: "featured"}, {ShortName: "inv"}}},
+		{"b.kerml", "package B { <s> part = 1; <attribute> y = 2; <action> :> y = 3; }",
+			[]ast.Identification{{ShortName: "s", Name: "part"}, {ShortName: "attribute", Name: "y"}, {ShortName: "action"}}},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			p := New(source.New(tt.file, []byte(tt.src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			members := root.Members[0].(*ast.Membership).Member.(*ast.Package).Members
+			if len(members) != len(tt.want) {
+				t.Fatalf("members = %d, want %d", len(members), len(tt.want))
+			}
+			for i, want := range tt.want {
+				u, ok := members[i].(*ast.Membership).Member.(*ast.Usage)
+				if !ok {
+					t.Fatalf("member %d = %T, want *ast.Usage", i, members[i].(*ast.Membership).Member)
+				}
+				if u.Keyword != "" || u.Ident.ShortName != want.ShortName || u.Ident.Name != want.Name || u.Value == nil {
+					t.Errorf("member %d = keyword %q <%q> %q value %v, want kind-less <%q> %q with a value",
+						i, u.Keyword, u.Ident.ShortName, u.Ident.Name, u.Value != nil, want.ShortName, want.Name)
+				}
+			}
+		})
+	}
+}
+
 // Malformed keyword-less members must produce diagnostics, never a panic.
 func TestF61Negative(t *testing.T) {
 	tests := []struct {

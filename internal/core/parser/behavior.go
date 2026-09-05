@@ -86,7 +86,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 // atNamedCalcMember reports whether the cursor begins a kind-less member declaration
 // (SysML.xtext DefaultReferenceUsage) rather than an expression or a `done;` node.
 func (p *Parser) atNamedCalcMember() bool {
-	if !isNameToken(p.peek().Kind) && !p.at(lexer.Lt) {
+	if !p.atName() && !p.at(lexer.Lt) {
 		return false
 	}
 	if _, ok := p.atActionNodeWord(); ok {

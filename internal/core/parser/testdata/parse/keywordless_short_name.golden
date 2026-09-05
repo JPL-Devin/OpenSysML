@@ -107,4 +107,22 @@
             (Usage kind="attribute" name="<w>" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="subsets" target=z
                 (*ast.QualifiedName))
-              (LiteralInteger value="2"))))))))
+              (LiteralInteger value="2")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<chains> links" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="3")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="<s> featured" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Linked"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<inv> chains" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (FeatureReference name="n")))
+          (OperatorExpr operator="+"
+            (FeatureReference name="chains")
+            (LiteralInteger value="1")))))))
