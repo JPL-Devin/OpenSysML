@@ -228,8 +228,8 @@ func (ctx *Context) returnedArguments(scope *symbols.Scope, call *ast.Invocation
 				args = append(args, arg)
 			}
 		}
-		for _, named := range call.NamedArgs {
-			if named.Name != nil && len(named.Name.Parts) != 0 && passed[named.Name.Parts[len(named.Name.Parts)-1].Text] {
+		for i, named := range call.NamedArgs {
+			if passed[target.names[i]] {
 				args = append(args, named.Value)
 			}
 		}
