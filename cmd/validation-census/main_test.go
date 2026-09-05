@@ -310,13 +310,16 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTestRepo(t, root, map[string]string{
-		negativeCorpusDir + "/kerml/a.kerml":     "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
-		negativeCorpusDir + "/kerml/b.kerml":     "// Invalid: b (KerML 7.2; pilot validateB).\npackage P;\n",
-		negativeCorpusDir + "/kerml/other.kerml": "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
-		negativeCorpusDir + "/kerml/prose.kerml": "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
-		negativeCorpusDir + "/kerml/spec.kerml":  "// Invalid: a (KerML 7.1 validateA; pilot Fixture_invalid.kerml.xt).\npackage P;\n",
-		negativeCorpusDir + "/xpect/x.kerml":     "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
-		negativeCorpusDir + "/xpect/bare.kerml":  "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
+		negativeCorpusDir + "/kerml/a.kerml":      "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/b.kerml":      "// Invalid: b (KerML 7.2; pilot validateB).\npackage P;\n",
+		negativeCorpusDir + "/kerml/other.kerml":  "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/prose.kerml":  "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/spec.kerml":   "// Invalid: a (KerML 7.1 validateA; pilot Fixture_invalid.kerml.xt).\npackage P;\n",
+		negativeCorpusDir + "/xpect/x.kerml":      "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/xpect/bare.kerml":   "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
+		negativeCorpusDir + "/kerml/d.kerml":      "// Invalid: d (KerML 7.4; pilot validateD).\npackage P;\n",
+		negativeCorpusDir + "/kerml/d-open.kerml": "// Invalid: d (KerML 7.4 validateD; pilot Fixture_open.kerml.xt).\npackage P;\n",
+		negativeCorpusDir + "/kerml/d-odd.kerml":  "// Invalid: d (KerML 7.4 validateD; pilot Fixture_odd.kerml.xt).\npackage P;\n",
 		rejectionBaselinePath: `{"cases": [
 			{"path": "kerml/a.kerml", "bucket": "both-reject"},
 			{"path": "kerml/b.kerml", "bucket": "pilot-only-rejects"},
@@ -324,22 +327,27 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
 			{"path": "kerml/spec.kerml", "bucket": "both-reject"},
 			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"},
-			{"path": "xpect/bare.kerml", "bucket": "both-reject"}]}`,
+			{"path": "xpect/bare.kerml", "bucket": "both-reject"},
+			{"path": "kerml/d.kerml", "bucket": "pilot-only-rejects"},
+			{"path": "kerml/d-open.kerml", "bucket": "both-accept"},
+			{"path": "kerml/d-odd.kerml", "bucket": "rejected"}]}`,
 		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n\ntype Arena[T any] struct{}\n\nfunc (a *Arena[T]) Take() {}\n",
 	})
 	base := testBaseline(
 		Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful},
 		Constraint{Name: "validateB", Source: "sysml", Status: StatusNotImplemented},
 		Constraint{Name: "validateC", Source: "sysml", Status: StatusUnknown},
+		Constraint{Name: "validateD", Source: "kerml", Status: StatusApproximate},
 	)
 	doc := testProvenance + strings.Join([]string{
-		"**Census:** 1 of 3 named constraints are reported by OpenSysML — 1 ✅ faithful and 0 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.",
+		"**Census:** 2 of 4 named constraints are reported by OpenSysML — 1 ✅ faithful and 1 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.",
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
 		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take). | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `kerml/spec.kerml`, `xpect/x.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |",
 		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
+		"| `validateD` | KerML | d | internal/core/passes/a.go:helper | same | `kerml/d.kerml` | ⚠️ approximate |",
 		"",
 	}, "\n")
 	if err := checkDocument(root, doc, base); err != nil {
@@ -352,9 +360,9 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"extra row": {
 			mutate: func(s string) string {
 				row := "| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |\n"
-				return strings.Replace(s, row, row+"| `validateD` | SysML | d | — | — | none | ❌ not implemented |\n", 1)
+				return strings.Replace(s, row, row+"| `validateE` | SysML | e | — | — | none | ❌ not implemented |\n", 1)
 			},
-			want: "validateD is in the table but not in",
+			want: "validateE is in the table but not in",
 		},
 		"missing row": {
 			mutate: func(s string) string {
@@ -363,7 +371,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			want: "validateB is in docs/project/validation-constraints-baseline.json but has no row",
 		},
 		"hand-edited figure": {
-			mutate: func(s string) string { return strings.Replace(s, "1 of 3", "2 of 3", 1) },
+			mutate: func(s string) string { return strings.Replace(s, "2 of 4", "3 of 4", 1) },
 			want:   "line is stale",
 		},
 		"stale release": {
@@ -529,6 +537,26 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `xpect/x.kerml` | ❌", 1)
 			},
 			want: "validateB is recorded not-implemented but docs/project/pilot-rejection-baseline.json records its negative case xpect/x.kerml as ours-only-rejects",
+		},
+		"approximate row lists a case both validators accept": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`kerml/d.kerml` | ⚠️", "`kerml/d.kerml`, `kerml/d-open.kerml` | ⚠️", 1)
+			},
+			want: "validateD negative case kerml/d-open.kerml is recorded as both-accept in docs/project/pilot-rejection-baseline.json, which is not a rejection",
+		},
+		"approximate row lists a case with an unknown bucket": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`kerml/d.kerml` | ⚠️", "`kerml/d.kerml`, `kerml/d-odd.kerml` | ⚠️", 1)
+			},
+			want: "validateD negative case kerml/d-odd.kerml is recorded as rejected in docs/project/pilot-rejection-baseline.json, which is not a rejection",
+		},
+		"faithful row lists a case both validators accept": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, "`kerml/d.kerml` | ⚠️", "none | ⚠️", 1)
+				s = strings.Replace(s, "`xpect/x.kerml` | ✅", "`xpect/x.kerml`, `kerml/d-open.kerml` | ✅", 1)
+				return s
+			},
+			want: "validateA negative case kerml/d-open.kerml is recorded as both-accept in docs/project/pilot-rejection-baseline.json, which is not a rejection",
 		},
 		"unknown row lists a case": {
 			mutate: func(s string) string {

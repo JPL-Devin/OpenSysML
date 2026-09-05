@@ -19,12 +19,17 @@ import (
 // say which of the two tools rejects each corpus case.
 const rejectionBaselinePath = "docs/project/pilot-rejection-baseline.json"
 
-// Buckets as cmd/pilot-reject records them.
+// Buckets as cmd/pilot-reject records them; only these three make a case
+// evidence of a rejection.
 const (
 	bucketBothReject = "both-reject"
 	bucketPilotOnly  = "pilot-only-rejects"
 	bucketOursOnly   = "ours-only-rejects"
 )
+
+func rejectionBucket(bucket string) bool {
+	return bucket == bucketBothReject || bucket == bucketPilotOnly || bucket == bucketOursOnly
+}
 
 // corpusCase is one rejection-corpus model: the specification constraint its
 // header cites, the pilot constraint it attributes the rejection to, if any,
@@ -164,6 +169,8 @@ func checkCaseEvidence(base *Baseline, r row, name, status string, c corpusCase)
 	switch {
 	case c.Bucket == "":
 		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is not recorded in %s", r.Line, name, c.Path, rejectionBaselinePath))
+	case !rejectionBucket(c.Bucket):
+		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is recorded as %s in %s, which is not a rejection", r.Line, name, c.Path, c.Bucket, rejectionBaselinePath))
 	case status == StatusFaithful && c.Bucket != bucketBothReject && c.Bucket != bucketOursOnly:
 		problems = append(problems, fmt.Sprintf("line %d: %s is recorded %s but %s records its negative case %s as %s", r.Line, name, status, rejectionBaselinePath, c.Path, c.Bucket))
 	case status == StatusNotImplemented && c.Bucket != bucketPilotOnly:
