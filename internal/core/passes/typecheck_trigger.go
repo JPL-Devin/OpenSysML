@@ -36,13 +36,10 @@ func (TriggerArgumentPass) Run(ctx *Context, name string, root *ast.RootNamespac
 		return nil
 	}
 	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()}
-	// An argument's body members are typed as the type pass does, triggers included.
+	// An argument's body members are typed as the type pass does.
 	bodies := &typeChecker{resolver: ctx.Resolver(), expr: expr, lang: ctx.Kind}
+	expr.walkMembers = bodies.walk
 	c := &triggerArgumentChecker{ctx: ctx, expr: expr}
-	expr.walkMembers = func(scope *symbols.Scope, members []ast.Node) {
-		bodies.walk(scope, members)
-		c.walk(scope, members)
-	}
 	c.walk(rootScope, root.Members)
 	return append(bodies.diags, expr.diags...)
 }
@@ -52,72 +49,21 @@ type triggerArgumentChecker struct {
 	expr *exprChecker
 }
 
+// walk checks every trigger among members, descending through every member
+// list they own — the body of a `{ … }` value included.
 func (c *triggerArgumentChecker) walk(scope *symbols.Scope, members []ast.Node) {
+	w := symbols.ExprWalker{Body: symbols.BodyExprScope, Members: c.walk}
 	for _, member := range members {
-		c.walkNode(scope, unwrapType(member))
-	}
-}
-
-// walkNode descends through every body shape a trigger may be written in.
-func (c *triggerArgumentChecker) walkNode(scope *symbols.Scope, node ast.Node) {
-	switch n := node.(type) {
-	case *ast.Definition:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.Usage:
-		if n.IsAccept {
-			c.check(scope, n)
+		node := unwrapType(member)
+		switch n := node.(type) {
+		case *ast.Usage:
+			if n.IsAccept {
+				c.check(scope, n)
+			}
+		case *ast.TransitionMember:
+			c.check(scope, n.Trigger)
 		}
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.Package:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.Namespace:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.SubjectMember:
-		c.walk(childScopeOr(scope, n), n.Body)
-	case *ast.ConstraintMember:
-		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
-	case *ast.AssumeMember:
-		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
-	case *ast.RequireMember:
-		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
-	case *ast.EntryMember:
-		c.walk(scope, n.Actions)
-	case *ast.DoMember:
-		c.walk(scope, n.Actions)
-	case *ast.ExitMember:
-		c.walk(scope, n.Actions)
-	case *ast.InitialNode:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		c.walk(childScopeOr(scope, n), ast.NodeBodyMembers(n))
-	case *ast.StateNode:
-		body := childScopeOr(scope, n)
-		c.walk(body, n.Entry)
-		c.walk(body, n.Do)
-		c.walk(body, n.Exit)
-		c.walk(body, n.Substates)
-		for _, region := range n.Regions {
-			c.walkNode(body, region)
-		}
-	case *ast.StateRegion:
-		c.walk(childScopeOr(scope, n), n.States)
-	case *ast.TransitionMember:
-		c.check(scope, n.Trigger)
-		body := symbols.TriggerScope(scope, n)
-		c.walk(body, n.Effect)
-		c.walk(body, n.Members)
-	case *ast.SendStatement:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.SuccessionEdge:
-		c.walk(childScopeOr(scope, n), n.Members)
-	case *ast.WhileLoopActionNode:
-		c.walk(childScopeOr(scope, n), n.Body)
-	case *ast.IfActionNode:
-		for _, branch := range n.Branches() {
-			c.walkNode(scope, branch)
-		}
-	case *ast.IfBranchNode:
-		c.walk(childScopeOr(scope, n), n.Body)
+		w.Decl(scope, node)
 	}
 }
 
