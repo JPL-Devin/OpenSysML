@@ -64,7 +64,7 @@ func (m *Model) SelectCallAmong(scope *symbols.Scope, e *ast.InvocationExpr, nam
 	if m == nil || e == nil {
 		return &InvocationSelection{}
 	}
-	return m.selectAmong(named, m.callArguments(scope, e), performs)
+	return m.selectAmong(scope, named, m.callArguments(scope, e), performs)
 }
 
 // callArguments types e's arguments as the checker does when its typing is
@@ -203,7 +203,7 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	if sel, ok := m.invocations[key]; ok {
 		return sel
 	}
-	sel := m.selectAmong(m.resolver.InvocationCandidates(scope, e.Type), args, performs)
+	sel := m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), args, performs)
 	m.resolver.Journal(e, func() { delete(m.invocations, key) })
 	m.invocations[key] = sel
 	return sel
@@ -215,7 +215,7 @@ func (m *Model) MemoSize() int {
 }
 
 // selectAmong selects among the declarations named, in lookup order.
-func (m *Model) selectAmong(named []*symbols.Symbol, args []Argument, performs Performs) *InvocationSelection {
+func (m *Model) selectAmong(scope *symbols.Scope, named []*symbols.Symbol, args []Argument, performs Performs) *InvocationSelection {
 	sel := &InvocationSelection{}
 	for _, sym := range named {
 		target, ok := m.resolver.ResolveAliasTarget(sym)
