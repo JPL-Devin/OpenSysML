@@ -23,6 +23,7 @@ const (
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
 	fqnEvaluation                 = "Performances::Evaluation"
+	fqnBooleanEvaluation          = "Performances::BooleanEvaluation"
 	fqnCollection                 = "Collections::Collection"
 	fqnMetaobject                 = "Metaobjects::Metaobject"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
@@ -147,8 +148,7 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
 		return m.exprConformance(scope, n.Operand, want, byUnit)
 	case *ast.BodyExpr:
-		// `{ … }` written as a value is the expression itself, an Evaluation.
-		c := m.typeConformance(m.libSymbol(fqnEvaluation), want)
+		c := m.typeConformance(m.bodyExprType(scope, n), want)
 		if c.Known && !c.Holds {
 			c.Found = "an expression body `{ … }`, the expression itself"
 		}
@@ -210,12 +210,27 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
 		return m.libSymbol(fqnAnything)
 	case *ast.BodyExpr:
-		// `{ … }` written as a value is the expression itself, an Evaluation.
-		return m.libSymbol(fqnEvaluation)
+		return m.bodyExprType(scope, n)
 	case *ast.ConstructorExpr:
 		return m.namedType(scope, n.Type)
+	case *ast.InvocationExpr:
+		if result := m.invocationResult(scope, n); result != nil {
+			return m.featureResultType(result)
+		}
 	}
 	return nil
+}
+
+// bodyExprType is the type of `{ … }` written as a value: the expression itself, an
+// Evaluation — a BooleanEvaluation when its result is Boolean, as the pilot reads it.
+func (m *Model) bodyExprType(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Symbol {
+	if body.Result != nil {
+		inner := symbols.BodyExprScope(scope, body)
+		if c := m.ExprConformsTo(inner, body.Result, m.libSymbol(FQNBoolean)); c.Known && c.Holds {
+			return m.libSymbol(fqnBooleanEvaluation)
+		}
+	}
+	return m.libSymbol(fqnEvaluation)
 }
 
 // namedType resolves a type reference, following an alias; nil if unresolved.
