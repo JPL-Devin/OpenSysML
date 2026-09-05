@@ -7,10 +7,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// ownerNames names the owner of each result expression membership of sym.
 func ownerNames(m *Model, sym *symbols.Symbol) []string {
 	var names []string
-	for _, owner := range m.ResultExpressionOwners(sym) {
-		names = append(names, owner.Name)
+	for _, expr := range m.ResultExpressionMemberships(sym) {
+		names = append(names, expr.Owner.Name)
 	}
 	return names
 }
@@ -68,6 +69,45 @@ func TestResultExpressionManyConditionsOneOwner(t *testing.T) {
 	}
 	if got := ownerNames(m, base); strings.Join(got, ",") != "Base" {
 		t.Fatalf("both belong to one owner, got %v", got)
+	}
+	if m.ResultExpressionConflict(base) != nil {
+		t.Fatal("the conditions of one constraint body are one membership")
+	}
+}
+
+func TestResultExpressionSecondStatedIsAMembership(t *testing.T) {
+	m, root := buildModel(t, "calc c { 1 2 } calc def C { in y; y + 1 y + 2 } calc def D :> C;")
+	for _, name := range []string{"c", "C"} {
+		s := sym(t, root, name)
+		if got := ownerNames(m, s); strings.Join(got, ",") != name+","+name {
+			t.Fatalf("%s: each expression of a calculation body is a membership, got %v", name, got)
+		}
+		conflict := m.ResultExpressionConflict(s)
+		if conflict == nil || conflict.Stated != 2 || conflict.Node != OwnedResultExpressions(s)[1].Node {
+			t.Fatalf("%s: the second stated expression is the fault, got %+v", name, conflict)
+		}
+	}
+	d := sym(t, root, "D")
+	if got := ownerNames(m, d); strings.Join(got, ",") != "C,C" {
+		t.Fatalf("a bodiless specialization inherits both, got %v", got)
+	}
+	if conflict := m.ResultExpressionConflict(d); conflict == nil || conflict.Stated != 0 || conflict.Node != d.Decl {
+		t.Fatalf("inheriting two faults the declaration, got %+v", conflict)
+	}
+}
+
+func TestResultExpressionConflictStatedOverInherited(t *testing.T) {
+	m, root := buildModel(t, "constraint def Base { x > 0 } constraint def Sub :> Base { x > 1 }")
+	sub := sym(t, root, "Sub")
+	conflict := m.ResultExpressionConflict(sub)
+	if conflict == nil || conflict.Stated != 1 || conflict.Node != OwnedResultExpressions(sub)[0].Node {
+		t.Fatalf("the body stated over the inherited result is the fault, got %+v", conflict)
+	}
+	if got := ownerNames(m, sym(t, root, "Base")); strings.Join(got, ",") != "Base" {
+		t.Fatalf("Base owns one, got %v", got)
+	}
+	if m.ResultExpressionConflict(sym(t, root, "Base")) != nil {
+		t.Fatal("one membership is no conflict")
 	}
 }
 

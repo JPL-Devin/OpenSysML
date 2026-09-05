@@ -12,10 +12,10 @@ const msgResultExpressionAtMostOne = "Only one (owned or inherited) result expre
 
 // ResultExpressionPass checks that a function or expression has at most one
 // result expression, owned or inherited (KerML 8.3.4.6 Expression::result,
-// 8.3.4.8 Function::result). A type that inherits a result expression cannot
-// state its own — a specialization or redefinition keeps the inherited body
-// or adds constraints beside it — and one that inherits two along different
-// specializations is invalid on its own.
+// 8.3.4.8 Function::result). A calculation body states at most one; a type
+// that inherits a result expression cannot state its own — a specialization or
+// redefinition keeps the inherited body or adds constraints beside it — and one
+// that inherits two along different specializations is invalid on its own.
 type ResultExpressionPass struct{}
 
 func (ResultExpressionPass) Level() PassLevel { return LevelConstraint }
@@ -41,18 +41,13 @@ func (ResultExpressionPass) Run(ctx *Context, name string, root *ast.RootNamespa
 		if head, typed := w8cOwnerHead(sym.Decl); typed && ctx.downstreamSpan(head) {
 			return
 		}
-		if len(model.ResultExpressionOwners(sym)) < 2 {
+		conflict := model.ResultExpressionConflict(sym)
+		if conflict == nil {
 			return
-		}
-		// The pilot anchors the fault at the body a type states over an
-		// inherited result, and at the type itself when both are inherited.
-		span := sym.Decl.Span()
-		if owned := semantics.OwnedResultExpressions(sym); len(owned) > 0 {
-			span = owned[0].Node.Span()
 		}
 		diags = append(diags, Diagnostic{
 			Severity: SeverityError,
-			Span:     span,
+			Span:     conflict.Node.Span(),
 			Message:  msgResultExpressionAtMostOne,
 			Code:     "result-expression-at-most-one",
 			Source:   "constraint",

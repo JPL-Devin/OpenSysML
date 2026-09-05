@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 241,
-        "digest": "sha256:8a0c1df306f0be51d958354c99492d0436450e4565bbd0886760485c4fd179d7"
+        "files": 243,
+        "digest": "sha256:521eb683402481a8fd8b2196198f4f94e6322e3902cdf632e0621364aa2dadcc"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 241,
-    "bothReject": 233,
+    "cases": 243,
+    "bothReject": 235,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -56,8 +56,8 @@
     },
     {
       "source": "grammar",
-      "cases": 87,
-      "bothReject": 87,
+      "cases": 89,
+      "bothReject": 89,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -778,6 +778,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "grammar/g69-calc-body-second-result-expression.sysml",
+      "source": "grammar",
+      "rule": "a calculation body ends in at most one result expression; a second bare expression is a second result expression (SysML.xtext:1951 CalculationBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -947,6 +956,15 @@
       "bucket": "both-reject",
       "oursErrors": 3,
       "pilotErrors": 4
+    },
+    {
+      "path": "grammar/k20-function-body-second-result-expression.kerml",
+      "source": "grammar",
+      "rule": "a function body ends in at most one result expression; a second bare expression is a second result expression (KerML.xtext:933 FunctionBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
     },
     {
       "path": "semantic/cn01-fork-two-incoming.sysml",
@@ -2319,8 +2337,8 @@
       }
     ],
     "totals": {
-      "cases": 241,
-      "bothReject": 233,
+      "cases": 243,
+      "bothReject": 235,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0

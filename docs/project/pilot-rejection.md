@@ -45,9 +45,10 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (87 cases: 20 original, 45 added along the *unreached* axis
-   described below, 13 from a second sweep, and 7 body-position cases
-   `g61`–`g67` from the constraint census described under `semantic/`). For productions our corpus exercises in the
+1. **`grammar/` — grammar mutation** (89 cases: 20 original, 45 added along the *unreached* axis
+   described below, 13 from a second sweep, 7 body-position cases
+   `g61`–`g67` from the constraint census described under `semantic/`, and the two second-result-expression
+   bodies `g69`/`k20`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -158,14 +159,14 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-241 case(s): 233 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+243 case(s): 235 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 87 | 87 | 0 | 0 | 0 |
+| grammar | 89 | 89 | 0 | 0 | 0 |
 | semantic | 111 | 103 | 0 | 8 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
@@ -179,7 +180,10 @@ three trigger-argument typing cases (`s48`–`s50`), to 235 with the enumerated 
 its literal (`p18-enum-value-typed-outside-enumeration`), to 236 with the one typed by an
 expression body (`s51`), to 239 with the three result-expression ownership cases (`s52`, `s53`,
 `k43`: a specialization, a redefining usage and a typed expression each stating a body over an
-inherited result expression), and to 241 with the two reference-subsetting ones (`s54`, `k44`).
+inherited result expression), to 241 with the two reference-subsetting ones (`s54`, `k44`), and to 243 with `g69`/`k20` (a calculation or
+function body listing a second bare expression: the pinned `CalculationBodyPart`/`FunctionBodyPart` admit one
+`ResultExpressionMember`, so the pilot stops at the second expression, `missing '}' at 'x'`, while we read it as a
+second result expression under the same one-result rule).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor

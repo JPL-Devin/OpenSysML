@@ -4,7 +4,9 @@
   reference-subsetting (`constraint d ::> c { x > 1 }`) one that owns a body are rejected with
   `Only one (owned or inherited) result expression is allowed`, on the newly stated body, as the
   reference validators reject them; two generals each owning a
-  result expression are reported on the declaration that inherits both. An empty or
+  result expression are reported on the declaration that inherits both, and a calculation,
+  function or expression body listing two bare expressions (`calc c { 1 2 }`) is reported on
+  the second, which the reference grammar does not admit. An empty or
   documentation-only redefinition (`:>> c;`, `:>> c { }`, `:>> c { doc /* … */ }`) keeps the
   inherited expression, and a nested `assert constraint { … }` remains a separate constraint, so
   a tighter requirement is written as a new or nested constraint rather than by replacing the

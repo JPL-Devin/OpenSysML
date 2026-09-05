@@ -35,9 +35,9 @@ type Condition struct {
 	// which the evaluator does not execute; nil for a condition or a group.
 	Statement ast.Node
 
-	// Conflict is a result expression stated over an inherited one, or the
-	// declaration inheriting two (KerML 8.3.4.8); no verdict is reached. Nil otherwise.
-	Conflict ast.Node
+	// Conflict is a second result expression, stated or inherited (KerML
+	// 8.3.4.8); no verdict is reached. Nil otherwise.
+	Conflict *semantics.ResultExpressionConflict
 
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
@@ -114,7 +114,7 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 // an anonymous one, which no name can redefine, is always inherited.
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
-	if conflict := ctx.resultExpressionConflict(sym); conflict != nil {
+	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
 		out = append(out, Condition{Conflict: conflict, Required: required})
 	}
 	var effective map[*symbols.Symbol]bool
@@ -130,18 +130,6 @@ func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol,
 		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
-}
-
-// resultExpressionConflict returns the result expression sym states over an
-// inherited one, or its declaration when it inherits two; nil when at most one.
-func (ctx *Context) resultExpressionConflict(sym *symbols.Symbol) ast.Node {
-	if len(ctx.model.ResultExpressionOwners(sym)) < 2 {
-		return nil
-	}
-	if owned := semantics.OwnedResultExpressions(sym); len(owned) > 0 {
-		return owned[0].Node
-	}
-	return sym.Decl
 }
 
 // namedConstraintOf returns the constraint usage a require/assume constraint
@@ -256,7 +244,7 @@ func setConstraint(conds []Condition, owner *symbols.Symbol) {
 
 // conflictingResultExpression returns the first result-expression conflict conds
 // record, groups included, or nil when they record none.
-func conflictingResultExpression(conds []Condition) ast.Node {
+func conflictingResultExpression(conds []Condition) *semantics.ResultExpressionConflict {
 	for _, cond := range conds {
 		if cond.Conflict != nil {
 			return cond.Conflict
@@ -268,13 +256,17 @@ func conflictingResultExpression(conds []Condition) ast.Node {
 	return nil
 }
 
-// conflictText says what a result-expression conflict is: the condition stated
-// over an inherited one, or a declaration inheriting two.
-func conflictText(conflict ast.Node) string {
-	if ast.IsExpression(conflict) {
-		return "`" + conditionText(conflict) + "` is stated over an inherited result expression"
+// conflictText says what a result-expression conflict is: a second result stated
+// in one body, a condition stated over an inherited one, or a declaration inheriting two.
+func conflictText(conflict *semantics.ResultExpressionConflict) string {
+	switch {
+	case conflict.Stated > 1:
+		return "`" + conditionText(conflict.Node) + "` is a second result expression of one body"
+	case conflict.Stated == 1:
+		return "`" + conditionText(conflict.Node) + "` is stated over an inherited result expression"
+	default:
+		return "it inherits a result expression from more than one supertype"
 	}
-	return "it inherits a result expression from more than one supertype"
 }
 
 // unexecutedStatement returns the first statement conds state, groups included,

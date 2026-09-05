@@ -132,6 +132,45 @@ func TestResultExpressionOneBodyManyConditions(t *testing.T) {
 	resultExpressionDiags(t, src)
 }
 
+// A calculation body listing two bare expressions states two result expressions
+// — the pilot's grammar admits one — and a bodiless calculation inheriting them
+// is faulted at its declaration; a constraint body's conditions stay one result.
+func TestResultExpressionOneBodyTwoResults(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		attribute x : Real;
+		calc c { 1.0 2.0 }
+		calc def C { in y : Real; y + 1.0 y + 2.0 }
+		calc def D :> C;
+		calc k : C;
+		constraint def K { in y : Real; y > 0.0 y < 10.0 }
+		constraint m : K;
+	}`
+	resultExpressionDiags(t, src, "2.0", "y + 2.0", "calc def D :> C;", "calc k : C;")
+}
+
+func TestResultExpressionOneBodyTwoResultsKerML(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		feature x : Real;
+		function F { in y : Real; y + 1.0 y + 2.0 }
+		function G specializes F;
+		expr e { 1.0 2.0 }
+		expr f : F;
+		predicate Q { x > 0.0 x < 10.0 }
+	}`
+	diags := only(constraintDiagsKerML(t, src), resultExpressionCode)
+	want := []string{"y + 2.0", "function G specializes F;", "2.0", "expr f : F;"}
+	if len(diags) != len(want) {
+		t.Fatalf("got %d diagnostics, want %d: %v", len(diags), len(want), diags)
+	}
+	for i, d := range diags {
+		if got := strings.TrimSpace(spanText(src, d)); got != want[i] {
+			t.Errorf("span text = %q, want %q", got, want[i])
+		}
+	}
+}
+
 // The KerML forms: a predicate, a boolean expression and an invariant hold the
 // same rule; a result parameter bound with `return r = …` is a binding, not a
 // second result expression.

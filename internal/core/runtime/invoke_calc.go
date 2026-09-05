@@ -134,9 +134,13 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// Most general first, so an inherited parameter keeps the position it has in
 	// the calc that declares it and a redeclaration refines it in place.
 	chain := ctx.calcChain(sym)
-	if owners := ctx.model.ResultExpressionOwners(sym); len(owners) > 1 {
-		names := make([]string, len(owners))
-		for i, owner := range owners {
+	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
+		if conflict.Stated > 1 {
+			return nil, fmt.Errorf("%w: calc %s states %d result expressions",
+				ErrConflictingResultExpressions, name, conflict.Stated)
+		}
+		names := make([]string, len(conflict.Owners))
+		for i, owner := range conflict.Owners {
 			names[i] = ctx.qualifiedSymbolName(owner)
 		}
 		return nil, fmt.Errorf("%w: calc %s states or inherits a result expression from each of %s",

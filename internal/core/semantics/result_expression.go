@@ -11,6 +11,21 @@ import (
 type ResultExpression struct {
 	Owner *symbols.Symbol
 	Node  ast.Node
+	// Condition marks a constraint body's condition, one of the several a body
+	// may list; a calculation body's expression is a result on its own.
+	Condition bool
+}
+
+// ResultExpressionConflict is a second result expression membership of a
+// function or expression (KerML 8.3.4.6, 8.3.4.8), which allows at most one.
+type ResultExpressionConflict struct {
+	// Node anchors the fault: the body stated beyond one — a second in the
+	// same body or one over an inherited result — or the declaration inheriting two.
+	Node ast.Node
+	// Stated counts the memberships the type's own body states; the rest are inherited.
+	Stated int
+	// Owners are the types whose bodies state a membership, one per membership.
+	Owners []*symbols.Symbol
 }
 
 // FunctionLike reports whether sym declares a function or an expression, the
@@ -66,11 +81,11 @@ func OwnedResultExpressions(sym *symbols.Symbol) []ResultExpression {
 		if !IsResultExpression(member) {
 			continue
 		}
-		node := member
+		expr := ResultExpression{Owner: sym, Node: member}
 		if c, ok := member.(*ast.ConstraintMember); ok {
-			node = c.Expression
+			expr.Node, expr.Condition = c.Expression, true
 		}
-		out = append(out, ResultExpression{Owner: sym, Node: node})
+		out = append(out, expr)
 	}
 	return out
 }
@@ -91,15 +106,42 @@ func (m *Model) ResultExpressionsOf(sym *symbols.Symbol) []ResultExpression {
 	return out
 }
 
-// ResultExpressionOwners lists the types whose bodies state the result
-// expressions sym owns or inherits, sym itself first. A valid function or
-// expression has at most one: a type that inherits a result states none.
-func (m *Model) ResultExpressionOwners(sym *symbols.Symbol) []*symbols.Symbol {
-	var out []*symbols.Symbol
+// ResultExpressionMemberships lists the result expressions sym owns or inherits
+// as the memberships KerML counts, sym's own first: each expression of a
+// calculation body is one, the conditions a constraint body lists are one
+// together. A valid function or expression has at most one.
+func (m *Model) ResultExpressionMemberships(sym *symbols.Symbol) []ResultExpression {
+	var out []ResultExpression
 	for _, expr := range m.ResultExpressionsOf(sym) {
-		if len(out) == 0 || out[len(out)-1] != expr.Owner {
-			out = append(out, expr.Owner)
+		if expr.Condition && len(out) > 0 {
+			if last := out[len(out)-1]; last.Condition && last.Owner == expr.Owner {
+				continue
+			}
 		}
+		out = append(out, expr)
 	}
 	return out
+}
+
+// ResultExpressionConflict describes sym's result expression memberships when
+// it has more than one; nil when it has at most one.
+func (m *Model) ResultExpressionConflict(sym *symbols.Symbol) *ResultExpressionConflict {
+	memberships := m.ResultExpressionMemberships(sym)
+	if len(memberships) < 2 {
+		return nil
+	}
+	c := &ResultExpressionConflict{Node: sym.Decl, Owners: make([]*symbols.Symbol, len(memberships))}
+	for i, expr := range memberships {
+		c.Owners[i] = expr.Owner
+		if expr.Owner == sym {
+			c.Stated++
+		}
+	}
+	switch {
+	case c.Stated > 1:
+		c.Node = memberships[1].Node
+	case c.Stated == 1:
+		c.Node = memberships[0].Node
+	}
+	return c
 }
