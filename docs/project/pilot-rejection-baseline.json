@@ -27,17 +27,17 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 243,
-        "digest": "sha256:26e993cc57553c70a8d5b86ecaadbd940ce91304ba8ab2196fecb0947bce5037"
+        "files": 246,
+        "digest": "sha256:bacbb833808105b3e644671ba965e7a48d1de0734f42d67ab9ca941bc1794e8c"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 243,
-    "bothReject": 235,
+    "cases": 246,
+    "bothReject": 237,
     "pilotOnlyRejects": 0,
-    "oursOnlyRejects": 8,
+    "oursOnlyRejects": 9,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
@@ -56,18 +56,18 @@
     },
     {
       "source": "grammar",
-      "cases": 87,
-      "bothReject": 87,
+      "cases": 89,
+      "bothReject": 89,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "semantic",
-      "cases": 113,
+      "cases": 114,
       "bothReject": 105,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     {
@@ -778,6 +778,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "grammar/g69-calc-body-second-result-expression.sysml",
+      "source": "grammar",
+      "rule": "a calculation body ends in at most one result expression; a second bare expression is a second result expression (SysML.xtext:1951 CalculationBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -947,6 +956,15 @@
       "bucket": "both-reject",
       "oursErrors": 3,
       "pilotErrors": 4
+    },
+    {
+      "path": "grammar/k20-function-body-second-result-expression.kerml",
+      "source": "grammar",
+      "rule": "a function body ends in at most one result expression; a second bare expression is a second result expression (KerML.xtext:933 FunctionBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
     },
     {
       "path": "semantic/cn01-fork-two-incoming.sysml",
@@ -1432,49 +1450,22 @@
       "pilotErrors": 2
     },
     {
-      "path": "semantic/k43-annotating-element-annotates-itself.kerml",
+      "path": "semantic/k43-expr-typed-by-function-states-second-result-expression.kerml",
       "source": "semantic",
-      "rule": "an annotation owned by its annotated element must own its annotating element, so an annotating element cannot annotate itself (KerML 8.3.2.3.3 validateAnnotationAnnotatedElementOwnership; pilot validateAnnotationAnnotatedElementOwnership).",
+      "rule": "an expression typed by a function that owns a result expression may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 3,
-      "pilotErrors": 9
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
-      "path": "semantic/k44-binding-connector-with-three-ends.kerml",
+      "path": "semantic/k44-expr-referencing-expr-states-second-result-expression.kerml",
       "source": "semantic",
-      "rule": "a binding connector is binary, so its ends must reference exactly two features (KerML 8.3.4.7.2 validateBindingConnectorIsBinary; pilot validateBindingConnectorIsBinary).",
+      "rule": "an expression reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 2,
-      "pilotErrors": 2
-    },
-    {
-      "path": "semantic/k45-conjugated-feature-without-type.kerml",
-      "source": "semantic",
-      "rule": "a feature must have at least one type, and a feature conjugating a class takes no type from it and owns no implicit subsetting to supply one (KerML 8.3.3.3.4 validateFeatureHasType; pilot validateFeatureHasType).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 2,
-      "pilotErrors": 2
-    },
-    {
-      "path": "semantic/k46-conjugated-structure-not-an-object.kerml",
-      "source": "semantic",
-      "rule": "a classifier must directly or indirectly specialize its kind's default supertype, and a structure conjugating a plain class reaches Base::Anything but not Objects::Object (KerML 8.3.4.3.2 checkStructureSpecialization; pilot validateClassifierDefaultSupertype).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 2,
-      "pilotErrors": 3
-    },
-    {
-      "path": "semantic/k47-feature-chain-through-alias-to-another-type.kerml",
-      "source": "semantic",
-      "rule": "each chaining feature of a feature chain must be featured within the one before it, and an alias reaching another type's feature is not (KerML 8.3.3.3.4 validateFeatureChainingFeatureConformance; pilot validateFeatureChainingFeatureConformance).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 4,
-      "pilotErrors": 4
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
@@ -1936,27 +1927,66 @@
       "pilotErrors": 2
     },
     {
-      "path": "semantic/s52-end-with-direction.sysml",
+      "path": "semantic/s52-variant-port-composite.sysml",
       "source": "semantic",
-      "rule": "an end feature cannot have a direction (KerML 8.3.3.3.4 validateFeatureEndNoDirection; pilot validateFeatureEndNoDirection).",
+      "rule": "A port usage whose owning type is not a port definition or port usage must be referential, and a variant has no owning type (SysML 7.12 Ports; pilot validatePortUsageIsReference).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 3,
-      "pilotErrors": 3
-    },
-    {
-      "path": "semantic/s53-end-derived-or-abstract.sysml",
-      "source": "semantic",
-      "rule": "an end feature cannot be derived, abstract, composite or portion (KerML 8.3.3.3.4 validateFeatureEndNotDerivedAbstractCompositeOrPortion; pilot validateFeatureEndNotDerivedAbstractCompositeOrPortion).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 3,
-      "pilotErrors": 3
+      "oursErrors": 2,
+      "pilotErrors": 2
     },
     {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s81-guarded-succession-guard-not-boolean.sysml",
+      "source": "semantic",
+      "rule": "the guard of a guarded succession in an action body must be a Boolean expression (SysML v2 8.3.18.8; pilot validateTransitionFeatureMembershipGuardExpression, vacuous at the pin once the library types the guard, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: transition guard must be Boolean, found String"
+      ]
+    },
+    {
+      "path": "semantic/s82-constraint-specialization-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint definition specializing one that owns a result expression may not state a second (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s83-redefined-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a redefining constraint usage inherits the redefined constraint's result expression and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s84-referencing-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint usage reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s85-viewpoint-inherits-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a viewpoint is a requirement and so a constraint, and may not inherit result expressions from two generals (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -2337,10 +2367,10 @@
       }
     ],
     "totals": {
-      "cases": 243,
-      "bothReject": 235,
+      "cases": 246,
+      "bothReject": 237,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     "note": "no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied corpus is byte-identical to the published one and both figures coincide"

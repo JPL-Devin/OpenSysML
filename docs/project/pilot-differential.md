@@ -215,11 +215,11 @@ nor double-counted as two independent disagreements.
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/sysml-examples` | 99 | 95 | 7 | 0 | 0 | 0 | 7 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
+| `examples/pilot-corpora/kerml-examples` | 58 | 50 | 4 | 6 | 0 | 0 | 4 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
 | `examples` | 33 | 25 | 2 | 547 | 0 | 1 | 1 | 546 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **367** | **338** | **56** | **608** | **34** | **2** | **20** | **572** |
+| **Total** | **367** | **337** | **57** | **608** | **34** | **2** | **21** | **572** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -227,7 +227,8 @@ positives from the reference's **own** corpora: `pilot-examples` 16 → **7** an
 retired one more of `pilot-examples` by publishing the conforming type its
 [non-conforming redefinition](omg-issues.md) named, leaving 6, and the quantity-dimension error on
 `Analysis Examples/Dynamics.sysml`:13 — a published product bound to a return typed by another
-dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**. The
+dimension — takes it to **7**; the [unbound-parameter advisory](#the-unbound-parameter-advisory)
+then takes `kerml-examples` to **4**. Our diagnostics on those roots therefore fall 20 → **11**. The
 `examples` root carries 1, the non-standard-notation warning on the `junction` of
 `pseudostates-demo.sysml`, the one demo that keeps the pseudostate notation because no SysML v2
 spelling of it exists. It carried 64 before the demos were rewritten to standard notation: the
@@ -235,9 +236,41 @@ succession shorthands retired 30, removing `initial <state>;` and `transition <s
 retired 27 more, and the standard-notation round below retired the last 7. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **10**. `severity-only` (2) holds pairs of the same shape:
+reference corpora is **11** — of which one, the `Behaviors.kerml` advisory, is deliberate and
+adjudicated below rather than suspect. `severity-only` (2) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### The unbound-parameter advisory
+
+One invocation-argument policy now applies at a bare call and at an invocation heading a feature
+chain alike: an argument past the last input parameter is an error both implementations report
+(`Must correspond to one input parameter of the invoked type` on the pilot's side), and a
+default-less input left unbound is the advisory `unbound-parameter` — a warning in every
+conformance mode — that the pilot does not report at all. Before this round the omission was an
+error at a bare call and unreported at a chain head, so `A()` and `A().y` against
+`behavior A { in x; … }` were judged differently. KerML 1.0 §8.3.4.8.8 lists no
+`InvocationExpression` constraint on the count of arguments, the pinned validators are silent on
+every omission form (positional, named, `[1]`, `[1..*]`, calc, behavior, constructor, chain head)
+and the pinned evaluator forms and evaluates the call; the transcript is in
+[omg-issues.md](omg-issues.md#an-invocation-leaving-an-input-parameter-unbound-validates-clean-pilot-2026-07).
+
+The advisory reaches one file of the reference corpora, `kerml-examples/Simple Tests/Behaviors.kerml`,
+line 14: `var z = A().y;` — formerly exempt as a chain head — leaves `A`'s `in x` unbound,
+which the pilot's `validate-kerml` accepts and its `ParsingTests_Behaviors.kerml.xt` declares
+error-free. It is **ours, one-sided by design**: an advisory that the call cannot be evaluated,
+which the runtime confirms with `ErrUnboundParameter`, on a file that is nonetheless well formed.
+It is recorded in the pilot-corpora ratchet (`Behaviors.kerml` 0 → 1) and here, and it moves no
+Xpect row: the suite carries no `// ERROR` for the line and we report a warning, so the Xpect
+harness is 1268 agree / 57 disagree before and after, the 57 being the pre-existing rows.
+
+| Count | Before | Now |
+|---|---:|---:|
+| overall: fully agreeing | 338 | **337** |
+| overall: our diagnostics | 56 | **57** |
+| overall: only ours | 20 | **21** |
+| `kerml-examples`: fully agreeing | 51 | **50** |
+| `kerml-examples`: only ours | 3 | **4** |
 
 ### Standard-notation demo round
 
@@ -476,7 +509,8 @@ populated and unchanged: 122 diagnostics total, 66 pilot-only. Step 3's two sema
 Xpect assertions not present in these seven differential roots.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`, 1 `multiplicity` (the
+[unbound-parameter advisory](#the-unbound-parameter-advisory)); `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
 `examples` 10 syntax, 15 `unmapped`, 242 `kind-mismatch`, 279 `unresolved-reference` — of which
@@ -553,20 +587,21 @@ page's history.
 
 | Count | Now |
 |---|---:|
-| overall: fully agreeing / only ours / our diagnostics | **338 / 20 / 56** |
+| overall: fully agreeing / only ours / our diagnostics | **337 / 21 / 57** |
 | only pilot | **572** |
 | pilot diagnostics | **608** |
 | severity-only | **2** |
 | unmapped, our side | **19** |
-| kerml-examples: only ours | **3** |
+| kerml-examples: only ours | **4** |
 | pilot-examples: only ours | **7** |
 | examples: only pilot | **546** |
 
-The KerML root is now the *cleanest* of the three OMG roots in proportion: **3** only-ours against 6
+The KerML root is now the *cleanest* of the three OMG roots in proportion: **4** only-ours against 6
 only-pilot — the only root where the reference reports more than we do — with 50 of 58 files fully
-agreeing (439 / 6 and 10 / 58 when the root was added, and 72 / 39, 15 / 47 and 8 / 48 at earlier rounds). None of the 3 is a syntax or `kind-mismatch` diagnostic — the notation
+agreeing (439 / 6 and 10 / 58 when the root was added, and 72 / 39, 15 / 47 and 8 / 48 at earlier rounds). None of the 4 is a syntax or `kind-mismatch` diagnostic — the notation
 the reference accepts, we parse, and the checks we applied to KerML typings that it does not apply
-are gone. What is left is K5's three specialization cycles, all adjudicated. The class tables below
+are gone. What is left is K5's three specialization cycles and the one deliberate
+[unbound-parameter advisory](#the-unbound-parameter-advisory), all adjudicated. The class tables below
 are kept as measured when each class was adjudicated, so they describe the root at 150 rather than at 3.
 
 One category label moved with this adjudication and **no count did**:

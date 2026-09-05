@@ -134,6 +134,18 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// Most general first, so an inherited parameter keeps the position it has in
 	// the calc that declares it and a redeclaration refines it in place.
 	chain := ctx.calcChain(sym)
+	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
+		if conflict.Stated > 1 {
+			return nil, fmt.Errorf("%w: calc %s states %d result expressions",
+				ErrConflictingResultExpressions, name, conflict.Stated)
+		}
+		names := make([]string, len(conflict.Owners))
+		for i, owner := range conflict.Owners {
+			names[i] = ctx.qualifiedSymbolName(owner)
+		}
+		return nil, fmt.Errorf("%w: calc %s states or inherits a result expression from each of %s",
+			ErrConflictingResultExpressions, name, strings.Join(names, ", "))
+	}
 	body, bodyOwner := calcBody(chain)
 	shape := &calcShape{
 		Sym:       sym,
@@ -187,13 +199,10 @@ func resultBindingExpr(bindings []lower.Binding) ast.Node {
 	return result
 }
 
-// calcChain returns sym's calc specialization chain, most general first. Only
-// calc links contribute: a calc that specializes a non-calc type inherits no
-// parameters or result from it. A library link is the normative frame every calc
-// specializes — this runtime implements its parameters rather than inheriting
-// them, so it contributes none.
+// calcChain returns the calcs sym takes members from (its supertypes and the calc
+// it references), most general first, then sym. Non-calc and library links contribute nothing.
 func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
-	supers := ctx.model.AllSupertypes(sym)
+	supers := ctx.model.MemberSources(sym)
 	chain := make([]*symbols.Symbol, 0, len(supers)+1)
 	for i := len(supers) - 1; i >= 0; i-- {
 		if supers[i] != nil && isCalcDecl(supers[i].Decl) && !ctx.libraryDeclared(supers[i]) {

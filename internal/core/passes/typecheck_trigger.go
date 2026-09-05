@@ -34,7 +34,7 @@ func (TriggerArgumentPass) Run(ctx *Context, name string, root *ast.RootNamespac
 	if rootScope == nil {
 		return nil
 	}
-	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()}
+	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind}
 	// An argument's body members are typed as the type pass does.
 	bodies := &typeChecker{resolver: ctx.Resolver(), expr: expr, lang: ctx.Kind}
 	expr.walkMembers = bodies.walk

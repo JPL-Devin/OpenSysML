@@ -45,9 +45,10 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (87 cases: 20 original, 45 added along the *unreached* axis
-   described below, 13 from a second sweep, and 7 body-position cases
-   `g61`–`g67` from the constraint census described under `semantic/`). For productions our corpus exercises in the
+1. **`grammar/` — grammar mutation** (89 cases: 20 original, 45 added along the *unreached* axis
+   described below, 13 from a second sweep, 7 body-position cases
+   `g61`–`g67` from the constraint census described under `semantic/`, and the two second-result-expression
+   bodies `g69`/`k20`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -158,29 +159,39 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-243 case(s): 235 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+246 case(s): 237 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 87 | 87 | 0 | 0 | 0 |
-| semantic | 113 | 105 | 0 | 8 | 0 |
+| grammar | 89 | 89 | 0 | 0 | 0 |
+| semantic | 114 | 105 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
-The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
-the pinned pilot does not implement; they are not permissiveness gaps on our side and are
-adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119, to
+Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
+the pinned pilot does not implement; the ninth, `s81`, is a non-Boolean guard on an action body's
+guarded succession, which the pinned pilot's `validateTransitionFeatureMembershipGuardExpression`
+leaves silent once the standard library types the guard (see the gap table below). None is a
+permissiveness gap on our side; each is adjudicated as a pilot gap in the differential. The corpus grew from 79 cases to 119, to
 120 with `g60` (an `alias` named by a keyword), to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it, to
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
 three trigger-argument typing cases (`s48`–`s50`), to 235 with the enumerated value typed by
 its literal (`p18-enum-value-typed-outside-enumeration`), to 236 with the one typed by an
-expression body (`s51`), and to 243 with the seven KerML census cases (`k43`–`k47`, `s52`, `s53`:
+expression body (`s51`), to 237 with the composite variant port (`s52`), to 238 with the
+non-Boolean guarded-succession guard (`s81`), to 241 with the three result-expression ownership cases (`s82`, `s83`,
+`k43`: a specialization, a redefining usage and a typed expression each stating a body over an
+inherited result expression), to 243 with the two reference-subsetting ones (`s84`, `k44`), and to 245 with `g69`/`k20` (a calculation or
+function body listing a second bare expression: the pinned `CalculationBodyPart`/`FunctionBodyPart` admit one
+`ResultExpressionMember`, so the pilot stops at the second expression, `missing '}' at 'x'`, while we read it as a
+second result expression under the same one-result rule), and to 246 with `s85` (a viewpoint definition, a
+requirement and so a constraint, inheriting result expressions from two generals), and to 253 with the seven KerML census cases (`k45`–`k49`, `s86`, `s87`:
 an annotating element annotating itself, a three-ended binding, a conjugated feature or structure
 without its type or default supertype, a chain through an alias to another type's feature, and
-an `end` with a direction or a derived/abstract modifier), all landing both-reject. The KerML constraints in that
+an `end` with a direction or a derived/abstract modifier), all landing both-reject.
+The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
 argument checking of the send-action family closed another (`k34`), the cross-subsetting
@@ -287,7 +298,7 @@ reading of the specification.
 | `validateItemUsageType`, `validatePartUsageType`, `validatePartUsagePartDefinition` | `checkItemUsage` and `checkPartUsage` are commented out in `SysMLValidator.xtend`; the generic `checkUsage` requires only a `Classifier`. `item i : AD;` (an attribute definition) is rejected as `validateOccurrenceUsageType` (`An occurrence, item or part must be typed by occurrence definitions.`, which we also report), and `part p : ID;` (an item definition) is accepted by both implementations. |
 | `validateOperatorExpressionQuantity` | Reported as a **warning** (`Should be a measurement reference (unit).`), and warnings do not count as rejection on either side. |
 | `validateUseCaseUsageReference` | Only the name and message constants are declared; `checkUseCaseUsage` implements the typing rule (`validateUseCaseUsageType`, `s38`) and nothing reads `INVALID_USE_CASE_USAGE_REFERENCE`. The `include` form is covered by `validateIncludeUseCaseUsageReference` (`s20`). |
-| `validateTransitionFeatureMembershipGuardExpression` | The error path (`Must be a Boolean expression.`) exists and the pilot's `TransitionUsage_invalid.sysml.xt` expects it for `if "test"`, but that fixture loads a reduced library without `ScalarValues`. With the full standard library the pinned validator accepts `first s1 if "test" then s2` and `if 1 + 2` — the same shape as the fixture — while we reject both (`transition guard must be Boolean, found String`). Recorded as a question in [omg-issues.md](omg-issues.md#a-non-boolean-transition-guard-is-accepted-with-the-full-library-loaded-pilot-2026-07). |
+| `validateTransitionFeatureMembershipGuardExpression` | The error path (`Must be a Boolean expression.`) exists and the pilot's `TransitionUsage_invalid.sysml.xt` expects it for `if "test"`, but that fixture loads a reduced library without `ScalarValues`. With the full standard library the pinned validator accepts `first s1 if "test" then s2`, `if 1 + 2`, and every other non-Boolean guard we tried in a state body (`accept … if 1 then`, `transition if 2.5 then`) or an action body (`first a if "go" then b`, a decision's `if e then`, an enumeration literal, a `String`-valued calc) — while we reject them all (`transition guard must be Boolean, found String`; `s81` pins the action-body form as ours-only). The cause is in `ExpressionAdapter`: a guard implicitly redefines the library's `TransitionPerformance::guard` (`bool guard[*]`), so its result specializes `Boolean` by construction and the validator's `isBoolean` test is vacuous. Recorded in [omg-issues.md](omg-issues.md#a-non-boolean-transition-guard-is-accepted-with-the-full-library-loaded-pilot-2026-07). |
 
 ### Constraints without a constructible violating model
 

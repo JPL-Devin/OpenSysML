@@ -235,7 +235,10 @@ package OpenSysMLPipeline {
             attribute :>> goType = "AssignmentReferentPass";
             attribute :>> elementScoped = true;
         }
-        part resultExpressions : ConstraintCheck { attribute :>> goType = "ResultExpressionPass"; }
+        part resultExpressions : ConstraintCheck {
+            attribute :>> goType = "ResultExpressionPass";
+            attribute :>> elementScoped = true;
+        }
         part featureReferences : ConstraintCheck { attribute :>> goType = "FeatureReferencePass"; }
         part metadataTypes : TypeCheck {
             attribute :>> goType = "MetadataTypePass";

@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 33,
-        "digest": "sha256:1ff26948b66efb2cc9ce8bb812a0d8bbbc3514d1ebfd004175632c79f67fed83"
+        "digest": "sha256:d12b61973253a66ce6213c1701a42e887618db86460878fe9e4918562d357020"
       },
       {
         "name": "probes",
@@ -75,12 +75,12 @@
   },
   "totals": {
     "files": 367,
-    "filesFullyAgreeing": 338,
+    "filesFullyAgreeing": 337,
     "agreement": 34,
     "severityMismatch": 2,
-    "openSysMLOnly": 20,
+    "openSysMLOnly": 21,
     "pilotOnly": 572,
-    "openSysMLDiagnostics": 56,
+    "openSysMLDiagnostics": 57,
     "pilotDiagnostics": 608
   },
   "roots": [
@@ -219,12 +219,12 @@
       "dir": "examples/pilot-corpora/kerml-examples",
       "totals": {
         "files": 58,
-        "filesFullyAgreeing": 51,
+        "filesFullyAgreeing": 50,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 3,
+        "openSysMLOnly": 4,
         "pilotOnly": 6,
-        "openSysMLDiagnostics": 3,
+        "openSysMLDiagnostics": 4,
         "pilotDiagnostics": 6
       },
       "files": [
@@ -241,6 +241,20 @@
               "count": 1
             }
           ]
+        },
+        {
+          "path": "Simple Tests/Behaviors.kerml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [
+            {
+              "line": 14,
+              "severity": "warning",
+              "category": "multiplicity",
+              "count": 1
+            }
+          ],
+          "pilotOnly": []
         },
         {
           "path": "Simple Tests/Circular.kerml",
@@ -3621,12 +3635,12 @@
     ],
     "totals": {
       "files": 367,
-      "filesFullyAgreeing": 339,
+      "filesFullyAgreeing": 338,
       "agreement": 34,
       "severityMismatch": 2,
-      "openSysMLOnly": 19,
+      "openSysMLOnly": 20,
       "pilotOnly": 572,
-      "openSysMLDiagnostics": 55,
+      "openSysMLDiagnostics": 56,
       "pilotDiagnostics": 608
     },
     "findings": [
