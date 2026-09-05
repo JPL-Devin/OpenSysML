@@ -721,6 +721,9 @@ func (e *ActionExecutor) hasFlow() bool {
 // completeWithoutFlow completes an action stating no flow: it performs no step,
 // so its performance begins, takes its inputs, and ends at once.
 func (e *ActionExecutor) completeWithoutFlow() error {
+	if err := e.checkResultParameters(); err != nil {
+		return err
+	}
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 	if err := e.bindInputs(); err != nil {
 		return err
@@ -799,6 +802,9 @@ func (e *ActionExecutor) initialize() error {
 	// A nested node's own flow is validated here, not at construction, so a
 	// malformed one is a typed error rather than a leaf that silently runs.
 	if err := e.validateSubflows(e.graph); err != nil {
+		return err
+	}
+	if err := e.checkResultParameters(); err != nil {
 		return err
 	}
 

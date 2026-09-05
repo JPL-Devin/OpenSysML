@@ -9,7 +9,7 @@ package test {
         in amount : Integer;
         inout tally : Integer;
         out scaled : Integer;
-        return result : Integer;
+        out result : Integer;
     }
 
     action def Double :> Scale {

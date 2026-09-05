@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 246,
-        "digest": "sha256:bacbb833808105b3e644671ba965e7a48d1de0734f42d67ab9ca941bc1794e8c"
+        "files": 256,
+        "digest": "sha256:04de50497011a01b8e37a008d8ce85682c417b02fa3a2e44ad1c240ff6915bc1"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 246,
-    "bothReject": 237,
+    "cases": 256,
+    "bothReject": 247,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 114,
-      "bothReject": 105,
+      "cases": 124,
+      "bothReject": 115,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1468,6 +1468,78 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/k45-conjugated-feature-without-type.kerml",
+      "source": "semantic",
+      "rule": "a feature must have at least one type, and a feature conjugating a class takes no type from it and owns no implicit subsetting to supply one (KerML 8.3.3.3.4 validateFeatureHasType; pilot validateFeatureHasType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k46-conjugated-structure-not-an-object.kerml",
+      "source": "semantic",
+      "rule": "a classifier must directly or indirectly specialize its kind's default supertype, and a structure conjugating a plain class reaches Base::Anything but not Objects::Object (KerML 8.3.4.3.2 checkStructureSpecialization; pilot validateClassifierDefaultSupertype).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k47-feature-chain-through-alias-to-another-type.kerml",
+      "source": "semantic",
+      "rule": "each chaining feature of a feature chain must be featured within the one before it, and an alias reaching another type's feature is not (KerML 8.3.3.3.4 validateFeatureChainingFeatureConformance; pilot validateFeatureChainingFeatureConformance).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 4,
+      "pilotErrors": 4
+    },
+    {
+      "path": "semantic/k48-annotating-element-annotates-itself.kerml",
+      "source": "semantic",
+      "rule": "an annotation owned by its annotated element must own its annotating element, so an annotating element cannot annotate itself (KerML 8.3.2.3.3 validateAnnotationAnnotatedElementOwnership; pilot validateAnnotationAnnotatedElementOwnership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 9
+    },
+    {
+      "path": "semantic/k49-binding-connector-with-three-ends.kerml",
+      "source": "semantic",
+      "rule": "a binding connector is binary, so its ends must reference exactly two features (KerML 8.3.4.7.2 validateBindingConnectorIsBinary; pilot validateBindingConnectorIsBinary).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k50-inline-cross-feature-also-crosses.kerml",
+      "source": "semantic",
+      "rule": "an end that declares its cross feature inline (`end [m] ...`) cannot also cross another feature (KerML 8.3.3.3 Feature::crossFeature is single-valued; pilot checkFeatureCrossingSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k51-return-parameter-in-classifier.kerml",
+      "source": "semantic",
+      "rule": "a return parameter membership must be owned by a function or expression (KerML 8.3.4.7 validateReturnParameterMembershipOwningType; pilot validateReturnParameterMembershipOwningType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k52-two-conjugators.kerml",
+      "source": "semantic",
+      "rule": "a type may have at most one conjugator (KerML 8.3.3.1 validateTypeAtMostOneConjugator; pilot validateTypeAtMostOneConjugator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -1993,6 +2065,24 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s86-end-with-direction.sysml",
+      "source": "semantic",
+      "rule": "an end feature cannot have a direction (KerML 8.3.3.3.4 validateFeatureEndNoDirection; pilot validateFeatureEndNoDirection).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/s87-end-derived-or-abstract.sysml",
+      "source": "semantic",
+      "rule": "an end feature cannot be derived, abstract, composite or portion (KerML 8.3.3.3.4 validateFeatureEndNotDerivedAbstractCompositeOrPortion; pilot validateFeatureEndNotDerivedAbstractCompositeOrPortion).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 3
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2367,8 +2457,8 @@
       }
     ],
     "totals": {
-      "cases": 246,
-      "bothReject": 237,
+      "cases": 256,
+      "bothReject": 247,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

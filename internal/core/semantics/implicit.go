@@ -174,6 +174,20 @@ func (m *Model) KindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
 	return m.kindBaseFQNs(sym, isKerML)
 }
 
+// DeclaresKerMLClassifier reports whether sym is a KerML classifier declaration
+// the symbol table records as a usage, such as `datatype D;` or `function F;`.
+func (m *Model) DeclaresKerMLClassifier(sym *symbols.Symbol) bool {
+	if sym == nil || !m.isKerMLDoc(sym) {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return false
+	}
+	_, ok = implicitKerMLBases[usage.Keyword]
+	return ok
+}
+
 // FeatureBaseFQN returns the standard-library element a feature declaration
 // takes its type from when it declares none: the base feature its kind implies,
 // or the base definition a SysML usage of that kind is typed by.
@@ -386,8 +400,9 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 		if !sameBase && !visiting[target] {
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —
-			// except back through a cycle, which reaches nothing new.
-			if slices.Contains(m.kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !m.declaredReaches(target, sym, nil) {
+			// except back through a cycle, which reaches nothing new, or a
+			// conjugated one, whose supertypes come from what it conjugates.
+			if slices.Contains(m.kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !declaresConjugation(target) && !m.declaredReaches(target, sym, nil) {
 				sameBase = true
 			}
 		}
