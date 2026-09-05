@@ -12,4 +12,6 @@
   a tighter requirement is written as a new or nested constraint rather than by replacing the
   inherited body. The runtime agrees: a calculation or constraint that states or inherits more
   than one result expression is refused with a typed error, naming each owner, instead of being
-  evaluated with a silently chosen body.
+  evaluated with a silently chosen body, and a bodiless reference-subsetting calculation or
+  constraint (`calc two ::> one;`, `constraint kept ::> c;`) computes or checks the body it
+  inherits rather than reporting none.

@@ -884,14 +884,12 @@ type scopedMember struct {
 	scope *symbols.Scope
 }
 
-// chainMembers returns the members declared by sym's supertypes, most general
-// first, followed by sym's own. A usage that takes its conditions from a
-// definition (constraint limit : MassLimit) carries no members itself. A library
-// supertype states the metamodel frame every element specializes rather than the
-// model's own objectives, conditions or parameters, so it contributes none.
+// chainMembers returns the members of the types sym takes members from (its
+// supertypes and the feature it references), most general first, then sym's own.
+// A library supertype states the metamodel frame, not model conditions, and contributes none.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
-	supers := ctx.model.AllSupertypes(sym)
+	supers := ctx.model.MemberSources(sym)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
 		if link == nil || ctx.libraryDeclared(link) {

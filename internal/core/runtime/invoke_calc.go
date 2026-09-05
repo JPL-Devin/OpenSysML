@@ -199,13 +199,10 @@ func resultBindingExpr(bindings []lower.Binding) ast.Node {
 	return result
 }
 
-// calcChain returns sym's calc specialization chain, most general first. Only
-// calc links contribute: a calc that specializes a non-calc type inherits no
-// parameters or result from it. A library link is the normative frame every calc
-// specializes — this runtime implements its parameters rather than inheriting
-// them, so it contributes none.
+// calcChain returns the calcs sym takes members from (its supertypes and the calc
+// it references), most general first, then sym. Non-calc and library links contribute nothing.
 func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
-	supers := ctx.model.AllSupertypes(sym)
+	supers := ctx.model.MemberSources(sym)
 	chain := make([]*symbols.Symbol, 0, len(supers)+1)
 	for i := len(supers) - 1; i >= 0; i-- {
 		if supers[i] != nil && isCalcDecl(supers[i].Decl) && !ctx.libraryDeclared(supers[i]) {
