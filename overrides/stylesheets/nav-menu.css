@@ -48,3 +48,41 @@
   border: 0;
   background: var(--md-default-fg-color--lightest);
 }
+
+/* Below the theme's drawer breakpoint the header already has one menu button, so this
+   one gives way to the same links in a row above the footer (overrides/main.html). */
+.osml-footer-menu {
+  display: none;
+  background: var(--md-footer-bg-color);
+  color: var(--md-footer-fg-color--light);
+}
+.osml-footer-menu__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 1rem;
+  padding: 0.8rem 0.8rem 0;
+}
+.osml-footer-menu a {
+  font-size: 0.7rem;
+  color: inherit;
+}
+.osml-footer-menu a:focus,
+.osml-footer-menu a:hover {
+  color: var(--md-footer-fg-color);
+}
+.osml-footer-menu hr {
+  width: 1px;
+  height: 0.8rem;
+  margin: 0;
+  border: 0;
+  background: var(--md-footer-fg-color--lighter);
+}
+@media screen and (max-width: 76.1875em) {
+  .osml-menu {
+    display: none;
+  }
+  .osml-footer-menu {
+    display: block;
+  }
+}
