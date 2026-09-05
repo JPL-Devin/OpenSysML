@@ -207,3 +207,54 @@ func TestNestedOwnedConstraintReadsEnclosingParameters(t *testing.T) {
 		}
 	}
 }
+
+// A named constraint's parameters mask the subject and actors the requirement
+// binds by name: `v` and `bound` in Below's body are its parameters, not the
+// requirement's subject `v` or actor `bound` (pilot 2026-07 accepts the shape).
+func TestOwnedConstraintParametersMaskSubjectAndActorBindings(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Vehicle { attribute mass : Real default = 300.0; }
+			constraint def Below { in v : Real; in bound : Real; v < bound }
+			part car : Vehicle;
+			part station : Vehicle;
+			requirement def Base {
+				subject v : Vehicle;
+				actor bound : Vehicle = station;
+				attribute m : Real default = 5.0;
+				require constraint below : Below { in v = m; in bound = 10.0; }
+				require constraint { v.mass > 0.0 }
+			}
+			requirement def High :> Base {
+				attribute :>> m = 50.0;
+			}
+			requirement base : Base;
+			requirement high : High;
+			satisfy base by car;
+			satisfy high by car;
+		}
+	`)
+	car, err := ctx.Instantiate(memberPath(t, pkg, "car"))
+	if err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	assertions := ctx.SatisfyAssertionsIn(pkg)
+	if len(assertions) != 2 {
+		t.Fatalf("assertions = %d, want the two the package states", len(assertions))
+	}
+	for i, want := range []bool{true, false} {
+		a := assertions[i]
+		result, err := ctx.CheckSatisfactionOn(a, car)
+		if want {
+			if err != nil || !result.Holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", a.Text(), result.Holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) || violation.Condition != "v < bound" {
+			t.Errorf("%s: err = %v; want a violation of v < bound", a.Text(), err)
+		}
+	}
+}

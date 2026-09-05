@@ -740,7 +740,7 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
 	for _, constraint := range cond.Constraints {
-		features = ctx.constraintFeatures(features, constraint)
+		features, bindings = ctx.constraintScope(features, bindings, constraint)
 	}
 	holds := true
 	if cond.Group != nil {
@@ -817,12 +817,13 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 	return out
 }
 
-// constraintFeatures overlays the features of a named constraint usage stating a
-// condition on those already in scope: its parameters mask same-named ones.
-func (ctx *Context) constraintFeatures(features map[string]scopedExpr, constraint *symbols.Symbol) map[string]scopedExpr {
+// constraintScope overlays the features of a named constraint usage stating a
+// condition on those already in scope: its parameters mask same-named ones,
+// the subject and actors the checked element binds by name included.
+func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings map[string]Value, constraint *symbols.Symbol) (map[string]scopedExpr, map[string]Value) {
 	own := ctx.conditionFeatures(constraint)
 	if len(own) == 0 {
-		return features
+		return features, bindings
 	}
 	out := make(map[string]scopedExpr, len(features)+len(own))
 	for name, feat := range features {
@@ -830,6 +831,27 @@ func (ctx *Context) constraintFeatures(features map[string]scopedExpr, constrain
 	}
 	for name, feat := range own {
 		out[name] = feat
+	}
+	return out, unmasked(bindings, own)
+}
+
+// unmasked returns bindings without the names features declare.
+func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[string]Value {
+	masked := false
+	for name := range bindings {
+		if _, ok := features[name]; ok {
+			masked = true
+			break
+		}
+	}
+	if !masked {
+		return bindings
+	}
+	out := make(map[string]Value, len(bindings))
+	for name, value := range bindings {
+		if _, ok := features[name]; !ok {
+			out[name] = value
+		}
 	}
 	return out
 }
