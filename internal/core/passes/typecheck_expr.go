@@ -948,12 +948,9 @@ func (ec *exprChecker) checkObjectBinding(scope *symbols.Scope, arg ast.Node, fe
 }
 
 // argumentTypeSymbol resolves a value's type in scope (feature reference or
-// chain, invocation result, constructed type, literal scalar), or nil.
+// chain, invocation result, body, constructed type, literal scalar), or nil.
 func (ec *exprChecker) argumentTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
-	if got := ec.valueTypeSymbol(scope, value); got != nil {
-		return got
-	}
-	if got := ec.invocationResultTypeSymbol(scope, value); got != nil {
+	if got := ec.declaredValueType(scope, value); got != nil {
 		return got
 	}
 	if got := ec.constructedTypeSymbol(scope, value); got != nil {

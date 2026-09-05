@@ -736,7 +736,17 @@ func TestExprBodyValueIsTheExpression(t *testing.T) {
 		private import ISQ::*;
 		private import SI::*;
 		attribute def Temp;
+		calc def KT { in t : Temp; return : Integer = 1; }
+		calc def KA { in a : Base::Anything; return : Integer = 1; }
+		calc def KE { in e : Performances::Evaluation; return : Integer = 1; }
+		calc def KF { in calc f : Performances::Evaluation; return : Integer = 1; }
+		calc def KC { in c : Base::Anything[0..*]; return : Integer = 1; }
+		package A { calc def K { in t : Temp; return : Integer = 1; } }
+		package B { calc def K { in e : Performances::Evaluation; return : Integer = 2; } }
+		part def Box { attribute inner : Temp; }
 		part def H {
+			private import A::*;
+			private import B::*;
 			attribute flag : Boolean;
 			attribute n : Integer;
 			%s
@@ -758,6 +768,10 @@ func TestExprBodyValueIsTheExpression(t *testing.T) {
 		{"attribute b : Boolean = { true } == true;", "comparing Expression with Boolean is always false"},
 		{"attribute a : Base::Anything = { \"x\" + 1 };", "operator '+' is not defined for String and Natural"},
 		{"action a { assign n := { 5 }; }", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute i : Integer = KT({ 5 });", "argument 1 of KT expects Temp, found Evaluation"},
+		{"attribute i : Integer = KT(t = { 5 });", "argument t of KT expects Temp, found Evaluation"},
+		{"attribute i : Integer = KT(({ 5 }, { 6 }));", "argument 1 of KT expects Temp, found Evaluation"},
+		{"part b : Box = new Box({ 5 });", "inner of Box is typed by Temp; cannot bind a value of type Evaluation"},
 	} {
 		diags := libraryTypeDiags(t, fmt.Sprintf(prelude, tc.decl))
 		if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.want) {
@@ -770,6 +784,11 @@ func TestExprBodyValueIsTheExpression(t *testing.T) {
 		"attribute u = { 5 };",
 		"attribute b : Boolean = flag.{in f; f};",
 		"calc def K { in expr f; return : Integer = f(); } attribute i : Integer = K({ 5 });",
+		"attribute i : Integer = KA({ 5 });",
+		"attribute i : Integer = KE({ 5 });",
+		"attribute i : Integer = KF({ 5 });",
+		"attribute i : Integer = KC({ 5 });",
+		"attribute i : Integer = K({ 5 });",
 	} {
 		if diags := libraryTypeDiags(t, fmt.Sprintf(prelude, decl)); len(diags) != 0 {
 			t.Errorf("%s: want no diagnostics, got %v", decl, diags)

@@ -122,9 +122,12 @@ func (ec *exprChecker) argument(scope *symbols.Scope, value ast.Node, name strin
 	}
 }
 
-// declaredValueType is the declared type of the feature value names, or of the
-// result of the call it makes; nil when neither.
+// declaredValueType is the declared type of the feature value names, of the result
+// of the call it makes, or the Evaluation a body `{ … }` is; nil when none.
 func (ec *exprChecker) declaredValueType(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	if _, ok := value.(*ast.BodyExpr); ok {
+		return ec.model.ScalarSymbol(semantics.PrimExpression)
+	}
 	if declared := ec.valueTypeSymbol(scope, value); declared != nil {
 		return declared
 	}
