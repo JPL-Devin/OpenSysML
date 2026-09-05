@@ -185,7 +185,7 @@
     {
       "name": "validateClassSpecialization",
       "source": "both",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateClassifierDefaultSupertype",
@@ -237,7 +237,7 @@
     {
       "name": "validateConstructorExpressionOwnedFeatures",
       "source": "kerml",
-      "status": "approximate"
+      "status": "unknown"
     },
     {
       "name": "validateControlNodeIncomingSuccessions",
@@ -267,7 +267,7 @@
     {
       "name": "validateDataTypeSpecialization",
       "source": "both",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateDecisionNodeIncomingSuccessions",
@@ -608,7 +608,7 @@
     {
       "name": "validateInvocationExpressionParameterRedefinition",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateItemUsageType",
@@ -714,17 +714,17 @@
       "name": "validateOperatorExpressionBracketOperator",
       "raw": "validateOperatorExpressionBracketOperator_",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionCastConformance",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionQuantity",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOwnedDifferencingNotOne",
@@ -904,7 +904,7 @@
     {
       "name": "validateSpecializationSpecificNotConjugated",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateStakeholderMembershipOwningType",

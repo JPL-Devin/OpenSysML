@@ -18,7 +18,9 @@ import (
 type exprChecker struct {
 	resolver *resolve.Resolver
 	model    *semantics.Model
-	diags    []Diagnostic
+	// lang is the document's language: KerML gives `[` no function to invoke.
+	lang  source.Kind
+	diags []Diagnostic
 	// chaining guards the type of a feature read through a chain against a
 	// feature whose value names itself, directly or through another feature.
 	chaining map[*symbols.Symbol]bool
@@ -48,11 +50,16 @@ func (ec *exprChecker) errorCode(code string, span source.Span, format string, a
 }
 
 func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
+	ec.warnCode("type.expr", span, format, args...)
+}
+
+// warnCode is warnf under the code of a rule with its own.
+func (ec *exprChecker) warnCode(code string, span source.Span, format string, args ...any) {
 	ec.diags = append(ec.diags, Diagnostic{
 		Severity: SeverityWarning,
 		Span:     span,
 		Message:  fmt.Sprintf(format, args...),
-		Code:     "type.expr",
+		Code:     code,
 		Source:   "type",
 	})
 }
@@ -289,9 +296,13 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 // written with says which of the two it is.
 func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semantics.PrimType {
 	if e.Bracket {
-		// The unit is a library name, checked by the units pass rather than typed
-		// here; the magnitude is an expression of its own and is checked.
+		// The unit is a measurement reference, not a scalar; the magnitude and the
+		// operators inside the unit are expressions of their own and are checked.
 		ec.infer(scope, e.Operand)
+		if e.Index != nil {
+			ec.infer(scope, e.Index)
+		}
+		ec.checkBracket(scope, e)
 		return semantics.PrimUnknown
 	}
 
@@ -527,7 +538,7 @@ func (ec *exprChecker) featurePrimType(sym *symbols.Symbol) semantics.PrimType {
 	// The value belongs to the declaring scope, and is checked there in its own
 	// right, so this only reads its type: diagnostics raised here would be
 	// reported once per reader.
-	silent := exprChecker{resolver: ec.resolver, model: ec.model, chaining: ec.chaining}
+	silent := exprChecker{resolver: ec.resolver, model: ec.model, lang: ec.lang, chaining: ec.chaining}
 	return silent.infer(sym.OwnerScope, usage.Value)
 }
 
@@ -552,6 +563,8 @@ func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 		return ec.checkEquality(scope, e)
 	case ast.OpConditional:
 		return ec.checkConditional(scope, e)
+	case ast.OpAs:
+		ec.checkCast(scope, e)
 	}
 	// Operators outside the scalar lattice (casts, classification, ranges,
 	// indexing): still walk operands so nested errors surface.
@@ -559,6 +572,32 @@ func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 		ec.infer(scope, operand)
 	}
 	return semantics.PrimUnknown
+}
+
+// checkCast warns of `x as T` when no type of x and T specialize one another
+// (KerML validateOperatorExpressionCastConformance).
+func (ec *exprChecker) checkCast(scope *symbols.Scope, e *ast.OperatorExpr) {
+	if ec.model == nil || e.TypeRef == nil || len(e.TypeRef.Parts) == 0 {
+		return
+	}
+	if c := ec.model.CastConformance(scope, e); c.Known && !c.Holds {
+		ec.warnCode(codeCastConformance, e.Span(), msgCastConformance, c.Found, e.TypeRef.Parts[len(e.TypeRef.Parts)-1].Text)
+	}
+}
+
+// checkBracket judges `x [u]`: a misspelt index in KerML (validateOperatorExpressionBracketOperator),
+// a quantity whose unit u is a measurement reference in SysML (validateOperatorExpressionQuantity).
+func (ec *exprChecker) checkBracket(scope *symbols.Scope, e *ast.IndexExpr) {
+	if ec.lang == source.KindKerML {
+		ec.warnCode(codeBracketOperator, e.Span(), msgBracketOperator)
+		return
+	}
+	if ec.model == nil || e.Index == nil {
+		return
+	}
+	if c := ec.model.UnitOperandConformance(scope, e.Index); c.Known && !c.Holds {
+		ec.warnCode(codeQuantityUnit, e.Index.Span(), msgQuantityUnit, c.Found)
+	}
 }
 
 func (ec *exprChecker) checkUnaryBoolean(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
@@ -813,6 +852,10 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
+// msgInvocationParameterRedefinition opens the report of an argument that binds no `in`
+// parameter of the invoked type (KerML §8.3.4.8 validateInvocationExpressionParameterRedefinition).
+const msgInvocationParameterRedefinition = "Must correspond to one input parameter of the invoked type"
+
 // invocation is a call under argument checking: the expression, the behavior it names,
 // its positional arguments and their types, the `in` parameters, and whether every
 // argument is known (complete).
@@ -849,7 +892,7 @@ func (ec *exprChecker) checkArguments(scope *symbols.Scope, call invocation, con
 	}
 	switch {
 	case len(args) > len(params):
-		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		report(args[len(params)].Span(), "%s: %s takes %d argument(s), found %d", msgInvocationParameterRedefinition, sym.Name, len(params), len(args))
 		return
 	case complete && len(args) < required:
 		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
@@ -1034,7 +1077,7 @@ func (ec *exprChecker) checkNamedArguments(
 		return
 	}
 	if len(args) > len(params) {
-		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args)+len(e.NamedArgs))
+		report(args[len(params)].Span(), "%s: %s takes %d argument(s), found %d", msgInvocationParameterRedefinition, sym.Name, len(params), len(args)+len(e.NamedArgs))
 		return
 	}
 	bound := make([]bool, len(params))
@@ -1051,7 +1094,7 @@ func (ec *exprChecker) checkNamedArguments(
 		}
 		at := ec.namedParameter(scope, sym, params, arg.Name)
 		if at < 0 {
-			report(e.Span(), "%s has no parameter named %q", sym.Name, semantics.QualifiedNameText(arg.Name))
+			report(arg.Name.Span(), "%s: %s has no parameter named %q", msgInvocationParameterRedefinition, sym.Name, semantics.QualifiedNameText(arg.Name))
 			unknown = true
 			continue
 		}
