@@ -479,3 +479,37 @@ func TestEndsInheritedThroughDiamondCountOnce(t *testing.T) {
 		t.Errorf("RelatedFeatureCount(leaf) = %d, want 1", n)
 	}
 }
+
+// An owned end claims what it redefines: the ends its `:>>` clauses name, or the
+// positional end when it names nothing — so naming an end of one general leaves
+// the other general's end at that position effective.
+func TestEndsClaimedAcrossSeveralGenerals(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def T;
+		connection def A { end [1] part a1 : T; end [1] part a2 : T; }
+		connection def B { end [1] part b1 : T; end [1] part b2 : T; }
+		connection def OneSide :> A, B {
+			end [1] part c1 : T :>> A::a1;
+			end [1] part c2 : T :>> A::a2;
+		}
+		connection def Positional :> A, B { end [1] part d1 : T; end [1] part d2 : T; }
+		connection def BothSides :> A, B {
+			end [1] part e1 : T :>> A::a1, B::b1;
+			end [1] part e2 : T :>> A::a2, B::b2;
+		}
+		connection def Swapped :> A { end [1] part f1 : T :>> A::a2; end [1] part f2 : T :>> A::a1; }
+	}`)
+	p := sym(t, root, "P")
+	b := nested(t, p.Scope, "B")
+	oneSide := nested(t, p.Scope, "OneSide")
+	if ends := m.endsOf(oneSide); len(ends) != 4 ||
+		ends[0] != nested(t, oneSide.Scope, "c1") || ends[1] != nested(t, oneSide.Scope, "c2") ||
+		ends[2] != nested(t, b.Scope, "b1") || ends[3] != nested(t, b.Scope, "b2") {
+		t.Errorf("endsOf(OneSide) = %v, want [c1 c2 B::b1 B::b2]", ends)
+	}
+	for _, name := range []string{"Positional", "BothSides", "Swapped"} {
+		if n := m.ConnectorEndCount(nested(t, p.Scope, name)); n != 2 {
+			t.Errorf("ConnectorEndCount(%s) = %d, want 2", name, n)
+		}
+	}
+}

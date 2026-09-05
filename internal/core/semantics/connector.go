@@ -134,15 +134,14 @@ func (m *Model) effectiveEnds(sym *symbols.Symbol) []connectorEnd {
 		out = append(out, connectorEnd{feature: end, owner: sym, index: i})
 	}
 
+	redefined := m.redefinedByEnds(owned)
 	var inherited []connectorEnd
 	for _, sup := range m.DirectSupertypes(sym) {
 		if !m.isConnectorLike(sup) {
 			continue
 		}
-		general := m.effectiveEnds(sup)
-		claimed := claimedEnds(owned, endFeatures(general))
-		for i, end := range general {
-			if !endClaimed(end.feature, i, owned, claimed) {
+		for i, end := range m.effectiveEnds(sup) {
+			if !endRedefined(end.feature, i, owned, redefined) {
 				inherited = append(inherited, end)
 			}
 		}
@@ -175,33 +174,27 @@ func (m *Model) unmaskedEnds(ends []connectorEnd) []connectorEnd {
 	return out
 }
 
-// endClaimed reports whether the general end at position i is redefined by an
-// owned end: by name, or by position when it has no symbol of its own.
-func endClaimed(end *symbols.Symbol, i int, owned []*symbols.Symbol, claimed map[*symbols.Symbol]bool) bool {
+// redefinedByEnds returns every feature the owned ends redefine, by clause or by position.
+func (m *Model) redefinedByEnds(owned []*symbols.Symbol) map[*symbols.Symbol]bool {
+	redefined := make(map[*symbols.Symbol]bool)
+	for _, end := range owned {
+		for _, target := range m.AllRedefinedFeatures(end) {
+			redefined[target] = true
+		}
+	}
+	return redefined
+}
+
+// endRedefined reports whether an owned end redefines the general end at position i;
+// an end without a symbol on either side is matched by position alone.
+func endRedefined(end *symbols.Symbol, i int, owned []*symbols.Symbol, redefined map[*symbols.Symbol]bool) bool {
 	if end == nil {
 		return i < len(owned)
 	}
-	return claimed[end]
-}
-
-// claimedEnds returns the ends of general that owned redefines, each by the
-// target its declaration names explicitly or, failing that, the one at its own
-// position. Only what no owned end claims is inherited.
-func claimedEnds(owned, general []*symbols.Symbol) map[*symbols.Symbol]bool {
-	claimed := make(map[*symbols.Symbol]bool)
-	for i, end := range owned {
-		if explicit := namedEnds(end, general); len(explicit) > 0 {
-			for _, target := range explicit {
-				claimed[target] = true
-			}
-			continue
-		}
-		if i < len(general) {
-			claimed[general[i]] = true
-		}
+	if redefined[end] {
+		return true
 	}
-	delete(claimed, nil)
-	return claimed
+	return i < len(owned) && owned[i] == nil
 }
 
 // namedEnds returns the ends of general that end's `:>>` clauses name, matching
