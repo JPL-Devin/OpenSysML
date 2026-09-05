@@ -41,7 +41,7 @@ func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.Conv
 	// that let a format be inferred learns the mapping it got is experimental.
 	if export.IsExperimental(from, to) {
 		resp.Experimental = true
-		resp.ExperimentalNotice = export.ExperimentalNotice
+		resp.ExperimentalNotice = export.Notice(from, to)
 	}
 	out, syntax, err := convertModel(name, data, from, to, req.TolerateSyntaxErrors)
 	if err != nil {

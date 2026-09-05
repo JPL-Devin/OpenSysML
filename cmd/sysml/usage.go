@@ -67,8 +67,9 @@ func doc() usage.Doc {
 				// Printed rather than restated, so the help cannot drift from what a
 				// conversion reports.
 				export.ExperimentalNotice,
-				"Every run that converts RDF says so on stderr. Saving to .sysml or " +
-					".kerml is stable.",
+				export.MigrationNotice,
+				"Every run that converts RDF or migrates a v1 model says so on stderr. " +
+					"Saving to .sysml or .kerml is stable.",
 			},
 		}, {
 			Title: "Native compilation",
@@ -248,7 +249,7 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
 	fs.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	fs.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
-	fs.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle, rdf, or xmi/mdzip for a SysML v1 model to migrate (default: from the input's extension)")
+	fs.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle, rdf, or xmi/mdzip for a SysML v1 model to migrate (experimental; default: from the input's extension)")
 	fs.StringVar(&migrationReport, "migration-report", "", "With -convert from xmi: write the element-by-element migration report to this file (JSON when it ends in .json, text otherwise)")
 	fs.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	fs.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")

@@ -273,6 +273,9 @@ func TestConvertMigratesXMI(t *testing.T) {
 	if !strings.Contains(migrated.stderr, "migration: migrated") || strings.Contains(migrated.stdout, "migration:") {
 		t.Errorf("the migration summary belongs on stderr:\nstdout: %s\nstderr: %s", migrated.stdout, migrated.stderr)
 	}
+	if !strings.Contains(migrated.stderr, "note: SysML v1 migration is experimental") || strings.Contains(migrated.stdout, "experimental") {
+		t.Errorf("the experimental notice belongs on stderr:\nstdout: %s\nstderr: %s", migrated.stdout, migrated.stderr)
+	}
 
 	textReport := filepath.Join(dir, "report.txt")
 	jsonReport := filepath.Join(dir, "report.json")

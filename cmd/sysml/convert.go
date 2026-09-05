@@ -54,8 +54,8 @@ func runConvert(files []string) error {
 	}
 	// Reported before the conversion, so a refusal carries it too, and on stderr,
 	// where it cannot land in the converted model written to stdout.
-	if export.IsExperimental(from, to) {
-		fmt.Fprintf(os.Stderr, "note: %s\n", export.ExperimentalNotice)
+	for _, notice := range export.Notices(from, to) {
+		fmt.Fprintf(os.Stderr, "note: %s\n", notice)
 	}
 	if migrationReport != "" && from != export.FormatXMI {
 		return fmt.Errorf("-migration-report describes a SysML v1 migration, and %s input is not migrated; pass it with -from xmi or a .xmi/.mdzip file", from)

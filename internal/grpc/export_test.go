@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // The REPL imports this package for its feature-value serialization, so a test
@@ -356,8 +357,8 @@ func TestConvertMigratesXMI(t *testing.T) {
 			if resp.Error != "" {
 				t.Fatalf("conversion refused: %s", resp.Error)
 			}
-			if resp.FromFormat != "xmi" || resp.Experimental {
-				t.Errorf("from_format %q, experimental %v; want xmi, false", resp.FromFormat, resp.Experimental)
+			if resp.FromFormat != "xmi" || !resp.Experimental || resp.ExperimentalNotice != export.MigrationNotice {
+				t.Errorf("from_format %q, experimental %v, notice %q; want xmi, true, the migration notice", resp.FromFormat, resp.Experimental, resp.ExperimentalNotice)
 			}
 			if !strings.Contains(resp.Content, "part def Vehicle") {
 				t.Errorf("no migrated notation:\n%s", resp.Content)

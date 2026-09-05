@@ -1,5 +1,15 @@
 # SysML v1 to v2 migration
 
+## Status: experimental
+
+The migration is **experimental**. It covers the structural, requirement, constraint, instance
+and allocation content listed under [Mapping](#mapping), reports every element
+it approximates or leaves behind, and refuses input it cannot read; behaviors, operations and
+units are not migrated yet, and what a v1 element is written as may change between releases
+without a compatibility path. Every run says so: `sysml -convert` prints `note:` to stderr,
+`ConvertResponse` carries `experimental` and `experimental_notice` (the Python client raises
+an `ExperimentalFeatureWarning`), and the wording lives once, in `export.MigrationNotice`.
+
 `sysml Model.xmi -convert sysml` reads a SysML v1 model exported from Cameo Systems Modeler /
 MagicDraw and writes it as SysML v2 textual notation. `-convert ttl` writes the same model as
 RDF, through [the RDF mapping](rdf-mapping.md). Every run also produces a **migration report**
