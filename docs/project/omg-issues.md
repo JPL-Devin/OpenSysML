@@ -179,6 +179,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 | `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors [performance.md](../internals/performance.md#a-real-model-apollo-11) records — defects in that model, not in any OMG material, so they are not rows of this page | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator.isDuration`/`isTime`, behind `validateTriggerInvocationActionAfterArgument` and `…AtArgument` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | with `d : DurationValue` and `t : TimeInstantValue`, `accept after d * d` and `accept at t * t` validate clean although the product has dimension T², while `accept after 10 [m] / 2 [m/s]`, whose quotient has dimension T, is refused | established from the pinned `SysMLValidator` class: an operator argument is a duration or an instant when its operator is one of `-`, `+`, `*`, `%`, `^`, `**` (`isQuantityOperator`) and every operand is itself one — `/` is not in the list and no dimension is computed; reproduced with the pinned batch validator, transcript below | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
@@ -440,6 +441,46 @@ Is the guard check intended to fire in a full-library workspace? A second
 implementation that rejects `if "test"` with the full library loaded, as the
 fixture suggests it should, currently disagrees with the release's validator on
 the same text.
+````
+
+---
+
+### A trigger's time arithmetic is judged by its operator, not its dimension (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML judges the argument by the dimension of its value
+(`spec-compliance.md`, the `after`/`at` trigger rows), so the two implementations
+disagree on the shapes below in both directions.
+
+````markdown
+**Question, not a bug report:** `SysMLValidator.isDuration` and `isTime`, which
+`checkTriggerInvocationExpression` uses for `validateTriggerInvocationActionAfterArgument`
+and `…AtArgument`, admit an `OperatorExpression` when its operator is one of
+`-`, `+`, `*`, `%`, `^`, `**` and every operand is itself a duration or a time
+instant. With the release's validator (`jupyter-sysml-kernel-0.61.0-all.jar`,
+tag `2026-07`) and the full standard library:
+
+```sysml
+package T {
+    private import ISQ::*;
+    private import Time::*;
+    private import SI::*;
+    attribute d : DurationValue;
+    attribute t : TimeInstantValue;
+    state def S {
+        state s1; state s2;
+        transition first s1 accept after d * d then s2;             // no error: dimension T²
+        transition first s1 accept at t * t then s2;                // no error: dimension T²
+        transition first s1 accept after 10 [m] / 2 [m/s] then s2;  // An after expression must be a DurationValue: dimension T
+    }
+}
+```
+
+Is the operator list the intended reading of `checkTriggerInvocationExpressionAfterArgument`
+(the argument's result conforms to `ISQ::DurationValue`)? A product of two durations
+is not a duration, and a quotient of a length by a speed is one; a second
+implementation that judges the value's dimension accepts the last line and
+refuses the first two.
 ````
 
 ---
