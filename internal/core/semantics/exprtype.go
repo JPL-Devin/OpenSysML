@@ -22,18 +22,22 @@ const (
 	PrimReal
 	PrimComplex
 	PrimNumber
+	// PrimExpression is a body `{ … }` written as a value: the Expression itself,
+	// known and no scalar, unlike PrimUnknown which suppresses checking.
+	PrimExpression
 )
 
 var primNames = map[PrimType]string{
-	PrimUnknown:  "unknown",
-	PrimBoolean:  "Boolean",
-	PrimString:   "String",
-	PrimNatural:  "Natural",
-	PrimInteger:  "Integer",
-	PrimRational: "Rational",
-	PrimReal:     "Real",
-	PrimComplex:  "Complex",
-	PrimNumber:   "Number",
+	PrimUnknown:    "unknown",
+	PrimBoolean:    "Boolean",
+	PrimString:     "String",
+	PrimNatural:    "Natural",
+	PrimInteger:    "Integer",
+	PrimRational:   "Rational",
+	PrimReal:       "Real",
+	PrimComplex:    "Complex",
+	PrimNumber:     "Number",
+	PrimExpression: "Expression",
 }
 
 // String returns the stdlib name of the type, or "unknown".

@@ -725,3 +725,54 @@ func TestExprScalarSpecializationUsesLattice(t *testing.T) {
 		part def Car { attribute m : Mass = 5.5; }
 	}`, "cannot bind Rational value to a feature typed by Integer")
 }
+
+// A body `{ … }` written as a value is the Expression itself, whatever its
+// result would be, so it binds to no scalar and to no data type; the pilot
+// reports each binding below. A body a type accepts, or an untyped feature,
+// is left alone.
+func TestExprBodyValueIsTheExpression(t *testing.T) {
+	const prelude = `package P {
+		private import ScalarValues::*;
+		private import ISQ::*;
+		private import SI::*;
+		attribute def Temp;
+		part def H {
+			attribute flag : Boolean;
+			attribute n : Integer;
+			%s
+		}
+	}`
+	for _, tc := range []struct{ decl, want string }{
+		{"attribute b : Boolean = { 5 };", "cannot bind Expression value to a feature typed by Boolean"},
+		{"attribute b : Boolean = { true };", "cannot bind Expression value to a feature typed by Boolean"},
+		{"attribute i : Integer = { 5 };", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute i : Integer = { true };", "cannot bind Expression value to a feature typed by Integer"},
+		{"attribute s : String = { 5 };", "cannot bind Expression value to a feature typed by String"},
+		{"attribute d : DurationValue = { 5 [s] };", "cannot bind Expression value to a feature typed by DurationValue"},
+		{"attribute t : Temp = { 5 };", "cannot bind Expression value to a feature typed by Temp"},
+		{"attribute i : Integer = 1 + { 5 };", "operator '+' is not defined for Natural and Expression"},
+		{"attribute i : Integer = -{ 5 };", "operator '-' requires a numeric operand, found Expression"},
+		{"attribute b : Boolean = 5 < { 5 };", "operator '<' is not defined for Natural and Expression"},
+		{"attribute b : Boolean = not { true };", "operator 'not' requires a Boolean operand, found Expression"},
+		{"attribute b : Boolean = { true } and flag;", "operator 'and' requires Boolean operands, found Expression and Boolean"},
+		{"attribute b : Boolean = { true } == true;", "comparing Expression with Boolean is always false"},
+		{"attribute a : Base::Anything = { \"x\" + 1 };", "operator '+' is not defined for String and Natural"},
+		{"action a { assign n := { 5 }; }", "cannot bind Expression value to a feature typed by Integer"},
+	} {
+		diags := libraryTypeDiags(t, fmt.Sprintf(prelude, tc.decl))
+		if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.want) {
+			t.Errorf("%s: want one diagnostic containing %q, got %v", tc.decl, tc.want, diags)
+		}
+	}
+	for _, decl := range []string{
+		"attribute a : Base::Anything = { 5 };",
+		"expr e = { 5 };",
+		"attribute u = { 5 };",
+		"attribute b : Boolean = flag.{in f; f};",
+		"calc def K { in expr f; return : Integer = f(); } attribute i : Integer = K({ 5 });",
+	} {
+		if diags := libraryTypeDiags(t, fmt.Sprintf(prelude, decl)); len(diags) != 0 {
+			t.Errorf("%s: want no diagnostics, got %v", decl, diags)
+		}
+	}
+}

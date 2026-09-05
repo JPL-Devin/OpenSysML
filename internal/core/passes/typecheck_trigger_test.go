@@ -538,12 +538,15 @@ func TestBodyTriggerArgumentIsRejected(t *testing.T) {
 	wantTriggerDiag(t, "transition first a if { true } then b;", "type.expr", body)
 	wantTriggerDiag(t, "transition first a accept when ({ true }) then b;", "trigger-when-boolean", body)
 	wantTriggerDiag(t, "transition first a accept when { true }#(1) then b;", "trigger-when-boolean", body)
-	wantTriggerDiag(t, "transition first a accept when not { true } then b;", "type.expr", "operator 'not' requires a Boolean operand, "+body)
-	wantTriggerDiag(t, "transition first a accept when { true } and flag then b;", "type.expr", "operator 'and' requires Boolean operands, "+body)
+	wantTriggerDiag(t, "transition first a accept when not { true } then b;", "type.expr", "operator 'not' requires a Boolean operand, found Expression")
+	wantTriggerDiag(t, "transition first a accept when { true } and flag then b;", "type.expr", "operator 'and' requires Boolean operands, found Expression and Boolean")
 	wantTriggerDiag(t, "transition first a accept after { 5 [s] } + d then b;", "trigger-after-duration", "`+` over an expression body `{ … }`")
 	wantTriggerDiag(t, "transition first a accept at { t } + d then b;", "trigger-at-time-instant", "`+` over an expression body `{ … }`")
 	wantTriggerSilent(t, "transition first a accept when flags->ControlFunctions::forAll {in f; f} then b;")
-	wantTriggerSilent(t, "transition first a accept when { true } == true then b;")
+	diags := triggerDiags(t, "transition first a accept when { true } == true then b;")
+	if len(diags) != 1 || diags[0].Severity != SeverityWarning || !strings.Contains(diags[0].Message, "comparing Expression with Boolean is always false") {
+		t.Errorf("`{ true } == true`: want the equality warning alone, got %v", diags)
+	}
 }
 
 // Arithmetic over an operand that is no quantity, number or String selects no

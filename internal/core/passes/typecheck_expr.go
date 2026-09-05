@@ -197,7 +197,14 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 		ec.checkNonScalarCondition(scope, n, code, format, mustType)
 		return
 	}
-	ec.errorCode(code, n.Span(), format, got)
+	found := got.String()
+	if got == semantics.PrimExpression {
+		// A body is described by what it is, when the library says so.
+		if c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean); c.Known && !c.Holds {
+			found = c.Found
+		}
+	}
+	ec.errorCode(code, n.Span(), format, found)
 }
 
 // checkNonScalarCondition reports a condition naming a feature typed by
@@ -410,7 +417,7 @@ func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) sema
 }
 
 // inferBody checks a body's members and result (in its parameters' scope); the
-// body's value is the expression itself, not that result, so it is no scalar.
+// body's value is the expression itself, not that result.
 func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
 	inner := ec.bodyScope(scope, e)
 	ec.checkBodyMembers(scope, e)
@@ -420,7 +427,7 @@ func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantic
 	if e.Result != nil {
 		ec.infer(inner, e.Result)
 	}
-	return semantics.PrimUnknown
+	return semantics.PrimExpression
 }
 
 // bodyScope returns the scope a body expression's result is written in: its
