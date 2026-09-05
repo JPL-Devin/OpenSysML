@@ -97,8 +97,12 @@ func (c *resultExpressionChecker) inheritedResultExpressions(sym *symbols.Symbol
 // w8cResultExpressions returns the body expressions of a function or expression
 // that act as its result: bare expression members, not nested declarations.
 func w8cResultExpressions(u *ast.Usage) []ast.Node {
+	return w8cResultExpressionsOf(u.Members)
+}
+
+func w8cResultExpressionsOf(members []ast.Node) []ast.Node {
 	var out []ast.Node
-	for _, m := range u.Members {
+	for _, m := range members {
 		n := unwrapType(m)
 		if w8cIsResultExpressionNode(n) {
 			out = append(out, n)
