@@ -19,27 +19,136 @@ const (
 	msgTriggerWhenBoolean   = "a 'when' trigger's condition must be Boolean, found %s: compare the value (`when x > 3`) or name a feature typed by Boolean"
 )
 
-// checkTrigger types a trigger. A change event carries a Boolean condition, a
-// time event a duration (`after`) or a time instant (`at`); a signal or call
-// trigger names an event and has nothing to type here. A payload parameter
-// carries its trigger as its value. `transition ... when <expr>` leaves the
-// trigger as a bare expression, a change-event condition unless it is a bare
-// name — that names a signal.
-func (ec *exprChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
+// TriggerArgumentPass types the argument of every `after`, `at` or `when`
+// trigger, each gated on its own argument rather than the whole document.
+type TriggerArgumentPass struct{}
+
+func (TriggerArgumentPass) Level() PassLevel { return LevelType }
+
+func (TriggerArgumentPass) ElementScoped() { /* marker: per-element gating */ }
+
+func (TriggerArgumentPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	if ctx == nil || ctx.Index == nil || root == nil {
+		return nil
+	}
+	rootScope := ctx.Index.DocumentRoot(name)
+	if rootScope == nil {
+		return nil
+	}
+	c := &triggerArgumentChecker{
+		ctx:  ctx,
+		expr: &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()},
+	}
+	c.walk(rootScope, root.Members)
+	return c.expr.diags
+}
+
+type triggerArgumentChecker struct {
+	ctx  *Context
+	expr *exprChecker
+}
+
+func (c *triggerArgumentChecker) walk(scope *symbols.Scope, members []ast.Node) {
+	for _, member := range members {
+		c.walkNode(scope, unwrapType(member))
+	}
+}
+
+// walkNode descends through every body shape a trigger may be written in.
+func (c *triggerArgumentChecker) walkNode(scope *symbols.Scope, node ast.Node) {
+	switch n := node.(type) {
+	case *ast.Definition:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Usage:
+		if n.IsAccept {
+			c.check(scope, n)
+		}
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Package:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Namespace:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.SubjectMember:
+		c.walk(childScopeOr(scope, n), n.Body)
+	case *ast.ConstraintMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.AssumeMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.RequireMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.EntryMember:
+		c.walk(scope, n.Actions)
+	case *ast.DoMember:
+		c.walk(scope, n.Actions)
+	case *ast.ExitMember:
+		c.walk(scope, n.Actions)
+	case *ast.InitialNode:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walk(childScopeOr(scope, n), ast.NodeBodyMembers(n))
+	case *ast.StateNode:
+		body := childScopeOr(scope, n)
+		c.walk(body, n.Entry)
+		c.walk(body, n.Do)
+		c.walk(body, n.Exit)
+		c.walk(body, n.Substates)
+		for _, region := range n.Regions {
+			c.walkNode(body, region)
+		}
+	case *ast.StateRegion:
+		c.walk(childScopeOr(scope, n), n.States)
+	case *ast.TransitionMember:
+		c.check(scope, n.Trigger)
+		body := symbols.TriggerScope(scope, n)
+		c.walk(body, n.Effect)
+		c.walk(body, n.Members)
+	case *ast.SendStatement:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.SuccessionEdge:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.WhileLoopActionNode:
+		c.walk(childScopeOr(scope, n), n.Body)
+	case *ast.IfActionNode:
+		for _, branch := range n.Branches() {
+			c.walkNode(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		c.walk(childScopeOr(scope, n), n.Body)
+	}
+}
+
+// check types one trigger unless its argument rests on a lower-tier fault.
+func (c *triggerArgumentChecker) check(scope *symbols.Scope, trigger ast.Node) {
+	trigger, arg := triggerArgument(trigger)
+	if arg == nil || c.ctx.DownstreamOfFailure(arg) {
+		return
+	}
+	if t, ok := trigger.(*ast.TimeEvent); ok {
+		c.expr.checkTimeEvent(scope, t)
+		return
+	}
+	c.expr.checkCondition(scope, arg, codeTriggerWhenBoolean, msgTriggerWhenBoolean, true)
+}
+
+// triggerArgument returns a trigger and the expression its rule judges; a
+// signal or call trigger (a bare name included) names an event and has none.
+func triggerArgument(trigger ast.Node) (ast.Node, ast.Node) {
 	switch t := trigger.(type) {
 	case nil:
+		return nil, nil
 	case *ast.ChangeEvent:
-		ec.checkCondition(scope, t.Condition, codeTriggerWhenBoolean, msgTriggerWhenBoolean, true)
+		return t, t.Condition
 	case *ast.TimeEvent:
-		ec.checkTimeEvent(scope, t)
+		return t, t.Duration
 	case *ast.Usage:
 		if t.IsAccept && isTriggerValue(t.Value) {
-			ec.checkTrigger(scope, t.Value)
+			return triggerArgument(t.Value)
 		}
+		return nil, nil
 	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
-	default:
-		ec.checkCondition(scope, trigger, codeTriggerWhenBoolean, msgTriggerWhenBoolean, true)
+		return nil, nil
 	}
+	return trigger, trigger
 }
 
 // isTriggerValue reports whether a usage's value is the trigger of an accept

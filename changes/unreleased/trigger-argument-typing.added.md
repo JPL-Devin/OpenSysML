@@ -11,4 +11,6 @@
   is reported as a value of dimension L². Triggers nested in action, state and transition
   bodies, including the body an action-target succession carries, are checked, and a body
   declared there now gets its own scope. An argument whose type only evaluation determines is
-  left to it, and an unresolved name is reported by name resolution alone.
+  left to it, and an unresolved name is reported by name resolution alone. The check is gated
+  per trigger, so an unresolved name elsewhere in the document does not hide an invalid trigger,
+  and a workspace document that redeclares a library type's qualified name does not disable it.

@@ -79,9 +79,6 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			} else {
 				tc.checkFeatureDecl(scope, usageDecl(d))
 			}
-			if d.IsAccept {
-				tc.expr.checkTrigger(scope, d)
-			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -168,8 +165,7 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.walk(body, m.Body)
 	case *ast.TransitionMember:
 		// The effect and body see the parameters the trigger declares; the
-		// guard is the transition guard pass's.
-		tc.expr.checkTrigger(scope, m.Trigger)
+		// trigger and guard are the trigger-argument and guard passes' own.
 		body := symbols.TriggerScope(scope, m)
 		tc.walk(body, m.Effect)
 		tc.walk(body, m.Members)
