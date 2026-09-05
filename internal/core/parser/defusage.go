@@ -1457,8 +1457,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	// A secondary keyword refines a definition's kind (`individual item def`),
 	// but a usage keeps the kind of the first keyword (`item part Shape` is an
-	// item usage), so the keyword recorded here is that first one.
-	return applyPrefixes(p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll))
+	// item usage), so the keyword recorded here is that first one; the compound
+	// `assoc struct` keeps both words since it declares an association structure.
+	keyword := kw
+	if kw == "assoc" && kindKeyword == "struct" {
+		keyword = "assoc struct"
+	}
+	return applyPrefixes(p.parseUsage(start, p.usageKindOf(kw), keyword, mods, isAll))
 }
 
 // parseDefinition parses a definition. keyword is the kind keyword as consumed

@@ -637,8 +637,7 @@ const sysmlMetaclassPrefix = "SysML::Systems::"
 var kermlMetaclassPrefixes = []string{"KerML::Kernel::", "KerML::Core::", "KerML::Root::"}
 
 // kermlMetaclassNames maps a KerML declaration keyword to the metaclass it
-// implies (KerML 1.1 §8.2, §9.2). `assoc struct` is recorded as `struct` by the
-// parser, so it is classified as a Structure rather than an AssociationStructure.
+// implies (KerML 1.1 §8.2, §9.2).
 var kermlMetaclassNames = map[string]string{
 	"type":         "Type",
 	"classifier":   "Classifier",
@@ -646,6 +645,7 @@ var kermlMetaclassNames = map[string]string{
 	"struct":       "Structure",
 	"assoc":        "Association",
 	"association":  "Association",
+	"assoc struct": "AssociationStructure",
 	"datatype":     "DataType",
 	"behavior":     "Behavior",
 	"function":     "Function",

@@ -338,3 +338,23 @@ func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
 		t.Errorf("untyped feature c does not subset Base::things; sources %v", m.DirectMemberSources(c))
 	}
 }
+
+// An `assoc struct` is an AssociationStructure, so its implicit base is
+// Objects::LinkObject rather than a plain association's Links::Link (KerML §8.4.4).
+func TestImplicitKerMLAssocStructBaseIsLinkObject(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Objects { struct Object; struct LinkObject :> Object; }
+		package Links { assoc Link; }
+		package P { assoc struct S { end feature a; end feature b; } assoc A { end feature a; end feature b; } }`)
+	p := sym(t, root, "P")
+	linkObject, _ := sym(t, root, "Objects").Scope.LookupLocal("LinkObject")
+	link, _ := sym(t, root, "Links").Scope.LookupLocal("Link")
+
+	s, _ := p.Scope.LookupLocal("S")
+	if supers := m.DirectSupertypes(s); len(supers) != 1 || supers[0] != linkObject {
+		t.Errorf("DirectSupertypes(assoc struct S) = %v, want [Objects::LinkObject]", supers)
+	}
+	a, _ := p.Scope.LookupLocal("A")
+	if supers := m.DirectSupertypes(a); len(supers) != 1 || supers[0] != link {
+		t.Errorf("DirectSupertypes(assoc A) = %v, want [Links::Link]", supers)
+	}
+}
