@@ -158,7 +158,7 @@ source → lexer → parser → AST → symbol index → resolve → passes
 - **Pass:** `{Level() PassLevel; Run(ctx, name, root) []Diagnostic}`
 - **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized) and `DownstreamOfFailure(ref)` — did a lower tier report a blocking diagnostic inside this reference?
 - **DefaultRegistry:** SyntaxPass, NameResolutionPass, TypeCheckPass, ConstraintPass
-- **Tiered execution:** a document-scoped pass at a higher tier is skipped once a lower tier errors; a pass marked `ElementScoped` runs and gates itself per subject through `Context.DownstreamOfFailure` ([element-scoped tier gating](../project/wave12a-element-gating.md))
+- **Tiered execution:** a document-scoped pass at a higher tier is skipped once a lower tier errors; a pass marked `ElementScoped` runs and gates itself per subject through `Context.DownstreamOfFailure` ([element-scoped tier gating](../project/element-scoped-tier-gating.md))
 - **Quick fixes:** A `Diagnostic` carries the `quickfix.Fix` values (`internal/core/quickfix`) the layer reporting it attached, so an editor offers edits without parsing messages
 
 ### 6a. Highlighting (`internal/core/highlight`)
@@ -716,7 +716,7 @@ clause violated, the derivation, and the corrected text where the intended readi
 The published corpus is never written to — corrections are applied to a copy under the oracle's
 output directory — and an entry whose published text no longer matches the bytes on disk fails a
 test rather than rotting. Each oracle reports both censuses; the as-published one stays the
-conformance statement. See [the declared errata overlay](../project/wave14-errata.md).
+conformance statement. See [the declared errata overlay](../project/errata-overlay.md).
 
 ---
 

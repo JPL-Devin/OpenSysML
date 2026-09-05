@@ -1,14 +1,11 @@
 # Making library records lossless (roadmap L3): the design
 
-> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
-> development round of this project — chronological, with no meaning outside this repository — and
-> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
-> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
+> This is an engineering record. `L3-<n>` names a row of the table in §7, and `F<n>` a row of the
+> divergence census in [pilot-differential.md](pilot-differential.md).
 >
-> **Oracle figures in this record are as measured at the round it documents;
-> they are not the current baseline.** The current baseline is the generated block in
-> [README](../../README.md) and [architecture](../internals/architecture.md),
-> regenerated and gated by `make docs-counts`.
+> **Oracle figures in this record are as measured when it was written; they are not the current
+> baseline.** The current baseline is the generated block in [README](../../README.md) and
+> [architecture](../internals/architecture.md), regenerated and gated by `make docs-counts`.
 
 Roadmap item **L3** asks for library records to become *lossless*: a restored library must equal a
 parsed one, so a library keeps its members, declared values and condition bodies on both load paths.
@@ -19,7 +16,7 @@ First: the cheapest lossless design turns out not to serialize member, value and
 at all (§2, §4). Second, and the reason the item's order changed: the memory cost of keeping library
 bodies was priced against the wrong population. It is not `DefaultIndexPoolSize = 4` library indexes
 but **one per cached model** — 100 at the gRPC default, measured at 1.56 GiB of heap in §3. So the
-**first slice of L3 is sharing one library index across models**, and the record format follows it,
+**first stage of L3 is sharing one library index across models**, and the record format follows it,
 where the cost of keeping bodies is a one-time ~17 MiB rather than ~17 MiB × 100.
 
 Nothing in this page changes behaviour. The three oracles are reproduced on the base commit as
@@ -185,7 +182,7 @@ Costs, measured, not speculative:
   reachable. An earlier draft of this page priced that against `DefaultIndexPoolSize = 4` and put it
   at ~68 MiB. That was wrong: the pool is prewarm headroom, not the population, and the live count is
   one index per cached model — measured at 100 in §3, i.e. **+1.7 GiB, not +68 MiB**. §3 is therefore
-  the slice that comes first; after it the +17 MiB is paid once per process (open row **L3-4**).
+  the stage that comes first; after it the +17 MiB is paid once per process (open row **L3-4**).
 - **The on-disk format does not grow.** It shrinks: names, kinds, spans, short names, alias targets
   and wildcard-import targets stop being persisted, because the parsed document states them.
 
@@ -210,13 +207,13 @@ distinct `*symbols.Index` values the cache still holds, twice in one process:
 | LSP | **1** — one `model.NewWorkspace()` per process (`cmd/sysml-lsp/main.go:112`), one index in it | 15.4 MiB |
 | REPL | **2** — the workspace's, plus the one `Session.symbolIndex` builds with `model.LoadStdlibInto` (`internal/repl/session.go:998`, `discover.go:25`) | 30.7 MiB after one submission (15.3 + 15.4) |
 
-**Result of slice A ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)), measured the same way
+**Result of stage A ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)), measured the same way
 on `1af78d94`:** the same 100 cached models cost **1.1 MiB of heap and 76.5 MiB RSS** (0.01 MiB per
 model) against 1598.3 MiB / 2180.3 MiB before, and **1** library index is built rather than 104. The
 REPL's two indexes (row **L3-10**) become two overlays of one base: 4 sessions with a submission and
 a browse index cost 17.1 MiB, against 122.7 MiB. The LSP's single index is unchanged in size and now
-shares the process-wide base. Rows **L3-4** and **L3-10** are closed by that slice; **L3-9** kept
-its per-operation churn until the slice recorded in its row below.
+shares the process-wide base. Rows **L3-4** and **L3-10** are closed by that stage; **L3-9** kept
+its per-operation churn until the stage recorded in its row below.
 
 **The pool's `Built` counter does not track one build per cached model.** Over the 100-model run it
 reached 104 with `Pooled: 53, Inline: 47`: 53 requests took a prewarmed index, 47 built one inline
@@ -258,7 +255,7 @@ changes and no interface is introduced. It holds the same 15 maps, empty, plus a
 is the fully loaded, fully expanded library index, `Freeze()`d once per process, built by
 `sync.Once`.
 
-The read-merge rule per map, which is the audit the slice consists of:
+The read-merge rule per map, which is the audit the stage consists of:
 
 | State | Merge on read | Why it is sound |
 |---|---|---|
@@ -308,7 +305,7 @@ race the detector has to catch in the field.
 - *Sharing only the AST and rebuilding the index per model* — the index build, not the parse, is the
   cost (§2: 41 ms parse versus 83–90 ms parse-and-index, and 15.9 MiB retained).
 
-### 3.4 The proof the sharing slice owes
+### 3.4 The proof the sharing stage owes
 
 `TestPooledIndexMatchesFreshlyBuiltIndex` is the shape but not the strength. The successor asserts,
 for a model resolving against an overlay versus the same model in an index of its own:
@@ -328,7 +325,7 @@ for a model resolving against an overlay versus the same model in an index of it
 5. **Eviction** — after `RemoveDocument` of the user document, the overlay answers every lookup of
    (2) exactly as a fresh overlay over the same base does.
 
-And the oracles: the sharing slice is a memory change, so all three fresh-cache runs must be
+And the oracles: the sharing stage is a memory change, so all three fresh-cache runs must be
 identical, with the differential multiset reported rather than its total.
 
 ### 3.5 Where this splits, and why
@@ -342,7 +339,7 @@ Two sessions, and the split is at the package boundary:
   becomes an overlay of the workspace's base, then re-measure §3.1 and re-run the three oracles.
 
 The honest reason for splitting there: the audit and the suppression case are where a mistake becomes
-a wrong answer, and pairing them with the consumer migration in one slice is how a partial
+a wrong answer, and pairing them with the consumer migration in one stage is how a partial
 copy-on-write shim gets landed to make the deadline. A is worth landing alone because its proof is
 what makes B safe.
 
@@ -432,7 +429,7 @@ assumed `1..1` and asserts the declared `0..1`, on both paths. Its comment alrea
 restored fact equals the derived fact" can. Add a field to the persisted facts without adding it to
 the comparison and the test still passes while the field is never checked — and the failure mode is a
 wrong answer on a warm cache, which is exactly the class of bug the index-only contract was adopted
-to end. Discipline in a later slice is not an answer, so the test carries the obligation itself:
+to end. Discipline in a later stage is not an answer, so the test carries the obligation itself:
 
 ```go
 // Every persisted fact field must be compared, or this fails: a field added to
@@ -505,8 +502,8 @@ Two of the 95's rows are real work:
 - **`internal/grpc`.** `attributesOf` reads `sym.Decl` (`internal/grpc/attributes.go:142,167`), so
   inherited library attributes start appearing in responses again — dozens of them, which is the
   regression the index-only contract was adopted to stop. The difference is that now they appear on
-  *both* paths, so the answer is stable. The policy is **decided** by the wave owner (**L3-3**) and is
-  stated below; it is not implemented in the sharing slice.
+  *both* paths, so the answer is stable. The policy is **decided** by the project maintainers (**L3-3**) and is
+  stated below; it is not implemented in the sharing stage.
 
 ### The decided element-API policy (L3-3)
 
@@ -526,7 +523,7 @@ Rejected alternatives: *report everything* — faithful, but buries the modeller
 reproduces the pre-index-only blow-up; *label every attribute by its declaring type* — same row count
 as reporting everything, so it does not solve the noise.
 
-When that slice arrives, `TestAttributesAreReportedOwnThenInherited` keeps asserting its
+When that stage arrives, `TestAttributesAreReportedOwnThenInherited` keeps asserting its
 `[mass, wheels, derived, label, inheritedOnly]` expectation, which stays true under this policy, and
 gains a case whose supertype chain reaches library content, asserting the **withheld count** rather
 than merely the absence.
@@ -544,19 +541,19 @@ A third consumer-visible gap is not a diagnostics question but a capability one:
 ## 7. Rows this page does not close
 
 Every row below is open, with a category from
-[the wave-11E categories](wave11e-decisions.md) where it is a divergence, and an owner.
+[the adjudication categories](adjudications.md) where it is a divergence, and an owner.
 
 | Row | What it is | Category | Owner |
 |---|---|---|---|
-| **L3-1** | The design itself is unimplemented: records are still index-only, and a library still contributes no bodies. | unimplemented obligation | L3, next slice |
+| **L3-1** | The design itself is unimplemented: records are still index-only, and a library still contributes no bodies. | unimplemented obligation | L3, next stage |
 | **L3-2** | `Model.Eval` cannot fold a library value expression that invokes a Kernel Function Library function over a feature (`isEmpty(voids)`). Resolution is fine; evaluation declines. | unimplemented obligation | L3, before consumers migrate |
-| **L3-3** | **Decided** (§6): the element API withholds library-inherited attributes and reports a count of what it withheld, keyed on `Index.Library`. Open only as unimplemented work, including the proto field and its two downstream clients. | adjudicated divergence, decided; implementation outstanding | `internal/grpc`, after the sharing and record slices |
-| **L3-4** | **Closed by slice A** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)): the population was one index per cached model — 100 at the gRPC default, 15.95 MiB each — and is now one shared base, so the +17 MiB of keeping the trees is a once-per-process cost. | not a divergence — a cost decision | wave owner |
+| **L3-3** | **Decided** (§6): the element API withholds library-inherited attributes and reports a count of what it withheld, keyed on `Index.Library`. Open only as unimplemented work, including the proto field and its two downstream clients. | adjudicated divergence, decided; implementation outstanding | `internal/grpc`, after the sharing and record stages |
+| **L3-4** | **Closed by stage A** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)): the population was one index per cached model — 100 at the gRPC default, 15.95 MiB each — and is now one shared base, so the +17 MiB of keeping the trees is a once-per-process cost. | not a divergence — a cost decision | project maintainers |
 | **L3-5** | The 26 `unresolved` errors the passes report over the parsed library (`that`, feature chains such as `CartesianVectorOf::result::dimension`, and implicit-redefinition targets). Each needs a category of its own once a consumer actually surfaces it. | not yet adjudicated | L3, after step 2 |
 | **L3-7** | First derivation of a specialization edge costs ~36 µs per symbol (~365 ms over the library) and is dominated by resolving each generalization target; the memo itself is live (a second pass is 0.13 ms). Whether 36 µs per edge is acceptable is a `semantics`/`resolve` question, and if it were cheap the cache would have little reason to exist. | performance defect, unadjudicated | `semantics` |
-| **L3-8** | **Delivered** in [#504](https://github.com/JPL-Devin/OpenSysML/pull/504): `Freeze`/`NewOverlay`, the layered read paths, the suppression of an ambiguated import target, the five proofs of §3.4, and the gRPC/REPL/LSP/workspace migration — done as one slice rather than the A/B split of §3.5. | unimplemented obligation, now met | `symbols`, `internal/grpc`, `internal/repl` |
-| **L3-9** | **Closed**: `edit.Apply` takes one index per call and reuses it, since adding a document a name already holds drops the previous contributions first (`internal/core/edit/edit.go`, `reindexer`). Measured on a fresh cache, 10 runs each: a 5-operation request took **6** indexes and 12.03 MiB of allocation in 37.6 ms, and now takes **1** and 3.04 MiB in 8.7 ms; a 10-operation request went from **11** indexes, 34.97 MiB and 100.3 ms to **1**, 5.68 MiB and 15.7 ms. An overlay of the shared base is 1.4 KiB retained (200 of them, 0.3 MiB), so the heap the per-operation indexes held was the analysis each carried, not the index: the same slice stopped analyzing the intermediate notation, whose diagnostics no caller reads — an edit is judged by the original's and the returned notation's. Equivalence with applying the operations one at a time — notation, applied edits, diagnostics, whole-index qualified lookups, refusal kinds, and no write into another model's index or the frozen base — is proved in `internal/grpc/edit_reindex_test.go`. | performance defect, closed | `internal/grpc` |
-| **L3-10** | **Closed by slice A**: the REPL's two library indexes (30.7 MiB) are two overlays of one shared base; 4 sessions with a submission and a browse index cost 17.1 MiB against 122.7 MiB. | performance defect | `internal/repl` |
+| **L3-8** | **Delivered** in [#504](https://github.com/JPL-Devin/OpenSysML/pull/504): `Freeze`/`NewOverlay`, the layered read paths, the suppression of an ambiguated import target, the five proofs of §3.4, and the gRPC/REPL/LSP/workspace migration — done as one stage rather than the A/B split of §3.5. | unimplemented obligation, now met | `symbols`, `internal/grpc`, `internal/repl` |
+| **L3-9** | **Closed**: `edit.Apply` takes one index per call and reuses it, since adding a document a name already holds drops the previous contributions first (`internal/core/edit/edit.go`, `reindexer`). Measured on a fresh cache, 10 runs each: a 5-operation request took **6** indexes and 12.03 MiB of allocation in 37.6 ms, and now takes **1** and 3.04 MiB in 8.7 ms; a 10-operation request went from **11** indexes, 34.97 MiB and 100.3 ms to **1**, 5.68 MiB and 15.7 ms. An overlay of the shared base is 1.4 KiB retained (200 of them, 0.3 MiB), so the heap the per-operation indexes held was the analysis each carried, not the index: the same stage stopped analyzing the intermediate notation, whose diagnostics no caller reads — an edit is judged by the original's and the returned notation's. Equivalence with applying the operations one at a time — notation, applied edits, diagnostics, whole-index qualified lookups, refusal kinds, and no write into another model's index or the frozen base — is proved in `internal/grpc/edit_reindex_test.go`. | performance defect, closed | `internal/grpc` |
+| **L3-10** | **Closed by stage A**: the REPL's two library indexes (30.7 MiB) are two overlays of one shared base; 4 sessions with a submission and a browse index cost 17.1 MiB against 122.7 MiB. | performance defect | `internal/repl` |
 | **L3-6** | `roadmap.md`'s L3 text says library value expressions do not resolve; measured, they resolve and fail to evaluate. Also it says `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips, while it asserts. | our defect (documentation) | this page; corrected in the roadmap by this PR |
 
 No oracle row moved, in either direction, so no conformance claim is made or implied here. The Xpect,
@@ -569,9 +566,9 @@ before and after, identical.
 
 1. **This PR** — the design above, the measurements of §2 and §3.1, and the roadmap correction.
    Nothing behavioural.
-2. **Slice A** — the shared index inside `symbols`: `NewOverlay`, `Freeze`, the read-path audit, the
+2. **Stage A** — the shared index inside `symbols`: `NewOverlay`, `Freeze`, the read-path audit, the
    suppression channel, and the five proofs of §3.4 under `-race`. No consumer changes.
-3. **Slice B** — the consumers of the shared index: gRPC's pool, its edit path (**L3-9**), the REPL's
+3. **Stage B** — the consumers of the shared index: gRPC's pool, its edit path (**L3-9**), the REPL's
    second index (**L3-10**); §3.1 re-measured and the three oracles re-run.
 4. **Then** — option C's mechanism plus the three tests of §5, with `AddRecords` / `RecordEntry`
    deleted and `formatVersion` bumped to 24, the +17 MiB now paid once per process.

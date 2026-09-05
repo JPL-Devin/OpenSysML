@@ -6,9 +6,9 @@
 **Baseline:** [validation-constraints-baseline.json](validation-constraints-baseline.json) — the constraint names read from the pinned jar, with the pin, the jar digest, the extraction method and each name's census status
 **Evidence:** `cmd/validation-census/testdata/probes/` — one minimal violating model per implemented row, run by `go test ./cmd/validation-census`
 
-**Labels:** the file and type names quoted in the Implementation column carry the wave a pass was
-built in (`w8c_`, `W10B…`); they are code identifiers, not product terms, and a reader who only
-wants the verdicts can ignore them.
+**Names:** the file and type names quoted in the Implementation column are the code's own
+identifiers, prefixes included (`w8c_`, `W10B…`); they name nothing outside the source tree, and a
+reader who only wants the verdicts can ignore them.
 
 The pilot validators name every constraint they check (`validateNamespaceDistinguishability`,
 `validateUsageType`, …), OpenSysML does not: its diagnostics are worded for the reader and its

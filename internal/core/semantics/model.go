@@ -43,8 +43,11 @@ type Model struct {
 	params        map[*symbols.Symbol]behaviorParameters
 	invocations   map[invocationKey]*InvocationSelection
 	arguments     ArgumentTyper // the checker's argument typing, nil when no checker runs
-	unioning      map[*symbols.Symbol][]*symbols.Symbol
-	ends          map[*symbols.Symbol][]connectorEnd
+	// typingArgs holds the calls whose arguments are being typed, so an argument
+	// whose type leads back to its own call is not typed again.
+	typingArgs map[*ast.InvocationExpr]bool
+	unioning   map[*symbols.Symbol][]*symbols.Symbol
+	ends       map[*symbols.Symbol][]connectorEnd
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -114,6 +117,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
+		typingArgs:        make(map[*ast.InvocationExpr]bool),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
 		ends:              make(map[*symbols.Symbol][]connectorEnd),
 
