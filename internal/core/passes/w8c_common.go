@@ -2,7 +2,6 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -147,80 +146,6 @@ func w8cIsReference(n ast.Node) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// w8cEvalConst evaluates n as a model-level constant, reading through features
-// it names to their bound values. seen guards a value that names itself.
-func w8cEvalConst(r *resolve.Resolver, m *semantics.Model, scope *symbols.Scope, n ast.Node, seen map[*symbols.Symbol]bool) (semantics.Value, bool) {
-	if n == nil || m == nil {
-		return semantics.Value{}, false
-	}
-	switch e := n.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
-		return w8cEvalFeature(r, m, scope, n, seen)
-	case *ast.OperatorExpr:
-		return w8cEvalOperator(r, m, scope, e, seen)
-	default:
-		return m.Eval(n)
-	}
-}
-
-// w8cEvalFeature evaluates the value a named feature is bound to.
-func w8cEvalFeature(r *resolve.Resolver, m *semantics.Model, scope *symbols.Scope, ref ast.Node, seen map[*symbols.Symbol]bool) (semantics.Value, bool) {
-	if r == nil {
-		return semantics.Value{}, false
-	}
-	sym, ok := r.ResolveTarget(scope, ref)
-	if !ok || sym == nil || seen[sym] {
-		return semantics.Value{}, false
-	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Value == nil {
-		return semantics.Value{}, false
-	}
-	next := make(map[*symbols.Symbol]bool, len(seen)+1)
-	for s := range seen {
-		next[s] = true
-	}
-	next[sym] = true
-	return w8cEvalConst(r, m, w8cScopeOf(sym), usage.Value, next)
-}
-
-// w8cEvalOperator evaluates an operator expression over evaluable operands.
-func w8cEvalOperator(r *resolve.Resolver, m *semantics.Model, scope *symbols.Scope, e *ast.OperatorExpr, seen map[*symbols.Symbol]bool) (semantics.Value, bool) {
-	switch e.Operator {
-	case ast.OpNeg, ast.OpPos, ast.OpNot:
-		if len(e.Operands) != 1 {
-			return semantics.Value{}, false
-		}
-		v, ok := w8cEvalConst(r, m, scope, e.Operands[0], seen)
-		if !ok {
-			return semantics.Value{}, false
-		}
-		return semantics.EvalUnary(e.Operator, v)
-	case ast.OpConditional:
-		if len(e.Operands) != 3 {
-			return semantics.Value{}, false
-		}
-		cond, ok := w8cEvalConst(r, m, scope, e.Operands[0], seen)
-		if !ok || cond.Kind != semantics.ValBool {
-			return semantics.Value{}, false
-		}
-		if cond.Bool {
-			return w8cEvalConst(r, m, scope, e.Operands[1], seen)
-		}
-		return w8cEvalConst(r, m, scope, e.Operands[2], seen)
-	default:
-		if len(e.Operands) != 2 {
-			return semantics.Value{}, false
-		}
-		l, lok := w8cEvalConst(r, m, scope, e.Operands[0], seen)
-		rv, rok := w8cEvalConst(r, m, scope, e.Operands[1], seen)
-		if !lok || !rok {
-			return semantics.Value{}, false
-		}
-		return semantics.EvalBinary(e.Operator, l, rv)
 	}
 }
 
