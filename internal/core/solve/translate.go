@@ -161,6 +161,10 @@ type translator struct {
 	// objectives are the translated objectives, in the order they are optimized.
 	objectives []Objective
 
+	// within is the objective whose own conditions are being translated: a member
+	// of its own it names (its `best`) is that objective's, not another's.
+	within *symbols.Symbol
+
 	nonlinear bool
 	intDiv    bool
 

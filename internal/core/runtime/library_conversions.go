@@ -72,7 +72,7 @@ func anythingToString(name string, _ *Context, args []Value) (Value, error) {
 		if x.Const.Kind == semantics.ValInfinity {
 			return NewStringValue("*"), nil
 		}
-		return NewStringValue(FormatConst(x.Const)), nil
+		return NewStringValue(semantics.FormatConst(x.Const)), nil
 	case ValQuantity, ValEnumLiteral:
 		return NewStringValue(FormatValue(x)), nil
 	case ValComplex:
@@ -121,7 +121,7 @@ func numberToString(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return NewStringValue(FormatConst(x)), nil
+	return NewStringValue(semantics.FormatConst(x)), nil
 }
 
 // stringToBoolean is BooleanFunctions::ToBoolean over the two Boolean literals.
@@ -244,7 +244,7 @@ func rationalGCD(args []semantics.Value) (semantics.Value, error) {
 	if !okX || !okY {
 		return semantics.Value{}, fmt.Errorf(
 			"%w: gcd is defined over whole values, got %s and %s",
-			semantics.ErrArithmeticDomain, FormatConst(args[0]), FormatConst(args[1]),
+			semantics.ErrArithmeticDomain, semantics.FormatConst(args[0]), semantics.FormatConst(args[1]),
 		)
 	}
 	// Exact over any whole operand, so MinInt64 and whole Reals past the Integer
@@ -252,7 +252,7 @@ func rationalGCD(args []semantics.Value) (semantics.Value, error) {
 	gcd := new(big.Int).GCD(nil, nil, x.Abs(x), y.Abs(y))
 	if !gcd.IsInt64() {
 		return semantics.Value{}, fmt.Errorf("%w: gcd(%s, %s) exceeds the Integer range",
-			semantics.ErrArithmeticOverflow, FormatConst(args[0]), FormatConst(args[1]))
+			semantics.ErrArithmeticOverflow, semantics.FormatConst(args[0]), semantics.FormatConst(args[1]))
 	}
 	return semantics.Value{Kind: semantics.ValInt, Int: gcd.Int64()}, nil
 }
@@ -294,12 +294,12 @@ func exactRationalTerm(fn string, x semantics.Value, term func(*big.Rat) *big.In
 	if x.Kind == semantics.ValInt {
 		ratio = new(big.Rat).SetInt64(x.Int)
 	} else if ratio = new(big.Rat).SetFloat64(x.Real); ratio == nil {
-		return semantics.Value{}, fmt.Errorf("%w: %s(%s) has no finite ratio", semantics.ErrArithmeticDomain, fn, FormatConst(x))
+		return semantics.Value{}, fmt.Errorf("%w: %s(%s) has no finite ratio", semantics.ErrArithmeticDomain, fn, semantics.FormatConst(x))
 	}
 	result := term(ratio)
 	if !result.IsInt64() {
 		return semantics.Value{}, fmt.Errorf("%w: %s(%s) is %s, which exceeds the Integer range",
-			semantics.ErrArithmeticOverflow, fn, FormatConst(x), result)
+			semantics.ErrArithmeticOverflow, fn, semantics.FormatConst(x), result)
 	}
 	return semantics.Value{Kind: semantics.ValInt, Int: result.Int64()}, nil
 }

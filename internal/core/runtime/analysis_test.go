@@ -51,8 +51,8 @@ func objectiveLabels(objs []Objective) string {
 }
 
 // An objective's direction comes from the trade-study definition typing it, and
-// the value it improves from the expression it states for the library's `best`
-// feature. Objectives stand in declaration order.
+// the value it improves from the expression its redefinition of the library's
+// `eval` calculation returns. Objectives stand in declaration order.
 func TestObjectivesOfDirectionValueAndOrder(t *testing.T) {
 	ctx, scope := analysisFixture(t, `
 		package test {
@@ -62,10 +62,12 @@ func TestObjectivesOfDirectionValueAndOrder(t *testing.T) {
 				attribute cost : Integer;
 				attribute margin : Integer;
 				objective cheapest : MinimizeObjective {
-					attribute :>> best = cost;
+					subject :>> selectedAlternative;
+					in calc :>> eval { cost }
 				}
 				objective widest : MaximizeObjective {
-					attribute :>> best = margin;
+					subject :>> selectedAlternative;
+					in calc :>> eval { margin }
 				}
 			}
 		}
@@ -88,7 +90,8 @@ func TestObjectivesOfDirectionThroughSpecialization(t *testing.T) {
 			analysis def Trade {
 				attribute mass : Integer;
 				objective lightest : LeastMass {
-					attribute :>> best = mass;
+					subject :>> selectedAlternative;
+					in calc :>> eval { mass }
 				}
 			}
 		}
@@ -113,7 +116,8 @@ func TestObjectivesOfWithoutDirection(t *testing.T) {
 			analysis def Trade {
 				attribute size : Integer;
 				objective goal : FitsWell {
-					attribute :>> best = size;
+					subject :>> selectedAlternative;
+					in calc :>> eval { size }
 				}
 			}
 		}
@@ -145,8 +149,8 @@ func TestObjectivesOfWithoutValue(t *testing.T) {
 	}
 }
 
-// A `best` restated in a nested body is the objective's value wherever the
-// objective writes it, and its names resolve in the scope stating it.
+// The expression `eval` returns is the objective's value, and its names resolve
+// in the scope stating it, which sees the case's attributes.
 func TestObjectivesOfValueScope(t *testing.T) {
 	ctx, scope := analysisFixture(t, `
 		package test {
@@ -155,7 +159,8 @@ func TestObjectivesOfValueScope(t *testing.T) {
 			analysis def Trade {
 				attribute total : Integer;
 				objective cheapest : MinimizeObjective {
-					attribute :>> best = total + 1;
+					subject :>> selectedAlternative;
+					in calc :>> eval { total + 1 }
 				}
 			}
 		}
@@ -172,6 +177,76 @@ func TestObjectivesOfValueScope(t *testing.T) {
 	}
 }
 
+// An `eval` naming its result explicitly states the same value as a bare body.
+func TestObjectivesOfExplicitResult(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Trade {
+				attribute total : Integer;
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = total * 2; }
+				}
+			}
+		}
+	`)
+	objs := objectivesOfCase(t, ctx, scope, "Trade")
+	if len(objs) != 1 || objs[0].Text() != "total * 2" || objs[0].Eval == nil {
+		t.Fatalf("objectives are [%s], want one improving total * 2 through eval", objectiveLabels(objs))
+	}
+}
+
+// An `eval` computing in steps states no single expression: the objective is
+// recorded as stepwise and given no value, rather than a guessed one.
+func TestObjectivesOfStepwiseEval(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Trade {
+				attribute total : Integer;
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval {
+						attribute doubled : Integer = total * 2;
+						return :>> result = doubled;
+					}
+				}
+			}
+		}
+	`)
+	objs := objectivesOfCase(t, ctx, scope, "Trade")
+	if len(objs) != 1 || objs[0].Value != nil || !objs[0].StepwiseEval || objs[0].Eval == nil {
+		t.Fatalf("objectives are [%s], want one stepwise eval stating no value", objectiveLabels(objs))
+	}
+}
+
+// An objective giving the library's bound `best` a value of its own is the
+// spelling validation rejects: it is recorded as such and never read as the value.
+func TestObjectivesOfReboundBest(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Trade {
+				attribute total : Integer;
+				objective cheapest : MinimizeObjective {
+					attribute :>> best = total;
+				}
+			}
+		}
+	`)
+	objs := objectivesOfCase(t, ctx, scope, "Trade")
+	if len(objs) != 1 || objs[0].Value != nil || objs[0].ReboundBest == nil {
+		t.Fatalf("objectives are [%s], want one rebinding best and stating no value", objectiveLabels(objs))
+	}
+	if objs[0].Best == nil || objs[0].Best != objs[0].ReboundBest {
+		t.Errorf("the rebound feature %v is not the objective's best %v", objs[0].ReboundBest, objs[0].Best)
+	}
+}
+
 // An objective's own conditions are its own: the library conditions it inherits
 // are about choosing among alternatives, not about which values are feasible.
 func TestObjectivesOfOwnConditions(t *testing.T) {
@@ -182,7 +257,8 @@ func TestObjectivesOfOwnConditions(t *testing.T) {
 			analysis def Trade {
 				attribute crew : Integer;
 				objective largest : MaximizeObjective {
-					attribute :>> best = crew;
+					subject :>> selectedAlternative;
+					in calc :>> eval { crew }
 					require constraint { crew >= 2 }
 					assume constraint { crew <= 7 }
 				}
@@ -213,7 +289,8 @@ func TestObjectivesOfInheritedProjectConditions(t *testing.T) {
 			analysis def Trade {
 				attribute mass : Integer;
 				objective lightest : LeastMass {
-					attribute :>> best = mass;
+					subject :>> selectedAlternative;
+					in calc :>> eval { mass }
 					require constraint { mass <= 90 }
 				}
 			}
@@ -230,6 +307,8 @@ func TestObjectivesOfInheritedProjectConditions(t *testing.T) {
 
 // An objective restating an inherited one stands where it is restated and takes
 // the value it states there, the objective it restates being the same objective.
+// Its `eval` binds the inherited result rather than stating a second result
+// expression, which the pilot rejects.
 func TestObjectivesOfRedeclared(t *testing.T) {
 	ctx, scope := analysisFixture(t, `
 		package test {
@@ -239,15 +318,18 @@ func TestObjectivesOfRedeclared(t *testing.T) {
 				attribute cost : Integer;
 				attribute margin : Integer;
 				objective cheapest : MinimizeObjective {
-					attribute :>> best = cost;
+					subject :>> selectedAlternative;
+					in calc :>> eval { cost }
 				}
 				objective widest : MaximizeObjective {
-					attribute :>> best = margin;
+					subject :>> selectedAlternative;
+					in calc :>> eval { margin }
 				}
 			}
 			analysis def Refined :> Base {
 				objective :>> cheapest : MinimizeObjective {
-					attribute :>> best = cost + 1;
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = cost + 1; }
 				}
 			}
 		}
@@ -367,7 +449,8 @@ func TestObjectivesOfAnalysisUsage(t *testing.T) {
 				attribute size : Integer;
 				require constraint { size >= 2 }
 				objective smallest : MinimizeObjective {
-					attribute :>> best = size;
+					subject :>> selectedAlternative;
+					in calc :>> eval { size }
 				}
 			}
 			analysis trade : Trade;
