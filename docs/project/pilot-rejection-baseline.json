@@ -27,17 +27,17 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 236,
-        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
+        "files": 237,
+        "digest": "sha256:ec771c42089f7dad92159b5103a8d7819e1270d97336c0be02d94f13e5c90ee5"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 236,
+    "cases": 237,
     "bothReject": 228,
     "pilotOnlyRejects": 0,
-    "oursOnlyRejects": 8,
+    "oursOnlyRejects": 9,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
@@ -64,10 +64,10 @@
     },
     {
       "source": "semantic",
-      "cases": 106,
+      "cases": 107,
       "bothReject": 98,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     {
@@ -1900,6 +1900,18 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s81-guarded-succession-guard-not-boolean.sysml",
+      "source": "semantic",
+      "rule": "the guard of a guarded succession in an action body must be a Boolean expression (SysML v2 8.3.18.8; pilot validateTransitionFeatureMembershipGuardExpression, vacuous at the pin once the library types the guard, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: transition guard must be Boolean, found String"
+      ]
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2274,10 +2286,10 @@
       }
     ],
     "totals": {
-      "cases": 236,
+      "cases": 237,
       "bothReject": 228,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     "note": "no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied corpus is byte-identical to the published one and both figures coincide"
