@@ -1,6 +1,11 @@
 package passes
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+)
 
 func TestW7GTwoTypesOnAOneTypeUsageIsAnError(t *testing.T) {
 	const src = `package T {
@@ -91,5 +96,47 @@ func TestW7GAnAttributeTypedByAnEnumerationTakesNoOtherType(t *testing.T) {
 	diags := only(typeDiags(t, src), "one-type")
 	if len(diags) != 1 || diags[0].Message != msgEnumerationAttributeTypes {
 		t.Fatalf("expected only the enumeration attribute to be reported, got %v", diags)
+	}
+}
+
+// TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone: a declared type or an
+// implicitly typing value outside the enumeration's generals makes two types.
+func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
+	const src = `package T {
+		enum def Level { low; high; }
+		enum def Wrong {
+			a : ScalarValues::Real;
+			b = 1;
+			c = 2.5;
+			d = "s";
+			e = true;
+			f = Level::low;
+			g : Level = Level::high;
+		}
+		enum def Right :> ScalarValues::Real {
+			ok1 = 4.0;
+			ok2 : ScalarValues::Real;
+			ok3 : Right;
+			ok4 :> ok1 = 1.0;
+			ok5 default = 3.0;
+			ok6 := 2.0;
+			ok7;
+			= 5.0;
+		}
+		enum def Nested {
+			enum n1 : Nested;
+			n2 = Nested::n1;
+		}
+	}`
+	var got []string
+	for _, d := range only(libraryTypeDiags(t, src), "one-type") {
+		if d.Message != oneTypeUsageMessages[ast.UsageEnumeration] {
+			t.Fatalf("unexpected message %q", d.Message)
+		}
+		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
+	}
+	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}
 }

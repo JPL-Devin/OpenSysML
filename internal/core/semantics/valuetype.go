@@ -16,6 +16,7 @@ const (
 
 	fqnString                     = "ScalarValues::String"
 	fqnNatural                    = "ScalarValues::Natural"
+	fqnInteger                    = "ScalarValues::Integer"
 	fqnRational                   = "ScalarValues::Rational"
 	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
@@ -146,6 +147,25 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		return m.typeConformance(def, want)
 	}
 	return conformanceUnknown()
+}
+
+// LiteralResultType is the result type a literal's evaluation declares (KerML
+// Performances: Integer, Real, String, Boolean); nil for any other node.
+func (m *Model) LiteralResultType(node ast.Node) *symbols.Symbol {
+	if m == nil {
+		return nil
+	}
+	switch node.(type) {
+	case *ast.LiteralBool:
+		return m.libSymbol(FQNBoolean)
+	case *ast.LiteralString:
+		return m.libSymbol(fqnString)
+	case *ast.LiteralInteger:
+		return m.libSymbol(fqnInteger)
+	case *ast.LiteralReal:
+		return m.libSymbol(fqnReal)
+	}
+	return nil
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as

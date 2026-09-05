@@ -2,6 +2,7 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -35,7 +36,7 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, d featureDecl) {
 			typings++
 		}
 	}
-	if typings <= 1 {
+	if typings <= 1 && !tc.enumeratedValueTypeDiffers(scope, d) {
 		return
 	}
 	msg, ok := oneTypeUsageMessages[d.kind]
@@ -54,6 +55,63 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, d featureDecl) {
 		Code:     "one-type",
 		Source:   "type",
 	})
+}
+
+// enumeratedValueTypeDiffers reports an enumerated value typed — by declaration
+// or by a typing value — outside its enumeration and that enumeration's generals.
+func (tc *typeChecker) enumeratedValueTypeDiffers(scope *symbols.Scope, d featureDecl) bool {
+	u, ok := d.node.(*ast.Usage)
+	if !ok || u.Kind != ast.UsageEnumeration || tc.owningEnumeration(scope) == nil {
+		return false
+	}
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		if typ := tc.expr.resolveTarget(scope, rel.Target); typ != nil && !tc.owningEnumerationConformsTo(scope, typ) {
+			return true
+		}
+	}
+	typ := tc.enumeratedValueType(scope, u)
+	return typ != nil && !tc.owningEnumerationConformsTo(scope, typ)
+}
+
+// enumeratedValueType is the type a non-default value gives an enumerated value
+// declaring no generalization (KerML checkFeatureValuationSpecialization).
+func (tc *typeChecker) enumeratedValueType(scope *symbols.Scope, u *ast.Usage) *symbols.Symbol {
+	if u.Value == nil || u.ValueIsDefault || u.Direction != ast.DirNone {
+		return nil
+	}
+	for _, rel := range u.Relationships {
+		if rel != nil && semantics.GeneralizationKind(rel.Kind) {
+			return nil
+		}
+	}
+	if typ := tc.expr.model.LiteralResultType(u.Value); typ != nil {
+		return typ
+	}
+	if typ := tc.expr.valueTypeSymbol(scope, u.Value); typ != nil {
+		return typ
+	}
+	return tc.expr.invocationResultTypeSymbol(scope, u.Value)
+}
+
+// owningEnumeration is the enumeration definition whose body scope is, or nil.
+func (tc *typeChecker) owningEnumeration(scope *symbols.Scope) *symbols.Symbol {
+	if scope == nil || tc.expr.model == nil {
+		return nil
+	}
+	if enum := scope.Owner(); enum != nil && enum.Kind == symbols.SymbolEnumerationDef {
+		return enum
+	}
+	return nil
+}
+
+// owningEnumerationConformsTo reports a type an enumerated value in scope takes
+// redundantly: its enumeration or a general of it (pilot removeRedundantTypes).
+func (tc *typeChecker) owningEnumerationConformsTo(scope *symbols.Scope, typ *symbols.Symbol) bool {
+	enum := tc.owningEnumeration(scope)
+	return enum != nil && tc.expr.model.Conforms(enum, typ)
 }
 
 func (tc *typeChecker) typesAnEnumeration(scope *symbols.Scope, rels []*ast.Relationship) bool {

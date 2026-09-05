@@ -364,6 +364,10 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			return
 		}
 	}
+	if relKind == ast.RelTyping && decl.useKind == ast.UsageEnumeration &&
+		tc.owningEnumerationConformsTo(scope, targetSym) {
+		return
+	}
 	msg := compatMessage(decl, relKind, targetSym.Kind)
 	if (relKind == ast.RelReferences || relKind == ast.RelSubsets) &&
 		targetSym.Kind == symbols.SymbolUnknown && targetSym.IsFeature() {
