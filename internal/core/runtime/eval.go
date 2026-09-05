@@ -2064,14 +2064,14 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 }
 
 // boundParameterNames is the parameter each named argument binds in callee, spelled as
-// callee's signature spells it; a label the model cannot place keeps its last segment.
+// callee's signature spells it; a label the model cannot place is kept as written.
 func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) []string {
 	names := make([]string, len(named))
 	for i, arg := range named {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			continue
 		}
-		names[i] = arg.Name.Parts[len(arg.Name.Parts)-1].Text
+		names[i] = semantics.QualifiedNameText(arg.Name)
 		if callee != nil && ctx.model != nil {
 			if name, ok := ctx.model.BoundParameter(scope, callee, arg.Name); ok {
 				names[i] = name

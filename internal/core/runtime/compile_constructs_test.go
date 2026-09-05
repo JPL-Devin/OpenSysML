@@ -405,13 +405,20 @@ func TestCompiledNamedArgumentsIllFormed(t *testing.T) {
 		}
 		calc def Missing { in v : Real; return : Real = Weighted(weight = v); }
 		calc def Duplicate { in v : Real; return : Real = Weighted(value = v, value = 2.0); }
+		calc def Other { in value : Real; return : Real = value; }
+		calc def Elsewhere { in v : Real; return : Real = Weighted(Other::value = v); }
 	}`))
-	for _, name := range []string{"Missing", "Duplicate"} {
+	for _, name := range []string{"Missing", "Duplicate", "Elsewhere"} {
 		if ok, why := f.eligible(t, name); ok || why == "" {
 			t.Errorf("%s: eligible %v, reason %q", name, ok, why)
 		}
 	}
 	wantErrorIs(t, "Missing(1)", f.same(t, "Missing", realArg(1)), ErrUnboundParameter)
+	elsewhere := f.same(t, "Elsewhere", realArg(1))
+	wantErrorIs(t, "Elsewhere(1)", elsewhere, ErrUnknownParameter)
+	if !strings.Contains(elsewhere.err.Error(), `"Other::value"`) {
+		t.Errorf("Elsewhere(1) = %v", elsewhere.err)
+	}
 	duplicate := f.same(t, "Duplicate", realArg(1))
 	wantErrorIs(t, "Duplicate(1)", duplicate, ErrCalcArity)
 	if !strings.Contains(duplicate.err.Error(), `binds parameter "value" twice`) {
