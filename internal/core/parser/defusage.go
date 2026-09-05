@@ -843,6 +843,12 @@ func (p *Parser) atChainModifier() bool {
 
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
+	p.parseMoreFeatureModifiers(&m)
+	return m
+}
+
+// parseMoreFeatureModifiers adds the modifier keywords at the cursor to m.
+func (p *Parser) parseMoreFeatureModifiers(m *featureMods) {
 	for {
 		t := p.peek()
 		if p.atChainWord() {
@@ -851,7 +857,7 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 				p.advance()
 				continue
 			}
-			return m
+			return
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
 			next := p.peekN(1)
@@ -865,10 +871,10 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 				p.advance()
 				continue
 			}
-			return m
+			return
 		}
 		if t.Kind != lexer.Keyword {
-			return m
+			return
 		}
 		switch t.KeywordID {
 		case "abstract":
@@ -894,7 +900,7 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			nextTok := p.peekN(1)
 			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !p.isModifierOrKindKeyword(nextTok.KeywordID)) {
 				// Treat as usage keyword, stop consuming modifiers
-				return m
+				return
 			}
 			m.isEvent = true
 		case "individual":
@@ -904,11 +910,11 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			nextTok := p.peekN(1)
 			if nextTok.Kind == lexer.Colon || nextTok.Kind == lexer.ColonGt || nextTok.Kind == lexer.ColonGtGt {
 				// individual : Type → anonymous usage
-				return m
+				return
 			}
 			if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "def" {
 				// individual def → DefIndividual keyword
-				return m
+				return
 			}
 			m.isIndividual = true
 		case "snapshot":
@@ -916,7 +922,7 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			// for either keyword; only another modifier after it is handled here.
 			nextTok := p.peekN(1)
 			if nextTok.Kind != lexer.Keyword || !featureModifierKeywords[nextTok.KeywordID] {
-				return m
+				return
 			}
 			m.portion = ast.PortionSnapshot
 		case "public":
@@ -946,7 +952,7 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 		case "nonunique":
 			m.isNonunique = true
 		default:
-			return m
+			return
 		}
 		p.advance()
 	}
@@ -1018,6 +1024,30 @@ func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.T
 		"name the usage after the keyword, or quote the keyword to use it as the name", codeAmbiguousModifierKind)
 }
 
+// parsePortionPrefix reads a `snapshot`/`timeslice` prefix (SysML v2 8.3.9.11) into
+// mods and returns the usage itself when no kind keyword follows (`timeslice t;`).
+func (p *Parser) parsePortionPrefix(start int, mods *featureMods, prefixes *[]*ast.PrefixMetadata) *ast.Usage {
+	for p.atKeyword("snapshot") || p.atKeyword("timeslice") {
+		tok := p.advance()
+		portion := ast.PortionSnapshot
+		if tok.KeywordID == "timeslice" {
+			portion = ast.PortionTimeslice
+		}
+		if mods.portion != ast.PortionNone {
+			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
+		}
+		mods.portion = portion
+		// The portion kind is part of the usage prefix, so prefix metadata may
+		// still follow it: `snapshot #Classified part s;`.
+		*prefixes = append(*prefixes, p.parsePrefixMetadata()...)
+		if !p.atPortionedKind() {
+			isAll := p.acceptSufficientAll()
+			return p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, *mods, isAll)
+		}
+	}
+	return nil
+}
+
 // parseDefUsage parses a definition or usage declaration. The caller has
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
@@ -1057,27 +1087,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// metadata may follow the modifiers: `abstract #Classified z;`.
 	prefixes = append(prefixes, p.parsePrefixMetadata()...)
 
-	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
-	// `timeslice item i;` as well as the bare `timeslice t;`
-	// (SysML v2 8.3.9.11, PortionUsage).
-	for p.atKeyword("snapshot") || p.atKeyword("timeslice") {
-		tok := p.advance()
-		portion := ast.PortionSnapshot
-		if tok.KeywordID == "timeslice" {
-			portion = ast.PortionTimeslice
-		}
-		if mods.portion != ast.PortionNone {
-			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
-		}
-		mods.portion = portion
-		// The portion kind is part of the usage prefix, so prefix metadata may
-		// still follow it: `snapshot #Classified part s;`.
-		prefixes = append(prefixes, p.parsePrefixMetadata()...)
-		// Without a kind keyword the portion itself declares an occurrence usage.
-		if !p.atPortionedKind() {
-			isAll := p.acceptSufficientAll()
-			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
-		}
+	if u := p.parsePortionPrefix(start, &mods, &prefixes); u != nil {
+		return applyPrefixes(u)
 	}
 
 	p.warnAmbiguousModifierKind(mods, p.declarationKindKeyword)
@@ -1159,6 +1170,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// (VariantMembership, SysML v2 §7.20).
 		if kw == "variant" {
 			mods.isVariant = true
+			// The variant element carries its own usage prefix (SysML.xtext
+			// VariantUsageElement → OccurrenceUsagePrefix): `variant ref port a;`.
+			p.parseMoreFeatureModifiers(&mods)
+			prefixes = append(prefixes, p.parsePrefixMetadata()...)
+			if u := p.parsePortionPrefix(start, &mods, &prefixes); u != nil {
+				return applyPrefixes(u)
+			}
 		}
 		isAll := p.acceptSufficientAll()
 		if kw == "bind" {

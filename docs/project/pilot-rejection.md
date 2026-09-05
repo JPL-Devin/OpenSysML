@@ -158,7 +158,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-237 case(s): 228 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+237 case(s): 229 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -166,7 +166,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 87 | 0 | 0 | 0 |
-| semantic | 107 | 98 | 0 | 9 | 0 |
+| semantic | 107 | 99 | 0 | 8 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -179,7 +179,8 @@ and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
 three trigger-argument typing cases (`s48`–`s50`), to 235 with the enumerated value typed by
 its literal (`p18-enum-value-typed-outside-enumeration`), to 236 with the one typed by an
-expression body (`s51`), and to 237 with the non-Boolean guarded-succession guard (`s81`). The KerML constraints in that
+expression body (`s51`), to 237 with the composite variant port (`s52`), and to 238 with the
+non-Boolean guarded-succession guard (`s81`). The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
 argument checking of the send-action family closed another (`k34`), the cross-subsetting

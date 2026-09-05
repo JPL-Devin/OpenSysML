@@ -28,16 +28,16 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 237,
-        "digest": "sha256:ec771c42089f7dad92159b5103a8d7819e1270d97336c0be02d94f13e5c90ee5"
+        "digest": "sha256:6ca2f37b71bd9fdb2ed78e0b3f86a72facf37d1368644bd2e70a8975d6ee083a"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
     "cases": 237,
-    "bothReject": 228,
+    "bothReject": 229,
     "pilotOnlyRejects": 0,
-    "oursOnlyRejects": 9,
+    "oursOnlyRejects": 8,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
@@ -65,9 +65,9 @@
     {
       "source": "semantic",
       "cases": 107,
-      "bothReject": 98,
+      "bothReject": 99,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 9,
+      "oursOnlyRejects": 8,
       "bothAccept": 0
     },
     {
@@ -1891,6 +1891,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/s52-variant-port-composite.sysml",
+      "source": "semantic",
+      "rule": "A port usage whose owning type is not a port definition or port usage must be referential, and a variant has no owning type (SysML 7.12 Ports; pilot validatePortUsageIsReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -1898,18 +1907,6 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
-    },
-    {
-      "path": "semantic/s81-guarded-succession-guard-not-boolean.sysml",
-      "source": "semantic",
-      "rule": "the guard of a guarded succession in an action body must be a Boolean expression (SysML v2 8.3.18.8; pilot validateTransitionFeatureMembershipGuardExpression, vacuous at the pin once the library types the guard, so this case lands in ours-only-rejects).",
-      "mode": "default",
-      "bucket": "ours-only-rejects",
-      "oursErrors": 1,
-      "pilotErrors": 0,
-      "ours": [
-        "line 6: transition guard must be Boolean, found String"
-      ]
     },
     {
       "path": "semantic/send-constructor-non-type.sysml",
@@ -2287,9 +2284,9 @@
     ],
     "totals": {
       "cases": 237,
-      "bothReject": 228,
+      "bothReject": 229,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 9,
+      "oursOnlyRejects": 8,
       "bothAccept": 0
     },
     "note": "no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied corpus is byte-identical to the published one and both figures coincide"
