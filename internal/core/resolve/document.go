@@ -1229,7 +1229,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			case len(na.Name.Parts) > 1:
 				r.ResolveQualified(scope, na.Name)
 			case typ != nil:
-				r.resolveMemberChain(typ, na.Name)
+				r.resolveMemberChain(typ, na.Name, nil)
 			}
 			r.resolveExpr(scope, na.Value)
 		}
@@ -1300,7 +1300,7 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// The outward reading is probed, so that a chain the walk below reads instead
 	// keeps its own diagnostics and per-segment symbols (see probe).
 	if len(fc.Member.Parts) > 1 {
-		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
+		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text, fc); !ok {
 			var outwardSym *symbols.Symbol
 			outward := r.probe(fc.Member, func() bool {
 				var ok bool
@@ -1315,7 +1315,7 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 		}
 	}
 
-	memberSym := r.resolveMemberChain(operandSym, fc.Member)
+	memberSym := r.resolveMemberChain(operandSym, fc.Member, fc)
 	memberSym = r.followChainMemberType(memberSym)
 	r.memoizeFeatureChain(scope, fc, resolution{sym: memberSym, ok: memberSym != nil})
 	return memberSym
@@ -1323,23 +1323,33 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 
 // chainMember looks a chain segment up as the member walk does: as a member of
 // sym when a model is attached, else in sym's own scope.
-func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
-	if found, ok := r.lookupMember(sym, name); ok && r.namedThroughNamespace(found) {
+func (r *Resolver) chainMember(sym *symbols.Symbol, name string, chain ast.Node) (*symbols.Symbol, bool) {
+	found, ok := r.lookupMember(sym, name)
+	if ok && namedByChain(found, chain) {
+		found, ok = r.lookupContributedMember(sym, name)
+	}
+	if ok && r.namedThroughNamespace(found) {
 		return found, true
 	}
 	if sym == nil || sym.Scope == nil {
 		return nil, false
 	}
-	found, ok := sym.Scope.LookupLocal(name)
-	if !ok || !r.namedThroughNamespace(found) {
+	found, ok = sym.Scope.LookupLocal(name)
+	if !ok || namedByChain(found, chain) || !r.namedThroughNamespace(found) {
 		return nil, false
 	}
 	return found, true
 }
 
+// namedByChain reports whether sym borrowed its name from chain, the feature
+// chain now being resolved: `assert h.q;` inside h names H's q, not itself.
+func namedByChain(sym *symbols.Symbol, chain ast.Node) bool {
+	return chain != nil && sym != nil && sym.NamingTarget == chain
+}
+
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
 // assigning each part's symbol explicitly (for feature chain member access).
-func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) *symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
 	}
@@ -1347,7 +1357,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	// Resolve first part using model.LookupMember if available, else
 	// scope.LookupLocal. A chained feature names a member of what precedes it,
 	// so it reaches only the visible ones (KerML 8.2.3.5).
-	cur, ok := r.chainMember(parentSym, qn.Parts[0].Text)
+	cur, ok := r.chainMember(parentSym, qn.Parts[0].Text, chain)
 
 	if !ok {
 		msg := "unresolved member: " + qn.Parts[0].Text
@@ -1361,7 +1371,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		next, found := r.chainMember(cur, qn.Parts[i].Text)
+		next, found := r.chainMember(cur, qn.Parts[i].Text, chain)
 		if !found && cur.Scope == nil {
 			r.Diagnostics = append(r.Diagnostics, Diagnostic{
 				Span:    qn.Parts[i].Span,

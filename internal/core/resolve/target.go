@@ -43,7 +43,7 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 		if !ok || t.Member == nil {
 			return nil, false
 		}
-		return r.memberChain(owner, t.Member)
+		return r.memberChain(owner, t.Member, t)
 	default:
 		return nil, false
 	}
@@ -281,7 +281,7 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		// A qualified segment the owner has no member for reads outward, as
 		// resolveFeatureChain does.
 		if len(ref.QN.Parts) > 1 {
-			if _, member := r.chainMember(owner, ref.QN.Parts[0].Text); !member {
+			if _, member := r.chainMember(owner, ref.QN.Parts[0].Text, ref.Chain); !member {
 				var outward *symbols.Symbol
 				if r.probe(ref.QN, func() bool {
 					outward, ok = r.resolveQualified(ref.Scope, ref.QN, hide)
@@ -291,7 +291,7 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 				}
 			}
 		}
-		return r.memberChain(owner, ref.QN)
+		return r.memberChain(owner, ref.QN, ref.Chain)
 	}
 	if ref.Constructed != nil {
 		if ref.QN != nil && len(ref.QN.Parts) > 1 {
@@ -301,7 +301,7 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		if !ok {
 			return nil, false
 		}
-		return r.memberChain(owner, ref.QN)
+		return r.memberChain(owner, ref.QN, nil)
 	}
 	if ref.Redefines {
 		// A subsetting reaches a sibling redefinition first, as resolveRelationships does.
@@ -340,12 +340,16 @@ func leadingName(target ast.Node) ast.Node {
 
 // memberChain walks qn's segments as members of owner, following inheritance
 // where a semantic model is attached.
-func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) (*symbols.Symbol, bool) {
 	cur := owner
 	for i, part := range qn.Parts {
 		next, ok := r.lookupMember(cur, part.Text)
+		if ok && namedByChain(next, chain) {
+			next, ok = r.lookupContributedMember(cur, part.Text)
+		}
 		if !ok && cur.Scope != nil {
 			next, ok = cur.Scope.LookupLocal(part.Text)
+			ok = ok && !namedByChain(next, chain)
 		}
 		if !ok {
 			next, ok = r.implicitlyNamedMember(cur.Scope, part.Text, nil)
