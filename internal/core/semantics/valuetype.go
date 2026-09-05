@@ -194,7 +194,13 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 	case *ast.LiteralReal:
 		return m.libSymbol(fqnReal)
 	case *ast.OperatorExpr:
+		if n.Operator == ast.OpAs {
+			// `x as T` results in T (KerML checkCastExpressionResultSpecialization).
+			return m.namedType(scope, n.TypeRef)
+		}
 		return m.libSymbol(operatorResultFQN(n.Operator))
+	case *ast.BodyExpr:
+		return m.libSymbol(fqnEvaluation)
 	case *ast.IndexExpr:
 		if n.Bracket {
 			return m.libSymbol(fqnAnything)
@@ -209,19 +215,24 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 		// `{ … }` written as a value is the expression itself, an Evaluation.
 		return m.libSymbol(fqnEvaluation)
 	case *ast.ConstructorExpr:
-		if n.Type == nil || m.resolver == nil {
-			return nil
-		}
-		def, ok := m.resolver.ResolveQualified(scope, n.Type)
-		if !ok || def == nil {
-			return nil
-		}
-		if alias, ok := m.resolver.ResolveAliasTarget(def); ok {
-			def = alias
-		}
-		return def
+		return m.namedType(scope, n.Type)
 	}
 	return nil
+}
+
+// namedType resolves a type reference, following an alias; nil if unresolved.
+func (m *Model) namedType(scope *symbols.Scope, qn *ast.QualifiedName) *symbols.Symbol {
+	if qn == nil || m.resolver == nil {
+		return nil
+	}
+	def, ok := m.resolver.ResolveQualified(scope, qn)
+	if !ok || def == nil {
+		return nil
+	}
+	if alias, ok := m.resolver.ResolveAliasTarget(def); ok {
+		def = alias
+	}
+	return def
 }
 
 // operatorResultFQN names the result type of the Kernel Function Library
