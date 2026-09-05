@@ -1120,6 +1120,7 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
+	model.SetSourceText(s.sessionSourceText())
 	ctx := runtime.NewContext(model, resolver, s.budgets.MaxSteps)
 	if err := ctx.SetBudgets(s.budgets); err != nil {
 		return nil, err

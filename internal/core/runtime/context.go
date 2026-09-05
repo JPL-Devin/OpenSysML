@@ -265,7 +265,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		// pick the overload the checker's argument typing picks.
 		model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
 	}
-	ctx := &Context{
+	return &Context{
 		model:               model,
 		resolver:            resolver,
 		ids:                 &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
@@ -313,11 +313,6 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		redefined:               make(map[featureOfType][]*symbols.Symbol),
 		sources:                 make(map[string]*source.SourceFile),
 	}
-	if model != nil {
-		// Documentation the model derives is read from the files registered here.
-		model.SetSourceText(ctx.sourceText)
-	}
-	return ctx
 }
 
 // RegisterSource gives the context the text of a file the model was read from,
@@ -327,15 +322,6 @@ func (ctx *Context) RegisterSource(sf *source.SourceFile) {
 		return
 	}
 	ctx.sources[sf.Name()] = sf
-}
-
-// sourceText reads a span of a registered file, "" for one not registered.
-func (ctx *Context) sourceText(file string, span source.Span) string {
-	sf, ok := ctx.sources[file]
-	if !ok || span.End() > sf.Len() {
-		return ""
-	}
-	return sf.Text(span)
 }
 
 // sourceLocation renders where a span in a file was written, as

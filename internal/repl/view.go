@@ -400,7 +400,9 @@ func (r *reportRuntime) runtime() (*runtime.Context, error) {
 		return nil, fmt.Errorf("no document loaded")
 	}
 	resolver := resolve.New(idx)
-	ctx := runtime.NewContext(semantics.NewModel(resolver), resolver, r.session.budgets.MaxSteps)
+	model := semantics.NewModel(resolver)
+	model.SetSourceText(r.session.sessionSourceText())
+	ctx := runtime.NewContext(model, resolver, r.session.budgets.MaxSteps)
 	if err := ctx.SetBudgets(r.session.budgets); err != nil {
 		return nil, err
 	}
