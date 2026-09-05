@@ -429,6 +429,39 @@ func TestSequenceTriggerArgumentIsRejected(t *testing.T) {
 	wantTriggerSilent(t, "assert constraint { (flag, ready) }")
 }
 
+// A workspace document that redeclares a library type's qualified name does not
+// stand in for the library's declaration, so the trigger rules keep judging.
+func TestTriggerTypesSurviveWorkspaceDuplicates(t *testing.T) {
+	const fixture = `package ISQBase { attribute def DurationValue; }
+	package Time { attribute def TimeInstantValue; }
+	package ScalarValues { datatype Boolean; }
+	package P {
+		state def S {
+			state a;
+			state b;
+			transition first a accept %s then b;
+		}
+	}`
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"after 5", "trigger-after-duration", "found Natural"},
+		{"after true", "trigger-after-duration", "found Boolean"},
+		{"at 5", "trigger-at-time-instant", "found Natural"},
+		{"at 5 [SI::s]", "trigger-at-time-instant", "found a quantity in second"},
+		{"when 5", "trigger-when-boolean", "found Natural"},
+		{"when 5 [SI::s]", "trigger-when-boolean", "found a quantity in second"},
+	} {
+		diags := libraryTypeDiags(t, strings.Replace(fixture, "%s", tc.trigger, 1))
+		if len(diags) != 1 || diags[0].Code != tc.code || !strings.Contains(diags[0].Message, tc.found) {
+			t.Errorf("%q beside duplicated library names: got %v, want one %s (%s)", tc.trigger, diags, tc.code, tc.found)
+		}
+	}
+	for _, trigger := range []string{"after 5 [SI::s]", "when true", "when 5 > 3"} {
+		if diags := libraryTypeDiags(t, strings.Replace(fixture, "%s", trigger, 1)); len(diags) != 0 {
+			t.Errorf("%q beside duplicated library names: got %v, want silence", trigger, diags)
+		}
+	}
+}
+
 // `seq#(i)` is one element of seq, of seq's type; a Collection (every quantity
 // value is one) is indexed as Anything. The pilot rejects each shape below.
 func TestIndexedTriggerArgument(t *testing.T) {
