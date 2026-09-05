@@ -203,11 +203,16 @@ func completionDetail(sym *symbols.Symbol) string {
 // declaredTypeText returns the qualified name a usage declares as its type, or
 // "" for anything else — a definition, or an untyped usage.
 func declaredTypeText(sym *symbols.Symbol) string {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok {
+	var rels []*ast.Relationship
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		rels = decl.Relationships
+	case *ast.CrossFeatureMember:
+		rels = decl.Relationships
+	default:
 		return ""
 	}
-	for _, rel := range usage.Relationships {
+	for _, rel := range rels {
 		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
 			continue
 		}

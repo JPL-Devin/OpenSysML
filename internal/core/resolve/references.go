@@ -222,7 +222,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.Usage:
 		c.prefixes(scope, d, d.Prefixes)
-		c.relationships(scope, d, ast.OwnRelationships(d))
+		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		if d.CrossFeature != nil {
 			c.crossFeature(scope, d)
@@ -544,7 +544,7 @@ func (c *refCollector) crossFeature(scope *symbols.Scope, u *ast.Usage) {
 	prev := c.member
 	c.member = u.CrossFeature
 	defer func() { c.member = prev }()
-	c.relationships(scope, u, u.CrossFeature.Relationships)
+	c.relationships(scope, u.CrossFeature, u.CrossFeature.Relationships)
 	c.multiplicity(scope, u.CrossFeature.Multiplicity)
 }
 

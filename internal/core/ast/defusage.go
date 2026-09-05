@@ -1,8 +1,6 @@
 package ast
 
 import (
-	"slices"
-
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -550,21 +548,6 @@ type CrossFeatureMember struct {
 	Ident         Identification
 	Multiplicity  *Multiplicity
 	Relationships []*Relationship
-}
-
-// OwnRelationships is the relationships a usage states of itself: the parser
-// also lists its cross feature's on it, and those belong to the cross feature.
-func OwnRelationships(u *Usage) []*Relationship {
-	if u.CrossFeature == nil || len(u.CrossFeature.Relationships) == 0 {
-		return u.Relationships
-	}
-	own := make([]*Relationship, 0, len(u.Relationships))
-	for _, rel := range u.Relationships {
-		if !slices.Contains(u.CrossFeature.Relationships, rel) {
-			own = append(own, rel)
-		}
-	}
-	return own
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.

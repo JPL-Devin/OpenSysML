@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 256,
-        "digest": "sha256:04de50497011a01b8e37a008d8ce85682c417b02fa3a2e44ad1c240ff6915bc1"
+        "files": 258,
+        "digest": "sha256:5783898a4c0ddb3565c4e049e023866b8fc3b59edb47e0b0299f18d2b1274b2d"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 256,
-    "bothReject": 247,
+    "cases": 258,
+    "bothReject": 249,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 124,
-      "bothReject": 115,
+      "cases": 126,
+      "bothReject": 117,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1540,6 +1540,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k53-cross-feature-typed-narrower-than-end.kerml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2083,6 +2092,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/s88-cross-feature-typed-narrower-than-end.sysml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2457,8 +2475,8 @@
       }
     ],
     "totals": {
-      "cases": 256,
-      "bothReject": 247,
+      "cases": 258,
+      "bothReject": 249,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
