@@ -128,6 +128,26 @@ func TestExposedElementsInheritedFromAViewDefinition(t *testing.T) {
 	wantNames(t, "exposed set of v", exposedNames(t, m, sym(t, root, "v")), []string{"A", "C"})
 }
 
+// A view usage's exposes satisfy the view conditions of its definition, and of
+// what that definition specializes in turn (SysML v2 7.24.2); the definition's
+// own exposes are filtered the same way.
+func TestExposedElementsSatisfyInheritedViewConditions(t *testing.T) {
+	m, root := buildModel(t, `
+		metadata def Safety;
+		metadata def Reviewed;
+		package Lib { #Safety part def A; part def B; #Safety #Reviewed part def C; }
+		package More { #Safety #Reviewed part def D; part def E; }
+		view def Safe { filter @Safety; }
+		view def SafeReviewed :> Safe { filter @Reviewed; expose More::*; }
+		view s : Safe { expose Lib::*; }
+		view sr : SafeReviewed { expose Lib::*; }
+		view again :> sr;
+	`)
+	wantNames(t, "exposed set of s", exposedNames(t, m, sym(t, root, "s")), []string{"A", "C"})
+	wantNames(t, "exposed set of sr", exposedNames(t, m, sym(t, root, "sr")), []string{"C", "D"})
+	wantNames(t, "exposed set of again", exposedNames(t, m, sym(t, root, "again")), []string{"C", "D"})
+}
+
 // A view exposing nothing has an empty exposed set, which is no error.
 func TestExposedElementsOfAViewExposingNothing(t *testing.T) {
 	m, root := buildModel(t, `

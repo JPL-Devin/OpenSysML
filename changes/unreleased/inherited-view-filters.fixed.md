@@ -1,0 +1,1 @@
+- A view usage's `expose` now honours the `filter` conditions of its view definition and that definition's supertypes, not only the conditions written in the usage itself.

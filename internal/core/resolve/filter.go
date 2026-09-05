@@ -19,6 +19,13 @@ import (
 // imports — including a `filter` beside the `expose` lines of a view.
 func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
 	filters := r.namespaceFilters(scope)
+	if imp.IsExpose {
+		for _, f := range r.inheritedViewConditions(scope) {
+			if !statesCondition(filters, f) {
+				filters = append(append([]symbols.ElementFilter{}, filters...), f)
+			}
+		}
+	}
 	if imp.FilterExpr != nil {
 		filters = append(append([]symbols.ElementFilter{}, filters...), symbols.ElementFilter{
 			Expr:  imp.FilterExpr,
@@ -54,6 +61,78 @@ func (r *Resolver) namespaceFilters(scope *symbols.Scope) []symbols.ElementFilte
 	}
 	r.nsFilters[scope] = filters
 	return filters
+}
+
+// inheritedViewConditions are the `filter` members of the views the view owning
+// scope specializes or is typed by: what a view exposes has to satisfy the
+// conditions of its definition too (SysML v2 7.24.2).
+func (r *Resolver) inheritedViewConditions(scope *symbols.Scope) []symbols.ElementFilter {
+	if scope == nil || !isViewSymbol(scope.Owner()) {
+		return nil
+	}
+	if filters, ok := r.viewFilters[scope]; ok {
+		return filters
+	}
+	supers, ok := r.model.(supertypeProvider)
+	if !ok || r.viewFiltersInProgress[scope] {
+		return nil
+	}
+	// Resolving the view's type looks through its own exposes, which asks again.
+	r.viewFiltersInProgress[scope] = true
+	defer delete(r.viewFiltersInProgress, scope)
+
+	var filters []symbols.ElementFilter
+	seen := map[*symbols.Symbol]bool{scope.Owner(): true}
+	queue := supers.DirectSupertypes(scope.Owner())
+	for len(queue) > 0 {
+		super := queue[0]
+		queue = queue[1:]
+		if super == nil || seen[super] || !isViewSymbol(super) {
+			continue
+		}
+		seen[super] = true
+		for _, f := range r.viewOwnConditions(super) {
+			if !statesCondition(filters, f) {
+				filters = append(filters, f)
+			}
+		}
+		queue = append(queue, supers.DirectSupertypes(super)...)
+	}
+	r.viewFilters[scope] = filters
+	return filters
+}
+
+// viewOwnConditions are the `filter` members view declares: read from its scope
+// when it has one, else from the index a restored library populates.
+func (r *Resolver) viewOwnConditions(view *symbols.Symbol) []symbols.ElementFilter {
+	if view.Scope != nil {
+		return r.namespaceFilters(view.Scope)
+	}
+	if r.idx == nil {
+		return nil
+	}
+	if fqn := r.idx.GetFQN(view); fqn != "" {
+		return r.idx.NamespaceFiltersOf(fqn)
+	}
+	return nil
+}
+
+// isViewSymbol reports whether sym declares a view definition or usage.
+func isViewSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolViewUsage, symbols.SymbolViewDef:
+		return true
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		return decl.Kind == ast.DefView
+	case *ast.Usage:
+		return decl.Kind == ast.UsageView
+	}
+	return false
 }
 
 // namespaceFQNOf is the indexed name of the namespace owning scope, or "" for a

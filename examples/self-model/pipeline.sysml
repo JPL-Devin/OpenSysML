@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 51;
+        attribute passCount : Integer = 52;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -265,6 +265,7 @@ package OpenSysMLPipeline {
             attribute :>> goType = "ControlNodeSuccessionPass";
             attribute :>> elementScoped = true;
         }
+        part oosemMethod : ConstraintCheck { attribute :>> goType = "OOSEMMethodPass"; }
 
         in item typed : TypeTable;
         out item findings : Diagnostic;

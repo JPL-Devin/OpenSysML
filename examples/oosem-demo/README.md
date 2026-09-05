@@ -37,3 +37,15 @@ Analyse the model:
 
 The model also validates cleanly under the OMG pilot implementation once the library file is
 alongside it, so what it writes is standard SysML v2 textual notation.
+
+The `OOSEM Views` package holds one usage of each OOSEM view definition; render them all with
+
+```bash
+./bin/sysml examples/oosem-demo/oosem-demo.sysml -render-all rendered/
+```
+
+which writes the enterprise, use-case, logical and physical trees as Mermaid, the system
+context as an interconnection diagram, the logical scenario as an action-flow diagram, and the
+requirements and measures as Markdown tables. `-validate` also runs the OOSEM method checks:
+delete an `allocate` or `satisfy` in `Physical Architecture` and the unallocated component or
+unsatisfied requirement is reported as a warning.
