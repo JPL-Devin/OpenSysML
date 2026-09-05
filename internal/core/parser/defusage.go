@@ -747,7 +747,7 @@ func (p *Parser) atDefUsageStart() bool {
 	if p.atTextualRepresentationStart() {
 		return true
 	}
-	if p.atVarPrefixedFeature() {
+	if p.atVarPrefixedFeature() || p.atVarPrefix() {
 		return true
 	}
 	if t.Kind != lexer.Keyword {
