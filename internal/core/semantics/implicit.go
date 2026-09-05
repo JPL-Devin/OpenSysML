@@ -9,6 +9,7 @@ import (
 // Standard-library names the implicit-base tables state more than once.
 const (
 	partFQN         = "Parts::Part"
+	anythingFQN     = "Base::Anything"
 	dataValueFQN    = "Base::DataValue"
 	occurrenceFQN   = "Occurrences::Occurrence"
 	renderingFQN    = "Views::Rendering"
@@ -111,7 +112,7 @@ var implicitKerMLBinaryFeatureBases = map[string]string{
 }
 
 var implicitKerMLBases = map[string]string{
-	"classifier":  "Base::Anything",
+	"classifier":  anythingFQN,
 	"class":       occurrenceFQN,
 	"struct":      "Objects::Object",
 	"assoc":       "Links::Link",
@@ -122,7 +123,7 @@ var implicitKerMLBases = map[string]string{
 	"interaction": "Links::Link",
 	"metaclass":   "Metaobjects::Metaobject",
 	"datatype":    dataValueFQN,
-	"type":        "Base::Anything",
+	"type":        anythingFQN,
 }
 
 // implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
@@ -215,7 +216,7 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// A usage with no kind keyword (`ref x`, `x;`, `#M x`) is a reference or plain
 		// usage typed by Anything, not an attribute's DataValue (SysML v2 §7.6.2).
 		if d.Keyword == "" && d.Kind == ast.UsageAttribute {
-			return "Base::Anything", true
+			return anythingFQN, true
 		}
 		if len(ownedEnds(sym)) == 2 {
 			switch d.Kind {

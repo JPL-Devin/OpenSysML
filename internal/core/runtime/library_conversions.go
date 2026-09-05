@@ -34,13 +34,13 @@ func registerConversionFunctions() {
 	registerValueFunction("IntegerFunctions::ToNatural", []string{"x"}, 1, integerToNatural)
 	registerValueFunction("RationalFunctions::ToInteger", []string{"x"}, 1, numberToInteger)
 	registerValueFunction("RealFunctions::ToInteger", []string{"x"}, 1, numberToInteger)
-	registerValueFunction("RealFunctions::ToRational", []string{"x"}, 1, realToRational)
+	registerValueFunction("RealFunctions::ToRational", []string{"x"}, 1, realItself)
 
 	// A Real is a Complex with a zero imaginary part, so the Complex functions
 	// answer `re` and `im`; the library gives `arg` the body `0.0`.
-	registerValueFunction("RealFunctions::re", []string{"x"}, 1, realPartOfReal)
-	registerValueFunction("RealFunctions::im", []string{"x"}, 1, imagPartOfReal)
-	registerValueFunction("RealFunctions::arg", []string{"x"}, 1, argumentOfReal)
+	registerValueFunction("RealFunctions::re", []string{"x"}, 1, realItself)
+	registerValueFunction("RealFunctions::im", []string{"x"}, 1, realZero)
+	registerValueFunction("RealFunctions::arg", []string{"x"}, 1, realZero)
 
 	registerLibraryFunction("RationalFunctions::floor", []string{"x"}, floorToInteger)
 	registerLibraryFunction("RationalFunctions::round", []string{"x"}, roundToInteger)
@@ -77,6 +77,8 @@ func anythingToString(name string, _ *Context, args []Value) (Value, error) {
 		return NewStringValue(FormatValue(x)), nil
 	case ValComplex:
 		return Value{}, fmt.Errorf("%w: %s: no string notation for a Complex value is defined", ErrUnevaluableLibraryFunction, name)
+	case ValArray, ValVector, ValVectorQuantity:
+		return Value{}, fmt.Errorf("%w: %s: no string notation for %s is defined", ErrUnevaluableLibraryFunction, name, describeOperand(x))
 	}
 	return Value{}, fmt.Errorf(
 		"%w: function %s parameter %q has no String notation for %s",
@@ -213,9 +215,10 @@ func numberToInteger(name string, _ *Context, args []Value) (Value, error) {
 	return Value{Kind: ValConst, Const: result}, nil
 }
 
-// realToRational is RealFunctions::ToRational; with a Rational held as a
-// float64 the value is the Real x is bound as, an Integer argument widened.
-func realToRational(name string, _ *Context, args []Value) (Value, error) {
+// realItself answers the Real x is bound as, an Integer argument widened: it is
+// RealFunctions::ToRational (a Rational is held as a float64) and RealFunctions::re
+// (a Real is its own real part).
+func realItself(name string, _ *Context, args []Value) (Value, error) {
 	x, err := numericArg(name, "x", args[0])
 	if err != nil {
 		return Value{}, err
@@ -223,25 +226,9 @@ func realToRational(name string, _ *Context, args []Value) (Value, error) {
 	return checkedReal(asReal(x))
 }
 
-// realPartOfReal is RealFunctions::re: a Real is its own real part.
-func realPartOfReal(name string, _ *Context, args []Value) (Value, error) {
-	x, err := numericArg(name, "x", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	return checkedReal(asReal(x))
-}
-
-// imagPartOfReal is RealFunctions::im, which is 0.0 for every Real.
-func imagPartOfReal(name string, _ *Context, args []Value) (Value, error) {
-	if _, err := numericArg(name, "x", args[0]); err != nil {
-		return Value{}, err
-	}
-	return checkedReal(0)
-}
-
-// argumentOfReal is RealFunctions::arg, whose vendored body is `0.0`.
-func argumentOfReal(name string, _ *Context, args []Value) (Value, error) {
+// realZero answers 0.0 for every Real: RealFunctions::im and RealFunctions::arg,
+// whose vendored bodies are both `0.0`.
+func realZero(name string, _ *Context, args []Value) (Value, error) {
 	if _, err := numericArg(name, "x", args[0]); err != nil {
 		return Value{}, err
 	}

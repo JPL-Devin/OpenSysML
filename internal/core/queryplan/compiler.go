@@ -319,7 +319,7 @@ func (c *compiler) validateDefault(
 
 // ignoreDependency discards the dependencies of an invoked query's defaults;
 // that query's own compilation records them.
-func ignoreDependency(string) {}
+func ignoreDependency(string) { /* the invoking query records them */ }
 
 // declaringQuery is the calculation whose body declares a parameter usage.
 func declaringQuery(param *symbols.Symbol) *symbols.Symbol {

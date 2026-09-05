@@ -15,6 +15,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/interop/reposync"
 )
 
+const applyCommitMessage = "OpenSysML sync apply"
+
 // The apply measurement drives the sync against a real project: fixture, then
 // revision, then a change made behind its back. Server ids never reach the report.
 
@@ -107,7 +109,7 @@ func MeasureApply(ctx context.Context, c *Client, fixture string, model, revised
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.CreateProject(ctx, project, "OpenSysML sync apply", BranchID); err != nil {
+	if _, err := c.CreateProject(ctx, project, applyCommitMessage, BranchID); err != nil {
 		return nil, fmt.Errorf("create project: %w", err)
 	}
 	run := &applyRun{
@@ -213,7 +215,7 @@ func (run *applyRun) round(ctx context.Context, name string, local *rdf.Graph, g
 		return nil, fmt.Errorf("list commits: %w", err)
 	}
 	if gate && set.Appliable() != nil {
-		_, err := reposync.Apply(ctx, run.repo, set, reposync.ApplyOptions{Message: "OpenSysML sync apply"})
+		_, err := reposync.Apply(ctx, run.repo, set, reposync.ApplyOptions{Message: applyCommitMessage})
 		var refused *reposync.NotAppliableError
 		if !errors.As(err, &refused) {
 			return nil, fmt.Errorf("%s: an unappliable set was not refused as one: %v", name, err)
@@ -233,7 +235,7 @@ func (run *applyRun) round(ctx context.Context, name string, local *rdf.Graph, g
 		return round, nil
 	}
 
-	result, err := reposync.Apply(ctx, run.repo, set, reposync.ApplyOptions{Message: "OpenSysML sync apply"})
+	result, err := reposync.Apply(ctx, run.repo, set, reposync.ApplyOptions{Message: applyCommitMessage})
 	if err != nil {
 		return nil, fmt.Errorf("%s: apply: %w", name, err)
 	}

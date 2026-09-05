@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -54,10 +55,25 @@ func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs
 	if m == nil || e == nil {
 		return &InvocationSelection{}
 	}
-	if m.arguments != nil {
-		return m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e), performs)
+	return m.SelectInvocation(scope, e, m.callArguments(scope, e), performs)
+}
+
+// SelectCallAmong is SelectCall were e's name to denote named, in that order, as a
+// trial spelling would: an alias stands for its target. Not memoized.
+func (m *Model) SelectCallAmong(scope *symbols.Scope, e *ast.InvocationExpr, named []*symbols.Symbol, performs Performs) *InvocationSelection {
+	if m == nil || e == nil {
+		return &InvocationSelection{}
 	}
-	return m.SelectInvocation(scope, e, untypedArguments(e), performs)
+	return m.selectAmong(scope, named, m.callArguments(scope, e), performs)
+}
+
+// callArguments types e's arguments as the checker does when its typing is
+// installed, else lists them untyped.
+func (m *Model) callArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument {
+	if m.arguments != nil {
+		return m.arguments.InvocationArguments(scope, e)
+	}
+	return untypedArguments(e)
 }
 
 // untypedArguments lists e's arguments, the receiver first, with nothing known of their types.
@@ -88,6 +104,15 @@ const (
 	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
 	PerformsAction
 )
+
+// CallSite is the kind of call site a reference is: an action performance when
+// the call is an action usage's value, else an expression.
+func CallSite(ref resolve.Reference) Performs {
+	if ref.Performed {
+		return PerformsAction
+	}
+	return PerformsBehavior
+}
 
 // Performable reports whether a call site of kind p can run sym: a behavior, or for an
 // evaluated call a feature typed by one, which performs that behavior.
@@ -178,7 +203,7 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	if sel, ok := m.invocations[key]; ok {
 		return sel
 	}
-	sel := m.selectInvocation(scope, e, args, performs)
+	sel := m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), args, performs)
 	m.resolver.Journal(e, func() { delete(m.invocations, key) })
 	m.invocations[key] = sel
 	return sel
@@ -189,9 +214,10 @@ func (m *Model) MemoSize() int {
 	return len(m.invocations)
 }
 
-func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {
+// selectAmong selects among the declarations named, in lookup order.
+func (m *Model) selectAmong(scope *symbols.Scope, named []*symbols.Symbol, args []Argument, performs Performs) *InvocationSelection {
 	sel := &InvocationSelection{}
-	for _, sym := range m.resolver.InvocationCandidates(scope, e.Type) {
+	for _, sym := range named {
 		target, ok := m.resolver.ResolveAliasTarget(sym)
 		if !ok || target == nil {
 			continue

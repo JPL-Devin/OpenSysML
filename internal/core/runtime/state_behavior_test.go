@@ -31,9 +31,9 @@ func TestStateBodyBehaviorsAreLowered(t *testing.T) {
         entry; then init;
         state init;
         state active {
-            entry { entered = 1; }
-            do { worked = 2; }
-            exit { exited = 3; }
+            entry { assign entered := 1; }
+            do { assign worked := 2; }
+            exit { assign exited := 3; }
         }
 
         succession first init then active;

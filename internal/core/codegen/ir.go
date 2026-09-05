@@ -350,9 +350,9 @@ type ForEach struct {
 // Return answers the function's result.
 type Return struct{ Value Expr }
 
-func (Declare) stmt() {}
-func (Assign) stmt()  {}
-func (If) stmt()      {}
-func (While) stmt()   {}
-func (ForEach) stmt() {}
-func (Return) stmt()  {}
+func (Declare) stmt() { /* marker: Stmt */ }
+func (Assign) stmt()  { /* marker: Stmt */ }
+func (If) stmt()      { /* marker: Stmt */ }
+func (While) stmt()   { /* marker: Stmt */ }
+func (ForEach) stmt() { /* marker: Stmt */ }
+func (Return) stmt()  { /* marker: Stmt */ }

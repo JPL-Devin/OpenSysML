@@ -25,6 +25,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
+const projectsPath = "/projects/"
+
 // Environment variables read by ConfigFromEnv. FLEXO_INTEROP is the gate: the
 // live test skips unless it is set, exactly as the corpus gates skip on an
 // absent corpus.
@@ -289,7 +291,7 @@ func (c *Client) LoadTurtle(ctx context.Context, project, branch string, turtle 
 // PostChanges commits SysML v2 JSON changes through the service's own commit
 // path and returns the commit it made. An empty branch takes the default one.
 func (c *Client) PostChanges(ctx context.Context, project, branch string, changes []byte) (Commit, error) {
-	target := c.cfg.SysMLV2URL + "/projects/" + url.PathEscape(project) + "/commits"
+	target := c.cfg.SysMLV2URL + projectsPath + url.PathEscape(project) + "/commits"
 	if branch != "" {
 		target += "?branchId=" + url.QueryEscape(branch)
 	}
@@ -320,7 +322,7 @@ type Branch struct {
 // Branch reads one branch of a project, head commit included.
 func (c *Client) Branch(ctx context.Context, project, branch string) (Branch, error) {
 	content, _, err := c.do(ctx, http.MethodGet,
-		c.cfg.SysMLV2URL+"/projects/"+url.PathEscape(project)+"/branches/"+url.PathEscape(branch), nil, "", nil)
+		c.cfg.SysMLV2URL+projectsPath+url.PathEscape(project)+"/branches/"+url.PathEscape(branch), nil, "", nil)
 	if err != nil {
 		return Branch{}, err
 	}
@@ -416,7 +418,7 @@ func (c *Client) selectGraph(ctx context.Context, target string) (*rdf.Graph, er
 // Commits lists a project's commits, newest first as the service returns them.
 func (c *Client) Commits(ctx context.Context, project string) ([]Commit, error) {
 	content, _, err := c.do(ctx, http.MethodGet,
-		c.cfg.SysMLV2URL+"/projects/"+url.PathEscape(project)+"/commits", nil, "", nil)
+		c.cfg.SysMLV2URL+projectsPath+url.PathEscape(project)+"/commits", nil, "", nil)
 	if err != nil {
 		return nil, err
 	}

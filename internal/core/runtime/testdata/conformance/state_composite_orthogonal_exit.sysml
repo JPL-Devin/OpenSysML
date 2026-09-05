@@ -8,13 +8,13 @@ package Test {
 		entry; then start;
 		state start;
 		state Working parallel {
-			exit { log = log * 10 + 3; }
+			exit { assign log := log * 10 + 3; }
 
 			state left {
 				entry; then lstart;
 				state lstart;
 				state lwork {
-					exit { log = log * 10 + 1; }
+					exit { assign log := log * 10 + 1; }
 				}
 
 				succession first lstart then lwork;
@@ -24,14 +24,14 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state rwork {
-					exit { log = log * 10 + 2; }
+					exit { assign log := log * 10 + 2; }
 				}
 
 				succession first rstart then rwork;
 			}
 		}
 		state Done {
-			entry { log = log * 10 + 5; }
+			entry { assign log := log * 10 + 5; }
 		}
 
 		succession first start then Working;

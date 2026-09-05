@@ -545,6 +545,125 @@ func holdsObject(val Value, id int64) bool {
 	return ok && got == id
 }
 
+const adoptClassifiedSrc = `package Demo {
+	private import ScalarValues::*;
+	item def Segment { attribute span : Real = 2.0; item ends [2]; }
+	item def Loop { item edges : Segment [*]; }
+	item def Square :> Loop {
+		item :>> edges [4] = (e1, e2, e3, e4);
+		item e1 [1]; item e2 [1]; item e3 [1]; item e4 [1];
+	}
+}`
+
+// A classification carries over adoption: the feature is rebound to its declaration in
+// the new analysis and the feature values it added fill the features declared there.
+func TestAdoptCarriesAClassifiedObject(t *testing.T) {
+	prev := contextOver(t, adoptClassifiedSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Square"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := obj.GetFeatureValue(prev, "edges"); err != nil {
+		t.Fatalf("GetFeatureValue(edges): %v", err)
+	}
+	id, ok := obj.FeatureValues["e1"].Value.Object()
+	if !ok {
+		t.Fatalf("e1 holds %v, want an object", obj.FeatureValues["e1"].Value)
+	}
+	e1 := prev.instances[id]
+	if len(e1.classifiers) != 1 {
+		t.Fatalf("e1 has %d classifiers, want the edges feature alone", len(e1.classifiers))
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptClassifiedSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	edges := lookupOne(t, ctx.resolver.Index(), "Demo::Square::edges")
+	if len(e1.classifiers) != 1 || e1.classifiers[0] != edges {
+		t.Errorf("e1 is classified by %v, want the edges feature of the new analysis", e1.classifiers)
+	}
+	if !ctx.instanceConforms(e1, lookupOne(t, ctx.resolver.Index(), "Demo::Segment")) {
+		t.Error("e1 no longer conforms to Segment in the new analysis")
+	}
+	feat := e1.FeatureValues["span"].Feature
+	if features := ctx.FeaturesOf(edges); feat != &features[indexOfFeature(t, features, "span")] {
+		t.Error("span still fills a feature of the analysis e1 was classified in")
+	}
+	span, err := e1.GetFeatureValue(ctx, "span")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(span): %v", err)
+	}
+	if got := fmt.Sprint(span.Value.Const); !strings.Contains(got, "2") {
+		t.Errorf("span = %s, want 2 from Segment as it is declared now", got)
+	}
+}
+
+const adoptRefinedSrc = `package Demo {
+	private import ScalarValues::*;
+	item def Engine;
+	item def V8 :> Engine;
+	item def Car { attribute tags : String [0..2]; item engine : Engine [1]; }
+	item def Coupe :> Car { attribute :>> tags : String [0..1]; item :>> engine : V8; }
+	item def Rack { item raw : Car [1]; item coupe : Coupe [1] = raw; }
+}`
+
+// A carried feature a classifier refined keeps reading the refining declaration across
+// adoption, so the narrowed type and multiplicity still govern its reads and writes.
+func TestAdoptKeepsTheFeaturesAClassifierRefined(t *testing.T) {
+	prev := contextOver(t, adoptRefinedSrc)
+	rack, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Rack"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := rack.GetFeatureValue(prev, "coupe"); err != nil {
+		t.Fatalf("GetFeatureValue(coupe): %v", err)
+	}
+	id, ok := rack.FeatureValues["raw"].Value.Object()
+	if !ok {
+		t.Fatalf("raw holds %v, want an object", rack.FeatureValues["raw"].Value)
+	}
+	raw := prev.instances[id]
+	if err := raw.SetFeatureValue(prev, "tags", sequenceOf([]Value{NewStringValue("x")})); err != nil {
+		t.Fatalf("write raw.tags: %v", err)
+	}
+	shapes := prev.ShapesOf(rack)
+
+	ctx := contextOver(t, adoptRefinedSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, rack); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	idx := ctx.resolver.Index()
+	coupe := lookupOne(t, idx, "Demo::Rack::coupe")
+	if len(raw.classifiers) != 1 || raw.classifiers[0] != coupe {
+		t.Fatalf("raw is classified by %v, want the coupe feature of the new analysis", raw.classifiers)
+	}
+	features := ctx.FeaturesOf(coupe)
+	for _, name := range []string{"tags", "engine"} {
+		if feat := raw.FeatureValues[name].Feature; feat != &features[indexOfFeature(t, features, name)] {
+			t.Errorf("raw.%s reads %s's declaration after adoption, want Coupe's refinement", name, feat.OwnerType.Name)
+		}
+	}
+	if err := raw.SetFeatureValue(ctx, "tags", sequenceOf([]Value{NewStringValue("x"), NewStringValue("y")})); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("write of two tags = %v, want ErrMultiplicityViolation under Coupe's tags [0..1]", err)
+	}
+	tags, err := raw.GetFeatureValue(ctx, "tags")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(tags): %v", err)
+	}
+	if got := FormatValue(tags.HeldValue()); !strings.Contains(got, "x") || strings.Contains(got, "y") {
+		t.Errorf("raw.tags = %s after the refused write, want the carried (\"x\")", got)
+	}
+	engine, err := raw.GetFeatureValue(ctx, "engine")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(engine): %v", err)
+	}
+	if held, ok := engine.Value.Object(); !ok || !ctx.instanceConforms(ctx.instances[held], lookupOne(t, idx, "Demo::V8")) {
+		t.Errorf("raw.engine = %s after adoption, want an object conforming to Coupe's engine : V8", FormatValue(engine.Value))
+	}
+}
+
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
 // feature values that no longer mean the same thing.
@@ -875,6 +994,78 @@ func crateIn(t *testing.T, ctx *Context) *Instance {
 		t.Fatalf("GetFeatureValue(box): %v", err)
 	}
 	return obj
+}
+
+const adoptStructuredSrc = `package Demo {
+	private import ScalarValues::*;
+	private import Collections::*;
+	private import VectorValues::*;
+	attribute def LabeledGrid :> Array { attribute label : String; }
+	attribute def Tagged :> NumericalVectorValue { attribute tag : String default "v"; }
+	attribute grid : LabeledGrid { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); :>> label = "grid"; }
+	attribute vec : Tagged { :>> dimension = 2; :>> elements = (1, 2); }
+	part def Holder { attribute cells : LabeledGrid; attribute axis : Tagged; }
+	part holder : Holder;
+}`
+
+// libraryContextOver indexes src over the standard library and gives the context its text.
+func libraryContextOver(t *testing.T, src string) *Context {
+	t.Helper()
+	ctx, _ := libraryModelContext(t, src)
+	ctx.RegisterSource(source.New("<test>", []byte(src)))
+	return ctx
+}
+
+// An array or vector a run wrote is carried with the object it was read from, so
+// the members its specialization adds are still answered after the carry-over.
+func TestAdoptCarriesTheObjectsBehindWrittenArraysAndVectors(t *testing.T) {
+	prev := libraryContextOver(t, adoptStructuredSrc)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	holder, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::holder"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	backing := make(map[string]int64)
+	for feature, src := range map[string]string{"cells": "grid", "axis": "vec"} {
+		val, err := evalIn(t, prev, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if backing[feature] = backingObject(val); backing[feature] == 0 {
+			t.Fatalf("%s = %s is backed by no object", src, FormatValue(val))
+		}
+		if err := holder.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(holder)
+
+	ctx := libraryContextOver(t, adoptStructuredSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, holder); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	for feature, id := range backing {
+		obj, found := ctx.Instance(id)
+		if !found {
+			t.Errorf("the object %d behind %s was not carried", id, feature)
+			continue
+		}
+		if fqn := ctx.fqnOf(obj.Type); fqn == "" || obj.Type != lookupOne(t, ctx.resolver.Index(), fqn) {
+			t.Errorf("the object behind %s is still of the declaration it was built against", feature)
+		}
+	}
+	for expr, want := range map[string]string{
+		"holder.cells":       "Array(2, 2)[1, 2, 3, 4]",
+		"holder.cells.label": `"grid"`,
+		"holder.cells.rank":  "2",
+		"holder.axis":        "⟨1, 2⟩",
+		"holder.axis.tag":    `"v"`,
+	} {
+		got, err := evalIn(t, ctx, lookupOne(t, ctx.resolver.Index(), "Demo").Scope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
 }
 
 // A shape digest names a library type instead of expanding it, so it must say

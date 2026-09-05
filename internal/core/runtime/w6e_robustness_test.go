@@ -19,8 +19,8 @@ func TestSimpleSelfTransitionThatNeverSettlesIsBounded(t *testing.T) {
 			entry; then start;
 			state start;
 			state s {
-				entry { log = log + 1; }
-				exit { log = log + 1; }
+				entry { assign log := log + 1; }
+				exit { assign log := log + 1; }
 			}
 
 			succession first start then s;
@@ -80,8 +80,8 @@ func TestSimpleSelfTransitionEffectReadingAnUnknownFeatureIsReported(t *testing.
 			entry; then start;
 			state start;
 			state s {
-				entry { log = log + 1; }
-				exit { log = log + 1; }
+				entry { assign log := log + 1; }
+				exit { assign log := log + 1; }
 			}
 
 			succession first start then s;

@@ -12,7 +12,7 @@ package Test {
 			state left {
 				entry; then lstart;
 				state lstart;
-				state lwork { exit { exits = exits + 1; } }
+				state lwork { exit { assign exits := exits + 1; } }
 
 				succession first lstart then lwork;
 				transition first lwork then leave;
@@ -21,7 +21,7 @@ package Test {
 			state right {
 				entry; then rstart;
 				state rstart;
-				state rwork { exit { exits = exits + 10; } }
+				state rwork { exit { assign exits := exits + 10; } }
 
 				succession first rstart then rwork;
 			}

@@ -13,7 +13,7 @@ package test {
 			accept when ready then done;
 		}
 		state done {
-			entry { log = log * 10 + 1; }
+			entry { assign log := log * 10 + 1; }
 		}
 
 		succession first start then waiting;

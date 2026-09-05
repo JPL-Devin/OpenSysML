@@ -289,6 +289,10 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	case runtime.ValComplex:
 		return &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(val.Complex())}}
+	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity:
+		// The wire Value has no Array or Vector arm, so one is named unsupported
+		// rather than flattened into a sequence that loses its shape or unit.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -951,7 +955,7 @@ func collectionElements(val runtime.Value) []runtime.Value {
 // Features are read in name order, because reading one materializes the object it
 // holds, so map order would decide the ids those objects are given.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
-	return instanceToProto(rt, inst, idx, func(error) {})
+	return instanceToProto(rt, inst, idx, func(error) { /* unmaterialized features are silent */ })
 }
 
 // instanceToProto is InstanceToProto, handing each feature value it could not

@@ -1,0 +1,31 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sheet",
+  "libraries": true,
+  "slots": {
+    "rect.edges": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "rect.e1.length": {"type": "Quantity", "value": 4, "unit": "m"},
+    "rect.e2.length": {"type": "Quantity", "value": 3, "unit": "m"},
+    "rect.e3.length": {"type": "Quantity", "value": 4, "unit": "m"},
+    "rect.e4.length": {"type": "Quantity", "value": 3, "unit": "m"},
+    "rect.e1.vertices": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "rect.vertices": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "rect.v12": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "rect.v23": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "rect.v34": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "rect.v41": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "rect.isClosed": {"type": "Boolean", "value": true},
+    "rect.faces": {"type": "Sequence", "elements": []}
+  },
+  "identical": [
+    ["rect.edges.1", "rect.e1"],
+    ["rect.edges.4", "rect.e4"],
+    ["rect.v12.1", "rect.vertices.2"],
+    ["rect.v41.2", "rect.vertices.1"]
+  ]
+}
