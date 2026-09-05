@@ -58,7 +58,7 @@ func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
 	if c.index.Library(sym) {
 		return
 	}
-	for _, fqn := range semantics.KindBaseFQNs(sym, c.isKerML) {
+	for _, fqn := range c.model.KindBaseFQNs(sym, c.isKerML) {
 		base := c.libraryType(fqn)
 		if base != nil && (base == sym || c.reaches(sym, base)) {
 			continue

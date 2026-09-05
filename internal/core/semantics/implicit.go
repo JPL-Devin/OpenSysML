@@ -164,8 +164,8 @@ var implicitKerMLFeatureBases = map[string]string{
 // KindBaseFQNs returns the standard-library bases every declaration of sym's
 // kind conforms to, implicitly or through its declared chain: one for most
 // kinds, an association and a behavior base for an interaction.
-func KindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
-	return kindBaseFQNs(sym, isKerML)
+func (m *Model) KindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	return m.kindBaseFQNs(sym, isKerML)
 }
 
 // FeatureBaseFQN returns the standard-library element a feature declaration
@@ -190,14 +190,14 @@ func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
 		// usage does, which is what types it (SysML v2 §7.3.2).
 		return baseUsageFQN, true
 	}
-	return kermlFeatureBaseFQN(sym)
+	return m.kermlFeatureBaseFQN(sym)
 }
 
 // kermlFeatureBaseFQN returns the base feature a KerML feature declaration
-// subsets by its keyword, taking the binary base when it declares two ends.
-func kermlFeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
+// subsets by its keyword, taking the binary base when it has two ends.
+func (m *Model) kermlFeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
 	keyword := keywordOf(sym)
-	if fqn, ok := implicitKerMLBinaryFeatureBases[keyword]; ok && len(ownedEnds(sym)) == 2 {
+	if fqn, ok := implicitKerMLBinaryFeatureBases[keyword]; ok && m.declaredEndCount(sym) == 2 {
 		return fqn, true
 	}
 	fqn, ok := implicitKerMLFeatureBases[keyword]
@@ -209,8 +209,8 @@ func (m *Model) RelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *
 	return m.relationshipTarget(sym, rel)
 }
 
-func kindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
-	fqn, ok := kindBaseFQN(sym, isKerML)
+func (m *Model) kindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	fqn, ok := m.kindBaseFQN(sym, isKerML)
 	if !ok {
 		return nil
 	}
@@ -225,14 +225,16 @@ func kindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
 
 // kindBaseFQN returns the base a declaration of sym's kind specializes for the
 // kind itself; kindBaseFQNs adds the further bases a kind with two facets has.
-func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+// A KerML association is binary by its effective ends, a SysML connection or
+// interface by its owned ones (KerML 1.1 §7.4.8, SysML v2 §7.13.2).
+func (m *Model) kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	if sym == nil {
 		return "", false
 	}
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		if isKerML {
-			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && len(ownedEnds(sym)) == 2 {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && m.declaredEndCount(sym) == 2 {
 				return fqn, true
 			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
@@ -261,7 +263,7 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		return fqn, ok
 	case *ast.Definition:
 		if isKerML {
-			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && len(ownedEnds(sym)) == 2 {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && m.declaredEndCount(sym) == 2 {
 				return fqn, true
 			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
@@ -316,7 +318,7 @@ func (m *Model) implicitBases(sym *symbols.Symbol) []*symbols.Symbol {
 		return nil
 	}
 	var out []*symbols.Symbol
-	for _, fqn := range kindBaseFQNs(sym, m.isKerMLDoc(sym)) {
+	for _, fqn := range m.kindBaseFQNs(sym, m.isKerMLDoc(sym)) {
 		// A declaration keeps its kind's base unless a declared chain already
 		// reaches it — the same rule for a usage and in either language (KerML §8.4.2).
 		if m.declaredGeneralizationReaches(sym, fqn, nil) {
@@ -370,7 +372,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —
 			// except back through a cycle, which reaches nothing new.
-			if slices.Contains(kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !m.declaredReaches(target, sym, nil) {
+			if slices.Contains(m.kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !m.declaredReaches(target, sym, nil) {
 				sameBase = true
 			}
 		}
@@ -437,7 +439,7 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	if typed, tok := m.declaredTypeFeatureBase(sym); tok {
 		fqn, ok = typed, true
 	}
-	if binary, bok := implicitKerMLBinaryFeatureBases[usage.Keyword]; bok && len(ownedEnds(sym)) == 2 {
+	if binary, bok := implicitKerMLBinaryFeatureBases[usage.Keyword]; bok && m.declaredEndCount(sym) == 2 {
 		fqn, ok = binary, true
 	}
 	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {

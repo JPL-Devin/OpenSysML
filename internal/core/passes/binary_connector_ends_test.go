@@ -142,3 +142,28 @@ func TestBinaryConnectorSysMLShapes(t *testing.T) {
 		t.Fatalf("binary link diagnostics on lines %v, want %v", got, want)
 	}
 }
+
+// A declaration owning two ends that redefine two of an n-ary general's ends
+// inherits the rest, so it stays n-ary and takes no binary base (KerML 1.1
+// checkAssociationBinarySpecialization, checkConnectorBinarySpecialization);
+// only a declared binary base makes the inherited third end excessive.
+func TestBinaryConnectorInheritedThirdEndStaysNary(t *testing.T) {
+	const src = `package P {
+	class T { feature x : T; feature y : T; feature z : T; }
+	assoc N { end a : T; end b : T; end c : T; }
+	assoc M specializes N { end redefines a : T; end redefines b : T; }
+	assoc O specializes N { end p : T; end q : T; }
+	assoc Q specializes N, Links::BinaryLink { end redefines a : T; end redefines b : T; }
+	interaction I specializes N { end redefines a : T; end redefines b : T; }
+	classifier K {
+		feature x : T; feature y : T; feature z : T;
+		connector n : N (x, y, z);
+		connector m : N { end redefines a references x; end redefines b references y; }
+		connector o :> n { end redefines a references x; end redefines b references y; }
+		connector q :> n, Links::binaryLinks { end redefines a references x; end redefines b references y; }
+	}
+}`
+	if got, want := binaryEndLines(t, src, true), []int{6, 13}; !sameLines(got, want) {
+		t.Fatalf("binary link diagnostics on lines %v, want %v", got, want)
+	}
+}

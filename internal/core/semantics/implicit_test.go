@@ -6,6 +6,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestImplicitBaseNeedsTheLibrary covers a model resolved without the standard
@@ -375,5 +376,67 @@ func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("untyped feature c does not subset Base::things; sources %v", m.DirectMemberSources(c))
+	}
+}
+
+// A binary base follows the effective ends of a KerML association or connector
+// (KerML 1.1 checkAssociationBinarySpecialization, checkConnectorBinarySpecialization):
+// two owned ends redefining two of a general's three leave it n-ary.
+func TestKerMLBinaryBaseFollowsEffectiveEnds(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class T;
+		assoc Three { end a : T; end b : T; end c : T; }
+		assoc TwoOfThree specializes Three { end redefines a : T; end redefines b : T; }
+		assoc ByPosition specializes Three { end x : T; end y : T; }
+		assoc Two { end a : T; end b : T; }
+		assoc TwoOfTwo specializes Two { end redefines a : T; end redefines b : T; }
+		assoc OneOfTwo specializes Two { end redefines a : T; }
+		class C {
+			feature x : T; feature y : T; feature z : T;
+			connector three : Three (x, y, z);
+			connector twoOfThree : Three { end redefines a references x; end redefines b references y; }
+			connector twoOfInherited subsets three { end redefines a references x; end redefines b references y; }
+			connector two (x, y);
+			connector twoOfTwo subsets two { end redefines source references x; end redefines target references y; }
+		}
+	}
+	package Links {
+		abstract assoc Link;
+		assoc BinaryLink specializes Link { end source : T; end target : T; }
+		abstract feature links : Link;
+		abstract feature binaryLinks : BinaryLink subsets links;
+	}`)
+	p := sym(t, root, "P")
+	c := sym(t, p.Scope, "C")
+	for _, tc := range []struct {
+		scope *symbols.Scope
+		name  string
+		want  []string
+	}{
+		{p.Scope, "Three", []string{"Links::Link"}},
+		{p.Scope, "TwoOfThree", []string{"P::Three"}},
+		{p.Scope, "ByPosition", []string{"P::Three"}},
+		{p.Scope, "Two", []string{"Links::BinaryLink"}},
+		{p.Scope, "TwoOfTwo", []string{"P::Two"}},
+		{p.Scope, "OneOfTwo", []string{"P::Two"}},
+		{c.Scope, "three", []string{"P::Three", "Links::links"}},
+		{c.Scope, "twoOfThree", []string{"P::Three", "Links::links"}},
+		{c.Scope, "twoOfInherited", []string{"P::C::three", "Links::links"}},
+		{c.Scope, "two", []string{"Links::binaryLinks"}},
+		{c.Scope, "twoOfTwo", []string{"P::C::two", "Links::binaryLinks"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sym(t, tc.scope, tc.name)
+			var got []string
+			for _, super := range m.DirectSupertypes(s) {
+				got = append(got, m.resolver.Index().GetFQN(super))
+			}
+			if base := m.implicitKerMLFeatureBase(s); base != nil {
+				got = append(got, m.resolver.Index().GetFQN(base))
+			}
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("supertypes of %s = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

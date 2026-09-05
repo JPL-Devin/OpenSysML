@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -275,6 +277,59 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 		}
 	}
 	return out
+}
+
+// declaredEndCount counts sym's owned ends plus the unclaimed ends of its declared
+// generals; it consults no implicit base, so implicit base selection may use it.
+func (m *Model) declaredEndCount(sym *symbols.Symbol) int {
+	owned := ownedEnds(sym)
+	var inherited []connectorEnd
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || !GeneralizationKind(rel.Kind) {
+			continue
+		}
+		sup := m.relationshipTarget(sym, rel)
+		if sup == nil || sup == sym || !m.isConnectorLike(sup) {
+			continue
+		}
+		ends := m.effectiveEnds(sup)
+		features := endFeatures(ends)
+		for i, end := range ends {
+			if !endClaimed(end.feature, i, owned, features) {
+				inherited = append(inherited, end)
+			}
+		}
+	}
+	return len(owned) + len(m.unmaskedEnds(inherited))
+}
+
+// endClaimed reports whether an owned end takes over general end i: by the ends its
+// redefinition clause names, or by position when it has none.
+func endClaimed(end *symbols.Symbol, i int, owned, general []*symbols.Symbol) bool {
+	if end == nil {
+		return i < len(owned)
+	}
+	for j, o := range owned {
+		if o == nil || !declaresRedefinition(o) {
+			if j == i {
+				return true
+			}
+			continue
+		}
+		if slices.Contains(namedEnds(o, general), end) {
+			return true
+		}
+	}
+	return false
+}
+
+func declaresRedefinition(sym *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && rel.Kind == ast.RelRedefines {
+			return true
+		}
+	}
+	return false
 }
 
 // declaresEnd reports whether sym declares an end feature: an end of a
