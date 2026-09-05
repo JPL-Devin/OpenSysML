@@ -11,4 +11,10 @@
   is reported as a value of dimension L². Triggers nested in action, state and transition
   bodies, including the body an action-target succession carries, are checked, and a body
   declared there now gets its own scope. An argument whose type only evaluation determines is
-  left to it, and an unresolved name is reported by name resolution alone.
+  left to it, and an unresolved name is reported by name resolution alone. A body `{ … }`
+  written as a value is the expression itself, not its result, wherever a value is typed: it is
+  reported as a trigger argument, bound to a typed feature (`attribute b : Boolean = { true }`),
+  passed to a typed parameter or given to an operator, as the reference validator reports it,
+  while its members are still checked. The check is gated
+  per trigger, so an unresolved name elsewhere in the document does not hide an invalid trigger,
+  and a workspace document that redeclares a library type's qualified name does not disable it.
