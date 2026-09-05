@@ -15,6 +15,9 @@ type AnnotationOwnershipPass struct{}
 
 func (AnnotationOwnershipPass) Level() PassLevel { return LevelConstraint }
 
+// ElementScoped: each `about` reference gates on its own resolution.
+func (AnnotationOwnershipPass) ElementScoped() {}
+
 func (AnnotationOwnershipPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
@@ -23,13 +26,14 @@ func (AnnotationOwnershipPass) Run(ctx *Context, name string, root *ast.RootName
 	if rootScope == nil {
 		return nil
 	}
-	c := &annotationOwnershipChecker{resolver: ctx.Resolver()}
+	c := &annotationOwnershipChecker{ctx: ctx, resolver: ctx.Resolver()}
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, c.check)
 	return c.diags
 }
 
 type annotationOwnershipChecker struct {
+	ctx      *Context
 	resolver *resolve.Resolver
 	diags    []Diagnostic
 }
@@ -39,6 +43,9 @@ func (c *annotationOwnershipChecker) check(sym *symbols.Symbol) {
 		return
 	}
 	for _, about := range annotatedElementRefs(sym.Decl) {
+		if c.ctx.DownstreamOfFailure(about) {
+			continue
+		}
 		target, ok := c.resolver.ResolveQualified(sym.OwnerScope, about)
 		if !ok || target == nil {
 			continue
