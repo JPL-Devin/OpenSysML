@@ -1048,7 +1048,7 @@ pub struct DocumentValue {
     /// Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
     #[prost(string, tag="7")]
     pub element_type: ::prost::alloc::string::String,
-    #[prost(oneof="document_value::Kind", tags="1, 2, 3, 4, 5, 6")]
+    #[prost(oneof="document_value::Kind", tags="1, 2, 3, 4, 5, 6, 8")]
     pub kind: ::core::option::Option<document_value::Kind>,
 }
 /// Nested message and enum types in `DocumentValue`.
@@ -1068,6 +1068,9 @@ pub mod document_value {
         BoolValue(bool),
         #[prost(bool, tag="6")]
         Infinity(bool),
+        /// magnitude in a unit, `2290000 \[kg\]`
+        #[prost(message, tag="8")]
+        Quantity(super::Quantity),
     }
 }
 /// DocumentQueryColumn is one projected property, in projection order.

@@ -18,7 +18,7 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "Error: jq is required" >&2
   exit 2
 fi
-if [ ! -f "$exe" ]; then
+if [[ ! -f "$exe" ]]; then
   echo "Error: $exe does not exist" >&2
   exit 2
 fi
@@ -31,25 +31,28 @@ trap 'rm -rf "$tmp"' EXIT
 $GO_WINRES extract --dir "$tmp" "$exe" >/dev/null
 
 info="$tmp/winres.json"
-if [ ! -f "$info" ]; then
+if [[ ! -f "$info" ]]; then
   echo "Error: $exe carries no resources at all" >&2
   exit 1
 fi
 
 # The one VERSIONINFO block, whatever language it was written under.
 strings_json="$(jq -c '[.RT_VERSION[]?[]?.info[]?] | first // empty' "$info")"
-if [ -z "$strings_json" ]; then
+if [[ -z "$strings_json" ]]; then
   echo "Error: $exe carries no VERSIONINFO resource" >&2
   exit 1
 fi
 
-field() { printf '%s' "$strings_json" | jq -r --arg k "$1" '.[$k] // ""'; }
+field() {
+  local key="$1"
+  printf '%s' "$strings_json" | jq -r --arg k "$key" '.[$k] // ""'
+}
 
 status=0
 expect() {
   local key="$1" want="$2" got
   got="$(field "$key")"
-  if [ "$got" = "$want" ]; then
+  if [[ "$got" == "$want" ]]; then
     echo "ok: $exe $key = $got"
   else
     echo "Error: $exe $key is '$got', expected '$want'" >&2
@@ -61,7 +64,7 @@ expect ProductName "OpenSysML"
 expect ProductVersion "$version"
 expect FileVersion "$version"
 for key in CompanyName FileDescription LegalCopyright OriginalFilename; do
-  if [ -z "$(field "$key")" ]; then
+  if [[ -z "$(field "$key")" ]]; then
     echo "Error: $exe has an empty $key" >&2
     status=1
   fi

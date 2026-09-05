@@ -8,76 +8,28 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// Quantity is a scalar quantity value: a magnitude and the measurement
-// reference it is expressed in (Quantities::ScalarQuantityValue is exactly a
-// number `num` and a reference `mRef`). The unit travels with the value, so
-// `1.5 [m/s]` is never mistaken for `1.5 [km/h]`.
-type Quantity struct {
-	Num  semantics.Value
-	Unit Unit
-}
+// Quantity is a scalar quantity value, the representation the semantic layer
+// shares with the query engine: a magnitude in a measurement reference.
+type Quantity = semantics.Quantity
 
-// Unit is a measurement reference as a quantity carries it: its text as written or
-// canonically composed, its product of named units, and its reduction to base units.
-type Unit struct {
-	Text    string
-	Product semantics.UnitProduct
-	Term    semantics.UnitTerm
-}
+// Unit is a measurement reference as a quantity carries it.
+type Unit = semantics.Unit
 
-// String renders the unit by its text, falling back to its reduction for a
-// unit that has none.
-func (u Unit) String() string {
-	if u.Text != "" {
-		return u.Text
+// quantityResult is the runtime value of a quantity computation: a number when
+// its unit cancelled, else the quantity.
+func quantityResult(q semantics.Quantity, err error) (Value, error) {
+	if err != nil {
+		return Value{}, err
 	}
-	return u.Term.String()
+	if q.Unit.None() {
+		return Value{Kind: ValConst, Const: q.Num}, nil
+	}
+	return NewQuantityValue(&q), nil
 }
 
 // composedQuantity is a result in the canonical form of its composed unit (`m**2`, `m`).
-// A unit that cancels leaves a number unless it names a dimension-one unit (`rad`).
 func composedQuantity(num semantics.Value, product semantics.UnitProduct, term semantics.UnitTerm) (Value, error) {
-	if term.Dimensionless() && !product.NamesDimensionOne() {
-		return dimensionlessValue(num, term)
-	}
-	unit := Unit{Text: product.String(), Product: product, Term: term}
-	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
-}
-
-// String renders the quantity as a magnitude in its unit: `1.5 [m/s]`.
-func (q *Quantity) String() string {
-	return q.TextWithMagnitude(constText(q.Num))
-}
-
-// TextWithMagnitude renders the quantity from an already-rendered magnitude, so
-// a caller with its own convention for numbers — a trace, which distinguishes a
-// whole Real from an Integer, or a result table, which rounds a Real for
-// display — keeps it and still names the unit the same way. The stored
-// magnitude is untouched.
-func (q *Quantity) TextWithMagnitude(magnitude string) string {
-	return fmt.Sprintf("%s [%s]", magnitude, q.Unit)
-}
-
-// baseMagnitude is the quantity's magnitude expressed over the base units its
-// unit reduces to, which is the form two commensurable quantities compare in.
-func (q *Quantity) baseMagnitude() float64 {
-	return semantics.ConvertMagnitude(toReal(q.Num), q.Unit.Term.Scale, semantics.UnitScale(1))
-}
-
-// constText renders a numeric constant without a unit.
-func constText(v semantics.Value) string {
-	switch v.Kind {
-	case semantics.ValInt:
-		return fmt.Sprintf("%d", v.Int)
-	case semantics.ValReal:
-		return FormatReal(v.Real)
-	case semantics.ValBool:
-		return fmt.Sprintf("%v", v.Bool)
-	case semantics.ValInfinity:
-		return "∞"
-	default:
-		return "<invalid>"
-	}
+	return quantityResult(semantics.ComposedQuantity(num, product, term))
 }
 
 // evalIndexExpr evaluates `magnitude [unit]`, the quantity expression: a
@@ -159,11 +111,6 @@ func (ec *EvalContext) declaredCollection(operand ast.Node) (string, bool) {
 	return "", false
 }
 
-// unitOne is the unit a bare number is read in: no named unit, scale one.
-func unitOne() Unit {
-	return Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
-}
-
 // asQuantity views a value as a quantity: a quantity as itself, and a bare
 // number as a magnitude of dimension one, since a number is commensurable with
 // a count or a ratio of like quantities but with nothing else.
@@ -173,7 +120,7 @@ func asQuantity(val Value) (*Quantity, bool) {
 		return val.Quantity(), true
 	case ValConst:
 		if val.Const.IsNumeric() {
-			return &Quantity{Num: val.Const, Unit: unitOne()}, true
+			return &Quantity{Num: val.Const, Unit: semantics.UnitOne()}, true
 		}
 	}
 	return nil, false
@@ -182,14 +129,8 @@ func asQuantity(val Value) (*Quantity, bool) {
 // inUnit is a magnitude in the unit of a quantity asQuantity read; the unit a bare
 // number was read with is no unit at all, so the result is a bare number again.
 func inUnit(num semantics.Value, unit Unit) (Value, error) {
-	if unit.none() {
-		return dimensionlessValue(num, unit.Term)
-	}
-	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
+	return quantityResult(semantics.InUnit(num, unit))
 }
-
-// none reports the unit a bare number is read with, which names nothing.
-func (u Unit) none() bool { return u.Text == "" && u.Product.IsEmpty() }
 
 // quantityOperands views both operands of an operation as quantities, reporting
 // false when neither is one — then the operation is ordinary arithmetic.
@@ -205,76 +146,24 @@ func quantityOperands(left, right Value) (*Quantity, *Quantity, bool) {
 	return lq, rq, true
 }
 
-// convertTo expresses the quantity in unit, which requires the two units to be
-// commensurable: their reductions must be over the same base units, or the
-// magnitudes measure different things and no factor relates them.
-func (q *Quantity) convertTo(unit Unit) (float64, error) {
-	if !q.Unit.Term.Commensurable(unit.Term) {
-		return 0, fmt.Errorf("%w: cannot express %s (%s) in %s (%s)", ErrIncommensurableUnits,
-			q.Unit, q.Unit.Term, unit, unit.Term)
-	}
-	if unit.Term.Scale.IsZero() {
-		return 0, fmt.Errorf("%w: %s reduces to a zero scale factor", ErrIncommensurableUnits, unit)
-	}
-	return semantics.ConvertMagnitude(toReal(q.Num), q.Unit.Term.Scale, unit.Term.Scale), nil
-}
-
 // addQuantities evaluates a sum or difference of quantities, in the unit of the
-// left operand (a bare number where that is one); Integer magnitudes in one unit
-// stay Integer, a conversion makes a Real.
+// left operand (a bare number where that is one).
 func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
-	converted, err := right.convertTo(left.Unit)
-	if err != nil {
-		return Value{}, err
-	}
-	rhs := semantics.Value{Kind: semantics.ValReal, Real: converted}
-	if right.Num.Kind == semantics.ValInt && left.Unit.Term.Scale == right.Unit.Term.Scale {
-		rhs = right.Num
-	}
-	num, err := magnitudeArith(op, left.Num, rhs)
-	if err != nil {
-		return Value{}, err
-	}
-	return inUnit(num, left.Unit)
+	return quantityResult(semantics.AddQuantities(op, *left, *right))
 }
 
 // scaleQuantities evaluates a product or quotient of quantities, whose unit is
 // the product or quotient of theirs — `10 [m] / 2 [s]` is `5 [m/s]`.
 func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
-	// The magnitudes are combined in the units they were written in, and the
-	// resulting unit is composed from the same two units, so no conversion is
-	// involved and nothing is normalized away.
-	num, err := magnitudeArith(op, left.Num, right.Num)
-	if err != nil {
-		return Value{}, err
-	}
-	var (
-		product semantics.UnitProduct
-		term    semantics.UnitTerm
-	)
-	if op == ast.OpMul {
-		product = left.Unit.Product.Times(right.Unit.Product)
-		term = left.Unit.Term.Times(right.Unit.Term)
-	} else {
-		product = left.Unit.Product.DividedBy(right.Unit.Product)
-		term = left.Unit.Term.DividedBy(right.Unit.Term)
-	}
-	return composedQuantity(num, product, term)
+	return quantityResult(semantics.ScaleQuantities(op, *left, *right))
 }
 
-// powQuantity raises a quantity to a constant exponent, its unit included. The
-// magnitude goes through semantics.Pow, the one implementation of `**` the
-// folder and the runtime share, so a quantity reports the domain and overflow
-// cases identically to a bare number instead of carrying an Inf or a NaN.
+// powQuantity raises a quantity to a constant exponent, its unit included.
 func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 	if !exponent.IsNumeric() {
 		return Value{}, fmt.Errorf("%w: exponent of a quantity is not a number", ErrTypeMismatch)
 	}
-	num, err := semantics.Pow(base.Num, exponent)
-	if err != nil {
-		return Value{}, err
-	}
-	return composedQuantity(num, base.Unit.Product.Pow(toReal(exponent)), base.Unit.Term.Pow(toReal(exponent)))
+	return quantityResult(semantics.PowQuantity(*base, exponent))
 }
 
 // sqrtQuantity is the square root of a quantity, `9 [m**2]` giving `3.0 [m]`;
@@ -300,73 +189,23 @@ func sqrtQuantity(q *Quantity) (Value, error) {
 					ErrUnitRoot, q.Unit, f.Name, f.Exponent)
 			}
 		}
-		magnitude = q.baseMagnitude()
+		magnitude = q.BaseMagnitude()
 		term = semantics.UnitTerm{Scale: semantics.UnitScale(1), Factors: term.Factors}
 		root, _ = term.BaseProduct().Root(2)
 	}
-	num, err := realResult(math.Sqrt(magnitude))
+	num, err := semantics.RealResult(math.Sqrt(magnitude))
 	if err != nil {
 		return Value{}, err
 	}
 	return composedQuantity(num, root, term.Pow(0.5))
 }
 
-// dimensionlessValue is the number a ratio of like quantities computes,
-// keeping its kind unless a scale factor is left to apply.
-func dimensionlessValue(num semantics.Value, term semantics.UnitTerm) (Value, error) {
-	if term.Scale != semantics.UnitScale(1) {
-		var err error
-		if num, err = realResult(semantics.ConvertMagnitude(toReal(num), term.Scale, semantics.UnitScale(1))); err != nil {
-			return Value{}, err
-		}
-	}
-	return Value{Kind: ValConst, Const: num}, nil
-}
-
-// magnitudeArith combines two magnitudes as the bare operator does:
-// Integer operands keep an Integer result except under `/`.
-func magnitudeArith(op ast.OperatorKind, left, right semantics.Value) (semantics.Value, error) {
-	if left.Kind == semantics.ValInt && right.Kind == semantics.ValInt {
-		if op == ast.OpDiv {
-			q, ok := semantics.IntQuotient(left.Int, right.Int)
-			if !ok {
-				return semantics.Value{}, ErrDivisionByZero
-			}
-			return semantics.Value{Kind: semantics.ValReal, Real: q}, nil
-		}
-		res, ok := semantics.IntArith(op, left.Int, right.Int)
-		if !ok {
-			return semantics.Value{}, integerOverflow(op, left.Int, right.Int)
-		}
-		return semantics.Value{Kind: semantics.ValInt, Int: res}, nil
-	}
-	res, ok := semantics.RealArith(op, toReal(left), toReal(right))
-	if !ok {
-		return semantics.Value{}, ErrDivisionByZero
-	}
-	return realResult(res)
-}
-
 // compareQuantities orders two quantities, converting the right one into the
 // left one's unit.
 func compareQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
-	converted, err := right.convertTo(left.Unit)
+	result, err := semantics.CompareQuantities(op, *left, *right)
 	if err != nil {
 		return Value{}, err
-	}
-	lhs := toReal(left.Num)
-	var result bool
-	switch op {
-	case ast.OpLt:
-		result = lhs < converted
-	case ast.OpLe:
-		result = lhs <= converted
-	case ast.OpGt:
-		result = lhs > converted
-	case ast.OpGe:
-		result = lhs >= converted
-	default:
-		return Value{}, fmt.Errorf("unknown comparison operator: %v", op)
 	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
@@ -375,13 +214,9 @@ func compareQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error
 // Incommensurable units are an error rather than an inequality: they measure
 // different things, so neither `==` nor `!=` is an answer about them.
 func equalQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
-	converted, err := right.convertTo(left.Unit)
+	equal, err := semantics.EqualQuantities(op, *left, *right)
 	if err != nil {
 		return Value{}, err
-	}
-	equal := toReal(left.Num) == converted
-	if op == ast.OpNeq {
-		equal = !equal
 	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: equal}}, nil
 }
@@ -389,9 +224,5 @@ func equalQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 // negateQuantity negates a quantity's magnitude, keeping its unit and the
 // magnitude's kind.
 func negateQuantity(q *Quantity) (Value, error) {
-	num, err := constUnary(ast.OpNeg, q.Num)
-	if err != nil {
-		return Value{}, err
-	}
-	return inUnit(num, q.Unit)
+	return quantityResult(semantics.NegateQuantity(*q))
 }
