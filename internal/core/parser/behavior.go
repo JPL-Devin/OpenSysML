@@ -95,7 +95,7 @@ func (p *Parser) atNamedCalcMember() bool {
 	cp := p.checkpoint()
 	p.parseIdentification()
 	t := p.peek()
-	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.Semicolon) ||
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.LBrace) || p.at(lexer.Semicolon) ||
 		p.valueOperatorAt(0) || (t.Kind == lexer.Keyword && !wordBinaryOpKeywords[t.KeywordID])
 	p.restore(cp)
 	p.release()
@@ -1473,9 +1473,10 @@ func continuesCondition(tok lexer.Token) bool {
 }
 
 // atReturnedUsage reports whether `return` opens a usage (`'return' UsageElement`, SysML.xtext:1961):
-// a specialization, or an identification (`<s>`? name?) a specialization, `[`, a value or `;` follows.
+// a specialization or multiplicity, or an identification (`<s>`? name?) a specialization, `[`,
+// a value, `{` or `;` follows. A value or body alone declares nothing (FeatureDeclaration).
 func (p *Parser) atReturnedUsage() bool {
-	if p.atFeatureSpecialization() {
+	if p.atFeatureSpecialization() || p.at(lexer.LBracket) {
 		return true
 	}
 	if !p.atName() && !p.at(lexer.Lt) {
@@ -1483,7 +1484,7 @@ func (p *Parser) atReturnedUsage() bool {
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) ||
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.LBrace) ||
 		p.at(lexer.Semicolon) || p.valueOperatorAt(0)
 	p.restore(cp)
 	p.release()
@@ -1597,6 +1598,20 @@ func (p *Parser) parseResultMember() ast.Node {
 
 		u.NodeSpan = p.spanFrom(start)
 		return u
+	}
+
+	// A value or body alone declares no result (FeatureDeclaration names, specializes
+	// or bounds it); the remainder is read so the members after it are kept.
+	if p.valueOperatorAt(0) || p.at(lexer.LBrace) {
+		const msg = "expected the result's name, specialization or multiplicity after 'return'"
+		p.error(p.peek().Span, msg)
+		p.parseUsageValue(&ast.Usage{})
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
+			p.parseDefUsageBody()
+		}
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Anything else after `return` is an expression, which no production admits:

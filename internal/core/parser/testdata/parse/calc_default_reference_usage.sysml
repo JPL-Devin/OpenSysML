@@ -40,6 +40,29 @@ package DefaultReferenceUsages {
 		return <r>;
 	}
 
+	// The declaration may open with a multiplicity instead (FeatureSpecializationPart),
+	// and a body may follow the identification directly (UsageBody).
+	calc def Every {
+		in xs : Integer[*];
+		return [*] = xs;
+	}
+	calc def EveryTyped {
+		in xs : Integer[*];
+		return [*] : Integer = xs;
+	}
+	calc def EverySubsets {
+		in xs : Integer[*];
+		return [*] :> xs;
+	}
+	calc def Documented {
+		in n : Integer;
+		return r { doc /* the result */ }
+	}
+	calc def ShortDocumented {
+		in n : Integer;
+		return <r> { doc /* the result */ }
+	}
+
 	// Kind-less members of a calc body are readable locals of its trailing expression.
 	calc def Affine {
 		in n : Integer;
@@ -47,12 +70,20 @@ package DefaultReferenceUsages {
 		offset := 1;
 		twice + offset
 	}
+	// A body may follow a kind-less member's name directly (DefaultReferenceUsage's UsageBody).
+	calc def Bodied {
+		in n : Integer;
+		twice { doc /* two n */ }
+		<t> thrice : Integer { doc /* three n */ }
+		n
+	}
 
 	part def Tank {
 		attribute level : Real;
 		assert constraint bounded {
 			limit = 10.0;
 			floor := 0.0;
+			flag { doc /* a bodied local */ }
 			level < limit and level > floor
 		}
 	}

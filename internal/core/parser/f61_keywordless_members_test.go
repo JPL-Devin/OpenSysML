@@ -375,6 +375,28 @@ func TestF61AssignmentStaysAssignment(t *testing.T) {
 			t.Fatalf("member 2 = %T, want *ast.AssignmentActionNode", members[2])
 		}
 	})
+
+	// A body right after the name is the usage's (DefaultReferenceUsage's UsageBody),
+	// not a body expression following an expression `twice`.
+	t.Run("body_declares_usage", func(t *testing.T) {
+		members := parseCalc(t, "twice { doc /* two n */ } <t> thrice { doc /* three n */ } n")
+		if len(members) != 5 {
+			t.Fatalf("members = %d, want 5", len(members))
+		}
+		for i, want := range []ast.Identification{{Name: "twice"}, {ShortName: "t", Name: "thrice"}} {
+			u, ok := members[2+i].(*ast.Membership).Member.(*ast.Usage)
+			if !ok {
+				t.Fatalf("member %d = %T, want *ast.Usage", 2+i, members[2+i])
+			}
+			if u.Keyword != "" || u.Ident.ShortName != want.ShortName || u.Ident.Name != want.Name || !u.HasBody || u.Value != nil {
+				t.Errorf("member %d = keyword %q <%q> %q body %v, want kind-less <%q> %q with a body",
+					2+i, u.Keyword, u.Ident.ShortName, u.Ident.Name, u.HasBody, want.ShortName, want.Name)
+			}
+		}
+		if _, ok := members[4].(*ast.FeatureReference); !ok {
+			t.Errorf("member 4 = %T, want the trailing expression", members[4])
+		}
+	})
 }
 
 // A keyword of the other language names a short-named keyword-less feature,

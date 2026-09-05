@@ -81,6 +81,63 @@
         (Definition kind="calc" abstract=false variation=false name="ShortBare"
           (Usage kind="attribute" name="<r>" ref=false direction="out" composite=false derived=false ordered=false nonunique=false)))
       (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Every"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (FeatureReference name="xs"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="EveryTyped"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (FeatureReference name="xs"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="EverySubsets"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="subsets" target=xs
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity)))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Documented"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="r" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Membership visibility="default"
+              (Documentation locale="")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="ShortDocumented"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="<r>" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Membership visibility="default"
+              (Documentation locale="")))))
+      (Membership visibility="default"
         (Definition kind="calc" abstract=false variation=false name="Affine"
           (Membership visibility="default"
             (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
@@ -98,6 +155,23 @@
             (FeatureReference name="twice")
             (FeatureReference name="offset"))))
       (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Bodied"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="twice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Documentation locale=""))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="<t> thrice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Documentation locale=""))))
+          (FeatureReference name="n")))
+      (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Tank"
           (Membership visibility="default"
             (Usage kind="attribute" name="level" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
@@ -111,6 +185,10 @@
               (Membership visibility="default"
                 (Usage kind="attribute" name="floor" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
                   (LiteralReal value="0.0")))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="flag" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Membership visibility="default"
+                    (Documentation locale=""))))
               (ConstraintMember assert=true negated=false
                 (OperatorExpr operator="and"
                   (OperatorExpr operator="<"

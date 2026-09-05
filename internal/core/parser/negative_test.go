@@ -47,6 +47,10 @@ func TestNegative(t *testing.T) {
 		{"calc_return_named_subsets_no_target", "calc def C { return r :> = 1; }"},
 		{"calc_return_short_name_unclosed", "calc def C { return <r result : Real = 1; }"},
 		{"calc_return_short_name_empty", "calc def C { return <> = 1; }"},
+		// A result declares something: a value or a body alone is no FeatureDeclaration.
+		{"calc_return_value_only", "calc def C { in n : Real; return = n; }"},
+		{"calc_return_body_only", "calc def C { return { doc /* r */ } }"},
+		{"calc_return_multiplicity_unclosed", "calc def C { in xs : Real[*]; return [* = xs; }"},
 		// A short name must be closed before the member's declaration tail.
 		{"calc_short_name_unclosed", "calc def C { <s x = 1; }"},
 		{"calc_short_name_empty", "calc def C { <> x = 1; }"},
