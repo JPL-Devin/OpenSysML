@@ -488,6 +488,42 @@ refuses the first two.
 
 ---
 
+### A quantity value is accepted as the unit of a quantity (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML judges the nested quantity by its value type
+(`validation-constraints.md`, `validateOperatorExpressionQuantity`), so the two
+implementations disagree on the shape below.
+
+````markdown
+**Question, not a bug report:** `SysMLValidator.checkOperatorExpression` judges
+the unit of `x [u]` with `resultConformsTo(u, TensorMeasurementReference)`,
+which admits an `OperatorExpression` whose declared result is a supertype of
+the wanted type when one of its arguments conforms. `BaseFunctions::'['` returns
+`Anything`, so a quantity value nested as the unit passes for the measurement
+reference it was built from. With the release's validator
+(`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`) and the full standard
+library:
+
+```sysml
+package Q {
+    private import ISQ::*;
+    private import SI::*;
+    attribute a = 10 [2 [m]];          // no warning: `m` is an argument of `[`
+    attribute b = 10 [(m, 3)];         // no warning: `m` is an element
+    attribute c = 10 [if true ? m else s];  // Should be a measurement reference (unit).
+}
+```
+
+Is the existential reading of `resultConformsTo` intended for `[`? `2 [m]` is a
+`ScalarQuantityValue`, not a measurement reference, and a second implementation
+that judges the value's type warns on `a`; it agrees on `b` (a sequence whose
+elements are units) and on `c` (the branches of a conditional are expression
+bodies, so its result is `Anything` and no argument is a unit).
+````
+
+---
+
 ### Eight control-node succession constraints are unimplemented `TODO`s (pilot `2026-07`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been

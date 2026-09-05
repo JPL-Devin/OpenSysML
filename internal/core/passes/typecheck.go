@@ -31,7 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	model := ctx.Model()
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
-		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
+		expr:     &exprChecker{resolver: ctx.Resolver(), model: model, lang: ctx.Kind},
 		lang:     ctx.Kind,
 	}
 	tc.expr.walkMembers = tc.walk
