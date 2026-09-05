@@ -129,15 +129,11 @@
     .osml-terminal .osml-ok     { color: #a5d6a7; }
     .osml-terminal .osml-dim    { opacity: .68; }
 
-    /* The numbers strip: what a real model costs, in one row. Each figure links
-       to the measurement behind it. */
+    /* The numbers strip: what a real model costs, in one row, the last thing before
+       the documentation index. Each figure links to the measurement behind it. */
     .osml-numbers {
-      border-top: 1px solid var(--md-default-fg-color--lightest);
-      margin-top: 2.4rem;
+      border-bottom: 1px solid var(--md-default-fg-color--lightest);
       scroll-margin-top: 3rem;
-    }
-    .osml-numbers + .osml-strip {
-      margin-top: 0;
     }
     .osml-numbers__inner {
       padding: .9rem 1.2rem .8rem;
@@ -468,6 +464,25 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
   checksums, and macOS Gatekeeper.</p>
 </section>
 
+<section class="osml-strip">
+  <div class="osml-strip__inner">
+    <div>
+      <h3><a href="{{ 'project/spec-compliance/'|url }}">Compliance, stated plainly</a></h3>
+      <p>Every construct is recorded as faithful, approximate or not implemented. No
+      conformance certification is claimed.</p>
+    </div>
+    <div>
+      <h3><a href="{{ record('project/omg-issues.md', base_url) }}">Defects, declared</a></h3>
+      <p>Where the published reference material is itself defective, the correction is
+      declared and the corpus left as published.</p>
+    </div>
+    <div>
+      <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>
+      <p>The roadmap lists what is missing, in the order it should be picked up.</p>
+    </div>
+  </div>
+</section>
+
 <section class="osml-numbers" id="numbers">
   <div class="osml-numbers__inner">
     <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
@@ -487,25 +502,6 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
       (Airbus, MPL-2.0); the commands to repeat it are on
       <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
     </p>
-  </div>
-</section>
-
-<section class="osml-strip">
-  <div class="osml-strip__inner">
-    <div>
-      <h3><a href="{{ 'project/spec-compliance/'|url }}">Compliance, stated plainly</a></h3>
-      <p>Every construct is recorded as faithful, approximate or not implemented. No
-      conformance certification is claimed.</p>
-    </div>
-    <div>
-      <h3><a href="{{ record('project/omg-issues.md', base_url) }}">Defects, declared</a></h3>
-      <p>Where the published reference material is itself defective, the correction is
-      declared and the corpus left as published.</p>
-    </div>
-    <div>
-      <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>
-      <p>The roadmap lists what is missing, in the order it should be picked up.</p>
-    </div>
   </div>
 </section>
 {% endblock %}
