@@ -883,7 +883,7 @@
     {
       "name": "validateSatisfyRequirementUsageReference",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateSelectExpressionOperator",
@@ -985,7 +985,7 @@
     {
       "name": "validateTransitionFeatureMembershipGuardExpression",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateTransitionFeatureMembershipOwningType",

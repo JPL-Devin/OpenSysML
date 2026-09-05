@@ -1,0 +1,18 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="state" abstract=false variation=false name="GuardedTargets"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="ready" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=ScalarValues::Boolean
+            (*ast.QualifiedName))))
+      (SubstateMember name="s1")
+      (TransitionMember source="" target="s2"
+        (FeatureReference name="ready"))
+      (SubstateMember name="s2")
+      (TransitionMember source="" target="s1"
+        (OperatorExpr operator="not"
+          (FeatureReference name="ready"))
+        (Membership visibility="default"
+          (Usage kind="action" name="reset" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (SubstateMember name="s3")
+      (TransitionMember source="" target="s1"))))
