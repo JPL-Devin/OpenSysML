@@ -84,9 +84,12 @@ package Demo {
 
     Not published yet, so take it from git or a path. Rust 1.83 or later.
 
-The four service clients each need a `sysml-grpc` binary to start, and all of them look for it in
-the same places, `$OPENSYSML_BINARY` first ([Getting the service binary](#getting-the-service-binary)).
-The Go API needs none: it is the engine.
+The four service clients each need a `sysml-grpc` binary to start, and they share the cache they
+find one in — `~/.opensysml/bin/sysml-grpc`, then `$PATH`, with a release downloaded into that
+cache when `$OPENSYSML_GRPC_VERSION` asks for one. An explicit path comes first, from a variable
+that differs by client: `$OPENSYSML_BINARY` for Python and Node, `$OPENSYSML_GRPC_BINARY` for Java
+and Rust. [Getting the service binary](#getting-the-service-binary) gives the five ways to provide
+one. The Go API needs none: it is the engine.
 
 ### Parse, evaluate, look up, instantiate
 
@@ -264,7 +267,7 @@ Those projects publish wheels for CPython 3.10 and later only, which is the rang
 ### Getting the service binary
 
 Every call goes through `sysml-grpc`. The client starts an instance of the service, looking for
-the binary in the same order every client uses: `$OPENSYSML_BINARY`, then
+the binary in this order: `$OPENSYSML_BINARY`, then
 `~/.opensysml/bin/sysml-grpc` (`.exe` on Windows), then a release download into that cache if
 one was requested, then `sysml-grpc` on `$PATH`. There are five ways to provide it:
 
