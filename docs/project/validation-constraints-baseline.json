@@ -242,17 +242,17 @@
     {
       "name": "validateControlNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateControlNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateControlNodeOwningType",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateCrossSubsettingCrossedFeature",
@@ -272,12 +272,12 @@
     {
       "name": "validateDecisionNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDecisionNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDefinitionVariationIsAbstract",
@@ -525,7 +525,7 @@
     {
       "name": "validateForkNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFramedConcernMembershipConstraintKind",
@@ -619,7 +619,7 @@
     {
       "name": "validateJoinNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateLibraryPackageNotStandard",
@@ -630,12 +630,12 @@
     {
       "name": "validateMergeNodeIncomingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateMergeNodeOutgoingSuccessions",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateMetadataFeatureAnnotatedElement",

@@ -113,6 +113,32 @@ func TestW8DMetadataUsageBodyValuesMustBeModelLevelEvaluable(t *testing.T) {
 	w8dWantLines(t, src, "metadata-value-not-evaluable", 12, 15)
 }
 
+// The usage and prefix spellings of one body rule are reported at the same
+// tier, so a violation in either does not gate the other's report.
+func TestW8DMetadataUsageBodyIsReportedBesideAPrefixAnnotationViolation(t *testing.T) {
+	src := `package Test {
+	private import ScalarValues::*;
+	metadata def W { attribute k : Integer; }
+	part def A {
+		metadata m1 : W { :>> k = ~3; }
+		@W { :>> k = ~3; }
+	}
+}
+`
+	w8dWantLines(t, src, "metadata-value-not-evaluable", 5, 6)
+
+	src = `package Test {
+	metadata def W { attribute k; }
+	part def A {
+		metadata m1 : W { bad = 1; }
+		@W { bad = 1; }
+	}
+}
+`
+	w8dWantLines(t, src, "metadata-body-feature", 4)
+	w8dWantLines(t, src, "metadata-owning-type-feature", 5)
+}
+
 func TestW8DLegalMetadataAnnotationsStaySilent(t *testing.T) {
 	src := `package Test {
 	metadata def A {

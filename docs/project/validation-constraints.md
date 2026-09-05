@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 133 of 217 named constraints are reported by OpenSysML — 123 ✅ faithful and 10 ⚠️ approximate; 7 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 77 ❔ unknown.
+**Census:** 142 of 217 named constraints are reported by OpenSysML — 132 ✅ faithful and 10 ⚠️ approximate; 7 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 68 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -206,11 +206,11 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateCaseUsageType` | SysML | A case is typed by one case definition | internal/core/passes/one_type.go:checkOneType | — | none | ✅ faithful |
 | `validateConjugatedPortDefinitionConjugatedPortDefinition` | SysML | A conjugated port definition has no conjugated port definition of its own (implicit element; not expressible in text) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateConnectionUsageType` | SysML | A connection is typed by connection definitions | internal/core/passes/typecheck.go:compatibleTyping (messages in w10b_usage_typing.go:pilotTypingMessage) | — | none | ✅ faithful |
-| `validateControlNodeIncomingSuccessions` | SysML | Incoming successions of a control node have target multiplicity 1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateControlNodeOutgoingSuccessions` | SysML | Outgoing successions of a control node have source multiplicity 1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateControlNodeOwningType` | SysML | A control node is owned by an action definition or usage (the grammar admits control nodes nowhere else; a syntax error in both tools) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateDecisionNodeIncomingSuccessions` | SysML | A decision node has at most one incoming succession; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateDecisionNodeOutgoingSuccessions` | SysML | Outgoing successions of a decision node have target multiplicity 0..1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateControlNodeIncomingSuccessions` | SysML | Every succession into a control node has target multiplicity 1 (SysML v2 8.3.17.6); the pilot never reports it — a pilot gap, not a pilot-confirmed check | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `succession into fork f has target multiplicity [0..1]; successions into a fork node must have target multiplicity [1]` | `semantic/cn06-fork-incoming-target-multiplicity.sysml` | ✅ faithful |
+| `validateControlNodeOutgoingSuccessions` | SysML | Every succession out of a control node has source multiplicity 1 (SysML v2 8.3.17.6); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `succession out of join j has source multiplicity [0..1]; successions out of a join node must have source multiplicity [1]` | `semantic/cn07-join-outgoing-source-multiplicity.sysml` | ✅ faithful |
+| `validateControlNodeOwningType` | SysML | A control node is owned by an action definition or usage (SysML v2 8.3.17.6); the grammar admits one in a constraint body, where the pilot reports it too | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `fork f is declared in constraint def C, which is not an action; declare it in the body of an action definition or usage` | `semantic/cn05-control-node-outside-action.sysml` | ✅ faithful |
+| `validateDecisionNodeIncomingSuccessions` | SysML | A decision node has at most one incoming succession (SysML v2 8.3.17.7); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `decide d has 2 incoming successions; a decision node may have at most one — merge the flows before the decision` | `semantic/cn04-decide-two-incoming.sysml` | ✅ faithful |
+| `validateDecisionNodeOutgoingSuccessions` | SysML | Every succession out of a decision node has target multiplicity 0..1 (SysML v2 8.3.17.7); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `succession out of decide d has target multiplicity [1]; successions out of a decision node must have target multiplicity [0..1]` | `semantic/cn09-decide-outgoing-target-multiplicity.sysml` | ✅ faithful |
 | `validateDefinitionVariationIsAbstract` | SysML | A variation definition is abstract (implied by `variation`; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateDefinitionVariationMembership` | SysML | An owned usage of a variation definition is a variant | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | — | `xpect/p09-variation-member-not-variant.sysml` | ✅ faithful |
 | `validateDefinitionVariationSpecialization` | SysML | A variation definition does not specialize another variation | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | same wording between two `variation` definitions; when an enumeration definition is involved the message names the implicit variation and the fix | `semantic/s47-enumeration-specializes-enumeration.sysml` | ✅ faithful |
@@ -225,7 +225,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateFlowUsageType` | SysML | A flow is typed by flow definitions | internal/core/passes/typecheck.go:compatibleTyping (messages in w10b_usage_typing.go:pilotTypingMessage) | — | none | ✅ faithful |
 | `validateForLoopActionUsageLoopVariable` | SysML | A for loop has a loop variable (the grammar requires one; a syntax error in both tools otherwise) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateForLoopActionUsageParameters` | SysML | A for loop has two parameters (implied by the grammar; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateForkNodeIncomingSuccessions` | SysML | A fork node has at most one incoming succession; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateForkNodeIncomingSuccessions` | SysML | A fork node has at most one incoming succession (SysML v2 8.3.17.8); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `fork f has 2 incoming successions; a fork node may have at most one — merge or join the flows before the fork` | `semantic/cn01-fork-two-incoming.sysml` | ✅ faithful |
 | `validateFramedConcernMembershipConstraintKind` | SysML | A framed concern is a required constraint (implied by the `frame` keyword; a syntax error in both tools otherwise) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateIfActionUsageParameters` | SysML | An if action has at least two parameters (implied by the grammar; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateIncludeUseCaseUsageReference` | SysML | An include use case usage references a use case | internal/core/passes/w11a_usage_typing.go:W11AUsageTypingPass.Run | — | none | ✅ faithful |
@@ -233,9 +233,9 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateInterfaceUsageEnd` | SysML | An interface usage's ends are ports | internal/core/passes/w10b_ends.go:W10BEndKindPass.Run | — | `xpect/p27-interface-end-not-port.sysml` | ✅ faithful |
 | `validateInterfaceUsageType` | SysML | An interface is typed by interface definitions | internal/core/passes/typecheck.go:compatibleTyping (messages in w10b_usage_typing.go:pilotTypingMessage) | — | none | ✅ faithful |
 | `validateItemUsageType` | SysML | An item is typed by item definitions (`An item must be typed by item definitions.`); the pilot reports `validateOccurrenceUsageType` instead on every probe | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateJoinNodeOutgoingSuccessions` | SysML | A join node has at most one outgoing succession; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateMergeNodeIncomingSuccessions` | SysML | Incoming successions of a merge node have source multiplicity 0..1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateMergeNodeOutgoingSuccessions` | SysML | A merge node has at most one outgoing succession; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateJoinNodeOutgoingSuccessions` | SysML | A join node has at most one outgoing succession (SysML v2 8.3.17.11); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `join j has 2 outgoing successions; a join node may have at most one — follow the join with a fork or decision node to branch` | `semantic/cn02-join-two-outgoing.sysml` | ✅ faithful |
+| `validateMergeNodeIncomingSuccessions` | SysML | Every succession into a merge node has source multiplicity 0..1 (SysML v2 8.3.17.13); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `succession into merge m has source multiplicity [1]; successions into a merge node must have source multiplicity [0..1]` | `semantic/cn08-merge-incoming-source-multiplicity.sysml` | ✅ faithful |
+| `validateMergeNodeOutgoingSuccessions` | SysML | A merge node has at most one outgoing succession (SysML v2 8.3.17.13); the pilot never reports it — a pilot gap | internal/core/passes/control_node.go:ControlNodeSuccessionPass.Run | `merge m has 2 outgoing successions; a merge node may have at most one — follow the merge with a fork or decision node to branch` | `semantic/cn03-merge-two-outgoing.sysml` | ✅ faithful |
 | `validateMetadataUsageType` | SysML | A metadata usage is typed by exactly one metadata definition or metaclass (`A metadata usage must be typed by one metadata definition.`); a part definition or a second type is rejected, an abstract one by `validateMetadataFeatureMetadataNotAbstract` | internal/core/passes/w8c_metadata_type.go:MetadataTypePass.Run | — | `semantic/s23-metadata-typed-by-part-def.sysml` | ✅ faithful |
 | `validateObjectiveMembershipIsComposite` | SysML | An objective is composite (the grammar admits no `ref objective`; a syntax error in both tools) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateObjectiveMembershipOwningType` | SysML | Only cases have objectives; the pilot grammar rejects `objective` elsewhere (`mismatched input 'objective' expecting '}'`) | internal/core/parser/defusage.go:Parser.misplacedMember (syntax tier, like the pilot) | `'objective' declares the objective of a case and is only allowed in a case body; move it into the case it belongs to` | `grammar/g63-objective-outside-case-body.sysml` | ✅ faithful |
@@ -303,9 +303,12 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 ## Out of scope for this census
 
 Rows are recorded as `main` stands at the recording date. Constraints being implemented in
-parallel (`validateFeatureValueOverriding`, the `validateTriggerInvocationAction*Argument`
-trio, and the control-node succession constraints) keep the status the evidence supports today; when their
+parallel (`validateFeatureValueOverriding` and the `validateTriggerInvocationAction*Argument`
+trio) keep the status the evidence supports today; when their
 passes land, the row's status moves and `-update` is not needed — the baseline's statuses are
-edited by hand, the names are not. The feature-chain value bindings of
+edited by hand, the names are not. The nine control-node succession constraints landed this way:
+their rows are ✅ although the pilot reports none of the eight count and multiplicity rules
+(`pilot-reject` files them under *only we reject*), because the census records what OpenSysML
+reports and the *Checks* column names the pilot gap. The feature-chain value bindings of
 `validateBindingConnectorTypeConformance` landed on `main` before this recording, so its row
 already describes them.

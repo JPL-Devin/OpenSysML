@@ -13,10 +13,11 @@ const msgMetadataBodyFeature = "Must redefine an owning-type feature"
 
 // W8DMetadataUsagePass checks that every feature in a `metadata m : A { … }` usage body
 // redefines one of A's own and binds a model-level evaluable value (KerML §7.5);
-// the type itself is MetadataTypePass's.
+// the type itself is MetadataTypePass's. It runs at the tier MetadataAnnotationPass
+// reports the same rules for the `@A { … }` spelling.
 type W8DMetadataUsagePass struct{}
 
-func (W8DMetadataUsagePass) Level() PassLevel { return LevelConstraint }
+func (W8DMetadataUsagePass) Level() PassLevel { return LevelType }
 
 func (W8DMetadataUsagePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
