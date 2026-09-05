@@ -6,6 +6,220 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+## 0.5.1 — 2026-09-05
+
+### Added
+
+- **Association arity, binary-link end counts and multiplicity bound types are checked the way
+  the reference does.** A concrete KerML `assoc`, `assoc struct` or `interaction` with fewer than
+  two ends is reported `Must have at least two related elements`, as a SysML `connection def`
+  already was; an interaction now implicitly specializes `Links::Link` (`Links::BinaryLink` when
+  binary) and `Performances::Performance`, being both an association and a behavior: a step may
+  invoke it, and its directed features are parameters, redefined by position like any behavior's.
+  A connector, binding, succession, flow or association that conforms to `Links::BinaryLink` yet
+  has more than two ends — positional `(x, y, z)` ends, declared `end` features and inherited
+  ends counted alike — reports each end past the second, with the redefinition check no longer
+  masking it. Whether a KerML association or connector implicitly takes the binary base follows
+  the same count, so one that redefines two ends of a three-ended general and inherits the third
+  stays n-ary. A multiplicity bound whose result type resolves to anything but an Integer-conforming
+  data type — a feature typed by a class, a bare `part`, `item`, `port`, `action` or `step` typed
+  only by its kind's library base, a call to a function whose result is a class, or a quantity
+  such as `3 [kg]`, say — is rejected with `Must have a Natural value`; an unresolved or untyped
+  bound stays silent.
+- **KerML binary connectors parse as the grammar reads them.** `connector a to b`,
+  `connector [0..1] a to [1..*] b`, `connector e ::> a.x to b.y`, `connector e references x to y`
+  and `connector $::P::a to b` declare an anonymous connector with two ends; only `connector c from a to b` names one. The
+  first end is no longer mistaken for the connector's name, so a model with two such connectors
+  no longer reports a duplicate declaration.
+
+- **Windows Authenticode signing through SignPath Foundation, ready to apply for.** The three
+  Windows executables now embed a `VERSIONINFO` resource (`ProductName` `OpenSysML`,
+  `ProductVersion` and `FileVersion` taken from the same `VERSION` the `-ldflags` carry,
+  `CompanyName`, `FileDescription`, `LegalCopyright`, `OriginalFilename`), written by a pinned
+  `go-winres` for `GOOS=windows` builds only and checked against the tag by
+  `make windows-versioninfo-check`. A new GitHub Actions workflow, `release-windows.yml`,
+  rebuilds them on every `v*` tag with the CircleCI release job's Makefile targets and version
+  variables, submits them to SignPath for signing once the `SIGNPATH_API_TOKEN` secret and the
+  `SIGNPATH_*` variables are configured — and otherwise stops after the build — and publishes the
+  signed files as additional `*-signed*` release assets with a `SHA256SUMS-windows-signed.txt`,
+  leaving the CircleCI-published assets, `SHA256SUMS.txt` and its cosign bundle untouched. The
+  README gains the "Code signing policy" section SignPath's terms require (team roles, MFA,
+  privacy statement), and the releasing guide the application, configuration and per-release
+  approval procedure. Signing takes effect only after the project's SignPath application is
+  approved.
+
+### Changed
+
+- Fully-qualified names no longer carry empty segments for unnamed enclosing elements (`Mid::inner`, never `Mid::::inner`), so name resolution stops re-normalizing every name it looks up: loading a real 28-file model allocates about 37% fewer objects and 8% less memory.
+
+- **The validation-constraint census gate now verifies the evidence each row cites, not only that the cited files exist.** `go run ./cmd/validation-census -check` requires every implemented row's `Implementation` cell to cite at least one `internal/….go:function` location and fails when a citation is not repository-relative (`file.go:function`), when the named Go file declares no such function or method (methods on generic receivers count) or when the citation runs past the method (`Type.method.extra`); it reads every listed negative case and fails when its header names no constraint or when the header's `pilot validate…` token (or the specification constraint cited before it) attributes the rejection to a different constraint, when the case's pilot-rejection bucket is not a rejection at all (`both-accept`, or a value the referee does not record) or contradicts the row's status (a faithful row citing a case only the pilot rejects, a not-implemented row citing a case only OpenSysML rejects, an unknown row citing any case), or when a corpus case attributed to a constraint is missing from that constraint's row. Two stale implementation references and fourteen rows whose evidence had never been recorded were corrected by the first run; three pilot-suite cases (`p13`, `p17`, `p19`) listed under a neighbouring constraint moved to the row the pinned pilot actually reports, and five pilot-suite headers now name that constraint beside the fixture they derive from.
+
+- **The conformance records under `docs/project/` are consolidated and renamed.** Seven historical
+  adjudication records are folded into one `docs/project/adjudications.md` that keeps the durable
+  decisions and drops rows later work closed; the three records that document live mechanisms are
+  now `element-scoped-tier-gating.md`, `lossless-library-records.md` and `errata-overlay.md`, and
+  the stale round-by-round movement tables are gone in favour of the current oracle figures.
+
+- **The state machine executor refuses the time trigger argument validation refuses.**
+  `accept after 5` and `accept at 2 [min]` were reported by validation (`trigger-after-duration`,
+  `trigger-at-time-instant`) yet scheduled by the runtime as five seconds and as an instant. The
+  executor now makes the same judgement validation does, from the same declarations, and refuses
+  such an argument as `ErrTimeTriggerType` when the state is entered, before the argument is
+  evaluated or anything is scheduled; only an argument the declarations leave open — a feature
+  whose type does not resolve — is read from its value, and a value there that is no time is
+  still `ErrIncommensurableUnits`.
+  Write `after 5 [s]` and `at` a `TimeInstantValue` feature, as the shipped conformance fixtures
+  now do.
+
+- **Guide chapter 9 is one client guide for all five languages, not a Python page.** It opens with
+  install, a worked task and the failure model in Go, Python, Node/TypeScript, Java and Rust tabs
+  before the per-client sections, and it now lives at `docs/guide/09-clients.md`; the old
+  `guide/09-python/` URL redirects there, and the old path keeps a pointer page for the links to
+  it that GitHub serves.
+- **The landing page points at the client documentation rather than at Python.** The client card
+  links to the guide chapter and lists every client's API reference beside it.
+
+### Fixed
+
+- State machines with time-triggered transitions (`accept after d`, `accept at t`) ran about three times slower than before the trigger argument's type was checked at runtime: the check re-derived the argument's static type on every state entry. The verdict is now judged once per transition the first time its state is entered and reused thereafter, restoring the previous execution speed and allocation volume; a wrong-typed argument is still refused on state entry exactly as before.
+
+- **An alias declared in a calc or action body is not executed.** `alias b for a;` inside a behavior body was lowered as a statement and failed the calculation with "not executable"; it is now a declaration like any other.
+
+- **A metadata type's `annotatedElement` alternatives are found by specialization, not by name.**
+  A body feature merely named `annotatedElement` that specializes nothing is a duplicate member,
+  not a restriction on what the metadata type may annotate; `@Named about Q` and `#Named part p`
+  used to be reported `Cannot annotate …` against its type and are now accepted, as the pilot
+  implementation accepts them. Only features that redefine or subset
+  `Metaobjects::Metaobject::annotatedElement`, at any distance, are read.
+
+- **A feature whose value calls a function on itself types in finite time.** A rollup such as
+  `attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);` — the value of
+  `totalMass` calls `sum` on `totalMass` itself — sent the type checker round the same call
+  without end, and `sysml -validate` died with a stack overflow on the Apollo 11 model. Typing an
+  argument that leads back to the call being typed now selects that call on its argument count
+  alone, once, so the model validates and reports its diagnostics.
+- **An interface whose ends are named like the parts it connects validates.** With
+  `interface def I { end plss : P; end psa : ~P; }` and
+  `interface x : I connect plss.port to psa.port;` inside a part with parts `plss` and `psa`,
+  the accessibility rule resolved each end against the interface's own inherited ends rather than
+  the enclosing part's, and reported `Must be an accessible feature` on a legal model. Ends now
+  resolve in the enclosing scope, as name resolution already did.
+- **A state definition written `:> StateAction` instantiates.** Spelling out the specialization
+  every state definition has implicitly made lowering materialize the library's content, whose
+  `ref state self : StateAction` led back to `StateAction`, so `-instantiate` of a part exhibiting
+  such states failed with `recursive state typing`. `States::StateAction` now contributes no
+  content to a state machine, as the implicit specialization never did; a library's own state
+  definitions still contribute theirs.
+
+- **An `assert` or `satisfy` may reference a case's objective.** `assert obj;`, `assert not
+  uc.obj;`, `satisfy uc.obj;` and `requirement r :> uc.obj;` used to report `assert target must be
+  a constraint usage, found partUsage`: an objective is a requirement usage and is now judged as
+  one, directly, negated, through a feature chain, through an alias and
+  inside a constraint body. A `subject`, `actor` or `stakeholder` referent stays a part and stays
+  rejected, as the pinned pilot rejects it.
+- **A feature chain through the asserting usage's own owner names the owner's member.** An
+  assertion borrows the name of the feature it references, so `part h : H { assert h.q; }` used
+  to resolve `h.q` to the assertion itself and accept it; it now reaches `H::q` and reports
+  `assert target must be a constraint usage, found partUsage`, where the pinned pilot reports
+  `Must reference a constraint.`
+
+- **A KerML `assoc struct` is an association structure.** The parser recorded it as a plain
+  `struct`, so it specialized `Objects::Object` instead of `Objects::LinkObject`, its features
+  subset `Objects::objects` instead of `Objects::linkObjects`, and its metaclass was `Structure`
+  instead of `AssociationStructure`. It now keeps the compound keyword through the parser, the
+  implicit-specialization tables, the metaclass table and the Xpect export.
+
+- **A generalization written as a feature chain is kept when resolving it re-enters an
+  active lookup.** `feature b subsets x.f` declared inside a feature that itself subsets
+  `a::b` used to lose `f` as a supertype for good: the chain's lookup was cut short by the
+  resolver's cycle guard and the incomplete answer was memoized, so `b` inherited nothing
+  from `f`. The answer is now provisional, as it already was for a qualified-name target,
+  and the next query resolves the chain.
+- **A generalization that fell back to an outer name while its owner's supertypes were
+  still being computed is no longer memoized.** A member's `specializes X` resolved while
+  the owner was mid-way through its own supertype query could not yet see the `X` the
+  owner inherits and settled for a same-named `X` in an enclosing namespace; that answer
+  was cached by both the resolver and the semantic model, so the inherited general was
+  lost for good. Such an answer now holds for the query that made it only, and the next
+  query finds the inherited one.
+
+- **An invocation heading a feature chain is checked.** `F(x = 1, x = 2).r` reports the duplicate binding under one or several chain segments, as a bare `F(x = 1, x = 2)` already did, along with an unknown parameter name, an argument of the wrong type and too many arguments; a required parameter left unbound stays accepted at a chain head (`A().y`), as the reference's own suite declares.
+
+- **A constraint usage may be typed by a requirement, concern or viewpoint definition.** `constraint c : SomeRequirementDef;` (and `require constraint c : SomeRequirementDef { … }`) was rejected with `A constraint must be typed by one constraint definition.`; a requirement definition is a constraint definition (SysML v2 §8.3.19), and the pilot accepts the typing.
+
+- **A control node's members are an action's.** `fork f { attribute a : Integer := 1; }` (and
+  `join`, `merge`, `decide`) used to report `Initialized feature must be variable`: the node
+  had no implicit base, so nothing made it an occurrence. A control node now specializes its
+  control action (`Actions::ForkAction`, `JoinAction`, `MergeAction`, `DecisionAction`), so its
+  members are an occurrence's and may be variable.
+
+- **A cross feature is compared with its end by effective type, not by spelling.** `end b : A
+  crosses a.x` with `feature x;` untyped, `end b crosses a.x` with an untyped end, and an end
+  whose body declares `member feature ac : B` while the end itself is typed by `A` used to pass
+  `Cross feature must have same type as feature`; they are now reported, as the pilot
+  implementation reports them, because an untyped feature is typed by `Anything` and an owned
+  cross feature is typed by its end. Each side's types are the KerML `Feature::type` set — the
+  declared types of the feature and of every feature it subsets, redefines or references, less
+  those a more specific one makes redundant — so `feature x : A subsets w` with `w : W` is
+  reported against an end typed `A`, while a connector end that reference-subsets a feature is
+  not reported for it.
+- **The bundled library snapshot refuses a blob written before the cross-feature symbol kind
+  existed.** Adding the kind renumbered the symbol kinds after it, which the snapshot stores as
+  integers, so a snapshot from an older build could have been decoded with the wrong kinds; the
+  format version now moves with the numbering and a test pins it.
+
+- **An enumerated value whose value is an expression body is typed outside its enumeration.** `enum def E { a = { 1 + 2 }; }` types `a` by `Performances::Evaluation`, a second type beside `E`, and is now reported as the reference implementation reports it; the body was previously invisible to the one-type rule.
+
+- **An enumerated value typed outside its enumeration is now an error, and one typed by a general of it no longer is.** A value written on an enumerated value types it (`enum def E :> Real { b = 3; }` types `b` by Integer; `a = x == y` or `a = new A()` types `a` by Boolean or `A`, the result the library function or constructor declares; `a = xs.?{…}` keeps the type of `xs`, whether `xs` declares it, inherits it or is itself typed only by its value; `a = x as T` types `a` by `T` and `a = { … }` by Evaluation), and so does a declared type; either counts as a second type beside the owning enumeration unless the enumeration specializes it, exactly as the reference implementation's `validateEnumerationUsageType` decides. `enum def E :> Real { a : Real; }` was wrongly rejected before.
+
+- **KerML `const` is a variable feature.** `const feature k : C;` is a variable feature in KerML,
+  so `portion const feature` now reports `A portion cannot be variable` and a `const feature` owned
+  by a package or by a non-occurrence type reports `Must be owned by an occurrence type`, as
+  `var feature` already did and as the pinned pilot reports.
+- **`var feature` parses at namespace level.** A KerML `var` prefix on a package or root member
+  used to stop the parser with `expected a namespace member`; the declaration now parses and the
+  owner rule reports it.
+
+- **A `metadata m : A { … }` usage body is checked at the same tier as an `@A { … }` annotation body.**
+  The usage form's `Must redefine an owning-type feature` and `Must be model-level evaluable`
+  reports used to be skipped whenever the document carried any type-tier error — including the
+  very same violation written in a sibling `@A { … }` annotation — so only one of two identical
+  bodies was reported. Both spellings are now reported together, as the pilot implementation
+  reports them.
+
+- **Named arguments bind at execution the way they validate.** A calc or action call that names a parameter by its short name (`<xs> x`), an alias, a qualified inherited name or a redefinition now executes — the runtime binds the label to the parameter the checker resolved instead of its written text — and two spellings of one parameter are rejected as a duplicate at the call, whether evaluated, compiled or built in. A qualified label the checker rejects (`F(Other::x = 1)`) is likewise an unknown parameter at execution rather than binding `x` by its last segment.
+
+- **A named require/assume constraint typed by a constraint definition now reads its own parameter bindings when its requirement is checked.** `require constraint n : Below { in x = m; in limit = 400.0; }` used to fail with `no value for feature x` because the condition was evaluated against the requirement's features rather than the constraint's; the constraint's parameters now mask same-named requirement features, and a redefinition rebinding one parameter (`require constraint :>> n { in x; in limit = 200.0; }`) keeps the others: its parameters redefine the redefined constraint's by position, as a step's do, so `in x;` restates the inherited `in x = m`. A default the definition writes in terms of another parameter (`in margin : Real default = limit * 2.0;`) reads the parameters the usage binds, an overriding `in limit = 100.0;` included, rather than a same-named feature of the requirement. A named constraint nested in another (`requirement def Outer { in x : Real; require constraint inner : Below { in y = x; } }`) reads the enclosing constraint's bindings too, its own parameters masking same-named outer ones. The parameters also mask a subject or actor the requirement binds under the same name (`subject v : Vehicle;` with `constraint def Below { in v : Real; … }`), which used to be read in the parameter's place and compare an object against a number, while the argument expressions that bind the parameters (`in v = v;`, `in limit = limit;`) still read the requirement's subject and actor rather than the parameter being bound. A parameter bound to a part (`in limit = truck;`) reads that part's attributes in the constraint body (`limit.mass`).
+
+- **A `require`/`assume constraint` body reaches the parameters it declares.**
+  `require constraint q { in y : Integer; y > 0 }` used to report `y` as
+  `Must be an accessible feature`, because the body was judged from the requirement rather
+  than from the constraint usage it states. The body is now checked from that usage, so its
+  own parameters and the requirement's features are both reachable, while a feature named
+  through another type's namespace is still reported, as the pilot implementation does.
+
+- The objective cardinality rule ("Only one objective is allowed.") now judges `verification` and `use case` declarations as well as `case` ones, and an objective now redefines the objective role of the types above it: a case owning one objective under an inherited one is silent, as it is in the reference, while a type owning two is reported at the second and at whatever inherits both. An inherited `objective : R;`, which binds no name, is counted too. Analysis cases stay exempt, since their objectives are improved lexicographically in the order declared.
+
+- **Overriding a bound parameter of a redefined `require`/`assume` constraint is now reported.** The parameters of `require constraint :>> n { in limit = 200.0; }` redefine those of the constraint it redefines by position, so that `in limit` overrides the first parameter's binding (`in x = m`) whatever its name; the rule used to see no redefinition there and accept the override silently, where the pilot reports `Cannot override a binding feature value`.
+
+- **A direction parameter may open with a short name.** `in <xs> x : Integer` parses; a short name before the parameter name was previously rejected after `in`, `out` and `inout`.
+
+- **A `when` trigger written as a conditional is refused like the other triggers.**
+  `accept when (if flag ? true else false)` was accepted because both branches are Boolean,
+  while `after` and `at` already refused a conditional argument as the `Anything` its library
+  function returns, and the reference validator refuses all three. The `when` argument is now
+  judged the same way (`trigger-when-boolean`, naming the result of `if`); an ordinary
+  condition — a guard, a constraint, an `if` — still leaves a conditional to evaluation.
+
+- **An error in an owner's value no longer hides its members' variability diagnostics.**
+  `Initialized feature must be variable` and `Only a variable feature can be constant` on a feature
+  declared inside a usage's body used to go unreported when the usage's own value failed a lower
+  tier (`part p : PD = missing { attribute a : Integer := 1; }`). A value does not decide whether
+  the members are variable, so only the owner's head before its value gates them now, as the
+  feature's own head already did.
+
+- **Selecting a variant as the value of a feature typed by its variation is no longer reported as a type mismatch.** A variant is implicitly typed by the variation that owns it, so `part vp : V = V::v1;`, `part w : V = vp.v1;` and `bind w = vp.v1;` conform even when the variant declares another type (`variant part v1 : Base;`). They used to be rejected as `cannot bind a value of type Base to a feature typed by V` and warned as `Bound features should have conforming types`; the reference implementation accepts all three.
+
 ## 0.5.0 — 2026-09-05
 
 ### Added
