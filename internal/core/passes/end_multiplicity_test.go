@@ -78,6 +78,27 @@ func TestKerMLEndOwnMultiplicityNotOne(t *testing.T) {
 	})
 }
 
+// An end's own multiplicity is the only one it has (KerML 1.1 Type::multiplicities),
+// so a stated non-one range warns even when a redefined or subsetted end is one.
+func TestKerMLEndOwnMultiplicityShadowsGenerals(t *testing.T) {
+	const src = `package P {
+		class A;
+		assoc G {
+			end feature a1 : A [1];
+			end feature a2 : A [1];
+		}
+		assoc S specializes G {
+			end feature b1 : A [0..*] redefines a1;
+			end feature b2 : A [2] subsets G::a2;
+		}
+	}`
+	got := endMultiplicityTexts(t, constraintDiagsKerML(t, src), src)
+	wantEndMultiplicity(t, got, []string{
+		"end feature b1 : A [0..*] redefines a1;",
+		"end feature b2 : A [2] subsets G::a2;",
+	})
+}
+
 // A KerML end declaring no multiplicity takes its generals': the feature it
 // subsets, references, redefines, chains to, or is typed by, and the end at its
 // position of each type its owner specializes. Any one of them being exactly one
