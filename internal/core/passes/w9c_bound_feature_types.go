@@ -50,14 +50,14 @@ func (c *w9cBindingChecker) check(sym *symbols.Symbol) {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		if d.Kind == ast.DefCalc {
-			c.checkResultExpressions(sym, d.Members, d.Span())
+			c.checkResultExpressions(sym, d.Span())
 		}
 	case *ast.Usage:
 		switch d.Kind {
 		case ast.UsageBinding:
 			c.checkBinding(sym, d)
 		case ast.UsageCalc, ast.UsageExpr:
-			c.checkResultExpressions(sym, d.Members, d.Span())
+			c.checkResultExpressions(sym, d.Span())
 		case ast.UsageSatisfy:
 			c.checkSatisfySubject(sym, d)
 		case ast.UsageSubject:
@@ -83,13 +83,13 @@ func (c *w9cBindingChecker) checkBinding(sym *symbols.Symbol, u *ast.Usage) {
 
 // checkResultExpressions judges the binding of a function's result expressions
 // to its result parameter (KerML 8.4.4.7).
-func (c *w9cBindingChecker) checkResultExpressions(sym *symbols.Symbol, members []ast.Node, span source.Span) {
+func (c *w9cBindingChecker) checkResultExpressions(sym *symbols.Symbol, span source.Span) {
 	want := c.model.FeatureTypeSet(c.model.ResultParameterOf(sym))
 	if len(want) == 0 {
 		return
 	}
-	for _, expr := range w8cResultExpressionsOf(members) {
-		if !c.valueConforms(sym.Scope, expr, want) {
+	for _, expr := range semantics.OwnedResultExpressions(sym) {
+		if !c.valueConforms(sym.Scope, expr.Node, want) {
 			c.report(span)
 			return
 		}

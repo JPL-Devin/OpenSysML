@@ -543,7 +543,7 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 		if !isRelationship(e.metaclassOf(ownerTerm)) {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
 		}
-		membership = e.owningMembership(subject, ownerTerm, fqn, isExpressionMember(node), e.variantMember(node, ownerTerm))
+		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm))
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {
 		// The membership states the visibility a member is declared with; a
@@ -566,7 +566,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		return err
 	}
 	// A bare expression among a body's members is the result the body computes.
-	result := isExpressionMember(node)
+	result := ast.IsExpression(node)
 	head := func(metaclass rdf.Term) {
 		e.head(subject, memberHead{node: node, visibility: visibility, fqn: fqn, owner: ownerTerm,
 			index: index, metaclass: metaclass, lines: lines, inline: inline})
