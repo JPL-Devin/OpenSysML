@@ -143,6 +143,7 @@ exclude_docs: |
   project/element-scoped-tier-gating.md
   project/lossless-library-records.md
   project/errata-overlay.md
+  project/oosem-library.md
 
 nav:
   - Documentation: README.md
