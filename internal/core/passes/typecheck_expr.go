@@ -734,10 +734,8 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	return ec.inferNodeInvocation(scope, e, nil, true)
 }
 
-// inferNodeInvocation is inferInvocation for an invocation performed by node,
-// whose body parameters redefine the invoked ones; node is nil for a bare call.
-// complete is whether every required parameter must be bound: a call heading a
-// feature chain reads a feature of its result, which the reference accepts unbound.
+// inferNodeInvocation is inferInvocation for an invocation performed by node (nil for a bare
+// call); complete is false for a chain head, whose unbound required parameters pass.
 func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol, complete bool) semantics.PrimType {
 	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
@@ -810,8 +808,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 }
 
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
-// listing considered (the other declarations the call could name) on each report;
-// a required parameter left unbound is reported only when complete.
+// listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
 	scope *symbols.Scope,
 	e *ast.InvocationExpr,
