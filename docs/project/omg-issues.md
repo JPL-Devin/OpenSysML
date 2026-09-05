@@ -817,7 +817,9 @@ posted upstream. OpenSysML derives a type's multiplicity from its owned members
 only, so an alias of a feature's multiplicity does not become the classifier's
 own, and no diagnostic is drawn; the census row
 (`validateClassifierMultiplicityDomain` in [validation-constraints.md](validation-constraints.md))
-records the disagreement.
+records the disagreement. The same delegate is behind the feature-side draft
+[above](#a-multiplicity-is-found-through-aliases-and-references-pilot-2026-07); the two
+belong in one report.
 
 ````markdown
 ### `Type.multiplicity` is derived through alias memberships, so `validateClassifierMultiplicityDomain` fires on a valid alias
