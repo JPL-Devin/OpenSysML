@@ -612,8 +612,12 @@ elements is the dimensionless `0.0`, so `mass + sum(subcomponents.totalMass)`
 on a component whose `subcomponents : MassedComponent [*] default null` holds
 nothing is an `incommensurable units` error rather than `mass` — the typed
 error above, reported for that row. Bind at least one element, or write the
-leaf's total without the sum, until `sum` learns the unit of an empty
-quantity collection.
+leaf's total without the sum (`attribute :>> totalMass = mass;` on the leaf
+definition, with the roll-up declared `default =`), until `sum` learns the
+unit of an empty quantity collection. Note also that the runtime reads a
+`default null` collection as empty even where nested parts subset it
+(`part b1 : Bolt :> subcomponents;`); declare the collection without the
+default and the subsetting parts are what `sum` and `->collect` see.
 
 ## Computed columns
 

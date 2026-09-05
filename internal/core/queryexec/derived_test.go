@@ -416,6 +416,75 @@ calc def Hearts :> Query {
 	}
 }
 
+// TestExecuteRollsUpDerivedValuesOverSubsettedParts: `mass + sum(subcomponents.totalMass)`
+// recurses through parts subsetting a multiplicity-many part, each level reading
+// its own carrier, and `->collect`/`size` see the same collection.
+func TestExecuteRollsUpDerivedValuesOverSubsettedParts(t *testing.T) {
+	fixture := derivedFixture(t, `
+private import SequenceFunctions::size;
+private import RealFunctions::sum;
+private import ControlFunctions::collect;
+
+part def MassedComponent {
+	part subcomponents : MassedComponent [*];
+	attribute mass :> ISQ::mass;
+	attribute totalMass :> ISQ::mass default = mass + sum(subcomponents.totalMass);
+	attribute childMasses :> ISQ::mass [*] = subcomponents->collect { in c : MassedComponent; c.mass };
+	attribute children : Natural = size(subcomponents);
+}
+part def Bolt :> MassedComponent {
+	attribute :>> mass = 1 [kg];
+	attribute :>> totalMass = mass;
+}
+part def Assembly :> MassedComponent {
+	attribute :>> mass = 10 [kg];
+	part b1 : Bolt :> subcomponents;
+	part b2 : Bolt :> subcomponents;
+}
+part def Stack :> MassedComponent {
+	attribute :>> mass = 100 [kg];
+	part a1 : Assembly :> subcomponents;
+	part a2 : Assembly :> subcomponents;
+}
+part depot { part stack : Stack; }
+calc def Totals :> Query {
+	in root : Element;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		properties = ("name", "totalMass", "childMasses", "children")
+	)
+}
+`)
+	for root, want := range map[string]struct {
+		total    string
+		children []string
+		count    int64
+	}{
+		"depot":    {"124 [kg]", []string{"10 [kg]", "10 [kg]"}, 2},
+		"Stack":    {"12 [kg]", []string{"1 [kg]", "1 [kg]"}, 2},
+		"Assembly": {"1 [kg]", nil, 0},
+	} {
+		result := quantityRows(t, fixture, "Totals", root)
+		if got := cellTexts(t, result, 1); !slices.Equal(got, slices.Repeat([]string{want.total}, len(result.Rows()))) {
+			t.Errorf("%s: totalMass = %v, want every row %s", root, got, want.total)
+		}
+		var masses []string
+		for _, value := range result.Rows()[0].Cells()[2].Values() {
+			quantity, ok := value.Quantity()
+			if !ok {
+				t.Fatalf("%s: childMasses holds %s, want quantities", root, value.Kind())
+			}
+			masses = append(masses, quantity.String())
+		}
+		if !slices.Equal(masses, want.children) {
+			t.Errorf("%s: childMasses = %v, want %v", root, masses, want.children)
+		}
+		if got := integerTexts(t, result, 3); got[0] != want.count {
+			t.Errorf("%s: children = %v, want %d", root, got, want.count)
+		}
+	}
+}
+
 // TestExecuteNamesTheSubexpressionOfAnUnevaluableDerivedValue: a value that is
 // not declaratively evaluable — an unbound `in` parameter, a cycle, an object
 // where a value is needed, a quantity summed with the dimensionless `0.0` that
