@@ -81,6 +81,8 @@ type Resolver struct {
 	modeMemo  map[modeMemoKey]resolution
 	filtered  map[filteredMemoKey]resolution
 	resolving map[ast.Node]bool // cycle detection
+	// interruptions counts the lookups the cycle guard cut short.
+	interruptions int
 	// featureChains are resolved per scope because a chain's leading operand
 	// can resolve differently in different document scopes.
 	featureChains map[featureChainKey]resolution
@@ -445,11 +447,11 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 	return r.resolveQualified(scope, qn, nil)
 }
 
-// Resolving reports whether target is being resolved on the current stack, so a
-// query for it just now failed on the cycle guard and not on the name. A caller
-// memoizing derived facts must treat such an answer as provisional.
-func (r *Resolver) Resolving(target ast.Node) bool {
-	return r.resolving[target]
+// Interruptions counts the lookups the cycle guard has cut short so far. A query
+// that failed while the count moved failed on the guard, not on a name, so a
+// caller memoizing derived facts must treat its answer as provisional.
+func (r *Resolver) Interruptions() int {
+	return r.interruptions
 }
 
 // resolveQualified is ResolveQualified with an optional filter hiding the
@@ -484,6 +486,7 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// Detect resolution cycles
 	if r.resolving[qn] {
 		// Cycle detected, fail resolution
+		r.interruptions++
 		return nil, false
 	}
 	r.resolving[qn] = true

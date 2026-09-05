@@ -64,6 +64,7 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 		return rd
 	}
 	if r.resolving[qn] {
+		r.interruptions++
 		return Reading{}
 	}
 	r.resolving[qn] = true

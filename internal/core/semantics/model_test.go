@@ -273,6 +273,92 @@ func TestDirectSupertypesNotMemoizedWhileOwnTypingResolves(t *testing.T) {
 	}
 }
 
+// A chain target (`subsets x.f`) whose lookup the cycle guard cuts short is
+// provisional like a qualified name's: memoized, it would drop `f` for good.
+func TestDirectSupertypesNotMemoizedWhileChainTargetResolves(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		owner     string
+	}{
+		{"leading name on the stack", `package T {
+			feature x { feature f; }
+			feature a subsets a::b {
+				feature b subsets x.f;
+			}
+		}`, "x"},
+		{"member owner typing on the stack", `package T {
+			classifier X { feature f; }
+			feature a subsets a::b {
+				feature y : X;
+				feature b subsets y.f;
+			}
+		}`, "X"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamed(t, "t.kerml", tc.src)
+			pkg := sym(t, root, "T")
+			f := sym(t, sym(t, pkg.Scope, tc.owner).Scope, "f")
+			a := sym(t, pkg.Scope, "a")
+			b := sym(t, a.Scope, "b")
+			for i := 0; i < 2; i++ {
+				if got := m.DirectSupertypes(b); len(got) != 1 || got[0] != f {
+					t.Fatalf("query %d: DirectSupertypes(b) = %v, want [f]", i+1, got)
+				}
+			}
+			if got := m.DirectSupertypes(a); len(got) != 1 || got[0] != b {
+				t.Fatalf("DirectSupertypes(a) = %v, want [b]", got)
+			}
+		})
+	}
+}
+
+// A member specializing its own owner is a cycle even though its general is
+// resolved while the owner's is (Xpect CircleInheritance, CircleProblem5).
+func TestDirectSupertypesKeptAcrossOwnerCycleGuard(t *testing.T) {
+	t.Run("member specializes its owner", func(t *testing.T) {
+		m, root := buildModelNamed(t, "t.kerml", `package Base { classifier Anything; }
+		package Test1 {
+			classifier <'A_Id'> A specializes A::B {
+				classifier <'B_Id'> B specializes A, Base::Anything {}
+			}
+		}`)
+		pkg := sym(t, root, "Test1")
+		a := sym(t, pkg.Scope, "A")
+		b := sym(t, a.Scope, "B")
+		anything := sym(t, sym(t, root, "Base").Scope, "Anything")
+		if got := m.DirectSupertypes(b); len(got) != 2 || got[0] != a || got[1] != anything {
+			t.Fatalf("DirectSupertypes(B) = %v, want [A, Base::Anything]", got)
+		}
+		if got := m.DirectSupertypes(a); len(got) != 1 || got[0] != b {
+			t.Fatalf("DirectSupertypes(A) = %v, want [B]", got)
+		}
+	})
+	t.Run("member specializes its owner through a sibling", func(t *testing.T) {
+		m, root := buildModelNamed(t, "t.kerml", `package Base { classifier Anything; }
+		package Test1 {
+			classifier A specializes D, Base::Anything {
+				classifier B specializes C {}
+			}
+			classifier C specializes A {}
+			classifier D specializes A::B {}
+		}`)
+		pkg := sym(t, root, "Test1")
+		a := sym(t, pkg.Scope, "A")
+		b := sym(t, a.Scope, "B")
+		c := sym(t, pkg.Scope, "C")
+		d := sym(t, pkg.Scope, "D")
+		if got := m.DirectSupertypes(d); len(got) != 1 || got[0] != b {
+			t.Fatalf("DirectSupertypes(D) = %v, want [A::B]", got)
+		}
+		if got := m.DirectSupertypes(b); len(got) != 1 || got[0] != c {
+			t.Fatalf("DirectSupertypes(B) = %v, want [C]", got)
+		}
+		if got := m.DirectSupertypes(c); len(got) != 1 || got[0] != a {
+			t.Fatalf("DirectSupertypes(C) = %v, want [A]", got)
+		}
+	})
+}
+
 // A closure built while a metadata annotation type is unresolved must not be
 // memoized, or the base type it contributes never appears once it resolves.
 func TestAllSupertypesNotMemoizedWhileMetadataProvisional(t *testing.T) {

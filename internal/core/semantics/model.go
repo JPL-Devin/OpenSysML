@@ -246,8 +246,8 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
-	// A target whose own resolution is on the stack failed on the cycle guard,
-	// not on its name, so the answer is provisional.
+	// A target that failed while the cycle guard cut a lookup short failed on
+	// the guard, not on its name, so the answer is provisional.
 	complete := true
 	for _, rel := range RelationshipsOf(sym) {
 		if rel == nil || rel.Target == nil || !GeneralizationKind(rel.Kind) {
@@ -262,16 +262,19 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !isQN {
 			// A chain target (`subsets b.f`) generalizes to the chain's final feature.
 			if fc, isChain := targetNode.(*ast.FeatureChainExpr); isChain {
-				if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc); ok && target != nil && target != sym && !seen[target] {
+				target, ok, interrupted := m.resolveGeneral(sym.OwnerScope, fc)
+				if !ok {
+					complete = complete && !interrupted
+				} else if target != sym && !seen[target] {
 					seen[target] = true
 					out = append(out, target)
 				}
 			}
 			continue
 		}
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || target == nil {
-			complete = complete && !m.resolver.Resolving(qn)
+		target, ok, interrupted := m.resolveGeneral(sym.OwnerScope, qn)
+		if !ok {
+			complete = complete && !interrupted
 			continue
 		}
 		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
@@ -437,6 +440,18 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	delete(m.provisionalSupers, sym)
 	m.directSupers[sym] = out
 	return out
+}
+
+// resolveGeneral resolves a generalization target written in scope. A failure
+// met while the resolver's cycle guard cut a lookup short is interrupted: the
+// target may still resolve once the lookup on the stack completes.
+func (m *Model) resolveGeneral(scope *symbols.Scope, target ast.Node) (sym *symbols.Symbol, ok, interrupted bool) {
+	before := m.resolver.Interruptions()
+	sym, ok = m.resolver.ResolveTarget(scope, target)
+	if !ok || sym == nil {
+		return nil, false, before != m.resolver.Interruptions()
+	}
+	return sym, true, false
 }
 
 // recordedSupertypes resolves the supertype edges installed for a library
