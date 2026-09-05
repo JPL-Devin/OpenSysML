@@ -181,7 +181,7 @@ and not from a disagreement alone.
 | `org.omg.kerml.xtext` — `KerMLValidator.checkMultiplicityRange`, the `validateMultiplicityRangeResultTypes` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a multiplicity bound naming a package-level feature typed by `ScalarValues::Natural` or `Integer` (`feature k : Natural; feature d [k];`, both owned by a package) reports `Must have a Natural value`; the same bound inside a type (`class T { feature k : Natural; feature d [k]; }`) is accepted | established from the pinned `KerMLValidator.xtend` lines 1333–1339, `FeatureReferenceExpression_modelLevelEvaluable_InvocationDelegate` and `MultiplicityRange_valueOf_InvocationDelegate`: a reference to a feature with no featuring type and no value is deemed model-level evaluable, its evaluation yields the feature rather than a `LiteralInteger`, `valueOf` returns the `-2` null marker and the check reports it; a reference to a type's member is not evaluable and is judged by its type through `isInteger`. The method carries `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Reproduced with the model below through `validate-kerml`; [pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round) records how OpenSysML judges both spellings by the referent's type | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.logic` — `Type_multiplicity_SettingDelegate`, behind `KerMLValidator.checkFeature`'s `validateFeatureMultiplicityDomain` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature whose body holds an `alias` for a `multiplicity` member of the enclosing class, or whose value references one (`class E { multiplicity em [1..4]; feature k : Integer { alias a for em; } }`), reports `Multiplicity must have same featuring types as it feature`, although the feature owns no multiplicity; the spec-genuine violation, a standalone `featuring of C::k::m by D;` on a feature's owned multiplicity, is accepted | established from the pinned `Type_multiplicity_SettingDelegate.getMultiplicityOf` (lines 43–48 at `c7fc737`), which takes the first `Multiplicity` among the members of every `ownedMembership` — aliases and reference memberships included — where KerML 1.1 8.3.3.1.10 `deriveTypeMultiplicity` reads `ownedMember->selectByKind(Multiplicity)`; and from `Feature_featuringType_SettingDelegate.basicGet` (lines 39–51), which reads `ownedTypeFeaturing` where 8.3.3.3.4 `deriveFeatureFeaturingType` reads every `typeFeaturing`. Reproduced with the models below through `validate-kerml`; [validation-constraints.md](validation-constraints.md) records the census row | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.logic` — `ConnectorAdapter.getDefaultSupertype`, with `KerMLValidator.checkConnectorBinarySpecialization` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a connector owning two ends that redefine two ends of a three-ended general (`connector m : N { end redefines a references x; end redefines b references y; }`) reports `Cannot have more than two ends`, while the same shape spelled as an association (`assoc B specializes N { end redefines a : T; end redefines b : T; }`) is accepted | established from the pinned `ConnectorAdapter.xtend` (`getDefaultSupertype` counts `TypeUtil.getOwnedEndFeaturesOf(target)`, two here, so the connector is given `Links::binaryLinks`) and `KerMLValidator.xtend` (`checkConnectorBinarySpecialization` then counts three `connectorEnd`s), reproduced with the model below through `validate-kerml`; KerML 1.1 8.3.4.5.3 implies `Links::binaryLinks` only for `connectorEnd->size() = 2`, which counts the inherited end. [pilot-differential.md](pilot-differential.md#binary-link-specialization-round) records how OpenSysML counts effective ends for the base | **not filed** — question drafted below, awaiting maintainer authorisation |
-| `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors [performance.md](../internals/performance.md#a-real-model-apollo-11) records — defects in that model, not in any OMG material, so they are not rows of this page. The pilot's own `kerml-examples/Simple Tests/Behaviors.kerml:14` has the same shape (`A().y` against `behavior A { in x; … }`), silent under the pinned `validate-kerml`, and its Xpect suite (`ParsingTests_Behaviors.kerml.xt`) declares the file error-free; an invocation heading a feature chain therefore leaves a required parameter unbound without a report, while every other argument check applies there | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator`/`KerMLValidator`, invocation argument count | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | an invocation that leaves a default-less `in` parameter unbound validates clean in every form: positional (`F(1.0)`, `F()` against `calc def F { in x : Real; in y : Real; … }`), named (`F(x = 1.0)`, `F(y = 2.0)`), with the omitted parameter declared `[1]` or `[1..*]`, on a calc, a behavior (`Act(1.0).r`, `Act()`), a constructor (`new P()`, `new P(1.0).q`) and an invocation heading a feature chain; only an argument past the last parameter is reported, `Must correspond to one input parameter of the invoked type` (`arity.sysml:38:32` for `F(1.0, 2.0, 3.0)`; `arity.kerml:30:30` for the KerML twin). The pinned evaluator forms and evaluates the same calls: `F(1.0)`, `F(x = 1.0)`, `F(y = 2.0)` and `F()` answer the unreduced `OperatorExpression +`, `F(1.0, 2.0)` `LiteralRational 3.0`, `D(1.0)` (`in y default 1.0`) `2.0`, `Opt(1.0)` (`in y [0..1]`) `1.0` | established by running the pinned `validate-sysml-batch` and `validate-kerml` over a 20-form probe of the above and `build/pilot-evaluator/eval-sysml --cases` over its evaluable rows (transcript below); earlier, `2026-05` (0.60.1) over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` was silent on `ln(m0 / mf)` and `calculateDeltaV(isp, initialMass, finalMass)` ([performance.md](../internals/performance.md#a-real-model-apollo-11)), and the pilot's own `kerml-examples/Simple Tests/Behaviors.kerml:14` (`A().y` against `behavior A { in x; … }`) is silent under `validate-kerml` with `ParsingTests_Behaviors.kerml.xt` declaring the file error-free. **Adjudicated as the specification's reading, not a pilot defect:** KerML 1.0 §8.3.4.8.8 lists no `InvocationExpression` constraint on the count of arguments — `validateInvocationExpressionParameterRedefinition` and `…NoDuplicateParameterRedefinition` bound each argument *written* to one input, and the pinned validator's `Must correspond to one input parameter`, `Parameter already bound` and `Must be an in parameter` are those — so the unbound parameter is a property of the instance the call describes, not of the expression. OpenSysML therefore reports the omission as the advisory `unbound-parameter` (a warning in every conformance mode) identically at a bare call and at a chain head, and refuses the evaluation at run time with `ErrUnboundParameter` | **not filed** — a question, not a defect report, drafted below; a maintainer may still want to confirm the reading |
 | `org.omg.sysml.xtext` — `SysMLValidator.isDuration`/`isTime`, behind `validateTriggerInvocationActionAfterArgument` and `…AtArgument` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | with `d : DurationValue` and `t : TimeInstantValue`, `accept after d * d` and `accept at t * t` validate clean although the product has dimension T², while `accept after 10 [m] / 2 [m/s]`, whose quotient has dimension T, is refused | established from the pinned `SysMLValidator` class: an operator argument is a duration or an instant when its operator is one of `-`, `+`, `*`, `%`, `^`, `**` (`isQuantityOperator`) and every operand is itself one — `/` is not in the list and no dimension is computed; reproduced with the pinned batch validator, transcript below | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
@@ -815,44 +815,64 @@ to agree with the `===` operator, and `isDuring` to reject an argument that is
 not an `Occurrence`, as the declared parameter types say?
 ````
 
-### A positional invocation with too few arguments validates clean (pilot `2026-05`)
+### An invocation leaving an input parameter unbound validates clean (pilot `2026-07`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
-posted upstream, to the pilot or to the model's repository.
+posted upstream, to the pilot or to any model's repository. OpenSysML has
+adjudicated the pilot's behaviour as the specification's reading (see the row
+above), so this is a request to confirm that reading, not a defect report.
 
 ````markdown
-**Question, not a bug report:** is the number of positional arguments of an
-`InvocationExpression` meant to be checked against the invoked behavior's `in`
-parameters? KerML 7.4.9 binds the i-th positional argument to the i-th input
-parameter of the invoked behavior, so a call with fewer arguments leaves an input
-unbound, and one with more has an argument that binds nothing.
+**Question, not a bug report:** is an `InvocationExpression` that leaves an
+input parameter of the invoked type unbound — no argument, no `default`, lower
+multiplicity bound 1 — meant to validate clean? KerML 8.3.4.8.8 constrains the
+arguments an invocation *writes* (`validateInvocationExpressionParameterRedefinition`,
+`validateInvocationExpressionNoDuplicateParameterRedefinition`) and states no
+constraint on the parameters it leaves out, so we read the omission as a property
+of the instance the expression describes (the parameter has no value) rather than
+of the expression, and report it as an advisory only. Is that the intended reading?
 
-The release's SysML validator (`jupyter-sysml-kernel-0.60.1-all.jar`, tag
-`2026-05`) over the public `airbus/apollo-11-sysml-v2` model (commit `6e9c93f`)
-reports no diagnostic for either of these:
+With `jupyter-sysml-kernel-0.61.0-all.jar` (tag `2026-07`), the SysML and KerML
+validators report nothing for any of these:
 
 ```sysml
-calc <ln> naturalLogarithm { in x: DataValue[1]; in y: DataValue[1]; return : DataValue[1]; }
+calc def F { in x : Real; in y : Real; return : Real = x + y; }
+calc def One { in x : Real; in y : Real [1]; return : Real = x + y; }
+calc def Many { in x : Real; in y : Real [1..*]; return : Real = x; }
+action def Act { in a : Real; in b : Real; out r : Real; }
+part def P { attribute p : Real; attribute q : Real; }
 
-calc def calculateDeltaV {
-    in isp :> specificImpulse;
-    in g0 :> ISQ::acceleration;
-    in m0 :> ISQ::mass;
-    in mf :> ISQ::mass;
-    return deltaV :> ISQ::speed = isp * g0 * ln(m0 / mf);
-}
-
-calc def calculateStageDeltaV {
-    // …
-    return deltaV :> ISQ::speed = calculateDeltaV(isp, initialMass, finalMass);
-}
+attribute f0 = F();              attribute f1 = F(1.0);
+attribute fn1 = F(x = 1.0);      attribute fn2 = F(y = 2.0);
+attribute one1 = One(1.0);       attribute many1 = Many(1.0);
+attribute act0 = Act().r;        attribute act1 = Act(1.0).r;
+ref c0 = new P();                attribute c1c = new P(1.0).q;
 ```
 
-A second implementation reports `naturalLogarithm requires 2 argument(s), found 1`
-and `calculateDeltaV requires 4 argument(s), found 3`, which the model's authors
-would presumably want to hear about. Is silence here a deliberate reading of the
-specification (an unbound input is legal and merely unvalued), or a check that has
-not been implemented yet?
+The only diagnostic on the probe is the one expected of the argument past the
+last parameter:
+
+```
+arity.sysml:38:32: error: Must correspond to one input parameter of the invoked type   -- F(1.0, 2.0, 3.0)
+arity.kerml:30:30: error: Must correspond to one input parameter of the invoked type   -- the KerML twin
+```
+
+The release's evaluator (`eval-sysml`) forms and evaluates the same calls, so
+the expression is treated as well formed end to end:
+
+```
+F(1.0)        -> OperatorExpression +      F(1.0, 2.0)  -> LiteralRational 3.0
+F(x = 1.0)    -> OperatorExpression +      D(1.0)       -> LiteralRational 2.0   (in y default 1.0)
+F(y = 2.0)    -> OperatorExpression +      Opt(1.0)     -> LiteralRational 1.0   (in y [0..1])
+F()           -> OperatorExpression +
+```
+
+A model author would presumably still want to hear about `F(1.0)`: the public
+`airbus/apollo-11-sysml-v2` model (commit `6e9c93f`) computes
+`isp * g0 * ln(m0 / mf)` against a two-input `naturalLogarithm` and
+`calculateDeltaV(isp, initialMass, finalMass)` against four inputs, and both
+validate clean. Is an advisory the pilot would consider, or is silence the
+intended reading?
 ````
 
 ---

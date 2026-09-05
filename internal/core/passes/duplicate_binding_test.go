@@ -131,9 +131,8 @@ func TestInvocationDuplicateParameterBindingSysML(t *testing.T) {
 }
 
 // An invocation heading a feature chain is argument-checked as a bare one is, under
-// one segment or several: duplicates, excess and unknown parameters alike. Only a
-// required parameter left unbound passes there, as the reference's own suite declares
-// for `A().y`.
+// one segment or several: duplicates, excess and unknown parameters alike, and a
+// default-less parameter left unbound is the same advisory in either position.
 func TestInvocationHeadingFeatureChain(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
@@ -150,8 +149,6 @@ func TestInvocationHeadingFeatureChain(t *testing.T) {
 		"attribute v = K(a = 1, b = 2).r;",
 		"item s = M(n = 1).r.inner.inner;",
 		"send M(n = 1).r.inner to rcv;",
-		"attribute v = K().r;",
-		"attribute v = K(b = 2).r;",
 	} {
 		wantLibraryClean(t, fmt.Sprintf(model, member))
 	}
@@ -160,8 +157,15 @@ func TestInvocationHeadingFeatureChain(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, "send M(n = 1, M::n = 2).r.inner to rcv;"), "type.expr", `M binds parameter "n" twice`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(c = 1).r;"), "type.expr", `K has no parameter named "c"`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "item s = M(1, 2).r.inner;"), "type.expr", `M takes 1 argument(s), found 2`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K();"), "type.expr", `K requires 1 argument(s), found 0`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(b = 2);"), "type.expr", `K requires an argument for parameter alpha`)
+	for _, member := range []string{
+		"attribute v = K();",
+		"attribute v = K(b = 2);",
+		"attribute v = K().r;",
+		"attribute v = K(b = 2).r;",
+	} {
+		wantLibraryWarning(t, fmt.Sprintf(model, member), CodeUnboundParameter,
+			"K leaves parameter alpha unbound, so the call cannot be evaluated")
+	}
 }
 
 // A constructor binds each feature of the instantiated type once, whatever name
