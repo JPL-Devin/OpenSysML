@@ -1717,7 +1717,8 @@ func (idx *Index) GetFQN(sym *Symbol) string {
 }
 
 // FQNOf returns a symbol's fully-qualified name from its owner scope chain, so
-// a caller holding a symbol but no index can still name it.
+// a caller holding a symbol but no index can still name it. An unnamed owner
+// contributes no segment: a part nested in an anonymous part of Mid is Mid::inner.
 func FQNOf(sym *Symbol) string {
 	if sym == nil {
 		return ""
@@ -1732,8 +1733,10 @@ func FQNOf(sym *Symbol) string {
 	scope := sym.OwnerScope
 	for scope != nil && scope.Owner() != nil {
 		owner := scope.Owner()
-		parts = append(parts, owner.Name)
-		size += len(owner.Name) + len(fqnSeparator)
+		if owner.Name != "" {
+			parts = append(parts, owner.Name)
+			size += len(owner.Name) + len(fqnSeparator)
+		}
 		scope = owner.OwnerScope
 	}
 
@@ -1752,7 +1755,8 @@ func FQNOf(sym *Symbol) string {
 }
 
 // HasFQN reports whether sym's fully-qualified name is fqn, without building
-// that name: the segments are compared against the owner chain from the end.
+// that name: the segments are compared against the owner chain from the end,
+// skipping unnamed owners as FQNOf does.
 func HasFQN(sym *Symbol, fqn string) bool {
 	if sym == nil {
 		return fqn == ""
@@ -1763,16 +1767,28 @@ func HasFQN(sym *Symbol, fqn string) bool {
 			return false
 		}
 		rest = rest[:len(rest)-len(name)]
-		if scope == nil || scope.Owner() == nil {
+		owner := namedOwner(scope)
+		if owner == nil {
 			return rest == ""
 		}
 		if !strings.HasSuffix(rest, fqnSeparator) {
 			return false
 		}
 		rest = rest[:len(rest)-len(fqnSeparator)]
-		owner := scope.Owner()
 		name, scope = owner.Name, owner.OwnerScope
 	}
+}
+
+// namedOwner returns the nearest named symbol owning scope or an ancestor of
+// it, or nil at the document root.
+func namedOwner(scope *Scope) *Symbol {
+	for scope != nil && scope.Owner() != nil {
+		if owner := scope.Owner(); owner.Name != "" {
+			return owner
+		}
+		scope = scope.Owner().OwnerScope
+	}
+	return nil
 }
 
 // DocumentOfRoot returns the name of the document whose root scope this is, or
