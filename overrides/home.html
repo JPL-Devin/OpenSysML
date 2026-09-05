@@ -129,43 +129,49 @@
     .osml-terminal .osml-ok     { color: #a5d6a7; }
     .osml-terminal .osml-dim    { opacity: .68; }
 
-    /* The numbers band: what a real model costs, first, because a figure is read
-       where a paragraph is not. Each figure links to the measurement behind it. */
+    /* The numbers strip: what a real model costs, in one row. Each figure links
+       to the measurement behind it. */
     .osml-numbers {
-      border-bottom: 1px solid var(--md-default-fg-color--lightest);
+      border-top: 1px solid var(--md-default-fg-color--lightest);
+      margin-top: 2.4rem;
+      scroll-margin-top: 3rem;
+    }
+    .osml-numbers + .osml-strip {
+      margin-top: 0;
     }
     .osml-numbers__inner {
-      padding: 1.6rem 1.2rem 1.4rem;
+      padding: .9rem 1.2rem .8rem;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
-      gap: .8rem 1.6rem;
-      align-items: start;
+      grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+      gap: .4rem 1.6rem;
+      align-items: baseline;
     }
     .osml-numbers__figure {
-      display: block;
+      display: flex;
+      gap: .55rem;
+      align-items: baseline;
       color: inherit;
-      border-left: 3px solid var(--md-primary-fg-color);
-      padding-left: .8rem;
     }
     .osml-numbers__value {
-      display: block;
-      font-size: 1.7rem;
-      line-height: 1.1;
+      font-size: 1.15rem;
+      line-height: 1.2;
       font-weight: 700;
+      white-space: nowrap;
       color: var(--md-primary-fg-color);
     }
+    [data-md-color-scheme="slate"] .osml-numbers__value {
+      color: var(--md-default-fg-color);
+    }
     .osml-numbers__label {
-      display: block;
-      margin-top: .3rem;
-      font-size: .68rem;
-      line-height: 1.55;
+      font-size: .66rem;
+      line-height: 1.5;
       color: var(--md-default-fg-color--light);
     }
     .osml-numbers__source {
       grid-column: 1 / -1;
-      margin: .2rem 0 0;
-      font-size: .66rem;
-      line-height: 1.55;
+      margin: 0;
+      font-size: .62rem;
+      line-height: 1.5;
       color: var(--md-default-fg-color--light);
     }
     .osml-numbers__source a {
@@ -372,28 +378,6 @@
   </div>
 </section>
 
-<section class="osml-numbers" id="numbers">
-  <div class="osml-numbers__inner">
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
-      <span class="osml-numbers__value">8 ms</span>
-      <span class="osml-numbers__label">to parse the Apollo 11 model &mdash; 28 files, 7,200 lines of SysML v2 &mdash; on one core.</span>
-    </a>
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
-      <span class="osml-numbers__value">0.37 s</span>
-      <span class="osml-numbers__label">to load it with the full standard library, resolve every name and validate it, from the command line.</span>
-    </a>
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#what-it-reports">
-      <span class="osml-numbers__value">3</span>
-      <span class="osml-numbers__label">defects found in its calculations &mdash; the reference implementation reports none.</span>
-    </a>
-    <p class="osml-numbers__source">
-      Measured on the public <a href="https://github.com/airbus/apollo-11-sysml-v2">Apollo 11 SysML v2 model</a>
-      (Airbus, MPL-2.0); the commands to repeat it are on
-      <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
-    </p>
-  </div>
-</section>
-
 <section class="osml-referee" id="refereed">
   <div class="osml-referee__inner">
     <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation</p>
@@ -482,6 +466,28 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
   <a href="{{ config.repo_url }}/releases/latest">releases page</a>; the
   <a href="{{ 'guide/01-install/'|url }}">install page</a> covers every route,
   checksums, and macOS Gatekeeper.</p>
+</section>
+
+<section class="osml-numbers" id="numbers">
+  <div class="osml-numbers__inner">
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">8 ms</span>
+      <span class="osml-numbers__label">to parse the Apollo 11 model &mdash; 28 files, 7,200 lines &mdash; on one core.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">0.37 s</span>
+      <span class="osml-numbers__label">to load it with the standard library, resolve every name and validate it.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">42 MB/s</span>
+      <span class="osml-numbers__label">of SysML v2 through the parser &mdash; 880 lines a millisecond.</span>
+    </a>
+    <p class="osml-numbers__source">
+      Measured on the public <a href="https://github.com/airbus/apollo-11-sysml-v2">Apollo 11 SysML v2 model</a>
+      (Airbus, MPL-2.0); the commands to repeat it are on
+      <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
+    </p>
+  </div>
 </section>
 
 <section class="osml-strip">

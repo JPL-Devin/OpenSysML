@@ -20,10 +20,9 @@ and Rust client libraries, covering the lifecycle from authoring through executi
 integrated tooling systems engineers expect from a modern language ecosystem.
 
 It is fast. The public [Apollo 11 SysML v2 model](https://github.com/airbus/apollo-11-sysml-v2)
-— 28 files, 7,200 lines — parses in **8 ms** and loads, resolves and validates against the
-full standard library in **0.37 s**, reporting three defects in the model's calculations that
-the OMG reference implementation does not. The measurement and how to repeat it are in
-[performance](docs/internals/performance.md#a-real-model-apollo-11).
+— 28 files, 7,200 lines — parses in **8 ms** (42 MB/s on one core) and loads, resolves and
+validates against the full standard library in **0.37 s**. The measurement and how to repeat
+it are in [performance](docs/internals/performance.md#a-real-model-apollo-11).
 
 The basis for these claims, and their limits, are documented in
 [spec compliance](docs/project/spec-compliance.md) and the
