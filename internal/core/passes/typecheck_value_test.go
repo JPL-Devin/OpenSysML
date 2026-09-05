@@ -128,6 +128,24 @@ func TestValueCollectionElementTypes(t *testing.T) {
 		"cannot bind Natural value to a feature typed by String")
 }
 
+// A nested collection binds flat, so its elements are checked against the
+// feature's type like the outer ones.
+func TestValueNestedCollectionElementTypes(t *testing.T) {
+	wantOneValueDiag(t,
+		`package P { attribute xs : ScalarValues::Integer[1..*] = (1, (2, "s")); }`,
+		"cannot bind String value to a feature typed by Integer")
+	wantOneValueDiag(t,
+		`package P { attribute xs : ScalarValues::Integer[1..*] = (1, ((), (2, 3.5))); }`,
+		"cannot bind Rational value to a feature typed by Integer")
+	wantOneValueDiag(t, `package P {
+		attribute cs : M::Color[*] = (M::Color::red, (M::Color::red, M::Size::large));
+	}`, "cannot bind a value of type Size to a feature typed by Color")
+	wantNoValueDiags(t, `package P {
+		attribute xs : ScalarValues::Integer[1..*] = (1, ((), (2, 3)));
+		attribute cs : M::Color[*] = (M::Color::red, (M::Color::red, M::Color::red));
+	}`)
+}
+
 func TestValueCollectionOfEnumerationLiterals(t *testing.T) {
 	wantOneValueDiag(t, `package P {
 		attribute cs : M::Color[*] = (M::Color::red, M::Size::large);

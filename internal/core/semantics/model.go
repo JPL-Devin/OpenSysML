@@ -30,17 +30,20 @@ type Model struct {
 	// computingSupers holds the symbols whose DirectSupertypes call is still on
 	// the stack, so the re-entrancy guard answers nil for them.
 	computingSupers map[*symbols.Symbol]bool
-	referenced      map[*symbols.Symbol]*symbols.Symbol
-	resolvingRef    map[*symbols.Symbol]bool
-	memberSources   map[*symbols.Symbol][]*symbols.Symbol
-	contributed     map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
-	primTypes       map[*symbols.Symbol]PrimType
-	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
-	params          map[*symbols.Symbol]behaviorParameters
-	invocations     map[invocationKey]*InvocationSelection
-	arguments       ArgumentTyper // the checker's argument typing, nil when no checker runs
-	unioning        map[*symbols.Symbol][]*symbols.Symbol
-	ends            map[*symbols.Symbol][]*symbols.Symbol
+	// valuing holds the features whose typing value is being judged, so a value
+	// that leads back to its own feature is not followed again.
+	valuing       map[*symbols.Symbol]bool
+	referenced    map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef  map[*symbols.Symbol]bool
+	memberSources map[*symbols.Symbol][]*symbols.Symbol
+	contributed   map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
+	primTypes     map[*symbols.Symbol]PrimType
+	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params        map[*symbols.Symbol]behaviorParameters
+	invocations   map[invocationKey]*InvocationSelection
+	arguments     ArgumentTyper // the checker's argument typing, nil when no checker runs
+	unioning      map[*symbols.Symbol][]*symbols.Symbol
+	ends          map[*symbols.Symbol][]*symbols.Symbol
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -102,6 +105,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 
 		provisionalSupers: make(map[*symbols.Symbol]bool),
 		computingSupers:   make(map[*symbols.Symbol]bool),
+		valuing:           make(map[*symbols.Symbol]bool),
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
@@ -240,6 +244,9 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
+	// A target whose own resolution is on the stack failed on the cycle guard,
+	// not on its name, so the answer is provisional.
+	complete := true
 	for _, rel := range RelationshipsOf(sym) {
 		if rel == nil || rel.Target == nil || !GeneralizationKind(rel.Kind) {
 			continue
@@ -262,6 +269,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
 		if !ok || target == nil {
+			complete = complete && !m.resolver.Resolving(qn)
 			continue
 		}
 		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
@@ -405,10 +413,10 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, base)
 	}
 
-	// A metadata annotation whose type did not resolve yet — a name still being
-	// resolved when this query ran — leaves the answer provisional, so it is
-	// recomputed on the next query instead of being memoized.
-	if !metadataComplete {
+	// A target that did not resolve yet — a name still being resolved when this
+	// query ran — leaves the answer provisional, so it is recomputed on the next
+	// query instead of being memoized.
+	if !complete || !metadataComplete {
 		delete(m.directSupers, sym)
 		m.provisionalSupers[sym] = true
 		return out
@@ -443,9 +451,9 @@ func (m *Model) recordedSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
-// SupertypesProvisional reports whether sym's supertypes were last derived from
-// a metadata annotation whose type had not resolved yet, so the answer may still
-// change and must not be recorded as a fact.
+// SupertypesProvisional reports whether sym's supertypes were last derived while
+// a generalization target or metadata type had not resolved yet, so the answer
+// may still change and must not be recorded as a fact.
 func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym]
 }
@@ -616,7 +624,7 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 // FeatureTypes returns a feature's effective types: those it declares, else those
 // of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
 func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
@@ -631,7 +639,7 @@ func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
 // DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
 // feature is written with, directly or through the features it specializes.
 func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !sym.IsFeature() {
 		return nil
 	}
 	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
@@ -647,7 +655,7 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 	for _, super := range m.DirectSupertypes(sym) {
 		switch {
 		case super == base:
-		case isFeature(super):
+		case super.IsFeature():
 			features = append(features, super)
 		default:
 			types = append(types, super)

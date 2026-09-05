@@ -8,3 +8,5 @@
   pinned pilot reports. `var attribute x : Integer := 1;` in an `item def`, `constant attribute c = 1;`
   on a part, and `:=` anywhere inside an occurrence stay silent, as does every model under `examples/`
   and the OMG corpora.
+  The rule is element-scoped: an error elsewhere in the document does not silence it, only a
+  lower-tier failure in the feature's own declaration or its owner's does.

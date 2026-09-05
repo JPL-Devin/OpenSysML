@@ -1634,7 +1634,9 @@ func bindingFor(bindings []Binding, name string) Binding {
 	return Binding{}
 }
 
-// bindingValues compiles one binding expression into planned values.
+// bindingValues compiles one binding expression into planned values. A KerML
+// sequence is flat, so `null` contributes nothing and a nested sequence its own
+// values, in written order.
 func (c *compiler) bindingValues(
 	content *symbols.Symbol,
 	member *symbols.Symbol,
@@ -1645,14 +1647,17 @@ func (c *compiler) bindingValues(
 	if node == nil {
 		return nil, c.unsupportedBinding(content, member, entry, parameter)
 	}
-	if sequenceExpr, ok := node.(*ast.SequenceExpr); ok {
-		values := make([]BindingValue, 0, len(sequenceExpr.Elements))
-		for _, element := range sequenceExpr.Elements {
-			value, err := c.bindingValue(content, member, entry, parameter, element)
+	switch expression := node.(type) {
+	case *ast.NullExpr:
+		return nil, nil
+	case *ast.SequenceExpr:
+		values := make([]BindingValue, 0, len(expression.Elements))
+		for _, element := range expression.Elements {
+			elementValues, err := c.bindingValues(content, member, entry, parameter, element)
 			if err != nil {
 				return nil, err
 			}
-			values = append(values, value)
+			values = append(values, elementValues...)
 		}
 		return values, nil
 	}

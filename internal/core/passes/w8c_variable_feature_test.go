@@ -210,3 +210,36 @@ func TestW8CVariableFeatureRulesIgnoreAWorkspaceOnlyOccurrenceName(t *testing.T)
 		}
 	}
 }
+
+func TestW8CVariableFeatureRulesAreElementScoped(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	attribute def AD {
+		attribute w : Integer := 4;
+		constant attribute k : Integer = 1;
+		attribute v : Integer := missing;
+		attribute broken : Missing := 5;
+	}
+	attribute def Unresolved :> Missing {
+		attribute u : Integer := 6;
+	}
+	part def PD {
+		var attribute ok : Integer := 7;
+		part p : Missing := null;
+	}
+	part def Elsewhere :> Missing;
+}`
+	// Only the feature's own head and its owner's gate it: the unresolved `Missing`
+	// elsewhere hides nothing, an unresolved value hides nothing, and an unresolved
+	// typing on the feature or its owner hides only that feature.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 2 {
+		t.Errorf("want two %q (AD::w, AD::v), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 1 {
+		t.Errorf("want one %q (AD::k), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected owner messages in %v", got)
+	}
+}
