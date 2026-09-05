@@ -622,6 +622,7 @@ func (m *Model) newStereotype(t xml.StartElement) *Stereotype {
 			if a.Name.Local == "id" {
 				s.ID = a.Value
 			}
+		case a.Name.Space == "xmlns" || a.Name.Local == "xmlns":
 		case strings.HasPrefix(a.Name.Local, "base_"):
 			s.BaseID = a.Value
 		default:

@@ -174,3 +174,57 @@ func TestRequirementKeepsCommentWithBodyElement(t *testing.T) {
 		t.Errorf("entries for _cmt = %+v", es)
 	}
 }
+
+func TestNamedMultiPairDependencyKeepsNamesDistinct(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_c" name="C"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" name="uses" client="_a" supplier="_b _c"/>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/><sysml:Block xmi:id="_s3" base_Class="_c"/>`)
+	wantLine(t, r.Notation, "dependency uses from A to B;")
+	wantLine(t, r.Notation, "dependency 'uses 2' from A to C;")
+	if es := entriesFor(r, "_d"); len(es) != 1 || es[0].Verdict != migrate.Approximated {
+		t.Errorf("entries = %+v", es)
+	}
+	for _, d := range errors(t, "named.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
+
+func TestNamedBindingConnectorKeepsItsName(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_s" name="S">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_x" name="x"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_y" name="y"/>
+      <ownedConnector xmi:type="uml:Connector" xmi:id="_bc" name="tie">
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e1" role="_x"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e2" role="_y"/>
+      </ownedConnector>
+    </packagedElement>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_s"/><sysml:BindingConnector xmi:id="_s2" base_Connector="_bc"/>`)
+	wantLine(t, r.Notation, "binding tie bind x = y;")
+	if es := entriesFor(r, "_bc"); len(es) != 1 || es[0].Target != "S::tie" {
+		t.Errorf("entries = %+v", es)
+	}
+	for _, d := range errors(t, "binding.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
+
+func TestDependencyStereotypeTagsAreKept(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" client="_a" supplier="_b"/>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/>
+  <custom:Critical xmlns:custom="http://example.com/custom" xmi:id="_s3" base_Dependency="_d" level="high"/>
+  <custom:Reviewed xmlns:custom="http://example.com/custom" xmi:id="_s4" base_Dependency="_d" by="QA"/>`)
+	wantLine(t, r.Notation, "dependency A to B;")
+	wantLine(t, r.Notation, "/* applied stereotype «Critical»: level = high */")
+	wantLine(t, r.Notation, "/* applied stereotype «Reviewed»: by = QA */")
+	es := entriesFor(r, "_d")
+	if len(es) != 1 || !strings.Contains(es[0].Note, "«Critical» «Reviewed»") {
+		t.Errorf("entries = %+v", es)
+	}
+}

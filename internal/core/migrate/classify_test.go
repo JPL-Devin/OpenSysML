@@ -203,3 +203,27 @@ func TestBlockEncapsulationIsKeptAndReported(t *testing.T) {
 		t.Errorf("entries = %+v", es)
 	}
 }
+
+func TestBooleanLiteralForms(t *testing.T) {
+	for val, want := range map[string]string{"true": "true", "1": "true", "false": "false", "0": "false"} {
+		r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p" name="on">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+        <defaultValue xmi:type="uml:LiteralBoolean" xmi:id="_v" value="`+val+`"/>
+      </ownedAttribute>
+    </packagedElement>`, `<sysml:Block xmi:id="_s1" base_Class="_a"/>`)
+		wantLine(t, r.Notation, "attribute on : ScalarValues::Boolean default = "+want)
+	}
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p" name="on">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+        <defaultValue xmi:type="uml:LiteralBoolean" xmi:id="_v" value="yes"/>
+      </ownedAttribute>
+    </packagedElement>`, `<sysml:Block xmi:id="_s1" base_Class="_a"/>`)
+	wantNoLine(t, r.Notation, "default =")
+	if es := entriesFor(r, "_p"); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, `"yes"`) {
+		t.Errorf("entries = %+v", es)
+	}
+}

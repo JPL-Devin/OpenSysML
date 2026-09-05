@@ -65,7 +65,7 @@ returned over the service yet.
 | «FlowPort» typed by a value type | `port` holding one `in`/`out`/`inout` attribute | approximated |
 | «FlowProperty» | directed `attribute`/`item` in the port def | mapped |
 | Connector, nested ends | `connect a.b to c.d` | mapped |
-| «BindingConnector» | `bind` | mapped |
+| «BindingConnector» | `bind`, or `binding name bind` when named | mapped |
 | InformationFlow / «ItemFlow» over a connector | `flow of Item from a.x to b.y` | mapped |
 | «Satisfy» | `satisfy requirement … by …` in the satisfying usage's owner | mapped |
 | «Verify» from a test case | `verify` in the verification def | mapped |

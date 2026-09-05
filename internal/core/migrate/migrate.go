@@ -908,19 +908,18 @@ func (m *migration) connector(c *xmi.Element) {
 		}
 	}
 	note := strings.Join(notes, "; ")
+	decl, kw := "connect "+paths[0]+" to "+paths[1]+";", "connection "
 	if c.HasStereotype("BindingConnector") {
-		m.w.line("bind " + paths[0] + " = " + paths[1] + ";")
-		m.add(c, verdictFor(note), "", note)
-	} else {
-		decl := "connect " + paths[0] + " to " + paths[1] + ";"
-		target := ""
-		if c.Name != "" {
-			decl = "connection " + writeName(c.Name) + " " + decl
-			target = m.v2Name(c)
-		}
-		m.w.line(decl)
-		m.add(c, verdictFor(note), target, note)
+		decl, kw = "bind "+paths[0]+" = "+paths[1]+";", "binding "
 	}
+	target := ""
+	if c.Name != "" {
+		decl = kw + writeName(c.Name) + " " + decl
+		target = m.v2Name(c)
+	}
+	m.w.line(decl)
+	m.add(c, verdictFor(note), target, note)
+	m.stereotypeComments(c)
 	for _, f := range m.flows[c] {
 		m.itemFlow(f, ends, paths)
 	}
@@ -1134,8 +1133,13 @@ func (m *migration) dependency(d *xmi.Element) {
 		pl.failed++
 		pl.notes = append(pl.notes, note)
 	}
-	for _, p := range pairs {
-		target, written, note := m.dependencyPair(d, p.client, p.supplier)
+	for i, p := range pairs {
+		name := d.Name
+		if name != "" && i > 0 {
+			name = m.freshName(m.scope, name)
+			pl.notes = append(pl.notes, fmt.Sprintf("pair %d is named %s so the pairs stay distinct", i+1, name))
+		}
+		target, written, note := m.dependencyPair(d, name, p.client, p.supplier)
 		if written {
 			pl.written++
 			pl.target = target
@@ -1147,6 +1151,20 @@ func (m *migration) dependency(d *xmi.Element) {
 		}
 	}
 	m.relationship(d, pl)
+	if pl.written > 0 {
+		m.stereotypeComments(d)
+	}
+}
+
+// freshName returns name, or name with a numeric suffix, not yet taken in owner,
+// and reserves it.
+func (m *migration) freshName(owner *xmi.Element, name string) string {
+	base := name
+	for i := 2; m.nameTaken(owner, name); i++ {
+		name = fmt.Sprintf("%s %d", base, i)
+	}
+	m.take(owner, name)
+	return name
 }
 
 // relationship appends the one report entry of a relationship: mapped when every
@@ -1184,9 +1202,9 @@ func uniqueStrings(in []string) []string {
 
 // dependencyPair writes one client–supplier pair of a dependency, returning
 // the v2 target written, if any, whether it was written, and a note.
-func (m *migration) dependencyPair(d, client, supplier *xmi.Element) (string, bool, string) {
+func (m *migration) dependencyPair(d *xmi.Element, name string, client, supplier *xmi.Element) (string, bool, string) {
 	if d.HasStereotype("DeriveReqt") {
-		target, note := m.derive(d, client, supplier)
+		target, note := m.derive(d, name, client, supplier)
 		return target, target != "", note
 	}
 	for _, end := range []*xmi.Element{client, supplier} {
@@ -1212,12 +1230,16 @@ func (m *migration) dependencyPair(d, client, supplier *xmi.Element) (string, bo
 		return "", true, "a copy is written as a plain dependency; the text is not kept in step"
 	}
 	decl := "dependency "
-	if d.Name != "" {
-		decl += writeName(d.Name) + " from "
+	if name != "" {
+		decl += writeName(name) + " from "
 	}
 	m.w.line(decl + from + " to " + to + ";")
-	if len(d.Stereotypes) > 0 {
-		return "", true, "«" + d.Stereotypes[0].Name + "» is written as a plain dependency"
+	var names []string
+	for _, s := range d.Stereotypes {
+		names = append(names, "«"+s.Name+"»")
+	}
+	if len(names) > 0 {
+		return "", true, strings.Join(names, " ") + " is written as a plain dependency"
 	}
 	return "", true, ""
 }
@@ -1277,21 +1299,18 @@ func (m *migration) verify(client, req *xmi.Element) (string, string) {
 
 // derive writes a requirement derivation as a connection def specializing the
 // library's Derivation, with the original and derived requirements as ends.
-func (m *migration) derive(d, derived, original *xmi.Element) (string, string) {
+func (m *migration) derive(d *xmi.Element, name string, derived, original *xmi.Element) (string, string) {
 	dc, _ := m.classify(derived)
 	oc, _ := m.classify(original)
 	if dc != catRequirementDef || oc != catRequirementDef {
 		return "", "both ends of a derive must be requirements"
 	}
-	name := d.Name
 	if name == "" {
 		name = "Derive " + derived.Name
 	}
-	base := name
-	for i := 2; m.nameTaken(m.scope, name); i++ {
-		name = fmt.Sprintf("%s %d", base, i)
+	if !m.taken[m.scope][name] {
+		name = m.freshName(m.scope, name)
 	}
-	m.take(m.scope, name)
 	if _, ok := m.names[d]; !ok && d.Name == "" {
 		m.names[d] = name
 	}

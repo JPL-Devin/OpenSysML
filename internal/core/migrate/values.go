@@ -38,10 +38,13 @@ func (m *migration) valueExpr(v *xmi.Element, scope *xmi.Element) (expr string, 
 		}
 		return val, true, ""
 	case "LiteralBoolean":
-		if v.Attrs["value"] == "true" {
+		switch v.Attrs["value"] {
+		case "true", "1":
 			return "true", true, ""
+		case "false", "0", "":
+			return "false", true, ""
 		}
-		return "false", true, ""
+		return "", false, "boolean literal " + strconv.Quote(v.Attrs["value"]) + " is not a boolean"
 	case "LiteralString":
 		return lexer.StringText(v.Attrs["value"]), true, ""
 	case "LiteralNull":
