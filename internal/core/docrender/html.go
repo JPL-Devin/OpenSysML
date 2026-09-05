@@ -83,7 +83,8 @@ type HTMLOptions struct {
 
 // HTML renders an evaluated document as deterministic, semantic HTML: an
 // <article> holding nested <section> elements, real tables with <caption> and
-// <th scope>, <ul>/<ol> lists and <figure> diagrams carrying Mermaid source.
+// <th scope>, <ul>/<ol> lists, <dl> definitions and <figure> diagrams
+// carrying Mermaid source.
 // Every node keeps its model facts in sysml- classes and data- attributes —
 // content kind, declared name, query, group column, row element and its kind,
 // projected column, value kind, reference target, diagram kind and direction —
@@ -276,6 +277,9 @@ func (w *htmlWriter) writeContent(node docir.Content, path []step, index, level 
 	case docir.ContentList:
 		w.writeList(node, id)
 		return nil
+	case docir.ContentDefinitions:
+		w.writeDefinitions(node, id)
+		return nil
 	case docir.ContentDiagram:
 		return w.writeDiagram(node, id)
 	default:
@@ -409,6 +413,20 @@ func (w *htmlWriter) writeList(node docir.Content, id string) {
 			w.inlineRuns(item.Runs()) + "</li>\n")
 	}
 	w.b.WriteString("</" + tag + ">\n")
+}
+
+// writeDefinitions writes one description list, one term/description group
+// per query row, each group carrying the element its row selected.
+func (w *htmlWriter) writeDefinitions(node docir.Content, id string) {
+	w.b.WriteString("<dl class=\"sysml-definitions\"" + attr("id", id) + " data-content=\"definitions\"" +
+		attr(attrName, node.Name()) + attr(attrQuery, node.Query()) + ">\n")
+	for _, entry := range node.Definitions() {
+		w.b.WriteString("<div class=\"sysml-entry\"" + elementAttrs(entry.Element()) + ">\n" +
+			"<dt class=\"sysml-term\">" + w.inlineRuns(entry.Term()) + "</dt>\n" +
+			"<dd class=\"sysml-description\">" + w.inlineRuns(entry.Description()) + "</dd>\n" +
+			"</div>\n")
+	}
+	w.b.WriteString("</dl>\n")
 }
 
 // writeDiagram writes one diagram as a figure: a table-kind view as a table,

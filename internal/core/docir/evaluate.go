@@ -210,6 +210,8 @@ func (e *evaluator) evaluateNode(node docplan.Content) (Content, error) {
 		return e.evaluateTable(node)
 	case docplan.ContentList:
 		return e.evaluateList(node)
+	case docplan.ContentDefinitions:
+		return e.evaluateDefinitions(node)
 	case docplan.ContentDiagram:
 		return e.evaluateDiagram(node)
 	default:
@@ -544,6 +546,72 @@ func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {
 		queryOrigin: result.Origin(),
 		origin:      node.Origin(),
 	}, nil
+}
+
+// evaluateDefinitions runs a definitions block's query once and turns each
+// row into one entry: its term column names it, its description column
+// describes it, and every run keeps the value it came from.
+func (e *evaluator) evaluateDefinitions(node docplan.Content) (Content, error) {
+	result, err := e.executeQuery(node)
+	if err != nil {
+		return Content{}, err
+	}
+	at := make(map[string]int, len(result.Columns()))
+	for i, column := range result.Columns() {
+		at[column.Name()] = i
+	}
+	indexOf := func(name string) (int, error) {
+		if i, ok := at[name]; ok {
+			return i, nil
+		}
+		return 0, &Error{
+			Kind:     ErrorUnknownDefinitionColumn,
+			Document: e.document,
+			Content:  node.Name(),
+			Query:    node.Query().Entry(),
+			Column:   name,
+			Origin:   node.Origin(),
+		}
+	}
+	termAt, err := indexOf(node.Term())
+	if err != nil {
+		return Content{}, err
+	}
+	descriptionAt, err := indexOf(node.Description())
+	if err != nil {
+		return Content{}, err
+	}
+	rows := result.Rows()
+	entries := make([]Definition, 0, len(rows))
+	for _, row := range rows {
+		cells := row.Cells()
+		entries = append(entries, Definition{
+			term:        e.cellRuns(cells, termAt),
+			description: e.cellRuns(cells, descriptionAt),
+			element:     row.Element(),
+			origin:      row.Origin(),
+		})
+	}
+	return Content{
+		kind:        ContentDefinitions,
+		name:        node.Name(),
+		definitions: entries,
+		query:       node.Query().Entry(),
+		queryOrigin: result.Origin(),
+		origin:      node.Origin(),
+	}, nil
+}
+
+// cellRuns renders one cell of a row as plain runs, one per value.
+func (e *evaluator) cellRuns(cells []queryexec.Cell, index int) []TextRun {
+	if index >= len(cells) {
+		return nil
+	}
+	var runs []TextRun
+	for _, value := range cells[index].Values() {
+		runs = append(runs, TextRun{text: e.valueText(value), origin: value.Origin()})
+	}
+	return runs
 }
 
 // evaluateDiagram renders the planned view reference of a diagram through the

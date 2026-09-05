@@ -46,7 +46,8 @@ func loadEvaluationFixtureFile(t *testing.T, path string) evaluationFixture {
 func loadEvaluationSource(t *testing.T, content string) evaluationFixture {
 	t.Helper()
 	index := libs.NewModelIndex()
-	p := parser.New(source.New(fixtureDoc, []byte(content)))
+	sf := source.New(fixtureDoc, []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
@@ -54,9 +55,16 @@ func loadEvaluationSource(t *testing.T, content string) evaluationFixture {
 	index.AddDocument(fixtureDoc, root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
+	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != fixtureDoc {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	return evaluationFixture{
 		index:    index,
-		model:    semantics.NewModel(resolver),
+		model:    model,
 		resolver: resolver,
 	}
 }

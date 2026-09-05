@@ -438,8 +438,8 @@ func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]sy
 	if m == nil || sym == nil || feature == "" {
 		return nil, false
 	}
-	if value, ok := m.reflectiveFeatureValue(sym, feature); ok {
-		return []symbols.FilterValue{value}, true
+	if values, ok := m.ReflectiveFeatureValues(sym, feature); ok {
+		return values, true
 	}
 	member, ok := m.LookupMember(sym, feature)
 	if !ok || member == nil {
@@ -694,6 +694,30 @@ func (m *Model) ReflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 	return m.reflectiveFeatureValue(sym, feature)
 }
 
+// ReflectiveFeatureValues is ReflectiveFeatureValue for a feature that may hold
+// several values: Element::documentation reads one per `doc` body, in order.
+func (m *Model) ReflectiveFeatureValues(sym *symbols.Symbol, feature string) ([]symbols.FilterValue, bool) {
+	if m == nil || sym == nil {
+		return nil, false
+	}
+	if feature == "documentation" {
+		bodies := m.DocumentationOf(sym)
+		values := make([]symbols.FilterValue, 0, len(bodies))
+		for _, body := range bodies {
+			values = append(values, symbols.FilterValue{Kind: symbols.FilterValueString, Str: body})
+		}
+		return values, true
+	}
+	value, ok := m.reflectiveFeatureValue(sym, feature)
+	if !ok {
+		return nil, false
+	}
+	if value.Kind == symbols.FilterValueEmpty {
+		return nil, true
+	}
+	return []symbols.FilterValue{value}, true
+}
+
 // reflectiveFeatureValue is what the candidate's declaration states for a
 // metaclass feature of it, and whether that feature is derived here at all
 // (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.
@@ -701,6 +725,10 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 	switch feature {
 	case "name", "declaredName":
 		return stringOrEmpty(simpleSymbolName(sym)), true
+	case "shortName":
+		return stringOrEmpty(m.EffectiveShortNameOf(sym)), true
+	case "declaredShortName":
+		return stringOrEmpty(sym.ShortName), true
 	case "qualifiedName":
 		return stringOrEmpty(m.fqnOf(sym)), true
 	}

@@ -354,6 +354,7 @@ func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
 	sem := semantics.NewModel(resolver)
 	resolver.SetModel(sem)
 	sem.SetArgumentTyper(passes.NewArgumentTyper(resolver, sem))
+	sem.SetSourceText(w.sourceTextLocked())
 	return resolver, sem
 }
 

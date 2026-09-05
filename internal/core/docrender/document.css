@@ -25,6 +25,7 @@
     --sysml-table-width: 100%;
     --sysml-title-page-height: 60vh;
     --sysml-group-heading-weight: 600;
+    --sysml-term-weight: 600;
 
     box-sizing: border-box;
     max-width: var(--sysml-measure);
@@ -105,6 +106,22 @@
   .sysml-document .sysml-list {
     margin: var(--sysml-space) 0;
     padding-left: var(--sysml-space);
+  }
+
+  .sysml-document .sysml-definitions {
+    margin: var(--sysml-space) 0;
+  }
+
+  .sysml-document .sysml-entry {
+    margin: var(--sysml-space-tight) 0;
+  }
+
+  .sysml-document .sysml-term {
+    font-weight: var(--sysml-term-weight);
+  }
+
+  .sysml-document .sysml-description {
+    margin: 0 0 0 var(--sysml-space);
   }
 
   .sysml-document .sysml-diagram {

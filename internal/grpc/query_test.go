@@ -21,7 +21,10 @@ package Demo {
 	}
 	part def Wheel;
 	part vehicle : Vehicle {
-		part wheels : Wheel[4];
+		part <W> wheels : Wheel[4] {
+			doc /* Four road wheels,
+			     * one per corner. */
+		}
 		attribute vin;
 	}
 	part spare : Wheel;
@@ -203,6 +206,9 @@ func TestQuerySelectReportsEveryPropertyByDefault(t *testing.T) {
 		QueryPropType:              "PartUsage",
 		QueryPropName:              "wheels",
 		QueryPropDeclaredName:      "wheels",
+		QueryPropShortName:         "W",
+		QueryPropDeclaredShortName: "W",
+		QueryPropDocumentation:     "Four road wheels,\none per corner.",
 		QueryPropQualifiedName:     "Demo::vehicle::wheels",
 		QueryPropOwner:             "Demo::vehicle",
 		QueryPropIsAbstract:        "false",
@@ -229,7 +235,7 @@ func TestQueryOmitsPropertiesAnElementDoesNotHave(t *testing.T) {
 		t.Fatalf("elements = %d, want 1", len(resp.Elements))
 	}
 	props := resp.Elements[0].Properties
-	for _, absent := range []string{QueryPropOwner, QueryPropIsAbstract, QueryPropMultiplicityLower} {
+	for _, absent := range []string{QueryPropOwner, QueryPropIsAbstract, QueryPropMultiplicityLower, QueryPropShortName, QueryPropDocumentation} {
 		if value, ok := props[absent]; ok {
 			t.Errorf("properties[%q] = %q, want it absent for a top-level package", absent, value)
 		}
@@ -247,7 +253,7 @@ func TestQuerySelectUnknownPropertyFails(t *testing.T) {
 // property in a constraint is an error, not an empty result.
 func TestQueryUnknownPropertyFailsRatherThanMatchingNothing(t *testing.T) {
 	_, err := runQuery(t, &pb.Query{
-		Where: primitive("documentation", opEqual, false, "x"),
+		Where: primitive("colour", opEqual, false, "red"),
 	})
 	assertQueryError(t, err, QueryErrUnknownProperty)
 	if got := connect.CodeOf(err); got != connect.CodeInvalidArgument {

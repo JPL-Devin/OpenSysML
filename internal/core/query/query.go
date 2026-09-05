@@ -22,6 +22,12 @@ const (
 	PropertyName = "name"
 	// PropertyDeclaredName is the explicitly declared name property.
 	PropertyDeclaredName = "declaredName"
+	// PropertyShortName is the effective short name property.
+	PropertyShortName = "shortName"
+	// PropertyDeclaredShortName is the explicitly declared short name property.
+	PropertyDeclaredShortName = "declaredShortName"
+	// PropertyDocumentation is the body text of each `doc` comment, in order.
+	PropertyDocumentation = "documentation"
 	// PropertyQualifiedName is the fully qualified name property.
 	PropertyQualifiedName = "qualifiedName"
 	// PropertyOwner is the owning element's qualified name property.
@@ -39,6 +45,7 @@ const (
 // propertyNames is the closed set of properties supported by element queries.
 var propertyNames = []string{
 	PropertyID, PropertyType, PropertyName, PropertyDeclaredName,
+	PropertyShortName, PropertyDeclaredShortName, PropertyDocumentation,
 	PropertyQualifiedName, PropertyOwner, PropertyIsAbstract, PropertyElementType,
 	PropertyMultiplicityLower, PropertyMultiplicityUpper,
 }

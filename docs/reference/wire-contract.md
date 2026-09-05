@@ -483,7 +483,7 @@ HTTP/1.1 400 Bad Request
 
 $ … /Query -d '{"modelHash":"2af5…dea2","query":{"where":{"primitive":{"property":"colour","operator":"PRIMITIVE_OPERATOR_EQUAL","value":["red"]}}}}'
 HTTP/1.1 400 Bad Request
-{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, type"}
+{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, declaredShortName, documentation, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, shortName, type"}
 
 $ … /ApplyEdits -d '{"modelHash":"b4e0…ded9","operations":[{"setValue":{"target":"Demo::sedan::mass","value":"1300.0"}}]}'
 HTTP/1.1 400 Bad Request

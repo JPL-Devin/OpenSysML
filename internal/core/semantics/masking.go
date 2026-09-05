@@ -86,15 +86,26 @@ func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 
 // EffectiveNameOf returns a declaration's name, including one inherited through a unique redefinition.
 func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
-	return m.effectiveNameOf(sym, make(map[*symbols.Symbol]bool))
+	return m.effectiveIdentifierOf(sym, declaredName, make(map[*symbols.Symbol]bool))
 }
 
-func (m *Model) effectiveNameOf(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) string {
+// EffectiveShortNameOf is Element::shortName: the declared short name, or the
+// one inherited through a unique redefinition (KerML 1.1 §8.2.4).
+func (m *Model) EffectiveShortNameOf(sym *symbols.Symbol) string {
+	return m.effectiveIdentifierOf(sym, declaredShortName, make(map[*symbols.Symbol]bool))
+}
+
+func declaredName(sym *symbols.Symbol) string      { return sym.Name }
+func declaredShortName(sym *symbols.Symbol) string { return sym.ShortName }
+
+// effectiveIdentifierOf reads the identifier sym declares, or the one the single
+// feature it redefines has (KerML 1.1 §8.3.3.3 effectiveName/effectiveShortName).
+func (m *Model) effectiveIdentifierOf(sym *symbols.Symbol, declared func(*symbols.Symbol) string, seen map[*symbols.Symbol]bool) string {
 	if sym == nil || seen[sym] {
 		return ""
 	}
-	if sym.Name != "" {
-		return sym.Name
+	if id := declared(sym); id != "" {
+		return id
 	}
 	seen[sym] = true
 
@@ -118,7 +129,7 @@ func (m *Model) effectiveNameOf(sym *symbols.Symbol, seen map[*symbols.Symbol]bo
 	if len(targets) != 1 {
 		return ""
 	}
-	return m.effectiveNameOf(targets[0], seen)
+	return m.effectiveIdentifierOf(targets[0], declared, seen)
 }
 
 // DeclaresRedefinition reports whether sym carries a `redefines`/`:>>` clause,

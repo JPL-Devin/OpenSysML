@@ -58,6 +58,9 @@ bound predicate that is not in this table:
 | `sysml:qualifiedName` | `qualifiedName` and element identity |
 | `sysml:name` | `name` |
 | `sysml:declaredName` | `declaredName` |
+| `sysml:shortName` | `shortName` |
+| `sysml:declaredShortName` | `declaredShortName` |
+| `sysml:documentation` | `documentation` |
 | `sysml:owner` | `owner` |
 | `sysml:isAbstract` | `isAbstract` |
 | `sysml:type` | `type` |

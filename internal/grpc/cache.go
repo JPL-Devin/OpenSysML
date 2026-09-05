@@ -53,7 +53,9 @@ type runtimeSemantics struct {
 func (m *CachedModel) RuntimeSemantics() (*runtimeSemantics, func()) {
 	m.rtSemOnce.Do(func() {
 		resolver := resolve.New(m.Index)
-		m.rtSem = &runtimeSemantics{Resolver: resolver, Model: semantics.NewModel(resolver)}
+		sem := semantics.NewModel(resolver)
+		sem.SetSourceText(cachedSourceText(m))
+		m.rtSem = &runtimeSemantics{Resolver: resolver, Model: sem}
 	})
 	rs := m.rtSem
 	rs.mu.Lock()
@@ -110,6 +112,7 @@ func (m *CachedModel) SoleDocument() (*CachedDocument, error) {
 func (m *CachedModel) SymbolContext() *SymbolContext {
 	m.symCtxOnce.Do(func() {
 		m.symCtx = NewSymbolContext(m.Index)
+		m.symCtx.Semantics.SetSourceText(cachedSourceText(m))
 	})
 	return m.symCtx
 }

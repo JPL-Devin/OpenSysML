@@ -12,11 +12,12 @@ import (
 type ContentKind string
 
 const (
-	ContentSection   ContentKind = "section"
-	ContentParagraph ContentKind = "paragraph"
-	ContentTable     ContentKind = "table"
-	ContentList      ContentKind = "list"
-	ContentDiagram   ContentKind = "diagram"
+	ContentSection     ContentKind = "section"
+	ContentParagraph   ContentKind = "paragraph"
+	ContentTable       ContentKind = "table"
+	ContentList        ContentKind = "list"
+	ContentDefinitions ContentKind = "definitions"
+	ContentDiagram     ContentKind = "diagram"
 )
 
 // ListStyle is the rendering style of an evaluated list.
@@ -110,8 +111,29 @@ func (i ListItem) Element() queryexec.Value { return i.element }
 // Origin returns the query row behind the item.
 func (i ListItem) Origin() provenance.Origin { return i.origin }
 
+// Definition is one evaluated definitions entry, produced from one query row.
+type Definition struct {
+	term        []TextRun
+	description []TextRun
+	element     queryexec.Value
+	origin      provenance.Origin
+}
+
+// Term returns the runs naming the entry, one per value of the term column.
+func (d Definition) Term() []TextRun { return append([]TextRun(nil), d.term...) }
+
+// Description returns the runs describing the entry, one per value of the
+// description column.
+func (d Definition) Description() []TextRun { return append([]TextRun(nil), d.description...) }
+
+// Element returns the model element the entry's query row selected.
+func (d Definition) Element() queryexec.Value { return d.element }
+
+// Origin returns the query row behind the entry.
+func (d Definition) Origin() provenance.Origin { return d.origin }
+
 // Content is one evaluated content node: a section, paragraph, table, list,
-// or diagram.
+// definitions block, or diagram.
 type Content struct {
 	kind        ContentKind
 	name        string
@@ -125,6 +147,7 @@ type Content struct {
 	rows        []queryexec.Row
 	groups      []TableGroup
 	items       []ListItem
+	definitions []Definition
 	rendering   *view.Rendering
 	direction   view.Direction
 	children    []Content
@@ -178,6 +201,20 @@ func (c Content) Items() []ListItem {
 	return out
 }
 
+// Definitions returns the ordered entries of a definitions block.
+func (c Content) Definitions() []Definition {
+	out := make([]Definition, len(c.definitions))
+	for i, entry := range c.definitions {
+		out[i] = Definition{
+			term:        append([]TextRun(nil), entry.term...),
+			description: append([]TextRun(nil), entry.description...),
+			element:     entry.element,
+			origin:      entry.origin,
+		}
+	}
+	return out
+}
+
 // Rendering returns a copy of the resolved view content of a diagram, nil
 // for every other kind.
 func (c Content) Rendering() *view.Rendering { return c.rendering.Clone() }
@@ -215,6 +252,7 @@ func cloneContent(content []Content) []Content {
 			rows:        append([]queryexec.Row(nil), child.rows...),
 			groups:      cloneGroups(child.groups),
 			items:       child.Items(),
+			definitions: child.Definitions(),
 			rendering:   child.rendering.Clone(),
 			direction:   child.direction,
 			children:    cloneContent(child.children),

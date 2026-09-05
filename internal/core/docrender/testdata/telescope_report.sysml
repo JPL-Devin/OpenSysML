@@ -13,17 +13,21 @@ package Observatory {
 	part def 'Assembly *frame*';
 
 	part telescope : 'Assembly *frame*' {
-		part optics : Subsystem {
+		part <'M1'> optics : Subsystem {
+			doc /* The primary mirror assembly. */
+			doc /* Collects light | not *heat*
+			     * from the target. */
 			attribute redefines mass = 8.5;
 			attribute redefines allocatedMass = 10.0;
 			attribute redefines zone = "payload";
 		}
 		part segmentControl : Subsystem {
+			doc /* Actuators that phase the mirror segments. */
 			attribute redefines mass = 20.0;
 			attribute redefines allocatedMass = 25.5;
 			attribute redefines zone = "payload";
 		}
-		part mount : Subsystem {
+		part <'M3|*'> mount : Subsystem {
 			attribute redefines mass = 15.0;
 			attribute redefines allocatedMass = 15.0;
 			attribute redefines zone = "support | *frame*";
@@ -166,6 +170,20 @@ package Observatory {
 		)
 	}
 
+	calc def SubsystemNotes :> Query {
+		in root : Element;
+		Project(
+			source = OrderBy(
+				source = Subsystems(root = root),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("shortName", "name", "documentation")
+		)
+	}
+
 	calc def MissingSubsystems :> Query {
 		in root : Element;
 		Project(
@@ -245,6 +263,21 @@ package Observatory {
 			part margins : Table {
 				attribute redefines caption = "Mass margins (allocated - estimated)";
 				calc rows : MassMargins {
+					in root = telescope;
+				}
+			}
+
+			part notesTable : Table {
+				attribute redefines caption = "Subsystem notes";
+				calc rows : SubsystemNotes {
+					in root = telescope;
+				}
+			}
+
+			part notes : Definitions {
+				attribute redefines term = "shortName";
+				attribute redefines description = "documentation";
+				calc rows : SubsystemNotes {
 					in root = telescope;
 				}
 			}

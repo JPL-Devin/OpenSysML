@@ -18,6 +18,10 @@ type Pos struct {
 	Col  int
 }
 
+// Lookup answers the text a span of the named document covers, or "" for a
+// document it does not hold.
+type Lookup func(doc string, span Span) string
+
 // SourceFile owns the raw bytes of one source file.
 type SourceFile struct {
 	name    string
