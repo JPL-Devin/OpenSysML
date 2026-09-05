@@ -216,3 +216,75 @@ func TestSatisfyChainedNonRequirementRejected(t *testing.T) {
 		t.Errorf("got %q", diags[0].Message)
 	}
 }
+
+// An objective is a requirement usage (SysML v2 §8.3.22.4), so it is a valid
+// referent of `assert` and `satisfy` directly, negated, chained and in a body.
+func TestAssertReferenceToObjectiveIsSilent(t *testing.T) {
+	src := `requirement def RD; constraint def CD;
+use case def UCD { subject s; objective obj : RD; }
+use case uc : UCD { objective obj : RD; assert obj; assert not obj; }
+verification vc { objective vobj : RD; alias aobj for vobj; }
+part ctx {
+	assert uc.obj;
+	assert not uc.obj;
+	assert vc.vobj;
+	assert vc.aobj;
+	assert uc.obj { true }
+	satisfy uc.obj;
+	satisfy vc.aobj;
+	requirement r2 :> uc.obj;
+	constraint k : CD { assert uc.obj; }
+}`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+}
+
+// An assertion borrows the name of the feature it references, so a chain through
+// its own owner reaches the owner's member of that name, not the assertion.
+func TestAssertReferenceThroughOwnChainNamesTheOwnersMember(t *testing.T) {
+	src := `constraint def CD; part def H { part q; constraint c : CD; }
+part h : H { assert h.q; assert h.c; }
+part h2 : H { part local; assert not h2.local; assert not h2.c; }`
+	diags := typeDiags(t, src)
+	if len(diags) != 2 {
+		t.Fatalf("expected two type diagnostics (h.q, h2.local), got %v", diags)
+	}
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "assert target must be a constraint usage, found partUsage") {
+			t.Errorf("got %q", d.Message)
+		}
+	}
+	got := nameresDiags(t, `part def H { part q; }
+part h : H { assert h.missing; }`)
+	if len(got) != 1 || !strings.Contains(got[0].Message, "missing") {
+		t.Fatalf("got %+v, want one unresolved diagnostic for h.missing", got)
+	}
+}
+
+// The other requirement-parameter usages stay parts and stay rejected.
+func TestAssertReferenceToRequirementParameterPartsRejected(t *testing.T) {
+	tests := []struct {
+		name, target, found string
+	}{
+		{"subject", "assert uc.s;", "partUsage"},
+		{"actor", "assert uc.a;", "partUsage"},
+		{"stakeholder", "assert r.sh;", "partUsage"},
+		{"satisfy subject", "satisfy uc.s;", "partUsage"},
+	}
+	prefix := `requirement def RD; part def PD;
+use case uc { subject s : PD; actor a : PD; objective obj : RD; }
+requirement r : RD { stakeholder sh : PD; }
+part ctx { `
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := typeDiags(t, prefix+tc.target+" }")
+			if len(diags) != 1 {
+				t.Fatalf("expected one type diagnostic, got %v", diags)
+			}
+			if !strings.Contains(diags[0].Message, "found "+tc.found) {
+				t.Errorf("got %q, want found %s", diags[0].Message, tc.found)
+			}
+		})
+	}
+}

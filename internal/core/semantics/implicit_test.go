@@ -379,6 +379,54 @@ func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
 	}
 }
 
+// An `assoc struct` is an AssociationStructure, so its implicit base is
+// Objects::LinkObject (Objects::BinaryLinkObject with two ends) rather than a
+// plain association's Links::Link / Links::BinaryLink (KerML §8.4.4).
+func TestImplicitKerMLAssocStructBaseIsLinkObject(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Objects { struct Object; struct LinkObject :> Object; struct BinaryLinkObject :> LinkObject; }
+		package Links { assoc Link; assoc BinaryLink :> Link; }
+		package P {
+			assoc struct S { end feature a; end feature b; }
+			assoc struct S3 { end feature a; end feature b; end feature c; }
+			assoc A { end feature a; end feature b; }
+			assoc A3 { end feature a; end feature b; end feature c; }
+		}`)
+	p := sym(t, root, "P")
+	objects := sym(t, root, "Objects").Scope
+	links := sym(t, root, "Links").Scope
+	for name, base := range map[string]struct {
+		scope *symbols.Scope
+		name  string
+	}{
+		"S":  {objects, "BinaryLinkObject"},
+		"S3": {objects, "LinkObject"},
+		"A":  {links, "BinaryLink"},
+		"A3": {links, "Link"},
+	} {
+		want, _ := base.scope.LookupLocal(base.name)
+		s, _ := p.Scope.LookupLocal(name)
+		if supers := m.DirectSupertypes(s); len(supers) != 1 || supers[0] != want {
+			t.Errorf("DirectSupertypes(%s) = %v, want [%s]", name, supers, base.name)
+		}
+	}
+}
+
+// A control node is an action usage of its control action, so its members
+// are the action's (SysML v2 §8.3.17) and the variability rules see an occurrence.
+func TestControlNodeBaseIsItsControlAction(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Actions { action def Action; action def ForkAction :> Action; action def JoinAction :> Action; action def MergeAction :> Action; action def DecisionAction :> Action; }
+		action def A { fork f; join j; merge m; decide d; }`)
+	actions := sym(t, root, "Actions").Scope
+	a := sym(t, root, "A").Scope
+	for node, base := range map[string]string{"f": "ForkAction", "j": "JoinAction", "m": "MergeAction", "d": "DecisionAction"} {
+		want, _ := actions.LookupLocal(base)
+		n, _ := a.LookupLocal(node)
+		if supers := m.DirectSupertypes(n); len(supers) != 1 || supers[0] != want {
+			t.Errorf("DirectSupertypes(%s) = %v, want [Actions::%s]", node, supers, base)
+		}
+	}
+}
+
 // A binary base follows the effective ends of a KerML association or connector
 // (KerML 1.1 checkAssociationBinarySpecialization, checkConnectorBinarySpecialization):
 // two owned ends redefining two of a general's three leave it n-ary.
