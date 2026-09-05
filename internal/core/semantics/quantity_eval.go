@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -212,23 +213,66 @@ func NegateQuantity(q Quantity) (Quantity, error) {
 	return InUnit(num, q.Unit)
 }
 
+// CompareMagnitudes orders two commensurable quantities: -1, 0 or 1. Integer
+// magnitudes over whole scale ratios compare exactly, so neighbours above 2^53
+// stay distinct; otherwise the right one converts to the left unit as a float64.
+func CompareMagnitudes(left, right Quantity) (int, error) {
+	if l, r, ok := exactMagnitudes(left, right); ok {
+		return l.Cmp(r), nil
+	}
+	rhs, err := right.ConvertTo(left.Unit)
+	if err != nil {
+		return 0, err
+	}
+	lhs := left.Num.AsReal()
+	switch {
+	case lhs < rhs:
+		return -1, nil
+	case lhs > rhs:
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// exactMagnitudes expresses two commensurable Integer magnitudes over their base
+// units as rationals, which is exact only while the scale ratios are whole.
+func exactMagnitudes(left, right Quantity) (*big.Rat, *big.Rat, bool) {
+	if left.Num.Kind != ValInt || right.Num.Kind != ValInt || !left.Unit.Term.Commensurable(right.Unit.Term) {
+		return nil, nil, false
+	}
+	l, lok := exactMagnitude(left.Num.Int, left.Unit.Term.Scale)
+	r, rok := exactMagnitude(right.Num.Int, right.Unit.Term.Scale)
+	return l, r, lok && rok
+}
+
+func exactMagnitude(magnitude int64, scale Scale) (*big.Rat, bool) {
+	if scale.IsZero() || !isWhole(scale.Num) || !isWhole(scale.Den) {
+		return nil, false
+	}
+	num, den := new(big.Rat).SetFloat64(scale.Num), new(big.Rat).SetFloat64(scale.Den)
+	if num == nil || den == nil {
+		return nil, false
+	}
+	m := new(big.Rat).SetInt64(magnitude)
+	return m.Mul(m, num.Quo(num, den)), true
+}
+
 // CompareQuantities orders two quantities, converting the right one into the
 // left one's unit.
 func CompareQuantities(op ast.OperatorKind, left, right Quantity) (bool, error) {
-	converted, err := right.ConvertTo(left.Unit)
+	c, err := CompareMagnitudes(left, right)
 	if err != nil {
 		return false, err
 	}
-	lhs := left.Num.AsReal()
 	switch op {
 	case ast.OpLt:
-		return lhs < converted, nil
+		return c < 0, nil
 	case ast.OpLe:
-		return lhs <= converted, nil
+		return c <= 0, nil
 	case ast.OpGt:
-		return lhs > converted, nil
+		return c > 0, nil
 	case ast.OpGe:
-		return lhs >= converted, nil
+		return c >= 0, nil
 	default:
 		return false, fmt.Errorf("unknown comparison operator: %v", op)
 	}
@@ -237,11 +281,11 @@ func CompareQuantities(op ast.OperatorKind, left, right Quantity) (bool, error) 
 // EqualQuantities compares two quantities in the left one's unit; incommensurable
 // units are an error, since neither `==` nor `!=` is an answer about them.
 func EqualQuantities(op ast.OperatorKind, left, right Quantity) (bool, error) {
-	converted, err := right.ConvertTo(left.Unit)
+	c, err := CompareMagnitudes(left, right)
 	if err != nil {
 		return false, err
 	}
-	equal := left.Num.AsReal() == converted
+	equal := c == 0
 	if op == ast.OpNeq {
 		equal = !equal
 	}

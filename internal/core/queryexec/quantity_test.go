@@ -280,6 +280,59 @@ calc def Ordered :> Query {
 	}
 }
 
+// TestExecuteOrdersLargeIntegerQuantitiesExactly: Integer magnitudes above 2^53,
+// which one float64 could not tell apart, order exactly in one unit and across
+// a conversion.
+func TestExecuteOrdersLargeIntegerQuantitiesExactly(t *testing.T) {
+	fixture := quantityFixture(t, `
+part heavy {
+	part above {
+		attribute mass = 9007199254740993 [kg];
+	}
+	part at {
+		attribute mass = 9007199254740992 [kg];
+	}
+	part grams {
+		attribute mass = 9007199254740992000 [g];
+	}
+}
+calc def Ascending :> Query {
+	in root : Element;
+	OrderBy(
+		source = Project(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+			properties = ("name", "mass")
+		),
+		property = "mass",
+		direction = "ascending",
+		missing = "last",
+		multiple = "error"
+	)
+}
+calc def Descending :> Query {
+	in root : Element;
+	OrderBy(
+		source = Project(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+			properties = ("name", "mass")
+		),
+		property = "mass",
+		direction = "descending",
+		missing = "last",
+		multiple = "error"
+	)
+}
+`)
+	ascending := quantityRows(t, fixture, "Ascending", "heavy")
+	if got := cellTexts(t, ascending, 0); !slices.Equal(got, []string{"at", "grams", "above"}) {
+		t.Fatalf("ascending order = %v", got)
+	}
+	descending := quantityRows(t, fixture, "Descending", "heavy")
+	if got := cellTexts(t, descending, 0); !slices.Equal(got, []string{"above", "at", "grams"}) {
+		t.Fatalf("descending order = %v", got)
+	}
+}
+
 // TestExecuteComputesQuantityColumns: column arithmetic keeps units, composes
 // them under * and /, and a ratio of like quantities is a bare number.
 func TestExecuteComputesQuantityColumns(t *testing.T) {

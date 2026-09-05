@@ -2307,8 +2307,8 @@ func valueEqual(a, b Value) bool {
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.
-		converted, err := b.Quantity().ConvertTo(a.Quantity().Unit)
-		return err == nil && toReal(a.Quantity().Num) == converted
+		c, err := semantics.CompareMagnitudes(*a.Quantity(), *b.Quantity())
+		return err == nil && c == 0
 	case ValArray:
 		return arrayEqual(a.Array(), b.Array())
 	case ValVector:

@@ -764,11 +764,7 @@ func compareOrdered(left, right Value) (int, error) {
 	case ValueQuantity:
 		l, _ := left.Quantity()
 		r, _ := right.Quantity()
-		converted, err := r.ConvertTo(l.Unit)
-		if err != nil {
-			return 0, err
-		}
-		return compareNumeric(RealValue(l.Num.AsReal()), RealValue(converted)), nil
+		return semantics.CompareMagnitudes(l, r)
 	case ValueString:
 		l, _ := left.String()
 		r, _ := right.String()

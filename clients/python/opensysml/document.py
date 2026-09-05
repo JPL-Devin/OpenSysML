@@ -140,11 +140,27 @@ def _bound_value(parameter, value):
     if isinstance(value, float):
         return sysml_pb2.DocumentValue(real_value=value)
     if isinstance(value, Quantity):
-        return sysml_pb2.DocumentValue(quantity=value.to_pb())
+        return sysml_pb2.DocumentValue(quantity=_bound_quantity(parameter, value))
     raise DocumentQueryError(
         f"binding {parameter!r} cannot carry {value!r}: a binding is a str, "
         f"int, float, bool, Quantity or ElementRef"
     )
+
+
+def _bound_quantity(parameter, value):
+    """A Quantity as the wire writes it; one it cannot carry is a caller error."""
+    if isinstance(value.magnitude, int) and not isinstance(value.magnitude, bool):
+        if not -(1 << 63) <= value.magnitude < (1 << 63):
+            raise DocumentQueryError(
+                f"binding {parameter!r} cannot carry {value!r}: an Integer magnitude "
+                f"must fit in a signed 64-bit integer"
+            )
+    try:
+        return value.to_pb()
+    except UnsupportedValueError as exc:
+        raise DocumentQueryError(
+            f"binding {parameter!r} cannot carry {value!r}: {exc}"
+        ) from exc
 
 
 def result_of(response):

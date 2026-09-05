@@ -190,6 +190,35 @@ func TestCompareQuantitiesConvertsCommensurableUnits(t *testing.T) {
 	}
 }
 
+// TestCompareMagnitudesKeepsLargeIntegersExact: Integer magnitudes above 2^53,
+// which one float64 cannot tell apart, stay ordered in one unit and across a
+// whole scale ratio; a Real operand or a fractional scale still compares as
+// float64, so 1 m and 100 cm remain equal.
+func TestCompareMagnitudesKeepsLargeIntegersExact(t *testing.T) {
+	m, idx := quantityFixture(t)
+	q := func(expr string) semantics.Quantity { return fold(t, m, idx, expr) }
+	cases := []struct {
+		left, right string
+		want        int
+	}{
+		{"9007199254740993 [kg]", "9007199254740992 [kg]", 1},
+		{"9007199254740992 [kg]", "9007199254740993 [kg]", -1},
+		{"9007199254740992 [kg]", "9007199254740992 [kg]", 0},
+		{"9007199254740993 [kg]", "9007199254740992000 [g]", 1},
+		{"9007199254740992000 [g]", "9007199254740993 [kg]", -1},
+		{"9007199254740992000 [g]", "9007199254740992 [kg]", 0},
+		{"9007199254740993 [kg]", "9007199254740992.0 [kg]", 0},
+		{"1 [m]", "100 [cm]", 0},
+		{"1 [m]", "101 [cm]", -1},
+	}
+	for _, c := range cases {
+		got, err := semantics.CompareMagnitudes(q(c.left), q(c.right))
+		if err != nil || got != c.want {
+			t.Errorf("CompareMagnitudes(%s, %s) = %d, %v; want %d", c.left, c.right, got, err, c.want)
+		}
+	}
+}
+
 // TestIncommensurableQuantitiesAreTypedErrors: comparison and addition across
 // dimensions report ErrIncommensurableUnits instead of comparing magnitudes.
 func TestIncommensurableQuantitiesAreTypedErrors(t *testing.T) {

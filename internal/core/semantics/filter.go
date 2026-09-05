@@ -723,24 +723,23 @@ func compareQuantityValues(p *symbols.FilterPredicate, left, right symbols.Filte
 			Span:   p.Span,
 		}
 	}
-	converted, err := rq.ConvertTo(lq.Unit)
+	c, err := CompareMagnitudes(*lq, *rq)
 	if err != nil {
 		return symbols.FilterValue{}, &FilterError{Err: ErrFilterUnevaluable, Reason: err.Error(), Span: p.Span}
 	}
-	l, r := lq.Num.AsReal(), converted
 	switch p.Op {
 	case symbols.FilterEq:
-		return boolValue(l == r), nil
+		return boolValue(c == 0), nil
 	case symbols.FilterNeq:
-		return boolValue(l != r), nil
+		return boolValue(c != 0), nil
 	case symbols.FilterLt:
-		return boolValue(l < r), nil
+		return boolValue(c < 0), nil
 	case symbols.FilterLe:
-		return boolValue(l <= r), nil
+		return boolValue(c <= 0), nil
 	case symbols.FilterGt:
-		return boolValue(l > r), nil
+		return boolValue(c > 0), nil
 	default: // symbols.FilterGe
-		return boolValue(l >= r), nil
+		return boolValue(c >= 0), nil
 	}
 }
 

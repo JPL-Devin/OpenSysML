@@ -380,7 +380,9 @@ The sort is stable, so equal keys keep their declaration order. Mixing
 incomparable value types across elements is a typed `invalid-order` error.
 
 Quantities sort by converted magnitude when their units are commensurable:
-`500000 [g]` orders below `119000 [kg]`. Quantities of different dimensions
+`500000 [g]` orders below `119000 [kg]`. Two Integer magnitudes compare
+exactly, so neighbours a Real cannot tell apart (`9007199254740993 [kg]`
+against `9007199254740992 [kg]`) keep their order. Quantities of different dimensions
 (`2290000 [kg]` against `42 [m]`) are not ordered — that is an
 `invalid-order` error naming both units, never a silent comparison of the
 bare magnitudes.
