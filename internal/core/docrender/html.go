@@ -25,6 +25,14 @@ func DefaultStylesheet() string { return defaultCSS }
 // stylesheet from.
 const StylesheetFileName = "sysml-document.css"
 
+// Attributes and closers the generated markup writes more than once.
+const (
+	attrName   = "data-name"
+	attrQuery  = "data-query"
+	attrColumn = "data-column"
+	rowEnd     = "</tr>\n"
+)
+
 // Stylesheet is one stylesheet a standalone document carries: Content is
 // inlined, Href is linked. Exactly one of the two is set; InlineStylesheet
 // states a sheet is inlined when its content is empty.
@@ -259,7 +267,7 @@ func (w *htmlWriter) writeContent(node docir.Content, path []step, index, level 
 		return w.writeSection(node, nested, id, level)
 	case docir.ContentParagraph:
 		w.b.WriteString("<p class=\"sysml-paragraph\"" + attr("id", id) + " data-content=\"paragraph\"" +
-			attr("data-name", node.Name()) + attr("data-query", node.Query()) + ">" +
+			attr(attrName, node.Name()) + attr(attrQuery, node.Query()) + ">" +
 			w.inlineRuns(node.Runs()) + "</p>\n")
 		return nil
 	case docir.ContentTable:
@@ -279,7 +287,7 @@ func (w *htmlWriter) writeContent(node docir.Content, path []step, index, level 
 // numbering was asked for. Heading levels saturate at 6, as HTML has no more.
 func (w *htmlWriter) writeSection(node docir.Content, path []step, id string, level int) error {
 	w.b.WriteString("<section class=\"sysml-section\"" + attr("id", id) + " data-content=\"section\"" +
-		attr("data-name", node.Name()) + ">\n")
+		attr(attrName, node.Name()) + ">\n")
 	tag := "h" + strconv.Itoa(min(level, 6))
 	w.b.WriteString("<" + tag + ">")
 	if w.opts.NumberSections {
@@ -308,7 +316,7 @@ func (w *htmlWriter) writeTable(node docir.Content, id string) {
 		names = []string{elementColumn}
 	}
 	w.b.WriteString("<table class=\"sysml-table\"" + attr("id", id) + " data-content=\"table\"" +
-		attr("data-name", node.Name()) + attr("data-query", node.Query()) +
+		attr(attrName, node.Name()) + attr(attrQuery, node.Query()) +
 		attr("data-group-by", node.GroupBy()) + ">\n")
 	if node.Caption() != "" {
 		w.b.WriteString("<caption class=\"sysml-caption\">" + htmlText(node.Caption()) + "</caption>\n")
@@ -336,7 +344,7 @@ func (w *htmlWriter) writeTable(node docir.Content, id string) {
 func (w *htmlWriter) writeTableHead(names []string) {
 	w.b.WriteString("<thead>\n<tr>\n")
 	for _, name := range names {
-		w.b.WriteString("<th scope=\"col\"" + attr("data-column", name) + ">" + htmlText(name) + "</th>\n")
+		w.b.WriteString("<th scope=\"col\"" + attr(attrColumn, name) + ">" + htmlText(name) + "</th>\n")
 	}
 	w.b.WriteString("</tr>\n</thead>\n")
 }
@@ -348,7 +356,7 @@ func (w *htmlWriter) writeRows(rows []queryexec.Row, names []string, columns int
 		w.b.WriteString("<tr class=\"sysml-row\"" + elementAttrs(row.Element()) + ">\n")
 		if columns == 0 {
 			w.writeCell([]queryexec.Value{row.Element()}, elementColumn)
-			w.b.WriteString("</tr>\n")
+			w.b.WriteString(rowEnd)
 			continue
 		}
 		cells := row.Cells()
@@ -359,7 +367,7 @@ func (w *htmlWriter) writeRows(rows []queryexec.Row, names []string, columns int
 			}
 			w.writeCell(values, names[i])
 		}
-		w.b.WriteString("</tr>\n")
+		w.b.WriteString(rowEnd)
 	}
 }
 
@@ -367,7 +375,7 @@ func (w *htmlWriter) writeRows(rows []queryexec.Row, names []string, columns int
 // with the punctuation joining them an element of its own so a theme can hide
 // or replace it.
 func (w *htmlWriter) writeCell(values []queryexec.Value, column string) {
-	w.b.WriteString("<td class=\"sysml-cell\"" + attr("data-column", column) +
+	w.b.WriteString("<td class=\"sysml-cell\"" + attr(attrColumn, column) +
 		attr("data-value-kind", sharedValueKind(values)) + ">")
 	for i, value := range values {
 		if i > 0 {
@@ -395,7 +403,7 @@ func (w *htmlWriter) writeList(node docir.Content, id string) {
 		tag = "ol"
 	}
 	w.b.WriteString("<" + tag + " class=\"sysml-list\"" + attr("id", id) + " data-content=\"list\"" +
-		attr("data-name", node.Name()) + attr("data-query", node.Query()) + ">\n")
+		attr(attrName, node.Name()) + attr(attrQuery, node.Query()) + ">\n")
 	for _, item := range node.Items() {
 		w.b.WriteString("<li class=\"sysml-item\"" + elementAttrs(item.Element()) + ">" +
 			w.inlineRuns(item.Runs()) + "</li>\n")
@@ -418,7 +426,7 @@ func (w *htmlWriter) writeFigure(id, name, caption string, rendering *view.Rende
 		return &Error{Kind: ErrorUnrenderableDiagram, Content: name, Actual: string(rendering.Kind), Form: "HTML"}
 	}
 	w.b.WriteString("<figure class=\"sysml-diagram\"" + attr("id", id) + " data-content=\"diagram\"" +
-		attr("data-name", name) + attr("data-view", rendering.View) +
+		attr(attrName, name) + attr("data-view", rendering.View) +
 		attr("data-diagram-kind", string(rendering.Kind)) +
 		attr("data-direction", string(direction)) + ">\n")
 	if rendering.Kind == view.KindTable {
@@ -458,9 +466,9 @@ func (w *htmlWriter) writeRenderingTable(rendering *view.Rendering) {
 			if i < len(row) {
 				cell = row[i]
 			}
-			w.b.WriteString("<td class=\"sysml-cell\"" + attr("data-column", name) + ">" + htmlText(cell) + "</td>\n")
+			w.b.WriteString("<td class=\"sysml-cell\"" + attr(attrColumn, name) + ">" + htmlText(cell) + "</td>\n")
 		}
-		w.b.WriteString("</tr>\n")
+		w.b.WriteString(rowEnd)
 	}
 	w.b.WriteString("</tbody>\n</table>\n")
 }

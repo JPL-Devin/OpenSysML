@@ -9,6 +9,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+const subsequenceOp = "SequenceFunctions::subsequence"
+
 // This file implements the collection operations of the Kernel Function
 // Library — SequenceFunctions, CollectionFunctions and the collection part of
 // ControlFunctions and NumericalFunctions — over runtime values, and the
@@ -640,17 +642,17 @@ func (ec *EvalContext) insertAt(op string, seq, values, at Value) (Value, error)
 // own `tail` is `subsequence(seq, 2)` for a one-element sequence — but an index
 // beyond the sequence is reported rather than silently clamped.
 func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
-	if err := checkArity("SequenceFunctions::subsequence", args, 3); err != nil {
+	if err := checkArity(subsequenceOp, args, 3); err != nil {
 		return Value{}, err
 	}
 	elements := elementsOf(args[0])
-	start, err := indexOf("SequenceFunctions::subsequence", args[1])
+	start, err := indexOf(subsequenceOp, args[1])
 	if err != nil {
 		return Value{}, err
 	}
 	end := int64(len(elements))
 	if args[2].Kind != ValNull {
-		if end, err = indexOf("SequenceFunctions::subsequence", args[2]); err != nil {
+		if end, err = indexOf(subsequenceOp, args[2]); err != nil {
 			return Value{}, err
 		}
 	}

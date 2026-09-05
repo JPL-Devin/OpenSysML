@@ -79,7 +79,8 @@ def test_complex_values_hash_and_compare_by_value():
     b = value_to_python(pb_complex(1.0, 2.0))
     c = value_to_python(pb_complex(1.0, -2.0))
 
-    assert a == b and a != c
+    assert a == b
+    assert a != c
     assert len({a, b, c}) == 2
 
 

@@ -505,7 +505,20 @@ func (e *encoder) mint(node ast.Node, fqn string) (rdf.Term, error) {
 // its owner; a metaclass this mapping invents is typed in the OpenSysML namespace.
 // lines is the text of the member, wrapper and all, unless inline: one written
 // on its owner's own lines is part of the owner's text.
-func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibility, fqn string, ownerTerm rdf.Term, index int, metaclass rdf.Term, lines region, inline bool) {
+type memberHead struct {
+	node       ast.Node
+	visibility ast.Visibility
+	fqn        string
+	owner      rdf.Term
+	index      int
+	metaclass  rdf.Term
+	lines      region
+	inline     bool
+}
+
+func (e *encoder) head(subject rdf.Term, h memberHead) {
+	node, visibility, fqn, ownerTerm, index, metaclass, lines, inline :=
+		h.node, h.visibility, h.fqn, h.owner, h.index, h.metaclass, h.lines, h.inline
 	e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
 	e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
 	// The id an API reader addresses the element by, which is the id its own
@@ -555,7 +568,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	// A bare expression among a body's members is the result the body computes.
 	result := isExpressionMember(node)
 	head := func(metaclass rdf.Term) {
-		e.head(subject, node, visibility, fqn, ownerTerm, index, metaclass, lines, inline)
+		e.head(subject, memberHead{node: node, visibility: visibility, fqn: fqn, owner: ownerTerm,
+			index: index, metaclass: metaclass, lines: lines, inline: inline})
 	}
 
 	switch n := node.(type) {
@@ -1220,8 +1234,8 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 			return err
 		}
 		// A prefix is written in its owner's head, so its text is the owner's.
-		e.head(prefixSubject, prefix, ast.VisibilityDefault, prefixFQN, subject, index,
-			rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]), region{}, true)
+		e.head(prefixSubject, memberHead{node: prefix, visibility: ast.VisibilityDefault, fqn: prefixFQN,
+			owner: subject, index: index, metaclass: rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]), inline: true})
 		if err := e.metadataUsage(prefixSubject, prefixFQN, fqn, prefix, "#"); err != nil {
 			return err
 		}

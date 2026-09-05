@@ -1119,7 +1119,8 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 	if err != nil {
 		return Message{}, err
 	}
-	return e.buildTypedMessage(scope, invocation.Type, signalType, signal, invocation.Args, invocation.NamedArgs, target, true)
+	return e.buildTypedMessage(scope, signalType, signal, target,
+		messageArgs{typeRef: invocation.Type, args: invocation.Args, named: invocation.NamedArgs, loneValue: true})
 }
 
 // buildConstructedMessage builds the message of `send new Telemetry(3) via
@@ -1137,7 +1138,8 @@ func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor 
 			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
 		}
 	}
-	msg, err := e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target, false)
+	msg, err := e.buildTypedMessage(scope, signal.Name, signal, target,
+		messageArgs{typeRef: constructor.Type, args: constructor.Args, named: constructor.NamedArgs})
 	if err != nil {
 		return Message{}, err
 	}
@@ -1189,7 +1191,15 @@ func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedNa
 // (`argN` where the type has none), a label the feature it names. Binding one feature
 // twice, by position and label or by two labels, is an error rather than the last
 // value. With loneValue a lone positional argument is also the message's Value.
-func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, signalType string, signal *symbols.Symbol, args []ast.Node, named []ast.NamedArg, target string, loneValue bool) (Message, error) {
+type messageArgs struct {
+	typeRef   *ast.QualifiedName
+	args      []ast.Node
+	named     []ast.NamedArg
+	loneValue bool
+}
+
+func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, signalType string, signal *symbols.Symbol, target string, in messageArgs) (Message, error) {
+	typeRef, args, named, loneValue := in.typeRef, in.args, in.named, in.loneValue
 	msg := Message{SignalType: signalType, Signal: signal, Target: target,
 		Payload: make(map[string]Value, len(args)+len(named))}
 	var slots []*symbols.Symbol

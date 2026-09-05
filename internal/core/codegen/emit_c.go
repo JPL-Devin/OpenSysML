@@ -11,6 +11,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
+const cAssign = "%s = %s;"
+
 // cPrelude is the runtime every generated C program carries: checked int64,
 // finite-only binary64, and the interpreter's once-rounded Integer quotient.
 const cPrelude = `#include <errno.h>
@@ -508,10 +510,10 @@ func (e *cEmitter) function(fn *Func) {
 		case p.Type.Many():
 			if p.Mult != MultAny || p.Range != RangeAny {
 				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
-				e.linef("%s = %s;", cLocal(p.Name), v)
+				e.linef(cAssign, cLocal(p.Name), v)
 			}
 		case p.Range != RangeAny:
-			e.linef("%s = %s;", cLocal(p.Name), cNarrowed(cLocal(p.Name), p.Range))
+			e.linef(cAssign, cLocal(p.Name), cNarrowed(cLocal(p.Name), p.Range))
 		}
 	}
 	e.result = cType(fn.Result)
@@ -627,7 +629,7 @@ func (e *cEmitter) stmt(s Stmt) {
 	case Declare:
 		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.declInit(s))
 	case Assign:
-		e.linef("%s = %s;", cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
+		e.linef(cAssign, cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
 	case If:
 		e.linef("if (%s) {", e.expr(s.Cond))
 		e.indent++

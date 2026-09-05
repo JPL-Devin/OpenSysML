@@ -955,7 +955,7 @@ func collectionElements(val runtime.Value) []runtime.Value {
 // Features are read in name order, because reading one materializes the object it
 // holds, so map order would decide the ids those objects are given.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
-	return instanceToProto(rt, inst, idx, func(error) {})
+	return instanceToProto(rt, inst, idx, func(error) { /* unmaterialized features are silent */ })
 }
 
 // instanceToProto is InstanceToProto, handing each feature value it could not

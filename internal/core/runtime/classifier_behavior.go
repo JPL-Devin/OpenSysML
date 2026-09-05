@@ -535,7 +535,7 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 // work: a driver put it in flight, so the start leaves it to that driver.
 func (ctx *Context) holdDrivenWork() func() {
 	if ctx.behaviorRunDepth > 0 || ctx.heldBehaviors != nil {
-		return func() {}
+		return func() { /* an outer start already holds them */ }
 	}
 	held := make(map[*ObjectBehavior]bool)
 	ctx.behaviorRunDepth++
