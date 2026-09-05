@@ -496,14 +496,40 @@ func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.
 			if _, empty := element.(*ast.NullExpr); empty {
 				continue
 			}
-			values = append(values, m.annotationValue(member.OwnerScope, element))
+			values = append(values, m.declaredValue(member.OwnerScope, element))
 		}
 		return values, true
 	}
 	if _, empty := usage.Value.(*ast.NullExpr); empty {
 		return nil, true
 	}
-	return []symbols.FilterValue{m.annotationValue(member.OwnerScope, usage.Value)}, true
+	return []symbols.FilterValue{m.declaredValue(member.OwnerScope, usage.Value)}, true
+}
+
+// declaredValue is annotationValue for a feature's own value, where a reference
+// to an attribute reads that attribute's value — as seen from the carrier when
+// the attribute is one of its features — rather than naming it. A unit, an
+// enumeration literal or a non-value element stays the element it names.
+func (m *Model) declaredValue(scope *symbols.Scope, value ast.Node) symbols.FilterValue {
+	result := m.annotationValue(scope, value)
+	ref, ok := value.(*ast.FeatureReference)
+	if result.Kind != symbols.FilterValueRef || !ok {
+		return result
+	}
+	if sym, ok := m.resolver.ResolveQualified(scope, ref.Name); ok && m.readsValueOf(sym) {
+		return symbols.FilterValue{}
+	}
+	return result
+}
+
+// readsValueOf reports whether a reference to sym denotes the value the attribute
+// holds rather than the element sym itself: a unit and an enumeration literal are
+// values by identity, a definition or an object feature is no value at all.
+func (m *Model) readsValueOf(sym *symbols.Symbol) bool {
+	if sym == nil || (sym.Kind != symbols.SymbolAttributeUsage && sym.Kind != symbols.SymbolEnumerationUsage) {
+		return false
+	}
+	return EnumerationOwning(sym) == nil && !m.IsMeasurementUnit(sym)
 }
 
 // metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML

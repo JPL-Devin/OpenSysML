@@ -155,9 +155,9 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
-		if d.Multiplicity != nil {
-			r.resolveExpr(scope, d.Multiplicity.Lower)
-			r.resolveExpr(scope, d.Multiplicity.Upper)
+		r.resolveMultiplicity(scope, d.Multiplicity)
+		if d.CrossFeature != nil {
+			r.resolveMultiplicity(scope, d.CrossFeature.Multiplicity)
 		}
 		// An accept node keeps its trigger in the usage's value, and a trigger's
 		// names are not all references (see resolveTrigger).

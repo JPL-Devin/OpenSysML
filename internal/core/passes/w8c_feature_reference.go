@@ -6,13 +6,15 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// KerMLValidator's validateFeatureReferenceExpressionReferentIsFeature and
-// validateFeatureChainExpressionConformance message.
+// KerMLValidator's message for a referent, chain-expression target or chaining
+// feature that is not a valid feature.
 const msgReferentIsFeature = "Must be a valid feature"
 
 // FeatureReferencePass checks the features an expression names: a referent must
-// be a feature (KerML 8.4.4.6.2/8.4.4.7.2), and a featured one must be reachable
-// from where it is named (8.3.4.5.2 validateSubsettingFeaturingTypes).
+// be a feature (KerML 8.4.4.6.2/8.4.4.7.2), a featured one must be reachable
+// from where it is named (8.3.4.5.2 validateSubsettingFeaturingTypes), and each
+// feature of a declared chain must be featured within the one before it
+// (8.3.3.3.4 validateFeatureChainingFeatureConformance).
 type FeatureReferencePass struct{}
 
 func (FeatureReferencePass) Level() PassLevel { return LevelConstraint }
@@ -83,6 +85,7 @@ func (c *featureReferenceChecker) checkSymbol(sym *symbols.Symbol) {
 	}
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
+		c.checkDeclaredChains(sym, d)
 		c.walkExpr(refSite{sym: sym}, scope, d.Value)
 		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
 	case *ast.Definition:
@@ -361,4 +364,98 @@ func w8cOwnedByImplicitNode(target *symbols.Symbol) bool {
 	}
 	owner := target.OwnerScope.Owner()
 	return owner != nil && owner.Name == "" && isUsageKind(owner.Kind)
+}
+
+// checkDeclaredChains checks the feature chains a usage's header writes; a flow
+// end's last segment names the end's nested feature, so only its prefix is a chain.
+func (c *featureReferenceChecker) checkDeclaredChains(sym *symbols.Symbol, d *ast.Usage) {
+	for _, rel := range d.Relationships {
+		if rel != nil && !(d.Kind == ast.UsageBinding && rel.Kind == ast.RelReferences) {
+			c.checkChainTarget(sym.OwnerScope, rel.Target)
+		}
+	}
+	for _, end := range w8dConnectorEndTargets(d) {
+		if d.FlowEnds != nil && (end == d.FlowEnds.From || end == d.FlowEnds.To) {
+			if chain, ok := end.(*ast.FeatureChainExpr); ok {
+				c.checkChainTarget(sym.OwnerScope, chain.Operand)
+			}
+			continue
+		}
+		c.checkChainTarget(sym.OwnerScope, end)
+	}
+}
+
+// checkChainTarget checks a relationship target written as a feature chain:
+// every chaining feature must be featured within the one before it.
+func (c *featureReferenceChecker) checkChainTarget(scope *symbols.Scope, n ast.Node) {
+	chain, ok := n.(*ast.FeatureChainExpr)
+	if !ok {
+		return
+	}
+	c.checkChainTarget(scope, chain.Operand)
+	target, ok := c.cc.resolver.ResolveTarget(scope, chain)
+	if !ok || target == nil || !isUsageKind(target.Kind) {
+		return
+	}
+	if !c.chainMemberFeaturedWithin(scope, chain, target) {
+		span := chain.Span()
+		if chain.Member != nil {
+			span = chain.Member.Span()
+		}
+		c.reportChainMember(span)
+	}
+}
+
+// chainMemberFeaturedWithin reports whether the chain's last member is featured
+// within the feature its operand names; an alias or import may reach one featured elsewhere.
+func (c *featureReferenceChecker) chainMemberFeaturedWithin(scope *symbols.Scope, chain *ast.FeatureChainExpr, target *symbols.Symbol) bool {
+	if c.cc.resolver.IsBaseThat(target) {
+		return true
+	}
+	if tu, ok := target.Decl.(*ast.Usage); ok && tu.IsVariant {
+		return true
+	}
+	ctxs := c.cc.featuringContexts(target)
+	if len(ctxs) == 0 {
+		return true
+	}
+	for _, ctx := range ctxs {
+		if w8cOwnsVariants(ctx) {
+			return true
+		}
+	}
+	prev, ok := c.cc.resolver.ResolveTarget(scope, chain.Operand)
+	if !ok || prev == nil || !isUsageKind(prev.Kind) {
+		return true
+	}
+	for _, ctx := range ctxs {
+		if !c.chainingFeatureConforms(prev, ctx) {
+			return false
+		}
+	}
+	return true
+}
+
+// chainingFeatureConforms reports whether prev specializes the featuring type
+// ctx, through the features it references as well as its declared generals.
+func (c *featureReferenceChecker) chainingFeatureConforms(prev, ctx *symbols.Symbol) bool {
+	if c.cc.featuringContextConforms(prev, ctx) {
+		return true
+	}
+	for _, src := range c.cc.model.MemberSources(prev) {
+		if src == ctx || c.cc.model.Conforms(src, ctx) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *featureReferenceChecker) reportChainMember(span source.Span) {
+	c.diags = append(c.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     span,
+		Message:  msgReferentIsFeature,
+		Code:     "feature-chain-conformance",
+		Source:   "constraint",
+	})
 }

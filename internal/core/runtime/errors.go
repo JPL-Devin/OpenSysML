@@ -7,6 +7,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var (
@@ -150,6 +151,10 @@ var (
 	// ErrTimeTriggerType is returned when a time trigger's argument is declared as
 	// no value of the type the trigger takes — the judgement validation makes of it.
 	ErrTimeTriggerType = errors.New("time trigger argument of the wrong type")
+
+	// ErrActionResultParameter is returned when an action to perform declares a
+	// `return` parameter, which only a function or expression owns.
+	ErrActionResultParameter = errors.New("action declares a return parameter")
 
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// the run's calc depth budget, which an unbounded recursion would otherwise
@@ -400,6 +405,8 @@ type NoValueError struct {
 	// Ref is the written name whose read found no value, so a caller can tell a
 	// read of its own expression from one made while evaluating a default.
 	Ref *ast.QualifiedName
+	// Symbol is the feature declaration the read reached, when it is known.
+	Symbol *symbols.Symbol
 }
 
 func (e *NoValueError) Error() string {

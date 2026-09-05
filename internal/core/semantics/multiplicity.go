@@ -25,17 +25,22 @@ type Range struct {
 	Upper Bound
 }
 
-// boundOf evaluates a multiplicity bound expression. `*` (LiteralInfinity)
-// becomes an infinite bound; an evaluable integer becomes a known bound;
-// anything else is unknown.
-func (m *Model) boundOf(n ast.Node) Bound {
+// boundIn evaluates a multiplicity bound expression, reading through features it
+// names when scope is non-nil: `*` is infinite, an integer known, else unknown.
+func (m *Model) boundIn(scope *symbols.Scope, n ast.Node) Bound {
 	if n == nil {
 		return Bound{}
 	}
 	if _, isInf := n.(*ast.LiteralInfinity); isInf {
 		return Bound{Infinite: true, Known: true}
 	}
-	v, ok := m.Eval(n)
+	var v Value
+	var ok bool
+	if scope != nil {
+		v, ok = m.EvalIn(scope, n)
+	} else {
+		v, ok = m.Eval(n)
+	}
 	if !ok {
 		return Bound{}
 	}
@@ -52,15 +57,21 @@ func (m *Model) boundOf(n ast.Node) Bound {
 // multiplicityRange extracts a Range from a parsed *ast.Multiplicity. ok is
 // false when the multiplicity is nil.
 func (m *Model) multiplicityRange(mult *ast.Multiplicity) (Range, bool) {
+	return m.multiplicityRangeIn(nil, mult)
+}
+
+// multiplicityRangeIn is multiplicityRange evaluating bounds that name valued
+// features (`[one]`) in scope; a nil scope evaluates constants only.
+func (m *Model) multiplicityRangeIn(scope *symbols.Scope, mult *ast.Multiplicity) (Range, bool) {
 	if mult == nil {
 		return Range{}, false
 	}
 	if mult.IsRange {
-		return Range{Lower: m.boundOf(mult.Lower), Upper: m.boundOf(mult.Upper)}, true
+		return Range{Lower: m.boundIn(scope, mult.Lower), Upper: m.boundIn(scope, mult.Upper)}, true
 	}
 	// Single-bound `[n]`: the parser stores the sole bound in Lower. The bound is
 	// both bounds, unless it is unbounded, where the lower bound is 0.
-	b := m.boundOf(mult.Lower)
+	b := m.boundIn(scope, mult.Lower)
 	if b.Infinite {
 		return Range{Lower: Bound{Value: 0, Known: true}, Upper: b}, true
 	}
@@ -84,8 +95,8 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// UsageMultiplicityOf returns the multiplicity a usage symbol declares, a subject
-// or the constraint an assume/require member owns included, or nil.
+// UsageMultiplicityOf returns the multiplicity a usage, subject, cross feature or
+// owned constraint symbol declares as its own, or nil; an end's `end [m]` is its cross feature's.
 func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	if sym == nil {
 		return nil

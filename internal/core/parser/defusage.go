@@ -232,7 +232,18 @@ type featureMods struct {
 	isReadonly        bool
 	isOrdered         bool
 	isNonunique       bool
-	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
+	crossMultiplicity *ast.Multiplicity // the `[mult]` right after `end`: the end's crossing multiplicity
+}
+
+// anonymousCrossFeature wraps the `[mult]` written right after `end` as the
+// unnamed cross feature it declares (KerML.xtext OwnedCrossingFeature).
+func anonymousCrossFeature(mult *ast.Multiplicity) *ast.CrossFeatureMember {
+	if mult == nil {
+		return nil
+	}
+	cross := &ast.CrossFeatureMember{Multiplicity: mult}
+	cross.NodeSpan = mult.Span()
+	return cross
 }
 
 // applyFeatureMods transfers modifiers that were consumed before a declaration's
@@ -299,8 +310,8 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.visibility != ast.VisibilityDefault {
 			d.Visibility = mods.visibility
 		}
-		if mods.earlyMultiplicity != nil && d.Multiplicity == nil {
-			d.Multiplicity = mods.earlyMultiplicity
+		if mods.crossMultiplicity != nil && d.CrossFeature == nil {
+			d.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 		}
 		if mods.prefixKeyword != "" && d.PrefixKeyword == "" {
 			d.PrefixKeyword = mods.prefixKeyword
@@ -885,11 +896,10 @@ func (p *Parser) parseMoreFeatureModifiers(m *featureMods) {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
-			// Check for early multiplicity: end [mult] ref ...
-			// Peek ahead without advancing to see if next token is '['
+			// `end [mult] ref ...`: the multiplicity is the end's crossing one.
 			p.advance() // consume "end"
 			if p.at(lexer.LBracket) {
-				m.earlyMultiplicity = p.parseMultiplicity()
+				m.crossMultiplicity = p.parseMultiplicity()
 			}
 			continue
 		case "constant", "const":
@@ -1971,10 +1981,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		IsNonunique:   mods.isNonunique,
 	}
 
-	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
-	if mods.earlyMultiplicity != nil {
-		u.Multiplicity = mods.earlyMultiplicity
-	}
+	u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 
 	// Handle UsageSatisfy special syntax:
 	// Full form: satisfy [requirement] <name> by <name> { body }
@@ -2933,15 +2940,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
 			var cross *ast.CrossFeatureMember
-			var mult *ast.Multiplicity
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
 
 			if p.isKindKeyword(p.peek()) {
 				// `end [1] part bead : TireBead` — the kind keyword follows the
 				// modifiers directly, so there is no short name, and the
-				// multiplicity was already taken as an early one.
-				mult = mods.earlyMultiplicity
+				// crossing multiplicity was already taken with the modifiers.
 				hasDefKeyword = true
 			} else if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
@@ -3034,9 +3039,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 					if p.at(lexer.LBracket) {
 						cross.Multiplicity = p.parseMultiplicity()
-						// The bounds are also kept on the end, which is where the
-						// semantics reads an association end's multiplicity from.
-						mult = cross.Multiplicity
 					}
 					for p.atRelationshipKeyword() {
 						rels := p.parseRelationships(true)
@@ -3114,13 +3116,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 
 					if isDefKeyword {
-						mult = p.parseMultiplicity()
+						crossStart := p.peek().Span.Offset
+						cross = anonymousCrossFeature(p.parseMultiplicity())
 
 						// Parse optional relationship clauses before definition keyword
 						for p.atRelationshipKeyword() {
-							rel := p.parseRelationships(true)
-							endRels = append(endRels, rel...)
+							rels := p.parseRelationships(true)
+							cross.Relationships = append(cross.Relationships, rels...)
+							endRels = append(endRels, rels...)
 						}
+						cross.NodeSpan = p.spanFrom(crossStart)
 
 						hasDefKeyword = true
 					}
@@ -3137,9 +3142,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 				if u, ok := decl.(*ast.Usage); ok {
 					if cross != nil {
 						u.CrossFeature = cross
-					}
-					if mult != nil && u.Multiplicity == nil {
-						u.Multiplicity = mult
 					}
 					// Prepend relationships parsed before definition keyword
 					if len(endRels) > 0 {
@@ -3229,11 +3231,15 @@ func (p *Parser) parseBodyMember() ast.Node {
 				Keyword:      keyword,
 				Ident:        id,
 				Visibility:   mods.visibility,
+				IsAbstract:   mods.isAbstract,
+				IsVariation:  mods.isVariation,
+				IsVariant:    mods.isVariant,
 				IsReference:  mods.isReference,
 				IsIndividual: mods.isIndividual,
 				IsEvent:      mods.isEvent,
 				Portion:      mods.portion,
 				IsVariable:   mods.isVariable,
+				IsConstant:   mods.isConstant,
 				IsDerived:    mods.isDerived,
 				IsComposite:  mods.isComposite,
 				IsPortion:    mods.isPortion,
@@ -3258,10 +3264,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
-			if u.Multiplicity == nil {
-				// `end [1] rim : Rim` — the multiplicity was taken as an early one.
-				u.Multiplicity = mods.earlyMultiplicity
-			}
+			u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 
 			// Parse post-multiplicity modifiers (ordered/nonunique)
 			postMods := p.parsePostModifiers()
@@ -3810,7 +3813,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		IsComposite:  mods.isComposite,
 		IsPortion:    mods.isPortion,
 		Direction:    mods.direction,
-		Multiplicity: mods.earlyMultiplicity,
+		CrossFeature: anonymousCrossFeature(mods.crossMultiplicity),
 	}
 	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)

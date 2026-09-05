@@ -22,9 +22,6 @@
               (Relationship kind="crosses" target=(expr)
                 (FeatureChainExpr member="b"
                   (FeatureReference name="y")))
-              (Multiplicity range=true
-                (LiteralInteger value="0")
-                (LiteralInteger value="1"))
               (CrossFeatureMember name="x1"
                 (Multiplicity range=true
                   (LiteralInteger value="0")

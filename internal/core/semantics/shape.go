@@ -240,7 +240,7 @@ func (m *Model) FrameFeature(sym *symbols.Symbol) bool {
 		return true
 	case sym.OwnerScope != nil && IsValueType(sym.OwnerScope.Owner()):
 		return true
-	case isParameter(sym):
+	case IsParameter(sym):
 		return true
 	default:
 		return m.restatesFrameRoot(sym)
@@ -256,8 +256,11 @@ func (m *Model) libraryTier(sym *symbols.Symbol) symbols.LibraryTier {
 	return m.resolver.Index().LibraryTier(sym)
 }
 
-// isParameter reports whether sym is a directed or result parameter of a behavior.
-func isParameter(sym *symbols.Symbol) bool {
+// IsParameter reports whether sym is a directed or result parameter of a behavior.
+func IsParameter(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
 	usage, ok := sym.Decl.(*ast.Usage)
 	return ok && (usage.Direction != ast.DirNone || usage.IsResult)
 }
