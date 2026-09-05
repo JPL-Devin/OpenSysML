@@ -131,10 +131,10 @@ func TestOwnedConstraintParametersBindInRequirement(t *testing.T) {
 			constraint def Below { in x : Real; in limit : Real; x < limit }
 			requirement def Base {
 				attribute m : Real = 300.0;
-				require constraint n : Below { in x = m; in limit = 400.0; }
+				require constraint n : Below { in x = m; in limit default = 400.0; }
 			}
 			requirement def Sub :> Base {
-				require constraint :>> n { in limit = 200.0; }
+				require constraint :>> n { in x; in limit = 200.0; }
 			}
 			requirement base : Base;
 			requirement sub : Sub;
@@ -327,10 +327,10 @@ func TestOwnedConstraintParameterHoldingAnObjectReadsItsFeatures(t *testing.T) {
 			part truck : Vehicle { attribute :>> mass = 1000.0; }
 			requirement def Base {
 				subject v : Vehicle;
-				require constraint massIs : MassIs { in limit = truck; in m = 1000.0; }
+				require constraint massIs : MassIs { in limit = truck; in m default = 1000.0; }
 			}
 			requirement def Wrong :> Base {
-				require constraint :>> massIs { in m = 300.0; }
+				require constraint :>> massIs { in limit; in m = 300.0; }
 			}
 			requirement base : Base;
 			requirement wrong : Wrong;
@@ -358,6 +358,68 @@ func TestOwnedConstraintParameterHoldingAnObjectReadsItsFeatures(t *testing.T) {
 		var violation *ViolationError
 		if !errors.As(err, &violation) || violation.Condition != "limit.mass == m" {
 			t.Errorf("%s: err = %v; want a violation of limit.mass == m", a.Text(), err)
+		}
+	}
+}
+
+func TestOwnedConstraintDefaultReadsTheParametersItDependsOn(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Vehicle { attribute mass : Real default = 300.0; }
+			constraint def Below {
+				in v : Vehicle;
+				in limit : Real;
+				in margin : Real default = limit * 2.0;
+				v.mass < margin
+			}
+			requirement def Wrap {
+				subject s : Vehicle;
+				in v : Vehicle;
+				in limit : Real;
+				require constraint below : Below { in v = v; in limit = limit; }
+			}
+			part car : Vehicle;
+			requirement def Base {
+				subject v : Vehicle;
+				attribute limit : Real default = 100.0;
+				require constraint below : Below { in v = v; in limit default = 200.0; }
+				require constraint wrap : Wrap { in v = v; in limit = 200.0; }
+			}
+			requirement def Tight :> Base {
+				require constraint :>> below { in v; in limit = 100.0; }
+			}
+			requirement def Wide :> Base {
+				require constraint :>> below { in v; in limit = 100.0; in margin = 400.0; }
+			}
+			requirement base : Base;
+			requirement tight : Tight;
+			requirement wide : Wide;
+			satisfy base by car;
+			satisfy tight by car;
+			satisfy wide by car;
+		}
+	`)
+	car, err := ctx.Instantiate(memberPath(t, pkg, "car"))
+	if err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	assertions := ctx.SatisfyAssertionsIn(pkg)
+	if len(assertions) != 3 {
+		t.Fatalf("assertions = %d, want the three the package states", len(assertions))
+	}
+	for i, want := range []bool{true, false, true} {
+		a := assertions[i]
+		result, err := ctx.CheckSatisfactionOn(a, car)
+		if want {
+			if err != nil || !result.Holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", a.Text(), result.Holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) || violation.Condition != "v.mass < margin" {
+			t.Errorf("%s: err = %v; want a violation of v.mass < margin", a.Text(), err)
 		}
 	}
 }

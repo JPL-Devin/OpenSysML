@@ -106,14 +106,17 @@ func (ec *EvalContext) valuedFeature(name string) (scopedExpr, bool) {
 }
 
 // inEnv returns a context reading env instead of this one's features and
-// bindings: a constraint usage's argument names the enclosing environment.
+// bindings. An enclosing environment holds other features than the ones being
+// resolved, so a same name there is a fresh read rather than a cycle.
 func (ec *EvalContext) inEnv(env *conditionEnv) *EvalContext {
 	if env == nil {
 		return ec
 	}
 	out := ec.over(ec.scope, []frame{mapFrame(env.bindings)})
 	out.features = env.features
-	out.resolving = nil
+	if env.enclosing {
+		out.resolving = nil
+	}
 	return out
 }
 
