@@ -46,7 +46,7 @@
     {
       "name": "validateAnnotationAnnotatedElementOwnership",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateAnnotationAnnotatingElement",
@@ -133,7 +133,7 @@
     {
       "name": "validateBindingConnectorIsBinary",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateBindingConnectorTypeConformance",
@@ -191,12 +191,12 @@
       "name": "validateClassifierDefaultSupertype",
       "raw": "validateClassifierDefaultSupertype_",
       "source": "kerml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateClassifierMultiplicityDomain",
       "source": "kerml",
-      "status": "unknown"
+      "status": "deliberate"
     },
     {
       "name": "validateCollectExpressionOperator",
@@ -373,7 +373,7 @@
     {
       "name": "validateFeatureChainingFeatureConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureChainingFeatureNotOne",
@@ -413,18 +413,18 @@
     {
       "name": "validateFeatureEndNoDirection",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureEndNotDerivedAbstractCompositeOrPortion",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureHasType",
       "raw": "validateFeatureHasType_",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureIsVariable",
