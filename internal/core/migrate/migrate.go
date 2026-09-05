@@ -372,15 +372,11 @@ func requirementText(e *xmi.Element) string {
 func (m *migration) requirementBody(e *xmi.Element) {
 	saved := m.scope
 	m.scope = e
-	if text := requirementText(e); text != "" {
+	text := requirementText(e)
+	if text != "" {
 		m.w.lines(prefixFirst("doc ", commentLines(commentText(text))))
-		for _, c := range m.ownComments(e) {
-			m.w.lines(prefixFirst("comment ", commentLines(commentBody(c))))
-			m.add(c, Mapped, "", "")
-		}
-	} else {
-		m.comments(e)
 	}
+	m.writeComments(e, text == "")
 	for _, c := range e.Children {
 		m.member(c)
 	}
@@ -544,13 +540,18 @@ func (m *migration) association(e *xmi.Element) {
 		saved := m.scope
 		m.scope = e
 		m.comments(e)
+		used := map[string]bool{}
 		for _, end := range ends {
 			t := m.model.Ref(end, "type")
 			typ, tnote := m.typeRef(t, e)
-			endName := end.Name
+			endName := m.nameOf(end)
 			if endName == "" && t != nil {
-				endName = lowerFirst(t.Name)
+				endName = m.nameFor(end)
 			}
+			for base, i := endName, 2; endName != "" && used[endName]; i++ {
+				endName = fmt.Sprintf("%s%d", base, i)
+			}
+			used[endName] = true
 			decl := "end"
 			if endName != "" {
 				decl += " " + writeName(endName)
@@ -1266,8 +1267,11 @@ func (m *migration) derive(d, derived, original *xmi.Element) (string, string) {
 
 // comments writes the comments documenting e: the first as doc, the rest as
 // comments, and a comment annotating other elements as `comment about`.
-func (m *migration) comments(e *xmi.Element) {
-	first := true
+func (m *migration) comments(e *xmi.Element) { m.writeComments(e, true) }
+
+// writeComments writes e's comments; the first becomes doc only when e has no
+// doc yet.
+func (m *migration) writeComments(e *xmi.Element, first bool) {
 	for _, c := range e.Owned("ownedComment") {
 		about := m.model.Refs(c, "annotatedElement")
 		others := false
@@ -1316,23 +1320,6 @@ func commentBody(c *xmi.Element) string {
 		return commentText(strings.TrimSpace(o.Text))
 	}
 	return ""
-}
-
-// ownComments lists the comments of e annotating e alone.
-func (m *migration) ownComments(e *xmi.Element) []*xmi.Element {
-	var out []*xmi.Element
-	for _, c := range e.Owned("ownedComment") {
-		own := true
-		for _, a := range m.model.Refs(c, "annotatedElement") {
-			if a != e {
-				own = false
-			}
-		}
-		if own && commentBody(c) != "" {
-			out = append(out, c)
-		}
-	}
-	return out
 }
 
 // comment writes a comment found outside the ownedComment role.

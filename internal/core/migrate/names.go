@@ -3,6 +3,8 @@ package migrate
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/xmi"
@@ -74,10 +76,11 @@ func (m *migration) take(owner *xmi.Element, name string) {
 }
 
 func lowerFirst(s string) string {
-	if s == "" {
+	r, n := utf8.DecodeRuneInString(s)
+	if n == 0 {
 		return s
 	}
-	return strings.ToLower(s[:1]) + s[1:]
+	return string(unicode.ToLower(r)) + s[n:]
 }
 
 // segments returns the v2 qualified-name segments of an element: the names

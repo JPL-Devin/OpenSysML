@@ -112,3 +112,46 @@ func TestEnumerationLiteralsAreReported(t *testing.T) {
 		t.Errorf("entries = %+v", es)
 	}
 }
+
+func TestUserPrimitiveTypeWithBuiltinNameStaysOwn(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_real" name="Real"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_a" name="x" type="_real"/>
+    </packagedElement>`, `<sysml:Block xmi:id="_st" base_Class="_b"/>`)
+	wantLine(t, r.Notation, "attribute def Real;")
+	wantLine(t, r.Notation, "attribute x : Real;")
+	wantNoLine(t, r.Notation, "ScalarValues")
+}
+
+func TestSelfAssociationEndsAreDistinct(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="Über"/>
+    <packagedElement xmi:type="uml:Association" xmi:id="_as" memberEnd="_e1 _e2">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_e1" type="_a" association="_as"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_e2" type="_a" association="_as"/>
+    </packagedElement>`, `<sysml:Block xmi:id="_st" base_Class="_a"/>`)
+	wantLine(t, r.Notation, "end 'über' : 'Über';")
+	wantLine(t, r.Notation, "end 'über2' : 'Über';")
+	for _, d := range errors(t, "self.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
+
+func TestRequirementTextKeepsCommentsAboutOthers(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req">
+      <ownedComment xmi:type="uml:Comment" xmi:id="_c1" body="see the block" annotatedElement="_r _b"/>
+      <ownedComment xmi:type="uml:Comment" xmi:id="_c2" body="" annotatedElement="_r"/>
+      <ownedComment xmi:type="uml:Comment" xmi:id="_c3" body="own note" annotatedElement="_r"/>
+    </packagedElement>`, `<sysml:Block xmi:id="_s1" base_Class="_b"/><sysml:Requirement xmi:id="_s2" base_Class="_r" Text="Shall work."/>`)
+	wantLine(t, r.Notation, "doc /* Shall work. */")
+	wantLine(t, r.Notation, "comment about Req, Thing /* see the block */")
+	wantLine(t, r.Notation, "comment /* own note */")
+	for id, v := range map[string]migrate.Verdict{"_c1": migrate.Mapped, "_c2": migrate.Skipped, "_c3": migrate.Mapped} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != v {
+			t.Errorf("%s entries = %+v", id, es)
+		}
+	}
+}

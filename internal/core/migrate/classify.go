@@ -129,8 +129,8 @@ func primitiveLibraryHref(href string) bool {
 }
 
 // scalarValue returns the ScalarValues type a v1 type maps to, or "" when the
-// type is the user's own: a primitive of the UML or SysML libraries by name,
-// whether referenced by href or bundled in the document.
+// type is the user's own: a primitive the UML or SysML libraries define, whether
+// referenced by href or bundled in the document.
 func scalarValue(t *xmi.Element) string {
 	if t == nil {
 		return ""
@@ -145,10 +145,7 @@ func scalarValue(t *xmi.Element) string {
 		}
 		return ""
 	}
-	if t.Type == "PrimitiveType" {
-		return name
-	}
-	if t.Type == "DataType" && isLibrary(t) {
+	if (t.Type == "PrimitiveType" || t.Type == "DataType") && isLibrary(t) {
 		return name
 	}
 	return ""
