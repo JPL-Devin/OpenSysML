@@ -82,9 +82,8 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	return diags
 }
 
-// w8cVariabilityDownstream reports whether what u's variability rests on, its own
-// head before the value and its owner's typing head in this document, has a
-// lower-tier failure.
+// w8cVariabilityDownstream reports a lower-tier failure in what u's variability
+// rests on: its own head before the value, or its owner's typing head in this document.
 func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) bool {
 	head := w8cHeadBefore(u, u.Members)
 	if u.Value != nil {
@@ -113,10 +112,8 @@ func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) b
 	return (doc == "" || doc == ctx.Name) && ctx.downstreamSpan(ownerHead)
 }
 
-// w8cOwnerHead is the part of an owner's declaration that fixes its type, all its
-// features' variability depends on: its head before the first body member. typed
-// is false for an owner whose notation alone fixes its type (a package, a
-// namespace, a state or control node), which no failure among its members retypes.
+// w8cOwnerHead is the owner's head before its first body member, which fixes its type.
+// typed is false for owners whose notation alone fixes it (package, namespace, state node).
 func w8cOwnerHead(node ast.Node) (head source.Span, typed bool) {
 	switch d := node.(type) {
 	case *ast.Usage:

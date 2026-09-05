@@ -255,9 +255,7 @@ func TestW8CVariableFeatureRulesSurviveUnrelatedPackageMemberFailures(t *testing
 	attribute broken : Missing := 5;
 	constant attribute kBroken : Missing = 6;
 }`
-	// A package has no typing to fail, so a member's failure gates only that member:
-	// the features before and after `unrelated` are reported, `broken` and `kBroken`
-	// are not.
+	// A package has no typing to fail, so a member's failure gates only that member.
 	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
 	if got[msgInitialValueNotVariable] != 2 {
 		t.Errorf("want two %q (before, after), got %v", msgInitialValueNotVariable, got)
@@ -290,8 +288,7 @@ library package Lib {
 	part unrelatedLib : Missing;
 	constant attribute kl : Integer = 5;
 }`
-	// Nested packages, namespaces and library packages gate nothing either, however
-	// deep the unrelated failure sits.
+	// Nested packages, namespaces and library packages gate nothing either.
 	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
 	if got[msgInitialValueNotVariable] != 3 {
 		t.Errorf("want three %q (Inner::before, N::n, Lib::l), got %v", msgInitialValueNotVariable, got)
@@ -321,8 +318,7 @@ func TestW8CVariableFeatureRulesStillGateOnATypedOwnerHead(t *testing.T) {
 		attribute unrelatedNested : Missing;
 	}
 }`
-	// A definition or usage owner still gates through its own head: the members of
-	// `AD` and `a` stay silent while `ok`'s body failure hides nothing of `ok::y`.
+	// A definition or usage owner still gates through its head, not through its body.
 	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
 	if got[msgInitialValueNotVariable] != 1 {
 		t.Errorf("want one %q (ok::y), got %v", msgInitialValueNotVariable, got)
