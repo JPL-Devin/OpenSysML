@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 236,
-        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
+        "files": 239,
+        "digest": "sha256:837baba3e911bd84337fc3ac0332e93864c4979ab0ddcfa200873e4a1dbb8427"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 236,
-    "bothReject": 228,
+    "cases": 239,
+    "bothReject": 231,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 106,
-      "bothReject": 98,
+      "cases": 109,
+      "bothReject": 101,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1432,6 +1432,33 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k43-inline-cross-feature-also-crosses.kerml",
+      "source": "semantic",
+      "rule": "an end that declares its cross feature inline (`end [m] ...`) cannot also cross another feature (KerML 8.3.3.3 Feature::crossFeature is single-valued; pilot checkFeatureCrossingSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k44-return-parameter-in-classifier.kerml",
+      "source": "semantic",
+      "rule": "a return parameter membership must be owned by a function or expression (KerML 8.3.4.7 validateReturnParameterMembershipOwningType; pilot validateReturnParameterMembershipOwningType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k45-two-conjugators.kerml",
+      "source": "semantic",
+      "rule": "a type may have at most one conjugator (KerML 8.3.3.1 validateTypeAtMostOneConjugator; pilot validateTypeAtMostOneConjugator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2274,8 +2301,8 @@
       }
     ],
     "totals": {
-      "cases": 236,
-      "bothReject": 228,
+      "cases": 239,
+      "bothReject": 231,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
