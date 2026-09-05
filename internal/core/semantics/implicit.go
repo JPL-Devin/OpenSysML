@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -111,6 +113,12 @@ var implicitKerMLBinaryFeatureBases = map[string]string{
 	"connector": "Links::binaryLinks",
 }
 
+// implicitKerMLBehaviorBases is the behavior base a kind that is also an
+// association specializes: an interaction is a Performance and a Link (KerML 1.1 §7.4.10.2).
+var implicitKerMLBehaviorBases = map[string]string{
+	"interaction": "Performances::Performance",
+}
+
 var implicitKerMLBases = map[string]string{
 	"classifier":  anythingFQN,
 	"class":       occurrenceFQN,
@@ -153,10 +161,11 @@ var implicitKerMLFeatureBases = map[string]string{
 	"metaclass":   "Metaobjects::metaobjects",
 }
 
-// KindBaseFQN returns the standard-library base every declaration of sym's
-// kind conforms to, implicitly or through its declared chain.
-func KindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
-	return kindBaseFQN(sym, isKerML)
+// KindBaseFQNs returns the standard-library bases every declaration of sym's
+// kind conforms to, implicitly or through its declared chain: one for most
+// kinds, an association and a behavior base for an interaction.
+func KindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	return kindBaseFQNs(sym, isKerML)
 }
 
 // FeatureBaseFQN returns the standard-library element a feature declaration
@@ -200,6 +209,22 @@ func (m *Model) RelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *
 	return m.relationshipTarget(sym, rel)
 }
 
+func kindBaseFQNs(sym *symbols.Symbol, isKerML bool) []string {
+	fqn, ok := kindBaseFQN(sym, isKerML)
+	if !ok {
+		return nil
+	}
+	out := []string{fqn}
+	if isKerML {
+		if behavior, ok := implicitKerMLBehaviorBases[keywordOf(sym)]; ok {
+			out = append(out, behavior)
+		}
+	}
+	return out
+}
+
+// kindBaseFQN returns the base a declaration of sym's kind specializes for the
+// kind itself; kindBaseFQNs adds the further bases a kind with two facets has.
 func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	if sym == nil {
 		return "", false
@@ -279,17 +304,10 @@ func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
 	return m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
 }
 
-// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not a declaration of a kind with a known base.
-func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	isKerML := m.isKerMLDoc(sym)
-	fqn, ok := kindBaseFQN(sym, isKerML)
-	if !ok || m.resolver == nil || m.resolver.Index() == nil {
-		return nil
-	}
-	// A declaration keeps its kind's base unless a declared chain already reaches
-	// it — the same rule for a usage and in either language (KerML §8.4.2).
-	if m.declaredGeneralizationReaches(sym, fqn, nil) {
+// implicitBases returns the stdlib definitions sym is implicitly typed by, or
+// nil when sym is not a declaration of a kind with a known base.
+func (m *Model) implicitBases(sym *symbols.Symbol) []*symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
 	// A conjugated type takes its supertypes from what it conjugates rather than
@@ -297,12 +315,21 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if declaresConjugation(sym) {
 		return nil
 	}
-	for _, base := range m.resolver.Index().LookupQualified(fqn) {
-		if base != nil && base != sym {
-			return base
+	var out []*symbols.Symbol
+	for _, fqn := range kindBaseFQNs(sym, m.isKerMLDoc(sym)) {
+		// A declaration keeps its kind's base unless a declared chain already
+		// reaches it — the same rule for a usage and in either language (KerML §8.4.2).
+		if m.declaredGeneralizationReaches(sym, fqn, nil) {
+			continue
+		}
+		for _, base := range m.resolver.Index().LookupQualified(fqn) {
+			if base != nil && base != sym {
+				out = append(out, base)
+				break
+			}
 		}
 	}
-	return nil
+	return out
 }
 
 // declaresConjugation reports whether sym conjugates a type.
@@ -343,7 +370,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —
 			// except back through a cycle, which reaches nothing new.
-			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want && !m.declaredReaches(target, sym, nil) {
+			if slices.Contains(kindBaseFQNs(target, m.isKerMLDoc(target)), want) && !m.declaredReaches(target, sym, nil) {
 				sameBase = true
 			}
 		}
@@ -533,7 +560,7 @@ func (m *Model) ImplicitGenerals(sym *symbols.Symbol) []*symbols.Symbol {
 		return nil
 	}
 	var out []*symbols.Symbol
-	for _, base := range []*symbols.Symbol{m.implicitBase(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)} {
+	for _, base := range append(m.implicitBases(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)) {
 		if base != nil && base != sym {
 			out = append(out, base)
 		}

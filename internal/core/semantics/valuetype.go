@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -253,14 +254,14 @@ func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool
 	}
 	seen[sym] = true
 	var defs, features []*symbols.Symbol
-	base := m.implicitBase(sym)
+	bases := m.implicitBases(sym)
 	baseParam := m.implicitBaseParameter(sym)
 	for _, super := range m.DirectSupertypes(sym) {
 		if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
 			super = alias
 		}
 		switch {
-		case super == base, super == baseParam:
+		case super == baseParam, slices.Contains(bases, super):
 		case super.Kind.IsDefinition():
 			defs = append(defs, super)
 		case super.IsFeature():
@@ -282,18 +283,16 @@ func (m *Model) implicitBaseParameter(sym *symbols.Symbol) *symbols.Symbol {
 	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
 		return nil
 	}
-	base := m.implicitBase(sym.OwnerScope.Owner())
-	if base == nil {
-		return nil
-	}
-	params := m.parametersOf(base)
-	for _, redefined := range m.implicitParameterRedefinitions(sym) {
-		if redefined == params.result.sym {
-			return redefined
-		}
-		for _, p := range params.positional {
-			if redefined == p.sym {
+	for _, base := range m.implicitBases(sym.OwnerScope.Owner()) {
+		params := m.parametersOf(base)
+		for _, redefined := range m.implicitParameterRedefinitions(sym) {
+			if redefined == params.result.sym {
 				return redefined
+			}
+			for _, p := range params.positional {
+				if redefined == p.sym {
+					return redefined
+				}
 			}
 		}
 	}

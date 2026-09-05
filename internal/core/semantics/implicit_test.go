@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -172,6 +173,44 @@ func TestSysMLImplicitDefinitionBasesRemainKindBased(t *testing.T) {
 			got := m.DirectSupertypes(target)
 			if len(got) != 1 || m.resolver.Index().GetFQN(got[0]) != tc.want {
 				t.Fatalf("supertypes of %s = %v, want [%s]", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// An interaction is an association and a behavior, so it implicitly specializes
+// Performance as well as Link — BinaryLink when it has two ends (KerML 7.4.10.2).
+func TestKerMLInteractionImplicitBases(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class T;
+		interaction Zero;
+		interaction Two { end a : T; end b : T; }
+		interaction Three { end a : T; end b : T; end c : T; }
+		interaction DeclaredBehavior specializes Performances::Performance { end a : T; end b : T; }
+		interaction DeclaredLink specializes Links::Link;
+		interaction Derived specializes Two { end a : T; end b : T; }
+	}
+	package Links { classifier Link; classifier BinaryLink specializes Link; }
+	package Performances { classifier Performance; }`)
+	p := sym(t, root, "P")
+	for _, tc := range []struct {
+		name string
+		want []string
+	}{
+		{"Zero", []string{"Links::Link", "Performances::Performance"}},
+		{"Two", []string{"Links::BinaryLink", "Performances::Performance"}},
+		{"Three", []string{"Links::Link", "Performances::Performance"}},
+		{"DeclaredBehavior", []string{"Performances::Performance", "Links::BinaryLink"}},
+		{"DeclaredLink", []string{"Links::Link", "Performances::Performance"}},
+		{"Derived", []string{"P::Two"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, super := range m.DirectSupertypes(sym(t, p.Scope, tc.name)) {
+				got = append(got, m.resolver.Index().GetFQN(super))
+			}
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("supertypes of %s = %v, want %v", tc.name, got, tc.want)
 			}
 		})
 	}

@@ -74,6 +74,31 @@ func TestBinaryConnectorDeclaredAndInheritedEnds(t *testing.T) {
 	}
 }
 
+// An interaction of any arity inherits both Link's `participant` (`source`/`target`
+// when binary) and Performance's `subperformances`, so redefining them is clean.
+func TestInteractionInheritsLinkAndPerformanceMembers(t *testing.T) {
+	diags := analyzeAll(t, "interaction.kerml", `package P {
+	class T;
+	abstract interaction Zero {
+		feature redefines participant : T[2..*];
+		step redefines subperformances;
+	}
+	interaction Two {
+		end redefines source : T;
+		end redefines target : T;
+		step redefines subperformances;
+	}
+	interaction Three {
+		end a : T; end b : T; end c : T;
+		feature redefines participant : T[3];
+		step redefines subperformances;
+	}
+}`)
+	if len(diags) != 0 {
+		t.Fatalf("interaction members analysed with diagnostics: %v", diags)
+	}
+}
+
 // A binary pair inherited along both paths of a diamond is still one pair; only
 // a leaf adding a third end of its own is reported.
 func TestBinaryConnectorDiamondInheritance(t *testing.T) {

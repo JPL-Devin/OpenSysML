@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"math"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -218,9 +219,9 @@ func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-		base := m.implicitBase(cur)
+		bases := m.implicitBases(cur)
 		for _, sup := range m.DirectSupertypes(cur) {
-			if sup == base || seen[sup] {
+			if seen[sup] || slices.Contains(bases, sup) {
 				continue
 			}
 			if !sup.IsFeature() {

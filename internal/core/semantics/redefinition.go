@@ -142,9 +142,8 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 		}
 	}
 	if len(generals) > 1 {
-		if base := m.implicitBase(sym); base != nil {
-			generals = slices.DeleteFunc(generals, func(sup *symbols.Symbol) bool { return sup == base })
-		}
+		bases := m.implicitBases(sym)
+		generals = slices.DeleteFunc(generals, func(sup *symbols.Symbol) bool { return slices.Contains(bases, sup) })
 	}
 	if len(generals) == 1 {
 		general := m.parametersOf(generals[0])
