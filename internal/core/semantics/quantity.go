@@ -42,6 +42,16 @@ func (u Unit) String() string {
 // None reports the unit a bare number is read with, which names nothing.
 func (u Unit) None() bool { return u.Text == "" && u.Product.IsEmpty() }
 
+// Clone returns a unit sharing no storage with u.
+func (u Unit) Clone() Unit {
+	return Unit{Text: u.Text, Product: u.Product.Clone(), Term: u.Term.Clone()}
+}
+
+// Clone returns a quantity sharing no storage with q.
+func (q Quantity) Clone() Quantity {
+	return Quantity{Num: q.Num, Unit: q.Unit.Clone()}
+}
+
 // UnitOne is the unit a bare number is read in: no named unit, scale one.
 func UnitOne() Unit {
 	return Unit{Term: UnitTerm{Scale: UnitScale(1)}}

@@ -137,6 +137,43 @@ func TestExecuteProjectsQuantityValues(t *testing.T) {
 	}
 }
 
+// TestQuantityCellsAreImmutable: mutating a quantity read from a result leaves
+// the stored value, factors and powers included, as it was.
+func TestQuantityCellsAreImmutable(t *testing.T) {
+	fixture := quantityFixture(t, massesQuery)
+	result := quantityRows(t, fixture, "Masses", "rocket")
+	read := func() semantics.Quantity {
+		quantity, ok := result.Rows()[0].Cells()[1].Values()[0].Quantity()
+		if !ok {
+			t.Fatal("mass is not a quantity")
+		}
+		return quantity
+	}
+	before := read()
+	if len(before.Unit.Term.Factors) == 0 || len(before.Unit.Product.Powers) == 0 {
+		t.Fatalf("fixture quantity %s has no factors or powers to mutate", before.String())
+	}
+	mutated := read()
+	mutated.Num.Int = 1
+	mutated.Unit.Text = "lb"
+	mutated.Unit.Term.Scale = semantics.UnitScale(7)
+	mutated.Unit.Term.Factors[0].Exponent = 9
+	mutated.Unit.Product.Powers[0].Exponent = 9
+	mutated.Unit.Product.Powers[0].Name = "lb"
+
+	after := read()
+	if after.String() != before.String() {
+		t.Fatalf("stored quantity became %s, was %s", after.String(), before.String())
+	}
+	if !after.Unit.Term.Same(before.Unit.Term) || !after.Unit.Product.Equal(before.Unit.Product) {
+		t.Fatalf("stored unit changed: term %+v -> %+v, product %+v -> %+v",
+			before.Unit.Term, after.Unit.Term, before.Unit.Product, after.Unit.Product)
+	}
+	if after.Unit.Term.Factors[0].Exponent == 9 || after.Unit.Product.Powers[0].Exponent == 9 {
+		t.Fatal("stored unit shares slice storage with the returned copy")
+	}
+}
+
 // TestExecuteFiltersQuantitiesByBareMagnitude: a bare numeric value compares
 // against the magnitude in each row's own unit.
 func TestExecuteFiltersQuantitiesByBareMagnitude(t *testing.T) {

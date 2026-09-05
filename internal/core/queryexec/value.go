@@ -59,9 +59,10 @@ func BooleanValue(value bool) Value {
 }
 
 // QuantityValue constructs a quantity value from a magnitude in a unit; the
-// quantity is copied, so the value stays immutable.
+// quantity is deep-copied, so the value stays immutable.
 func QuantityValue(quantity semantics.Quantity) Value {
-	return Value{kind: ValueQuantity, quantity: &quantity}
+	clone := quantity.Clone()
+	return Value{kind: ValueQuantity, quantity: &clone}
 }
 
 // constantValue converts a folded semantic constant to the query value of the
@@ -106,12 +107,13 @@ func (v Value) Real() (float64, bool) { return v.real, v.kind == ValueReal }
 // Boolean returns the value's Boolean and whether it is a Boolean value.
 func (v Value) Boolean() (bool, bool) { return v.boolean, v.kind == ValueBoolean }
 
-// Quantity returns the value's quantity and whether it is a quantity value.
+// Quantity returns an independent copy of the value's quantity and whether it
+// is a quantity value.
 func (v Value) Quantity() (semantics.Quantity, bool) {
 	if v.kind != ValueQuantity || v.quantity == nil {
 		return semantics.Quantity{}, false
 	}
-	return *v.quantity, true
+	return v.quantity.Clone(), true
 }
 
 // Magnitude returns a quantity value's magnitude as the bare integer or real

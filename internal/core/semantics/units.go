@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -192,6 +193,11 @@ func (t UnitTerm) String() string {
 		return "1"
 	}
 	return out
+}
+
+// Clone returns a term sharing no storage with t.
+func (t UnitTerm) Clone() UnitTerm {
+	return UnitTerm{Scale: t.Scale, Factors: slices.Clone(t.Factors)}
 }
 
 // Times returns the product of two terms.
