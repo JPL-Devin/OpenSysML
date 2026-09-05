@@ -86,9 +86,13 @@ func (p *Parser) parseCalcBody() []ast.Node {
 // atNamedCalcMember reports whether the cursor begins a member declaration a
 // calculation body reads without a kind keyword (SysML.xtext DefaultReferenceUsage):
 // a name that a specialization, multiplicity, value (`x = e;`), `;` or a keyword
-// that is not a binary operator (`a and b`, `x as Real`) follows.
+// that is not a binary operator (`a and b`, `x as Real`) follows. The `done;`
+// node of our notation is not a declaration.
 func (p *Parser) atNamedCalcMember() bool {
 	if !p.at(lexer.Identifier) && !p.at(lexer.UnrestrictedName) {
+		return false
+	}
+	if _, ok := p.atActionNodeWord(); ok {
 		return false
 	}
 	cp := p.checkpoint()

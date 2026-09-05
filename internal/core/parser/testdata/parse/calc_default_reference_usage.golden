@@ -1,0 +1,118 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="DefaultReferenceUsages" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ISQ" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Power"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="force" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="speed" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="subsets" target=ISQ::power
+              (*ast.QualifiedName))
+            (OperatorExpr operator="*"
+              (FeatureReference name="force")
+              (FeatureReference name="speed")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Delta"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v0" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v1" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="deltaV" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="subsets" target=ISQ::speed
+              (*ast.QualifiedName))
+            (OperatorExpr operator="-"
+              (FeatureReference name="v1")
+              (FeatureReference name="v0")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Samples"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=LengthValue
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="subsets" target=ISQ::length
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (FeatureReference name="xs"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Affine"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="twice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="*"
+                (FeatureReference name="n")
+                (LiteralInteger value="2"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="offset" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
+              (LiteralInteger value="1")))
+          (OperatorExpr operator="+"
+            (FeatureReference name="twice")
+            (FeatureReference name="offset"))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Tank"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="level" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="bounded" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+              (Membership visibility="default"
+                (Usage kind="attribute" name="limit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (LiteralReal value="10.0")))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="floor" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
+                  (LiteralReal value="0.0")))
+              (ConstraintMember assert=true negated=false
+                (OperatorExpr operator="and"
+                  (OperatorExpr operator="<"
+                    (FeatureReference name="level")
+                    (FeatureReference name="limit"))
+                  (OperatorExpr operator=">"
+                    (FeatureReference name="level")
+                    (FeatureReference name="floor"))))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Sum"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="1")))
+          (WhileLoopActionNode kind="while" variable=""
+            (OperatorExpr operator="<="
+              (FeatureReference name="i")
+              (FeatureReference name="n"))
+            (Membership visibility="default"
+              (Usage kind="attribute" name="doubled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (OperatorExpr operator="*"
+                  (FeatureReference name="i")
+                  (LiteralInteger value="2"))))
+            (*ast.AssignmentActionNode)
+            (*ast.AssignmentActionNode))
+          (FeatureReference name="total"))))))

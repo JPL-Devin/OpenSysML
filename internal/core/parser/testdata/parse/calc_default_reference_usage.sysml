@@ -1,0 +1,55 @@
+// A calculation body item is an action body item, so a kind-less `x = e;` in a
+// calc, constraint or statement body declares a feature with a value
+// (SysML.xtext CalculationBodyItem -> NonOccurrenceUsageMember -> DefaultReferenceUsage).
+// An assignment is written `assign x := e;` (AssignmentNode).
+package DefaultReferenceUsages {
+	private import ScalarValues::*;
+	private import ISQ::*;
+
+	// A `return` declares its result parameter, so a specialization may follow
+	// it with or without a name (SysML.xtext ReturnParameterMember).
+	calc def Power {
+		in force : Real;
+		in speed : Real;
+		return :> ISQ::power = force * speed;
+	}
+	calc def Delta {
+		in v0 : Real;
+		in v1 : Real;
+		return deltaV :> ISQ::speed = v1 - v0;
+	}
+	calc def Samples {
+		in xs : LengthValue[*];
+		return :> ISQ::length[*] = xs;
+	}
+
+	// Kind-less members of a calc body are readable locals of its trailing expression.
+	calc def Affine {
+		in n : Integer;
+		twice = n * 2;
+		offset := 1;
+		twice + offset
+	}
+
+	part def Tank {
+		attribute level : Real;
+		assert constraint bounded {
+			limit = 10.0;
+			floor := 0.0;
+			level < limit and level > floor
+		}
+	}
+
+	// A statement body carries the same members; the assignment keeps its keyword.
+	calc def Sum {
+		in n : Integer;
+		attribute total : Integer = 0;
+		attribute i : Integer = 1;
+		while i <= n {
+			doubled = i * 2;
+			assign total := total + doubled;
+			assign i := i + 1;
+		}
+		total
+	}
+}

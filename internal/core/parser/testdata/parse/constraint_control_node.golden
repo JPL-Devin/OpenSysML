@@ -41,7 +41,9 @@
           (FeatureReference name="y")
           (LiteralInteger value="0"))
         (JoinNode name="j"))
-      (*ast.AssignmentActionNode)
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="3")))
       (ConstraintMember assert=true negated=false
         (OperatorExpr operator=">"
           (FeatureReference name="y")
@@ -108,7 +110,11 @@
             (Relationship kind="typing" target=ScalarValues::Real
               (*ast.QualifiedName))
             (LiteralReal value="10.0")))
-        (*ast.AssignmentActionNode)
+        (Membership visibility="default"
+          (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (OperatorExpr operator="+"
+              (FeatureReference name="x")
+              (LiteralReal value="1.0"))))
         (IfActionNode
           (OperatorExpr operator=">"
             (FeatureReference name="y")

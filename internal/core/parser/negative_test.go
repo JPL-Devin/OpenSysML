@@ -42,6 +42,9 @@ func TestNegative(t *testing.T) {
 		{"state_member_then", "state s { state start; state finish; start then finish; }"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
+		// A specialization after `return` names what the result subsets.
+		{"calc_return_subsets_no_target", "calc def C { return :> = 1; }"},
+		{"calc_return_named_subsets_no_target", "calc def C { return r :> = 1; }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
 		{"calc_while_unclosed_body", "calc def C { while i < 2 { i = i + 1; }"},
 		{"calc_for_no_variable", "calc def C { for in xs { } }"},
