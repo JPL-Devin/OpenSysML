@@ -413,12 +413,15 @@ func boundFeatureName(u *ast.Usage) string {
 	return ""
 }
 
-// annotationValue evaluates one value an annotation binds: a constant, or a
-// reference to an element such as an enumeration literal, which is compared by
-// identity.
+// annotationValue evaluates one value an annotation binds: a constant, a
+// quantity, or a reference to an element such as an enumeration literal, which
+// is compared by identity.
 func (m *Model) annotationValue(scope *symbols.Scope, value ast.Node) symbols.FilterValue {
 	if v, ok := evalConst(value); ok {
 		return constValue(v)
+	}
+	if q, ok := m.EvalQuantity(scope, value); ok {
+		return quantityValue(q)
 	}
 	switch e := value.(type) {
 	case *ast.LiteralString:

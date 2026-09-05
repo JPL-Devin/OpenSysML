@@ -87,11 +87,12 @@ func TestObjectiveOwnConditions(t *testing.T) {
 
 // TestObjectiveConditionsFromItsDefinition: a condition a model states on its own
 // objective definition bounds the values its objectives improve, the objective's
-// `best` being bound to the value it improves.
+// inherited `best` being bound to the value its `eval` returns, as the library
+// derives it.
 func TestObjectiveConditionsFromItsDefinition(t *testing.T) {
 	q := analysisQuery(t, "BoundedByItsDefinition")
 	script := Script(q)
-	best := "|test::BoundedByItsDefinition::lightest::best|"
+	best := "|test::BoundedByItsDefinition::lightest.best|"
 	mass := "|test::BoundedByItsDefinition::mass|"
 	for _, want := range []string{
 		"(assert (= " + best + " " + mass + "))",
@@ -100,6 +101,71 @@ func TestObjectiveConditionsFromItsDefinition(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("script does not assert %s:\n%s", want, script)
 		}
+	}
+}
+
+// TestObjectiveBestShadowsTheCases: a `best` the objective's definition
+// conditions is the objective's own even when the case declares a feature of
+// that name, which the case's own conditions keep naming.
+func TestObjectiveBestShadowsTheCases(t *testing.T) {
+	q := analysisQuery(t, "ShadowedBest")
+	script := Script(q)
+	objBest := "|test::ShadowedBest::lightest.best|"
+	caseBest := "|test::ShadowedBest::best|"
+	mass := "|test::ShadowedBest::mass|"
+	for _, want := range []string{
+		"(assert (= " + objBest + " " + mass + "))",
+		"(assert (>= " + objBest + " 2))",
+		"(<= " + caseBest + " 1)",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not assert %s:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "(>= "+caseBest+" 2)") {
+		t.Errorf("the definition's condition binds the case's best:\n%s", script)
+	}
+}
+
+// TestObjectiveConditionLocalIsNotShadowed: a `best` a condition nested in the
+// objective declares for itself is that condition's, not the objective's nor the
+// case's; a sibling condition without one still reads the objective's.
+func TestObjectiveConditionLocalIsNotShadowed(t *testing.T) {
+	q := analysisQuery(t, "LocalBest")
+	script := Script(q)
+	objBest := "|test::LocalBest::lightest.best|"
+	localBest := "|test::LocalBest::lightest::tight::best|"
+	for _, want := range []string{
+		"(assert (>= " + localBest + " 6))",
+		"(assert (>= " + objBest + " 3))",
+		"(assert (>= " + objBest + " 2))",
+		"(assert (= " + objBest + " |test::LocalBest::mass|))",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not assert %s:\n%s", want, script)
+		}
+	}
+	for _, wrong := range []string{"(>= " + objBest + " 6)", "(>= |test::LocalBest::best| 6)"} {
+		if strings.Contains(script, wrong) {
+			t.Errorf("the condition's own best is read as another's %s:\n%s", wrong, script)
+		}
+	}
+}
+
+// TestObjectiveEvalReadsTheObjectivesOwnMember: the evaluation's `weight` is the
+// objective's own attribute, which shadows the case's of the same name.
+func TestObjectiveEvalReadsTheObjectivesOwnMember(t *testing.T) {
+	q := analysisQuery(t, "OwnWeight")
+	script := Script(q)
+	own := "|test::OwnWeight::lightest.weight|"
+	if want := "(minimize " + own + ")"; !strings.Contains(script, want) {
+		t.Errorf("script does not %s:\n%s", want, script)
+	}
+	if wrong := "(minimize |test::OwnWeight::weight|)"; strings.Contains(script, wrong) {
+		t.Errorf("the objective improves the case's weight %s:\n%s", wrong, script)
+	}
+	if want := "(assert (= " + own + " (+ |test::OwnWeight::mass| 1)))"; !strings.Contains(script, want) {
+		t.Errorf("script does not assert %s:\n%s", want, script)
 	}
 }
 
@@ -129,7 +195,8 @@ func TestObjectiveVariablesAreDeclared(t *testing.T) {
 				attribute spare : Natural;
 				require constraint { used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = spare;
+					subject :>> selectedAlternative;
+					in calc :>> eval { spare }
 				}
 			}
 		}`)
@@ -167,7 +234,8 @@ func TestObjectiveDecidesLogic(t *testing.T) {
 				attribute ratio : Real;
 				require constraint { count >= 2 }
 				objective finest : MinimizeObjective {
-					attribute :>> best = ratio;
+					subject :>> selectedAlternative;
+					in calc :>> eval { ratio }
 				}
 			}
 		}`)
@@ -286,7 +354,12 @@ func TestObjectiveRefusals(t *testing.T) {
 		{"GuardedNonlinearGain", ErrNotOptimizable, []string{"objective bestGain", "nonlinear"}},
 		{"UndirectedGoal", ErrNotOptimizable, []string{"objective goal", "no direction",
 			"TradeStudies::MinimizeObjective"}},
-		{"ValuelessGoal", ErrNotOptimizable, []string{"objective goal", "no value", "attribute :>> best"}},
+		{"ValuelessGoal", ErrNotOptimizable, []string{"objective goal", "no value", "in calc :>> eval { expression }"}},
+		// The old spelling is a validation error, so it is refused rather than
+		// read as the value; the refusal points at the spelling that is not.
+		{"ReboundBest", ErrNotOptimizable, []string{"objective goal", "bound `best`", "validation rejects",
+			"in calc :>> eval { expression }"}},
+		{"StepwiseGoal", ErrNotOptimizable, []string{"objective goal", "in steps", "in calc :>> eval { expression }"}},
 		{"NoGoal", ErrNoObjective, []string{"NoGoal", "no objective"}},
 	}
 	for _, tc := range cases {
@@ -367,7 +440,8 @@ func TestCaseStepsAreNotBodyStatements(t *testing.T) {
 				perform action tally : Tally;
 				require constraint { used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = spare;
+					subject :>> selectedAlternative;
+					in calc :>> eval { spare }
 				}
 			}
 			action def Tally;
@@ -375,7 +449,8 @@ func TestCaseStepsAreNotBodyStatements(t *testing.T) {
 				attribute used : Integer;
 				require constraint { action a; used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = used;
+					subject :>> selectedAlternative;
+					in calc :>> eval { used }
 				}
 			}
 		}`)

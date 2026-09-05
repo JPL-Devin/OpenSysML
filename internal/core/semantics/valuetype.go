@@ -667,6 +667,36 @@ func (m *Model) dimensionConformance(scope *symbols.Scope, node ast.Node, want *
 	return Conformance{Known: true, Holds: got.Term.Commensurable(wantDim.Term), Found: found}
 }
 
+// QuantityConforms judges a value in a reduced unit against a declared type: a
+// quantity value type by dimension, any other type as a ScalarQuantityValue.
+func (m *Model) QuantityConforms(unit UnitTerm, want *symbols.Symbol) Conformance {
+	if m == nil || want == nil {
+		return conformanceUnknown()
+	}
+	got, ok := m.DimensionOfUnit(unit)
+	if !ok {
+		return conformanceUnknown()
+	}
+	found := "a value of dimension " + got.String()
+	if got.Term.Dimensionless() {
+		found = "a dimensionless value"
+	}
+	quantity := m.libSymbol(fqnScalarQuantityValue)
+	if quantity == nil {
+		return conformanceUnknown()
+	}
+	if !m.Conforms(want, quantity) {
+		c := m.typeConformance(quantity, want)
+		c.Found = found
+		return c
+	}
+	wantDim, ok := m.DimensionOfType(want)
+	if !ok {
+		return Conformance{Known: true, Holds: true, Found: found}
+	}
+	return Conformance{Known: true, Holds: got.Term.Commensurable(wantDim.Term), Found: found}
+}
+
 // incommensurableSum finds, in quantity arithmetic, a sum or difference of
 // operands whose dimensions are both known and incommensurable. Such an
 // expression has no value of any dimension, so it is a value of no quantity type.
