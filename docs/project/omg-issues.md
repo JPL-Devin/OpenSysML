@@ -179,6 +179,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkMultiplicityRange`, the `validateMultiplicityRangeResultTypes` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a multiplicity bound naming a package-level feature typed by `ScalarValues::Natural` or `Integer` (`feature k : Natural; feature d [k];`, both owned by a package) reports `Must have a Natural value`; the same bound inside a type (`class T { feature k : Natural; feature d [k]; }`) is accepted | established from the pinned `KerMLValidator.xtend` lines 1333–1339, `FeatureReferenceExpression_modelLevelEvaluable_InvocationDelegate` and `MultiplicityRange_valueOf_InvocationDelegate`: a reference to a feature with no featuring type and no value is deemed model-level evaluable, its evaluation yields the feature rather than a `LiteralInteger`, `valueOf` returns the `-2` null marker and the check reports it; a reference to a type's member is not evaluable and is judged by its type through `isInteger`. The method carries `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Reproduced with the model below through `validate-kerml`; [pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round) records how OpenSysML judges both spellings by the referent's type | **not filed** — drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.logic` — `Type_multiplicity_SettingDelegate`, behind `KerMLValidator.checkFeature`'s `validateFeatureMultiplicityDomain` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature whose body holds an `alias` for a `multiplicity` member of the enclosing class, or whose value references one (`class E { multiplicity em [1..4]; feature k : Integer { alias a for em; } }`), reports `Multiplicity must have same featuring types as it feature`, although the feature owns no multiplicity; the spec-genuine violation, a standalone `featuring of C::k::m by D;` on a feature's owned multiplicity, is accepted | established from the pinned `Type_multiplicity_SettingDelegate.getMultiplicityOf` (lines 43–48 at `c7fc737`), which takes the first `Multiplicity` among the members of every `ownedMembership` — aliases and reference memberships included — where KerML 1.1 8.3.3.1.10 `deriveTypeMultiplicity` reads `ownedMember->selectByKind(Multiplicity)`; and from `Feature_featuringType_SettingDelegate.basicGet` (lines 39–51), which reads `ownedTypeFeaturing` where 8.3.3.3.4 `deriveFeatureFeaturingType` reads every `typeFeaturing`. Reproduced with the models below through `validate-kerml`; [validation-constraints.md](validation-constraints.md) records the census row | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.logic` — `ConnectorAdapter.getDefaultSupertype`, with `KerMLValidator.checkConnectorBinarySpecialization` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a connector owning two ends that redefine two ends of a three-ended general (`connector m : N { end redefines a references x; end redefines b references y; }`) reports `Cannot have more than two ends`, while the same shape spelled as an association (`assoc B specializes N { end redefines a : T; end redefines b : T; }`) is accepted | established from the pinned `ConnectorAdapter.xtend` (`getDefaultSupertype` counts `TypeUtil.getOwnedEndFeaturesOf(target)`, two here, so the connector is given `Links::binaryLinks`) and `KerMLValidator.xtend` (`checkConnectorBinarySpecialization` then counts three `connectorEnd`s), reproduced with the model below through `validate-kerml`; KerML 1.1 8.3.4.5.3 implies `Links::binaryLinks` only for `connectorEnd->size() = 2`, which counts the inherited end. [pilot-differential.md](pilot-differential.md#binary-link-specialization-round) records how OpenSysML counts effective ends for the base | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors [performance.md](../internals/performance.md#a-real-model-apollo-11) records — defects in that model, not in any OMG material, so they are not rows of this page. The pilot's own `kerml-examples/Simple Tests/Behaviors.kerml:14` has the same shape (`A().y` against `behavior A { in x; … }`), silent under the pinned `validate-kerml`, and its Xpect suite (`ParsingTests_Behaviors.kerml.xt`) declares the file error-free; an invocation heading a feature chain therefore leaves a required parameter unbound without a report, while every other argument check applies there | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.isDuration`/`isTime`, behind `validateTriggerInvocationActionAfterArgument` and `…AtArgument` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | with `d : DurationValue` and `t : TimeInstantValue`, `accept after d * d` and `accept at t * t` validate clean although the product has dimension T², while `accept after 10 [m] / 2 [m/s]`, whose quotient has dimension T, is refused | established from the pinned `SysMLValidator` class: an operator argument is a duration or an instant when its operator is one of `-`, `+`, `*`, `%`, `^`, `**` (`isQuantityOperator`) and every operand is itself one — `/` is not in the list and no dimension is computed; reproduced with the pinned batch validator, transcript below | **not filed** — question drafted below, awaiting maintainer authorisation |
@@ -608,6 +609,66 @@ returns its `-2` null marker, and the result-types error fires. The method is an
 `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Is a package-level
 feature meant to be a valid bound (judged by its type like a member), or is a bound that cannot
 be evaluated to a literal meant to be rejected?
+````
+
+---
+
+### A multiplicity is found through aliases and references (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML does not check `validateFeatureMultiplicityDomain`
+at all — the census row in
+[validation-constraints.md](validation-constraints.md) records it as not
+implemented — so there is no adjudication of ours to point at, only the
+pilot's behaviour against the clause.
+
+````markdown
+### `validateFeatureMultiplicityDomain` fires on an alias or a reference to a class's multiplicity, and not on a foreign featuring
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    private import ScalarValues::*;
+    class E {
+        multiplicity em [1..4];
+        feature k : Integer { alias a for em; }
+        feature v : Natural = em;
+    }
+}
+```
+
+reports `Multiplicity must have same featuring types as it feature` at line 5 (`feature k`) and
+line 6 (`feature v`). Neither feature owns a multiplicity: `k` owns an alias `Membership` whose
+`memberElement` is `em`, and `v` owns a `FeatureValue` whose `FeatureReferenceExpression` holds
+`em` through a reference `Membership`. `Type_multiplicity_SettingDelegate.getMultiplicityOf` takes
+the first `Multiplicity` among `ownedMembership.memberElement`, which finds `em` in both cases,
+and `checkFeature` then compares `em`'s featuring types with the feature's: `em` is a classifier
+multiplicity, so it has none (as `validateClassifierMultiplicityDomain` requires), while `k` and
+`v` are featured by `E`, and the error is reported. KerML 1.1 8.3.3.1.10 derives `multiplicity`
+from `ownedMember->selectByKind(Multiplicity)`, under which neither feature has a multiplicity
+and the constraint is vacuous; the model is valid.
+
+Conversely,
+
+```kerml
+package P {
+    private import ScalarValues::*;
+    class C { feature k : Integer { multiplicity m [1..2]; } }
+    class D;
+    featuring of C::k::m by D;
+}
+```
+
+validates clean, although `m` is `k`'s multiplicity and its `featuringType` under 8.3.3.3.4
+(`typeFeaturing.featuringType`, every `TypeFeaturing` counted — the one
+`checkMultiplicityTypeFeaturing` implies from `k` and the written one) is `{C, D}` while `k`'s is
+`{C}`. `Feature_featuringType_SettingDelegate.basicGet` reads only `ownedTypeFeaturing` plus the
+adapter's implicit featuring types, so the standalone `featuring` relationship does not reach the
+check. Should `Type::multiplicity` be
+derived from `ownedMember` rather than from every owned membership's member, and should
+`Feature::featuringType` include non-owned `TypeFeaturing`s?
 ````
 
 ---

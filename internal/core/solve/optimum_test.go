@@ -63,6 +63,17 @@ func TestOptimumBoundedByItsDefinition(t *testing.T) {
 	if got.Status != OptimumAttained || got.Value != "2" {
 		t.Errorf("least mass is %s %q: %s", got.Status, got.Value, got.Detail)
 	}
+	// The case's own `best <= 1` would contradict the definition's `best >= 2`
+	// were the two one value.
+	got = oneOptimum(t, "ShadowedBest")
+	if got.Status != OptimumAttained || got.Value != "2" {
+		t.Errorf("least mass under a shadowed best is %s %q: %s", got.Status, got.Value, got.Detail)
+	}
+	// The case's `weight == 100` is not the objective's `weight == mass + 1`.
+	got = oneOptimum(t, "OwnWeight")
+	if got.Status != OptimumAttained || got.Value != "2" {
+		t.Errorf("least own weight is %s %q: %s", got.Status, got.Value, got.Detail)
+	}
 }
 
 // TestOptimumOverAVariantSelection: the objective's value depends on which
