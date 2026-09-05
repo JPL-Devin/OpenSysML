@@ -237,6 +237,15 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// RequirementConstraintUsage), so it takes a constraint's base.
 		fqn, ok := implicitUsageBases[ast.UsageConstraint]
 		return fqn, ok
+	// A control node is the action usage of its ControlAction (SysML v2 §8.3.17).
+	case *ast.ForkNode:
+		return "Actions::ForkAction", true
+	case *ast.JoinNode:
+		return "Actions::JoinAction", true
+	case *ast.MergeNode:
+		return "Actions::MergeAction", true
+	case *ast.DecisionNode:
+		return "Actions::DecisionAction", true
 	}
 	return "", false
 }
