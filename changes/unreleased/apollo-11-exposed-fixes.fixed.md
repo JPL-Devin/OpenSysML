@@ -13,5 +13,6 @@
 - **A state definition written `:> StateAction` instantiates.** Spelling out the specialization
   every state definition has implicitly made lowering materialize the library's content, whose
   `ref state self : StateAction` led back to `StateAction`, so `-instantiate` of a part exhibiting
-  such states failed with `recursive state typing`. A library type now contributes no content to
-  a state machine, as the implicit specialization never did.
+  such states failed with `recursive state typing`. `States::StateAction` now contributes no
+  content to a state machine, as the implicit specialization never did; a library's own state
+  definitions still contribute theirs.

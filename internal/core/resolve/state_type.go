@@ -8,13 +8,11 @@ import (
 // TypeDecl returns the declaration a type name reaches and the scope of that
 // declaration's body, which is what a usage typed by it inherits its content
 // from. It reports nothing itself: the tier reported the name already.
-// A library type such as States::StateAction yields no content: every state
-// specializes it implicitly and the runtime carries its semantics natively.
 func (r *Resolver) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.ResolveQualified(scope, qn) })
-	if !ok || sym == nil || sym.Scope == nil || r.idx.LibraryTier(sym).Library() {
+	if !ok || sym == nil || sym.Scope == nil {
 		return nil, nil, false
 	}
 	return sym.Decl, sym.Scope, true
