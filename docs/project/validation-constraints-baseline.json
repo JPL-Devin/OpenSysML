@@ -780,7 +780,7 @@
     {
       "name": "validatePortUsageIsReference",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validatePortUsageNestedUsagesNotComposite",

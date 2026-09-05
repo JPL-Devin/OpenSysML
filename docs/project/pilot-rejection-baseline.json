@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 236,
-        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
+        "files": 237,
+        "digest": "sha256:6ca2f37b71bd9fdb2ed78e0b3f86a72facf37d1368644bd2e70a8975d6ee083a"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 236,
-    "bothReject": 228,
+    "cases": 237,
+    "bothReject": 229,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 106,
-      "bothReject": 98,
+      "cases": 107,
+      "bothReject": 99,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1891,6 +1891,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/s52-variant-port-composite.sysml",
+      "source": "semantic",
+      "rule": "A port usage whose owning type is not a port definition or port usage must be referential, and a variant has no owning type (SysML 7.12 Ports; pilot validatePortUsageIsReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2274,8 +2283,8 @@
       }
     ],
     "totals": {
-      "cases": 236,
-      "bothReject": 228,
+      "cases": 237,
+      "bothReject": 229,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
