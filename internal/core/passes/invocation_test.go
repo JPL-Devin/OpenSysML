@@ -293,6 +293,56 @@ func TestInvocationOverloadNoneApplicableReportsAgainstTheCallable(t *testing.T)
 	}`, "type.expr", `argument 1 of pick expects Integer, found String (candidates: P::A::pick, P::B::pick)`)
 }
 
+// A candidate the arguments fit but leave a default-less parameter of is applicable:
+// the call binds to it and advises of the omission rather than reporting a mismatch
+// against a candidate the arguments do not fit.
+func TestInvocationOverloadOmittedInputSelectsTheFittingCandidate(t *testing.T) {
+	wantLibraryWarning(t, `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { calc def pick { in s : String; in y : Real; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute partial = pick("a");
+		}
+	}`, CodeUnboundParameter, "pick leaves parameter y unbound, so the call cannot be evaluated")
+}
+
+// A candidate the arguments bind completely beats one they leave a parameter of,
+// whether they conform to its parameter or may only fit it at run time.
+func TestInvocationOverloadCompleteCandidateBeatsOmission(t *testing.T) {
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Real; in y : Real; return : Real = x + y; } }
+		package B { calc def pick { in x : Integer; return : Integer = x; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute r : Real = 2.5;
+			attribute exact = pick(2);
+			attribute loose = pick(r);
+		}
+	}`)
+}
+
+// Two candidates the arguments fit equally, each left with a parameter unbound, tie:
+// nothing written tells them apart, and a call writing no argument at all least of all.
+func TestInvocationOverloadOmittedInputsAreAmbiguous(t *testing.T) {
+	for _, call := range []string{"pick(1.0)", "pick()"} {
+		wantLibraryDiag(t, `package P {
+			private import ScalarValues::*;
+			package A { calc def pick { in x : Real; in y : Real; return : Real = x + y; } }
+			package B { calc def pick { in x : Real; in z : String; return : Real = x; } }
+			package C {
+				private import A::*;
+				private import B::*;
+				attribute tied = `+call+`;
+			}
+		}`, "invocation-ambiguous", "call of pick is ambiguous between P::A::pick, P::B::pick")
+	}
+}
+
 // A feature typed by a calc performs that calc, so it is a candidate beside a same-named
 // calc: each call is checked against the one its argument fits, and only a call neither
 // fits is reported, naming both.
