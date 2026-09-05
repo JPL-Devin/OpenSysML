@@ -3,17 +3,19 @@ package passes
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // msgRelatedElements is the reference's message for an association or connector
 // that relates fewer than two elements (pilot KerMLValidator checkAssociation,
-// validateAssociationRelatedTypes).
+// validateAssociationRelatedTypes; checkConnector, validateConnectorRelatedFeatures).
 const msgRelatedElements = "Must have at least two related elements"
 
-// W10BRelatedElementsPass reports a concrete association or connector with
-// fewer than two ends: a link needs two participants (KerML §8.4.3.4). An
-// abstract declaration is exempt, as it is in the reference — its ends are the
+// W10BRelatedElementsPass reports a concrete association with fewer than two
+// ends, or a concrete connector whose ends reference fewer than two features: a
+// link needs two participants (KerML 1.1 §8.3.3.5, §8.3.4.7). An abstract
+// declaration is exempt, as it is in the reference — its ends are the
 // specialization's to supply.
 type W10BRelatedElementsPass struct{}
 
@@ -28,12 +30,19 @@ func (W10BRelatedElementsPass) Run(ctx *Context, name string, root *ast.RootName
 		return nil
 	}
 	model := ctx.Model()
+	isKerML := ctx.Kind == source.KindKerML
 	var diags []Diagnostic
 	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
-		if !w10bRelatesElements(sym) {
-			return
-		}
-		if w10bEndCount(model, sym, make(map[*symbols.Symbol]bool)) >= 2 {
+		switch w10bClassify(sym, isKerML) {
+		case w10bAssociation:
+			if w10bEndCount(model, sym, make(map[*symbols.Symbol]bool)) >= 2 {
+				return
+			}
+		case w10bConnector:
+			if model.RelatedFeatureCount(sym) >= 2 {
+				return
+			}
+		default:
 			return
 		}
 		diags = append(diags, Diagnostic{
@@ -70,27 +79,65 @@ func w10bEndCount(model *semantics.Model, sym *symbols.Symbol, visited map[*symb
 	return count
 }
 
-// w10bRelatesElements reports whether sym declares an association or connector
-// whose ends this rule counts.
-func w10bRelatesElements(sym *symbols.Symbol) bool {
+// w10bRelationKind tells an association, whose ends are its related types,
+// from a connector, whose related features are what its ends reference.
+type w10bRelationKind int
+
+const (
+	w10bUnrelated w10bRelationKind = iota
+	w10bAssociation
+	w10bConnector
+)
+
+// w10bClassify classifies sym for this rule. Abstract declarations and
+// variations are exempt, as is a SysML flow with no ends: a message, which the
+// reference makes abstract.
+func w10bClassify(sym *symbols.Symbol, isKerML bool) w10bRelationKind {
 	if sym == nil || semantics.DeclaresVariation(sym) {
-		return false
+		return w10bUnrelated
 	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		if d.IsAbstract {
-			return false
+			return w10bUnrelated
 		}
 		switch d.Kind {
-		case ast.DefConnection, ast.DefInterface, ast.DefAllocation, ast.DefAssoc:
-			return true
+		case ast.DefConnection, ast.DefInterface, ast.DefAllocation, ast.DefFlow, ast.DefAssoc:
+			return w10bAssociation
 		}
 	case *ast.Usage:
 		if d.IsAbstract {
-			return false
+			return w10bUnrelated
 		}
 		switch d.Kind {
-		case ast.UsageConnection, ast.UsageInterface, ast.UsageAllocation:
+		case ast.UsageAssoc, ast.UsageInteraction:
+			return w10bAssociation
+		case ast.UsageFlow:
+			if !isKerML && !w10bFlowStatesEnd(d) && !w10bDeclaresEnd(d) {
+				return w10bUnrelated
+			}
+			return w10bConnector
+		case ast.UsageConnection, ast.UsageInterface, ast.UsageAllocation,
+			ast.UsageConnector, ast.UsageBinding, ast.UsageSuccession:
+			return w10bConnector
+		}
+	}
+	return w10bUnrelated
+}
+
+// w10bFlowStatesEnd reports whether a flow names a `from`/`to` end; `of T`
+// alone states only the payload.
+func w10bFlowStatesEnd(usage *ast.Usage) bool {
+	return usage.FlowEnds != nil && (usage.FlowEnds.From != nil || usage.FlowEnds.To != nil)
+}
+
+// w10bDeclaresEnd reports whether usage owns an `end` feature in its body.
+func w10bDeclaresEnd(usage *ast.Usage) bool {
+	for _, member := range usage.Members {
+		if wrapper, ok := member.(*ast.Membership); ok {
+			member = wrapper.Member
+		}
+		if end, ok := member.(*ast.Usage); ok && end.IsEnd {
 			return true
 		}
 	}

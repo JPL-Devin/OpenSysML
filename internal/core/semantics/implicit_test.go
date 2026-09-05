@@ -1,10 +1,12 @@
 package semantics
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestImplicitBaseNeedsTheLibrary covers a model resolved without the standard
@@ -177,6 +179,44 @@ func TestSysMLImplicitDefinitionBasesRemainKindBased(t *testing.T) {
 	}
 }
 
+// An interaction is an association and a behavior, so it implicitly specializes
+// Performance as well as Link — BinaryLink when it has two ends (KerML 7.4.10.2).
+func TestKerMLInteractionImplicitBases(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class T;
+		interaction Zero;
+		interaction Two { end a : T; end b : T; }
+		interaction Three { end a : T; end b : T; end c : T; }
+		interaction DeclaredBehavior specializes Performances::Performance { end a : T; end b : T; }
+		interaction DeclaredLink specializes Links::Link;
+		interaction Derived specializes Two { end a : T; end b : T; }
+	}
+	package Links { classifier Link; classifier BinaryLink specializes Link; }
+	package Performances { classifier Performance; }`)
+	p := sym(t, root, "P")
+	for _, tc := range []struct {
+		name string
+		want []string
+	}{
+		{"Zero", []string{"Links::Link", "Performances::Performance"}},
+		{"Two", []string{"Links::BinaryLink", "Performances::Performance"}},
+		{"Three", []string{"Links::Link", "Performances::Performance"}},
+		{"DeclaredBehavior", []string{"Performances::Performance", "Links::BinaryLink"}},
+		{"DeclaredLink", []string{"Links::Link", "Performances::Performance"}},
+		{"Derived", []string{"P::Two"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, super := range m.DirectSupertypes(sym(t, p.Scope, tc.name)) {
+				got = append(got, m.resolver.Index().GetFQN(super))
+			}
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("supertypes of %s = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
 	m, root := buildModelNamed(t, "t.kerml", `package Occurrences {
 		class Occurrence { feature endShot; }
@@ -340,22 +380,34 @@ func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
 }
 
 // An `assoc struct` is an AssociationStructure, so its implicit base is
-// Objects::LinkObject rather than a plain association's Links::Link (KerML §8.4.4).
+// Objects::LinkObject (Objects::BinaryLinkObject with two ends) rather than a
+// plain association's Links::Link / Links::BinaryLink (KerML §8.4.4).
 func TestImplicitKerMLAssocStructBaseIsLinkObject(t *testing.T) {
-	m, root := buildModelNamed(t, "t.kerml", `package Objects { struct Object; struct LinkObject :> Object; }
-		package Links { assoc Link; }
-		package P { assoc struct S { end feature a; end feature b; } assoc A { end feature a; end feature b; } }`)
+	m, root := buildModelNamed(t, "t.kerml", `package Objects { struct Object; struct LinkObject :> Object; struct BinaryLinkObject :> LinkObject; }
+		package Links { assoc Link; assoc BinaryLink :> Link; }
+		package P {
+			assoc struct S { end feature a; end feature b; }
+			assoc struct S3 { end feature a; end feature b; end feature c; }
+			assoc A { end feature a; end feature b; }
+			assoc A3 { end feature a; end feature b; end feature c; }
+		}`)
 	p := sym(t, root, "P")
-	linkObject, _ := sym(t, root, "Objects").Scope.LookupLocal("LinkObject")
-	link, _ := sym(t, root, "Links").Scope.LookupLocal("Link")
-
-	s, _ := p.Scope.LookupLocal("S")
-	if supers := m.DirectSupertypes(s); len(supers) != 1 || supers[0] != linkObject {
-		t.Errorf("DirectSupertypes(assoc struct S) = %v, want [Objects::LinkObject]", supers)
-	}
-	a, _ := p.Scope.LookupLocal("A")
-	if supers := m.DirectSupertypes(a); len(supers) != 1 || supers[0] != link {
-		t.Errorf("DirectSupertypes(assoc A) = %v, want [Links::Link]", supers)
+	objects := sym(t, root, "Objects").Scope
+	links := sym(t, root, "Links").Scope
+	for name, base := range map[string]struct {
+		scope *symbols.Scope
+		name  string
+	}{
+		"S":  {objects, "BinaryLinkObject"},
+		"S3": {objects, "LinkObject"},
+		"A":  {links, "BinaryLink"},
+		"A3": {links, "Link"},
+	} {
+		want, _ := base.scope.LookupLocal(base.name)
+		s, _ := p.Scope.LookupLocal(name)
+		if supers := m.DirectSupertypes(s); len(supers) != 1 || supers[0] != want {
+			t.Errorf("DirectSupertypes(%s) = %v, want [%s]", name, supers, base.name)
+		}
 	}
 }
 
@@ -372,5 +424,75 @@ func TestControlNodeBaseIsItsControlAction(t *testing.T) {
 		if supers := m.DirectSupertypes(n); len(supers) != 1 || supers[0] != want {
 			t.Errorf("DirectSupertypes(%s) = %v, want [Actions::%s]", node, supers, base)
 		}
+	}
+}
+
+// A binary base follows the effective ends of a KerML association or connector
+// (KerML 1.1 checkAssociationBinarySpecialization, checkConnectorBinarySpecialization):
+// two owned ends redefining two of a general's three leave it n-ary.
+func TestKerMLBinaryBaseFollowsEffectiveEnds(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class T;
+		assoc Three { end a : T; end b : T; end c : T; }
+		assoc TwoOfThree specializes Three { end redefines a : T; end redefines b : T; }
+		assoc ByPosition specializes Three { end x : T; end y : T; }
+		assoc Two { end a : T; end b : T; }
+		assoc TwoOfTwo specializes Two { end redefines a : T; end redefines b : T; }
+		assoc OneOfTwo specializes Two { end redefines a : T; }
+		assoc A { end source : T; end target : T; }
+		assoc B { end source : T; end target : T; }
+		assoc OfA specializes A, B { end redefines A::source : T; end redefines A::target : T; }
+		assoc OfBoth specializes A, B { end redefines A::source : T; end redefines B::target : T; }
+		class C {
+			feature x : T; feature y : T; feature z : T;
+			connector ofA : A, B { end redefines A::source references x; end redefines A::target references y; }
+			connector three : Three (x, y, z);
+			connector twoOfThree : Three { end redefines a references x; end redefines b references y; }
+			connector twoOfInherited subsets three { end redefines a references x; end redefines b references y; }
+			connector two (x, y);
+			connector twoOfTwo subsets two { end redefines source references x; end redefines target references y; }
+		}
+	}
+	package Links {
+		abstract assoc Link;
+		assoc BinaryLink specializes Link { end source : T; end target : T; }
+		abstract feature links : Link;
+		abstract feature binaryLinks : BinaryLink subsets links;
+	}`)
+	p := sym(t, root, "P")
+	c := sym(t, p.Scope, "C")
+	for _, tc := range []struct {
+		scope *symbols.Scope
+		name  string
+		want  []string
+	}{
+		{p.Scope, "Three", []string{"Links::Link"}},
+		{p.Scope, "TwoOfThree", []string{"P::Three"}},
+		{p.Scope, "ByPosition", []string{"P::Three"}},
+		{p.Scope, "Two", []string{"Links::BinaryLink"}},
+		{p.Scope, "TwoOfTwo", []string{"P::Two"}},
+		{p.Scope, "OneOfTwo", []string{"P::Two"}},
+		{p.Scope, "OfA", []string{"P::A", "P::B", "Links::Link"}},
+		{p.Scope, "OfBoth", []string{"P::A", "P::B", "Links::Link"}},
+		{c.Scope, "ofA", []string{"P::A", "P::B", "Links::links"}},
+		{c.Scope, "three", []string{"P::Three", "Links::links"}},
+		{c.Scope, "twoOfThree", []string{"P::Three", "Links::links"}},
+		{c.Scope, "twoOfInherited", []string{"P::C::three", "Links::links"}},
+		{c.Scope, "two", []string{"Links::binaryLinks"}},
+		{c.Scope, "twoOfTwo", []string{"P::C::two", "Links::binaryLinks"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sym(t, tc.scope, tc.name)
+			var got []string
+			for _, super := range m.DirectSupertypes(s) {
+				got = append(got, m.resolver.Index().GetFQN(super))
+			}
+			if base := m.implicitKerMLFeatureBase(s); base != nil {
+				got = append(got, m.resolver.Index().GetFQN(base))
+			}
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("supertypes of %s = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

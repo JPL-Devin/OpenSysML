@@ -130,6 +130,40 @@ func TestInvocationDuplicateParameterBindingSysML(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, "attribute k = K(a = 1, a = 2);"), "type.expr", `K binds parameter "a" twice`)
 }
 
+// An invocation heading a feature chain is argument-checked as a bare one is, under
+// one segment or several: duplicates, excess and unknown parameters alike. Only a
+// required parameter left unbound passes there, as the reference's own suite declares
+// for `A().y`.
+func TestInvocationHeadingFeatureChain(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		calc def K { in <a> alpha : Integer; in b : Integer = 0; return r : Integer = alpha + b; }
+		item def Sig { attribute p : Integer; ref item inner : Sig; }
+		calc def M { in n : Integer; return r : Sig; }
+		part def Recv;
+		action def Owner {
+			part rcv : Recv;
+			%s
+		}
+	}`
+	for _, member := range []string{
+		"attribute v = K(a = 1, b = 2).r;",
+		"item s = M(n = 1).r.inner.inner;",
+		"send M(n = 1).r.inner to rcv;",
+		"attribute v = K().r;",
+		"attribute v = K(b = 2).r;",
+	} {
+		wantLibraryClean(t, fmt.Sprintf(model, member))
+	}
+	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(a = 1, alpha = 2).r;"), "type.expr", `K binds parameter "alpha" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "item s = M(n = 1, n = 2).r.inner.inner;"), "type.expr", `M binds parameter "n" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send M(n = 1, M::n = 2).r.inner to rcv;"), "type.expr", `M binds parameter "n" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(c = 1).r;"), "type.expr", `K has no parameter named "c"`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "item s = M(1, 2).r.inner;"), "type.expr", `M takes 1 argument(s), found 2`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K();"), "type.expr", `K requires 1 argument(s), found 0`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(b = 2);"), "type.expr", `K requires an argument for parameter alpha`)
+}
+
 // A constructor binds each feature of the instantiated type once, whatever name
 // reaches it: an inherited feature, a redefining one, a short name, an alias or a
 // qualified name (validateConstructorExpressionNoDuplicateFeatureRedefinition).

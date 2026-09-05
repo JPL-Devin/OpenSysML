@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc man man-check install-tree pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check changelog-check changelog-render self-model
+.PHONY: all build build-sysml build-lsp build-grpc windows-versioninfo-check man man-check install-tree pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check changelog-check changelog-render self-model
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -16,12 +16,26 @@ LDFLAGS := -X main.Version=$(VERSION) \
 STATICCHECK_VERSION := 2025.1.1
 GOSEC_VERSION := v2.22.5
 BUF_VERSION := v1.57.2
+GO_WINRES_VERSION := v0.3.3
 
 # buf drives all protobuf codegen; override BUF to use an already-installed binary.
 BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 # Wire-compatibility baseline: the schema as it stands on the main branch. The
 # backslash escapes buf's ref separator, which make would otherwise read as a comment.
 BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
+
+# go-winres embeds a VERSIONINFO resource into the Windows binaries (a build
+# tool only; nothing of it ships). The .syso it writes carries a _windows_amd64
+# suffix, so the Go toolchain ignores it on every other GOOS.
+GO_WINRES ?= go run github.com/tc-hib/go-winres@$(GO_WINRES_VERSION)
+TARGET_GOOS := $(or $(GOOS),$(shell go env GOOS))
+TARGET_GOARCH := $(or $(GOARCH),$(shell go env GOARCH))
+WINRES_DIR := packaging/windows
+# $(call winres,<cmd>): emit cmd/<cmd>/rsrc_windows_<arch>.syso stamped with VERSION for Windows targets; no-op otherwise.
+# go-winres runs on the host, so the cross-compile GOOS/GOARCH are cleared for it.
+define winres
+$(if $(filter windows,$(TARGET_GOOS)),GOOS= GOARCH= $(GO_WINRES) make --in $(WINRES_DIR)/$(1).winres.json --arch $(TARGET_GOARCH) --out cmd/$(1)/rsrc --product-version "$(VERSION)" --file-version "$(VERSION)")
+endef
 
 # Build output directory
 BIN_DIR := bin
@@ -61,20 +75,27 @@ build: build-sysml build-lsp build-grpc ## Build all binaries
 build-sysml: ## Build sysml binary
 	@echo "Building sysml..."
 	@mkdir -p $(BIN_DIR)
+	$(call winres,sysml)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml ./cmd/sysml
 	@echo "✓ Built $(BIN_DIR)/sysml ($(VERSION))"
 
 build-lsp: ## Build sysml-lsp binary
 	@echo "Building sysml-lsp..."
 	@mkdir -p $(BIN_DIR)
+	$(call winres,sysml-lsp)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-lsp ./cmd/sysml-lsp
 	@echo "✓ Built $(BIN_DIR)/sysml-lsp ($(VERSION))"
 
 build-grpc: ## Build sysml-grpc binary
 	@echo "Building sysml-grpc..."
 	@mkdir -p $(BIN_DIR)
+	$(call winres,sysml-grpc)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
 	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
+
+windows-versioninfo-check: ## Check a Windows binary's VERSIONINFO carries VERSION (EXE=path/to/file.exe)
+	@test -n "$(EXE)" || { echo "Error: set EXE=path/to/file.exe"; exit 1; }
+	GOOS= GOARCH= GO_WINRES="$(GO_WINRES)" scripts/check-windows-versioninfo.sh "$(EXE)" "$(VERSION)"
 
 man: ## Regenerate the shipped manual pages from each command's description
 	@echo "Writing the manual pages..."
@@ -161,6 +182,7 @@ clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
 	rm -f coverage.txt coverage-python.xml coverage-node.lcov
 	rm -f sysml sysml-lsp sysml-grpc
+	rm -f cmd/*/rsrc_windows_*.syso
 	rm -rf $(SITE_DIR)
 	@# Only the default destination; an overridden SELF_MODEL_OUT is the caller's.
 	rm -rf build/self-model

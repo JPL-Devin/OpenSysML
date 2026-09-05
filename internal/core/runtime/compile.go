@@ -586,7 +586,8 @@ type callArguments struct {
 
 // callArgumentsOf reads an invocation's arguments, declining the forms the
 // evaluator reports at run time: a receiver or positional beside named ones.
-func callArgumentsOf(n *ast.InvocationExpr) (callArguments, error) {
+// names is the parameter each named argument binds, as the target resolved them.
+func callArgumentsOf(n *ast.InvocationExpr, names []string) (callArguments, error) {
 	var args callArguments
 	if n.Operand != nil {
 		if len(n.NamedArgs) > 0 {
@@ -601,12 +602,12 @@ func callArgumentsOf(n *ast.InvocationExpr) (callArguments, error) {
 	if len(args.exprs) > 0 {
 		return args, ineligible("invocation with positional and named arguments")
 	}
-	for _, arg := range n.NamedArgs {
-		if arg.Name == nil || len(arg.Name.Parts) == 0 {
+	for i, arg := range n.NamedArgs {
+		if names[i] == "" {
 			return args, ineligible("invocation with an unnamed argument")
 		}
 		args.exprs = append(args.exprs, arg.Value)
-		args.names = append(args.names, arg.Name.Parts[len(arg.Name.Parts)-1].Text)
+		args.names = append(args.names, names[i])
 	}
 	return args, nil
 }
@@ -668,11 +669,11 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	if scope == nil {
 		return nil, ineligible("invocation without a scope")
 	}
-	args, err := callArgumentsOf(n)
+	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
+	args, err := callArgumentsOf(n, target.names)
 	if err != nil {
 		return nil, err
 	}
-	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
 	switch {
 	case len(target.ambiguous) > 0:
 		return nil, ineligible(fmt.Sprintf("%s is ambiguous", target.qualName))
