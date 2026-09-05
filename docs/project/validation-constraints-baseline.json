@@ -714,17 +714,17 @@
       "name": "validateOperatorExpressionBracketOperator",
       "raw": "validateOperatorExpressionBracketOperator_",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionCastConformance",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionQuantity",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOwnedDifferencingNotOne",
