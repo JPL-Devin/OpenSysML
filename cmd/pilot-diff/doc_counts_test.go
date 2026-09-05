@@ -91,7 +91,7 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	categoryStart := docRequireLineContaining(t, lines, "Per category, the only-ours totals are:")
 	docAssertCategoryProse(t, lines, categoryStart, report)
 
-	movementStart := docRequireLineContaining(t, lines, "What has moved since the adjudication")
+	movementStart := docRequireLineContaining(t, lines, "Where the current counts stand")
 	movement := docRequireTable(t, lines, movementStart.number+1, "Count")
 	docAssertMovementTable(t, movement, report)
 

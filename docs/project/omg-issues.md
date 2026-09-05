@@ -150,10 +150,10 @@ corresponding check.
 | `Individuals Examples/AnalysisIndividualExample.sysml:86` | `individual action :>> fuelConsumption : FuelEconomyAnalysis_1` | the redefining action is typed by the enclosing analysis definition, which does not conform to the redefined feature's `FuelConsumption` | KerML 7.4.9 and 8.3.4.2 make a redefinition a subsetting, so the redefining feature's type must conform to the redefined one's. The file declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the intended type. | **fixed upstream at `2026-07`** — the corpus now publishes `fuelConsumption : FuelConsumption_1`, the type this row named, so the row is closed and its overlay entry retired |
 
 The first two rows form one adjudicated quantity-commensurability family in
-[the false-positive audit](wave12f-false-positives.md); the third is the same physics read through a
+[the adjudications record](adjudications.md); the third is the same physics read through a
 declared type rather than through an addition, so it is an error and not a warning; and the fourth
 was the corpus instance of the subsetting-conformance divergence adjudicated in
-[wave11e-decisions.md](wave11e-decisions.md), which the `2026-07` corpus corrects on its own.
+[the same record](adjudications.md), which the `2026-07` corpus corrects on its own.
 OpenSysML retains the three open diagnostics, and nothing has been posted upstream. All three are
 entries of the declared errata overlay — the geometry row with a correction, the turbojet and
 dynamics rows without one — quoted verbatim with their derivations in
@@ -174,7 +174,7 @@ and not from a disagreement alone.
 | Component | Pinned version | Symptom | Adjudication | Status |
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
-| `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [adjudications.md](adjudications.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
@@ -278,7 +278,7 @@ the six files contributes **exactly one** pilot-only row, each row is the EMF
 pair diagnostic above, and each line is a `disjoint from` clause written in a
 type declaration — the form the mechanism section pins to `OwnedDisjoining`. The
 per-clause table is in
-[the row-by-row sweep of pilot-only diagnostics](pilot-differential.md#only-the-pilot--the-wave-9b-row-by-row-sweep-137). The clause appears on classifiers, plain types and features alike and the
+[the row-by-row sweep of pilot-only diagnostics](pilot-differential.md#only-the-pilot--the-row-by-row-sweep-137). The clause appears on classifiers, plain types and features alike and the
 reported EMF class tracks the declaration, so the defect is in the pair rather
 than in one metaclass; the standalone form `disjoint b.f.a from b.a;`
 (`Simple Tests/FeatureChains.kerml:28`) sits in the same file as one of the six
@@ -292,7 +292,7 @@ column entirely and silences nothing else it depends on.
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
 posted upstream. The adjudication is in
-[the parser-recovery decisions](wave12d-decisions.md).
+[the parser-recovery decisions](adjudications.md).
 
 ````markdown
 **Question, not a bug report:** three Xpect fixtures under
@@ -666,7 +666,7 @@ not been implemented yet?
 ## The errata overlay entries for these models
 
 The second section's rows are also entries of the declared errata overlay
-(`internal/errata`, [the declared errata overlay](wave14-errata.md)): the published bytes on
+(`internal/errata`, [the declared errata overlay](errata-overlay.md)): the published bytes on
 disk are never edited, and a row that carries a correction has that correction
 applied to the *second* figure every oracle reports, never to the headline one.
 The overlay adds no category and reclassifies nothing — the two quantity rows stay the adjudicated

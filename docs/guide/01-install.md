@@ -39,7 +39,7 @@ sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **Windows:**
-Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
+Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized: those binaries are not Authenticode-signed. Once the project's [SignPath Foundation](https://signpath.org) application is approved, releases also carry an `opensysml-windows-amd64-signed.zip` with the same two executables signed through SignPath — prefer it when it is there (see the [Code signing policy](../../README.md#code-signing-policy)).
 
 **Available binaries:**
 - `sysml` — Interactive REPL

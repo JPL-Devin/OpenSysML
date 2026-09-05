@@ -10,9 +10,36 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// stateActionFQN names the library state every state specializes, whose
+// content (self, substates, transitions) the executor carries natively.
+const stateActionFQN = "States::StateAction"
+
+// stateTypes resolves the names a state machine is lowered with, withholding
+// the content of States::StateAction: materializing it would only recurse.
+type stateTypes struct {
+	*resolve.Resolver
+	frame *symbols.Symbol
+}
+
+func (ctx *Context) stateTypes() lower.EndpointResolver {
+	if ctx.resolver == nil {
+		return nil
+	}
+	return &stateTypes{Resolver: ctx.resolver, frame: ctx.librarySymbol(stateActionFQN)}
+}
+
+func (s *stateTypes) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
+	decl, body, ok := s.Resolver.TypeDecl(scope, qn)
+	if !ok || (s.frame != nil && decl == s.frame.Decl) {
+		return nil, nil, false
+	}
+	return decl, body, true
+}
 
 // StateConfiguration represents the active state configuration (simple or multi-region).
 type StateConfiguration struct {
@@ -133,11 +160,7 @@ func newStateExecutorForOccurrence(
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
 	// Endpoints come from the name-resolution tier, which reported on them already.
-	var endpoints lower.EndpointResolver
-	if ctx.resolver != nil {
-		endpoints = ctx.resolver
-	}
-	graph, err := lower.ToStateGraphWithEndpoints(stateMachine.Decl, declScope(stateMachine), endpoints)
+	graph, err := lower.ToStateGraphWithEndpoints(stateMachine.Decl, declScope(stateMachine), ctx.stateTypes())
 	if err != nil {
 		return nil, fmt.Errorf("lower state machine: %w", err)
 	}
