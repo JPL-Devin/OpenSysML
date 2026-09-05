@@ -32,9 +32,9 @@ func (e *StateExecutor) timeMagnitude(val Value, what string) (float64, error) {
 	}
 }
 
-// checkTimeTriggerType refuses the trigger argument validation refuses; one the
-// declarations leave open is left to the evaluated value, as in validation.
-func (e *StateExecutor) checkTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent, val Value) error {
+// checkTimeTriggerType refuses, before evaluating it, the trigger argument
+// validation refuses; one the declarations leave open is left to its value.
+func (e *StateExecutor) checkTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent) error {
 	c := e.ctx.model.TimeEventConforms(scope, t)
 	if !c.Known || c.Holds {
 		return nil
@@ -44,7 +44,7 @@ func (e *StateExecutor) checkTimeTriggerType(scope *symbols.Scope, t *ast.TimeEv
 		keyword = "at"
 	}
 	return fmt.Errorf("%w: `%s %s` must be a %s, found %s",
-		ErrTimeTriggerType, keyword, FormatValue(val), semantics.TimeEventType(t), c.Found)
+		ErrTimeTriggerType, keyword, e.ctx.bindingExprText(t.Duration, scope), semantics.TimeEventType(t), c.Found)
 }
 
 // durationInClockUnits expresses a quantity in the clock's unit, reporting a

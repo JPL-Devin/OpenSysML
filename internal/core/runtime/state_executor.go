@@ -477,6 +477,9 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 		if trans.Trigger == nil {
 			continue // a completion transition, scheduled once the do behavior ends
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
+			if err := e.checkTimeTriggerType(trans.Scope, timeEvent); err != nil {
+				return err
+			}
 			// Evaluate duration expression in the scope the transition was written
 			// in, the machine's data shadowing it.
 			durationVal, err := e.evalStepOf(trans.Source, timeEvent.Duration, trans.Scope)
@@ -488,9 +491,6 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 			// entering the state. An instant already past fires immediately.
 			duration, err := e.timeMagnitude(durationVal, "time duration")
 			if err != nil {
-				return err
-			}
-			if err := e.checkTimeTriggerType(trans.Scope, timeEvent, durationVal); err != nil {
 				return err
 			}
 			timestamp := e.currentTime + duration

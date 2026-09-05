@@ -183,8 +183,8 @@ func TestTimeTriggerAdmitsATypedFeature(t *testing.T) {
 	}
 }
 
-// A duration that does not measure time cannot be scheduled: the diagnostic
-// names the quantity and says it is no duration.
+// A duration that does not measure time is refused as the type mismatch
+// validation reports, before its value is ever computed.
 func TestTimeTriggerRejectsNonTimeDimension(t *testing.T) {
 	exec := libStateExecutor(t, "Machine", `package test {
 		private import SI::*;
@@ -202,10 +202,43 @@ func TestTimeTriggerRejectsNonTimeDimension(t *testing.T) {
 	if err == nil {
 		t.Fatal("scheduling a mass as a duration succeeded")
 	}
+	if want := "`after 5 [kg]` must be a ISQBase::DurationValue, found a quantity in kilogram"; !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want it to contain %q", err, want)
+	}
+	if !errors.Is(err, ErrTimeTriggerType) {
+		t.Errorf("err = %v, want it to wrap ErrTimeTriggerType", err)
+	}
+	if errors.Is(err, ErrIncommensurableUnits) {
+		t.Errorf("err = %v, want the static refusal, not a conversion of the value", err)
+	}
+}
+
+// Converting a quantity the declarations left open keeps the dimension error its
+// identity, so a caller can branch on a mass scheduled where a time was due.
+func TestTimeMagnitudeRejectsNonTimeDimension(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package test {
+		private import SI::*;
+		state Machine { entry; then start; state start; }
+	}`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	mass, err := evalIn(t, ctx, pkg.Scope, "5 [kg]")
+	if err != nil {
+		t.Fatalf("eval 5 [kg]: %v", err)
+	}
+	exec, err := newStateExecutor(ctx, findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState), nil)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	_, err = exec.timeMagnitude(mass, "time duration")
+	if err == nil {
+		t.Fatal("converting a mass to seconds succeeded")
+	}
 	if !strings.Contains(err.Error(), "5 [kg] is not a time") {
 		t.Errorf("err = %v, want it to name the quantity as written", err)
 	}
-	// The dimension mismatch keeps its identity, so a caller can branch on it.
 	if !errors.Is(err, ErrIncommensurableUnits) {
 		t.Errorf("err = %v, want it to wrap ErrIncommensurableUnits", err)
 	}
