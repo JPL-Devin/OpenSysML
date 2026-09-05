@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 236,
-        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
+        "files": 239,
+        "digest": "sha256:695abb31598f31207d070f9dbc0670f312f2db8fac09e756bb55232213821e10"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 236,
-    "bothReject": 228,
+    "cases": 239,
+    "bothReject": 231,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 106,
-      "bothReject": 98,
+      "cases": 109,
+      "bothReject": 101,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1432,6 +1432,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k43-expr-typed-by-function-states-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "an expression typed by a function that owns a result expression may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -1891,6 +1900,24 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/s52-constraint-specialization-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint definition specializing one that owns a result expression may not state a second (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s53-redefined-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a redefining constraint usage inherits the redefined constraint's result expression and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2274,8 +2301,8 @@
       }
     ],
     "totals": {
-      "cases": 236,
-      "bothReject": 228,
+      "cases": 239,
+      "bothReject": 231,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
