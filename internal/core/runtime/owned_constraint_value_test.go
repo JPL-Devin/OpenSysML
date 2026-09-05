@@ -158,3 +158,52 @@ func TestOwnedConstraintParametersBindInRequirement(t *testing.T) {
 		}
 	}
 }
+
+// A named constraint nested in another reads the enclosing one's bound
+// parameters (`in y = x` where the outer usage binds `x`), while its own
+// parameters mask same-named ones of the outer usage (pilot 2026-07 accepts the shape).
+func TestNestedOwnedConstraintReadsEnclosingParameters(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			constraint def Below { in y : Real; in limit : Real; y < limit }
+			requirement def Outer {
+				subject s;
+				in x : Real;
+				in limit : Real;
+				require constraint inner : Below { in y = x; in limit = 1000.0; }
+			}
+			requirement def Base {
+				attribute m : Real default = 500.0;
+				require constraint outer : Outer { in x = m; in limit = 400.0; }
+			}
+			requirement def High :> Base {
+				attribute :>> m = 5000.0;
+			}
+			requirement base : Base;
+			requirement high : High;
+		}
+	`)
+	for _, tc := range []struct {
+		req  string
+		want bool
+	}{{"base", true}, {"high", false}} {
+		sym := requirementNamed(t, pkg, tc.req)
+		conds := ctx.ConditionsOf(sym, sym.OwnerScope)
+		if len(conds) != 1 || len(conds[0].Constraints) != 2 ||
+			conds[0].Constraints[0].Name != "outer" || conds[0].Constraints[1].Name != "inner" {
+			t.Fatalf("%s states [%s] through %v, want y < limit through [outer inner]", tc.req, labelsOf(conds), conds)
+		}
+		holds, err := ctx.EvaluateRequirementOn(sym, sym.OwnerScope, nil)
+		if tc.want {
+			if err != nil || !holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", tc.req, holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) {
+			t.Errorf("%s: err = %v; want a violation of y < limit", tc.req, err)
+		}
+	}
+}

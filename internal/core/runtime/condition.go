@@ -43,9 +43,10 @@ type Condition struct {
 	// trusted rather than required to hold.
 	Required bool
 
-	// Constraint is the named constraint usage stating the condition through
-	// its type, whose parameter values it reads; nil reads the checked element's.
-	Constraint *symbols.Symbol
+	// Constraints are the named constraint usages stating the condition through
+	// their types, outermost first: each one's parameter values mask the
+	// enclosing ones', which mask the checked element's. Empty reads the latter alone.
+	Constraints []*symbols.Symbol
 }
 
 // Label renders the condition as written, negation and grouping included.
@@ -209,13 +210,11 @@ func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body
 	return out
 }
 
-// setConstraint marks conds as stated by owner, a nested named constraint's own
-// conditions excepted: the innermost usage's parameter values are the ones read.
+// setConstraint marks conds as stated by owner, enclosing any nested named
+// constraint already marked: the innermost usage's parameter values win.
 func setConstraint(conds []Condition, owner *symbols.Symbol) {
 	for i := range conds {
-		if conds[i].Constraint == nil {
-			conds[i].Constraint = owner
-		}
+		conds[i].Constraints = append([]*symbols.Symbol{owner}, conds[i].Constraints...)
 		setConstraint(conds[i].Group, owner)
 	}
 }
@@ -740,8 +739,8 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
-	if cond.Constraint != nil {
-		features = ctx.constraintFeatures(features, cond.Constraint)
+	for _, constraint := range cond.Constraints {
+		features = ctx.constraintFeatures(features, constraint)
 	}
 	holds := true
 	if cond.Group != nil {
@@ -819,7 +818,7 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 }
 
 // constraintFeatures overlays the features of a named constraint usage stating a
-// condition on those of the checked element: its parameters mask same-named ones.
+// condition on those already in scope: its parameters mask same-named ones.
 func (ctx *Context) constraintFeatures(features map[string]scopedExpr, constraint *symbols.Symbol) map[string]scopedExpr {
 	own := ctx.conditionFeatures(constraint)
 	if len(own) == 0 {
