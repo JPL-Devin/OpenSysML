@@ -672,7 +672,7 @@
     {
       "name": "validateMultiplicityRangeResultTypes",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateNamespaceDistinguishablity",
