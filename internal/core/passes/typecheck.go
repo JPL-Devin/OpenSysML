@@ -368,6 +368,9 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		tc.owningEnumerationConformsTo(scope, targetSym) {
 		return
 	}
+	if relKind == ast.RelSpecializes && w11aFamilyRuleFires(decl, targetSym) {
+		return // a supertype of the wrong classifier family is the family rules' finding
+	}
 	kind := targetSym.Kind
 	if relKind == ast.RelReferences || relKind == ast.RelSubsets {
 		kind = referentKind(targetSym)

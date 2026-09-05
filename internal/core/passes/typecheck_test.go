@@ -40,8 +40,8 @@ func TestTypeCheckSpecializesCrossKindError(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
 	}
-	if diags[0].Code != "type" {
-		t.Fatalf("expected code %q, got %q", "type", diags[0].Code)
+	if diags[0].Code != "specialization-kind" {
+		t.Fatalf("expected code %q, got %q", "specialization-kind", diags[0].Code)
 	}
 }
 
