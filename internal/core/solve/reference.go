@@ -72,14 +72,13 @@ func (t *translator) resolvePath(node ast.Node, scope *symbols.Scope, segments [
 	}
 	resolver := t.ctx.Resolver()
 	var chain []*symbols.Symbol
-	sym, ok := t.features[segments[0]]
-	if !ok {
+	// A member the objective being translated owns or inherits shadows the case's
+	// and is read through it, so two objectives' `best` are two values.
+	sym, ok := t.model.LookupMember(t.within, segments[0])
+	if ok {
+		chain = append(chain, t.within)
+	} else if sym, ok = t.features[segments[0]]; !ok {
 		sym, ok = resolver.LookupName(scope, segments[0])
-		// A member the objective being translated owns or inherits is read
-		// through it, so two objectives' `best` are two values.
-		if member, own := t.model.LookupMember(t.within, segments[0]); ok && own && member == sym {
-			chain = append(chain, t.within)
-		}
 	}
 	if !ok {
 		// A qualified name may name a package member or a library element.

@@ -104,6 +104,29 @@ func TestObjectiveConditionsFromItsDefinition(t *testing.T) {
 	}
 }
 
+// TestObjectiveBestShadowsTheCases: a `best` the objective's definition
+// conditions is the objective's own even when the case declares a feature of
+// that name, which the case's own conditions keep naming.
+func TestObjectiveBestShadowsTheCases(t *testing.T) {
+	q := analysisQuery(t, "ShadowedBest")
+	script := Script(q)
+	objBest := "|test::ShadowedBest::lightest.best|"
+	caseBest := "|test::ShadowedBest::best|"
+	mass := "|test::ShadowedBest::mass|"
+	for _, want := range []string{
+		"(assert (= " + objBest + " " + mass + "))",
+		"(assert (>= " + objBest + " 2))",
+		"(<= " + caseBest + " 1)",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not assert %s:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "(>= "+caseBest+" 2)") {
+		t.Errorf("the definition's condition binds the case's best:\n%s", script)
+	}
+}
+
 // TestObjectivesInDeclarationOrder: objectives are optimized in the order
 // declared, which is what makes them lexicographic.
 func TestObjectivesInDeclarationOrder(t *testing.T) {

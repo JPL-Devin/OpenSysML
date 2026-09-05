@@ -271,4 +271,18 @@ package test {
 			in calc :>> eval { mass }
 		}
 	}
+
+	// A case with a feature of its own named like the objective's `best`: the
+	// definition's condition is over the objective's, not the case's.
+	analysis def ShadowedBest {
+		attribute mass : Integer;
+		attribute best : Integer;
+		require constraint {
+			mass <= 9 and best <= 1
+		}
+		objective lightest : LeastMass {
+			subject :>> selectedAlternative;
+			in calc :>> eval { mass }
+		}
+	}
 }
