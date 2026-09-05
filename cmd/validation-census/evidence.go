@@ -26,18 +26,23 @@ const (
 	bucketOursOnly   = "ours-only-rejects"
 )
 
-// corpusCase is one rejection-corpus model: the pilot constraint its header
-// attributes the rejection to, if any, and the bucket the referee recorded.
+// corpusCase is one rejection-corpus model: the specification constraint its
+// header cites, the pilot constraint it attributes the rejection to, if any,
+// and the bucket the referee recorded.
 type corpusCase struct {
 	Path   string
-	Header string
+	Spec   string
 	Pilot  string
 	Bucket string
 }
 
 // pilotAttribution is the `pilot <constraint>` token a semantic case's header
-// carries, naming the constraint the pinned pilot rejects the model under.
-var pilotAttribution = regexp.MustCompile(`\bpilot ((?:in)?validate[A-Za-z]+_?)\b`)
+// carries, naming the constraint the pinned pilot rejects the model under;
+// specCitation is the constraint the citation before it names, when it does.
+var (
+	pilotAttribution = regexp.MustCompile(`\bpilot ((?:in)?validate[A-Za-z]+_?)\b`)
+	specCitation     = regexp.MustCompile(`\b((?:in)?validate[A-Za-z]+_?); pilot\b`)
+)
 
 // loadCorpus reads every corpus case's header line and its recorded bucket.
 func loadCorpus(root string) (map[string]corpusCase, error) {
@@ -75,9 +80,12 @@ func loadCorpus(root string) (map[string]corpusCase, error) {
 		if err != nil {
 			return err
 		}
-		c := corpusCase{Path: filepath.ToSlash(rel), Header: header, Bucket: buckets[filepath.ToSlash(rel)]}
+		c := corpusCase{Path: filepath.ToSlash(rel), Bucket: buckets[filepath.ToSlash(rel)]}
 		if m := pilotAttribution.FindStringSubmatch(header); m != nil {
 			c.Pilot = m[1]
+		}
+		if m := specCitation.FindStringSubmatch(header); m != nil {
+			c.Spec = m[1]
 		}
 		cases[c.Path] = c
 		return nil
@@ -112,16 +120,34 @@ func constraintNamed(base *Baseline, token string) (Constraint, bool) {
 	return Constraint{}, false
 }
 
+// attributedTo reports whether a case's header attributes it to the named
+// constraint: either the pilot token or the specification citation resolves to it.
+func attributedTo(base *Baseline, c corpusCase, name string) bool {
+	for _, token := range []string{c.Pilot, c.Spec} {
+		if token == "" {
+			continue
+		}
+		if token == name {
+			return true
+		}
+		if constraint, ok := constraintNamed(base, token); ok && constraint.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // checkCaseEvidence verifies one listed negative case against the corpus: a
-// case attributed to a pilot constraint names the row's constraint in its
-// header, and the bucket the referee recorded agrees with the row's status —
-// a faithful row's case is one we reject, a not-implemented row's case is one
-// only the pilot rejects, an approximate row may list either (a pilot-only case
-// is the gap it records), and an unknown row has no case.
-func checkCaseEvidence(r row, name, status string, c corpusCase) []string {
+// case attributed to a pilot constraint is attributed to the row's constraint
+// by its pilot token or its specification citation, and the bucket the referee
+// recorded agrees with the row's status — a faithful row's case is one we
+// reject, a not-implemented row's case is one only the pilot rejects, an
+// approximate row may list either (a pilot-only case is the gap it records),
+// and an unknown row has no case.
+func checkCaseEvidence(base *Baseline, r row, name, status string, c corpusCase) []string {
 	var problems []string
-	if c.Pilot != "" && !regexp.MustCompile(`\b`+regexp.QuoteMeta(name)+`\b`).MatchString(c.Header) {
-		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s does not name the constraint in its header", r.Line, name, c.Path))
+	if c.Pilot != "" && !attributedTo(base, c, name) {
+		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is attributed to %s, not to this constraint", r.Line, name, c.Path, c.Pilot))
 	}
 	switch {
 	case c.Bucket == "":
@@ -215,11 +241,16 @@ func receiverType(fn *ast.FuncDecl) string {
 	return ""
 }
 
-// checkImplementation verifies that every Go location an Implementation cell
-// cites exists and declares the function or method it names.
-func checkImplementation(decls *declarations, r row, name string) []string {
+// checkImplementation verifies that an implemented row cites at least one Go
+// location and that every cited location exists and declares the function or
+// method it names.
+func checkImplementation(decls *declarations, r row, name, status string) []string {
 	var problems []string
-	for _, m := range implementationRef.FindAllStringSubmatch(r.Cells[3], -1) {
+	refs := implementationRef.FindAllStringSubmatch(r.Cells[3], -1)
+	if implemented(status) && len(refs) == 0 && r.Cells[3] != "" && r.Cells[3] != "—" {
+		problems = append(problems, fmt.Sprintf("line %d: %s implementation %q cites no internal/<file>.go:<function> location", r.Line, name, r.Cells[3]))
+	}
+	for _, m := range refs {
 		file, symbol := m[1], m[2]
 		found, err := decls.declared(file, symbol)
 		switch {

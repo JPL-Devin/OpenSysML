@@ -313,11 +313,13 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		negativeCorpusDir + "/kerml/a.kerml":     "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
 		negativeCorpusDir + "/kerml/b.kerml":     "// Invalid: b (KerML 7.2; pilot validateB).\npackage P;\n",
 		negativeCorpusDir + "/kerml/other.kerml": "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/prose.kerml": "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
 		negativeCorpusDir + "/xpect/x.kerml":     "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
 		rejectionBaselinePath: `{"cases": [
 			{"path": "kerml/a.kerml", "bucket": "both-reject"},
 			{"path": "kerml/b.kerml", "bucket": "pilot-only-rejects"},
 			{"path": "kerml/other.kerml", "bucket": "both-reject"},
+			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
 			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"}]}`,
 		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n",
 	})
@@ -331,7 +333,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
-		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper) | same | `kerml/a.kerml`, `kerml/other.kerml`, `xpect/x.kerml` | ✅ faithful |",
+		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper) | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `xpect/x.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |",
 		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
 		"",
@@ -446,16 +448,29 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			mutate: func(s string) string { return strings.Replace(s, "a.go:helper", "a.go:renamed", 1) },
 			want:   "internal/core/passes/a.go declares no renamed",
 		},
+		"implementation cites no location": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper)", "internal/core/passes/a.go (APass)", 1)
+			},
+			want: "validateA implementation \"internal/core/passes/a.go (APass)\" cites no internal/<file>.go:<function> location",
+		},
 		"negative case attributed to another constraint": {
 			mutate: func(s string) string {
-				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`, `xpect/x.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`, `xpect/x.kerml`", 1)
+				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`", 1)
 				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/a.kerml` | ❌", 1)
 			},
-			want: "validateA negative case kerml/b.kerml does not name the constraint in its header",
+			want: "validateA negative case kerml/b.kerml is attributed to validateB, not to this constraint",
+		},
+		"negative case names the constraint in prose but its pilot token names another": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, ", `kerml/prose.kerml`", "", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/prose.kerml` | ❌", 1)
+			},
+			want: "validateB negative case kerml/prose.kerml is attributed to validateA, not to this constraint",
 		},
 		"faithful row lists a pilot-only case": {
 			mutate: func(s string) string {
-				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`, `xpect/x.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`, `xpect/x.kerml`", 1)
+				s = strings.Replace(s, "`kerml/a.kerml`, `kerml/other.kerml`", "`kerml/a.kerml`, `kerml/b.kerml`, `kerml/other.kerml`", 1)
 				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/a.kerml` | ❌", 1)
 			},
 			want: "validateA is recorded faithful but docs/project/pilot-rejection-baseline.json records its negative case kerml/b.kerml as pilot-only-rejects",

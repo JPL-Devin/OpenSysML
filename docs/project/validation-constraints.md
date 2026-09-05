@@ -25,9 +25,11 @@ the diagnostic it reports was recorded as that row's probe.
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
 provenance value, on a table row the baseline does not record, on
-a baseline name the table lacks, on an implemented row without a probe, on an *Implementation*
-location whose function the named file does not declare, on a *Negative case* that does not
-exist, whose header attributes the rejection to a different constraint, or whose bucket in
+a baseline name the table lacks, on an implemented row without a probe, on an implemented row's
+*Implementation* cell that cites no `internal/….go:function` location or cites one whose
+function the named file does not declare, on a *Negative case* that does not exist, whose
+header attributes the rejection (by its `pilot validate…` token or the specification constraint
+cited before it) to a different constraint, or whose bucket in
 [pilot-rejection-baseline.json](pilot-rejection-baseline.json) contradicts the row's status (a
 ✅ row's case must be one OpenSysML rejects, a ❌ row's one only the pilot rejects), on a corpus
 case attributed to a constraint whose row does not list it, and — when the pinned

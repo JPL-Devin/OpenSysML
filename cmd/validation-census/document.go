@@ -212,13 +212,13 @@ func checkDocument(root, content string, base *Baseline) error {
 		if implemented(c.Status) && (r.Cells[3] == "" || r.Cells[3] == "—") {
 			problems = append(problems, fmt.Sprintf("line %d: %s is recorded %s but names no implementation", r.Line, name, c.Status))
 		}
-		problems = append(problems, checkImplementation(decls, r, name)...)
+		problems = append(problems, checkImplementation(decls, r, name, c.Status)...)
 		problems = append(problems, checkNegativeCase(root, r, name)...)
 		listed[name] = make(map[string]bool)
 		for _, path := range negativeCases(r.Cells[5]) {
 			listed[name][path] = true
 			if cc, ok := cases[path]; ok {
-				problems = append(problems, checkCaseEvidence(r, name, c.Status, cc)...)
+				problems = append(problems, checkCaseEvidence(base, r, name, c.Status, cc)...)
 			}
 		}
 	}
