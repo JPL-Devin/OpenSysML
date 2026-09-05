@@ -39,12 +39,23 @@ func wantLibraryClean(t *testing.T, src string) {
 
 func wantLibraryDiag(t *testing.T, src, code, want string) {
 	t.Helper()
+	wantLibrarySeverity(t, src, SeverityError, code, want)
+}
+
+// wantLibraryWarning is wantLibraryDiag for an advisory.
+func wantLibraryWarning(t *testing.T, src, code, want string) {
+	t.Helper()
+	wantLibrarySeverity(t, src, SeverityWarning, code, want)
+}
+
+func wantLibrarySeverity(t *testing.T, src string, severity Severity, code, want string) {
+	t.Helper()
 	diags := libraryDiags(t, src)
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one diagnostic, got %v", diags)
 	}
-	if diags[0].Code != code {
-		t.Fatalf("expected code %q, got %q (%s)", code, diags[0].Code, diags[0].Message)
+	if diags[0].Severity != severity || diags[0].Code != code {
+		t.Fatalf("expected %s %q, got %s %q (%s)", severity, code, diags[0].Severity, diags[0].Code, diags[0].Message)
 	}
 	if !strings.Contains(diags[0].Message, want) {
 		t.Fatalf("expected message containing %q, got %q", want, diags[0].Message)
@@ -336,12 +347,12 @@ func TestInvocationOverloadRedeclaredLibraryInputs(t *testing.T) {
 	wantLibraryClean(t, fmt.Sprintf(src, ""))
 	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Renamed(x = 16.0);`),
 		"type.expr", `Renamed has no parameter named "x"`)
-	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Renamed();`),
-		"type.expr", "Renamed requires 1 argument(s), found 0")
-	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Floor(2.0);`),
-		"type.expr", "Floor requires 2 argument(s), found 1")
-	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Boolean = Required();`),
-		"type.expr", "Required requires 1 argument(s), found 0")
+	wantLibraryWarning(t, fmt.Sprintf(src, `attribute z : Real = Renamed();`),
+		CodeUnboundParameter, "Renamed leaves parameter y unbound")
+	wantLibraryWarning(t, fmt.Sprintf(src, `attribute z : Real = Floor(2.0);`),
+		CodeUnboundParameter, "Floor leaves parameter x unbound")
+	wantLibraryWarning(t, fmt.Sprintf(src, `attribute z : Boolean = Required();`),
+		CodeUnboundParameter, "Required leaves parameter seq unbound")
 }
 
 // An argument of unknown type binds to any parameter, so the first candidate
@@ -658,7 +669,7 @@ func TestInvocationOverloadSiblingScalarTypes(t *testing.T) {
 }
 
 // A named argument is checked against the parameter it names as a positional
-// one is against its position, and a parameter without a default must be named.
+// one is against its position, and a parameter without a default left unnamed is advised of.
 func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
@@ -675,8 +686,8 @@ func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
 		"type.expr", `argument m of density expects Real, found String`)
 	wantLibraryDiag(t, fmt.Sprintf(model, `b : Real = density(m = kg, v = litre, scale = true);`),
 		"type.expr", `argument scale of density expects Real, found Boolean`)
-	wantLibraryDiag(t, fmt.Sprintf(model, `partial : Real = density(m = kg);`),
-		"type.expr", `density requires an argument for parameter v`)
+	wantLibraryWarning(t, fmt.Sprintf(model, `partial : Real = density(m = kg);`),
+		CodeUnboundParameter, `density leaves parameter v unbound`)
 }
 
 // Candidates come through re-exporting public imports and from general types; an
@@ -902,7 +913,7 @@ func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testi
 }
 
 // A performed action's input is omitted when it may hold no value or a default reaches
-// it along its redefinitions; an input with neither must be bound.
+// it along its redefinitions; an input with neither left unbound is advised of.
 func TestInvocationPerformedActionOptionalInputs(t *testing.T) {
 	const outer = `
 		package test {
@@ -926,9 +937,9 @@ func TestInvocationPerformedActionOptionalInputs(t *testing.T) {
 		action def base { in x : Integer = 3; out code : Integer; }
 		action def tag :> base { in x : Integer :>> x; }
 	}`+outer)
-	wantLibraryDiag(t, `package B {
+	wantLibraryWarning(t, `package B {
 		private import ScalarValues::*;
 		action def base { in x : Integer = 3; out code : Integer; }
 		action def tag :> base { in x : Integer :>> x; in y : Integer; }
-	}`+outer, "type.expr", "tag requires 2 argument(s), found 0")
+	}`+outer, CodeUnboundParameter, "tag leaves parameter y unbound")
 }

@@ -48,14 +48,23 @@ func (ec *exprChecker) errorCode(code string, span source.Span, format string, a
 }
 
 func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
+	ec.warnCode("type.expr", span, format, args...)
+}
+
+// warnCode is warnf under the code of a rule with its own.
+func (ec *exprChecker) warnCode(code string, span source.Span, format string, args ...any) {
 	ec.diags = append(ec.diags, Diagnostic{
 		Severity: SeverityWarning,
 		Span:     span,
 		Message:  fmt.Sprintf(format, args...),
-		Code:     "type.expr",
+		Code:     code,
 		Source:   "type",
 	})
 }
+
+// CodeUnboundParameter advises of an invocation leaving a default-less input parameter
+// unbound: well formed (KerML 1.0 §8.3.4.8.8), but the runtime refuses to evaluate it.
+const CodeUnboundParameter = "unbound-parameter"
 
 // checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
 // against the type and multiplicity the feature declares; an accept's trigger
@@ -105,7 +114,7 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, d f
 	for _, element := range valueElements(value) {
 		var got semantics.PrimType
 		if inv, ok := element.(*ast.InvocationExpr); ok && node != nil {
-			got = ec.inferNodeInvocation(valueScope, inv, node, true)
+			got = ec.inferNodeInvocation(valueScope, inv, node)
 		} else {
 			got = ec.infer(valueScope, element)
 		}
@@ -482,7 +491,7 @@ func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureCha
 	case *ast.ConstructorExpr:
 		ec.inferConstructor(scope, head)
 	case *ast.InvocationExpr:
-		ec.inferNodeInvocation(scope, head, nil, false)
+		ec.inferNodeInvocation(scope, head, nil)
 	}
 	sym, ok := ec.resolver.ResolveTarget(scope, e)
 	if !ok || sym == nil {
@@ -737,12 +746,12 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 // inferInvocation checks a call's arguments against the `in` parameters of the declaration
 // SelectInvocation chose and types it by its result; a receiver `x->f(a)` is the first argument.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	return ec.inferNodeInvocation(scope, e, nil, true)
+	return ec.inferNodeInvocation(scope, e, nil)
 }
 
 // inferNodeInvocation is inferInvocation for an invocation performed by node (nil for a bare
-// call); complete is false for a chain head, whose unbound required parameters pass.
-func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol, complete bool) semantics.PrimType {
+// call).
+func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol) semantics.PrimType {
 	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
 	argTypes := ec.argumentTypes(scope, e)
@@ -806,11 +815,25 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, args, argTypes, params, considered, complete)
+	ec.checkArguments(scope, e, sym, args, argTypes, params, considered)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
 	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
+}
+
+// reporter reports a finding about an invocation's arguments.
+type reporter func(span source.Span, format string, args ...any)
+
+// listing is report with considered (the other declarations a call could name) on each finding.
+func listing(report reporter, considered []*symbols.Symbol) reporter {
+	if len(considered) < 2 {
+		return report
+	}
+	suffix := " (candidates: " + candidateNames(considered) + ")"
+	return func(span source.Span, format string, args ...any) {
+		report(span, "%s"+suffix, fmt.Sprintf(format, args...))
+	}
 }
 
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
@@ -823,32 +846,17 @@ func (ec *exprChecker) checkArguments(
 	argTypes argumentTypes,
 	params []parameter,
 	considered []*symbols.Symbol,
-	complete bool,
 ) {
-	report := ec.errorf
-	if len(considered) > 1 {
-		suffix := " (candidates: " + candidateNames(considered) + ")"
-		report = func(span source.Span, format string, args ...any) {
-			ec.errorf(span, "%s"+suffix, fmt.Sprintf(format, args...))
-		}
-	}
+	report := listing(ec.errorf, considered)
+	advise := listing(func(span source.Span, format string, args ...any) {
+		ec.warnCode(CodeUnboundParameter, span, format, args...)
+	}, considered)
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report, complete)
+		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report, advise)
 		return
 	}
-	// Arguments bind in order, so a call must reach the last required parameter.
-	required := 0
-	for i, p := range params {
-		if p.required(ec.model) {
-			required = i + 1
-		}
-	}
-	switch {
-	case len(args) > len(params):
+	if len(args) > len(params) {
 		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
-		return
-	case complete && len(args) < required:
-		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
 	for i, arg := range args {
@@ -856,7 +864,16 @@ func (ec *exprChecker) checkArguments(
 			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
 		}
 	}
+	// Arguments bind in order, so the parameters past the last one are unbound.
+	for _, p := range params[len(args):] {
+		if p.required(ec.model) {
+			advise(e.Span(), msgUnboundParameter, sym.Name, p.name())
+		}
+	}
 }
+
+// msgUnboundParameter is the CodeUnboundParameter advisory: the call's name, then the parameter's.
+const msgUnboundParameter = "%s leaves parameter %s unbound, so the call cannot be evaluated"
 
 // inferConstructor checks the arguments of `new T(…)` against T's features: a
 // positional argument binds the feature at its position, a label the feature it
@@ -1015,8 +1032,8 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 }
 
 // checkNamedArguments reports named arguments that name no `in` parameter of sym or do
-// not bind to it, a parameter bound twice (by whichever name or position), and, when
-// complete, default-less parameters no argument names.
+// not bind to it, a parameter bound twice (by whichever name or position), and advises
+// of default-less parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
 	scope *symbols.Scope,
 	e *ast.InvocationExpr,
@@ -1024,8 +1041,7 @@ func (ec *exprChecker) checkNamedArguments(
 	args []ast.Node,
 	argTypes argumentTypes,
 	params []parameter,
-	report func(source.Span, string, ...any),
-	complete bool,
+	report, advise reporter,
 ) {
 	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
 	// reports the same call.
@@ -1066,12 +1082,12 @@ func (ec *exprChecker) checkNamedArguments(
 		}
 	}
 	// A misspelt name is the likelier cause of a parameter left unbound.
-	if unknown || !complete {
+	if unknown {
 		return
 	}
 	for i, p := range params {
 		if !bound[i] && p.required(ec.model) {
-			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
+			advise(e.Span(), msgUnboundParameter, sym.Name, p.name())
 		}
 	}
 }
