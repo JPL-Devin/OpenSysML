@@ -224,6 +224,9 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.prefixes(scope, d, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
+		if d.CrossFeature != nil {
+			c.multiplicity(scope, d.CrossFeature.Multiplicity)
+		}
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
 			c.trigger(scope, d.Value)

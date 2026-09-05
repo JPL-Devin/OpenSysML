@@ -11,6 +11,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -682,7 +683,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
 		e.relationships(subject, owner, n.Relationships)
-		e.multiplicity(subject, owner, n.Multiplicity)
+		e.multiplicity(subject, owner, semantics.StatedMultiplicityOf(n))
 		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage states its ends

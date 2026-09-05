@@ -29,13 +29,24 @@ type Range struct {
 // becomes an infinite bound; an evaluable integer becomes a known bound;
 // anything else is unknown.
 func (m *Model) boundOf(n ast.Node) Bound {
+	return m.boundIn(nil, n)
+}
+
+// boundIn is boundOf reading through features the bound names, in scope.
+func (m *Model) boundIn(scope *symbols.Scope, n ast.Node) Bound {
 	if n == nil {
 		return Bound{}
 	}
 	if _, isInf := n.(*ast.LiteralInfinity); isInf {
 		return Bound{Infinite: true, Known: true}
 	}
-	v, ok := m.Eval(n)
+	var v Value
+	var ok bool
+	if scope != nil {
+		v, ok = m.EvalIn(scope, n)
+	} else {
+		v, ok = m.Eval(n)
+	}
 	if !ok {
 		return Bound{}
 	}
@@ -52,15 +63,21 @@ func (m *Model) boundOf(n ast.Node) Bound {
 // multiplicityRange extracts a Range from a parsed *ast.Multiplicity. ok is
 // false when the multiplicity is nil.
 func (m *Model) multiplicityRange(mult *ast.Multiplicity) (Range, bool) {
+	return m.multiplicityRangeIn(nil, mult)
+}
+
+// multiplicityRangeIn is multiplicityRange evaluating bounds that name valued
+// features (`[one]`) in scope; a nil scope evaluates constants only.
+func (m *Model) multiplicityRangeIn(scope *symbols.Scope, mult *ast.Multiplicity) (Range, bool) {
 	if mult == nil {
 		return Range{}, false
 	}
 	if mult.IsRange {
-		return Range{Lower: m.boundOf(mult.Lower), Upper: m.boundOf(mult.Upper)}, true
+		return Range{Lower: m.boundIn(scope, mult.Lower), Upper: m.boundIn(scope, mult.Upper)}, true
 	}
 	// Single-bound `[n]`: the parser stores the sole bound in Lower. The bound is
 	// both bounds, unless it is unbounded, where the lower bound is 0.
-	b := m.boundOf(mult.Lower)
+	b := m.boundIn(scope, mult.Lower)
 	if b.Infinite {
 		return Range{Lower: Bound{Value: 0, Known: true}, Upper: b}, true
 	}
@@ -85,7 +102,8 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 }
 
 // UsageMultiplicityOf returns the multiplicity a usage symbol declares, a subject
-// or the constraint an assume/require member owns included, or nil.
+// or the constraint an assume/require member owns included, or nil. An end
+// that declares none states its cross feature's (`end [0..*] item x`).
 func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	if sym == nil {
 		return nil
@@ -95,13 +113,25 @@ func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
-		return decl.Multiplicity
+		return StatedMultiplicityOf(decl)
 	case *ast.SubjectMember:
 		return decl.Multiplicity
 	case *ast.CrossFeatureMember:
 		return decl.Multiplicity
 	}
 	return nil
+}
+
+// StatedMultiplicityOf returns the multiplicity a usage node states: its own,
+// else the crossing one an end writes ahead of its kind keyword.
+func StatedMultiplicityOf(u *ast.Usage) *ast.Multiplicity {
+	if u == nil {
+		return nil
+	}
+	if u.Multiplicity != nil || u.CrossFeature == nil {
+		return u.Multiplicity
+	}
+	return u.CrossFeature.Multiplicity
 }
 
 // AssumedRange is the multiplicity of a feature that declares none: a feature
