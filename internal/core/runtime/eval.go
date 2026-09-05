@@ -2037,6 +2037,7 @@ type invocationTarget struct {
 	library     *libraryFunction  // the library function the name denotes: the library declaration calc is
 	shape       *calcShape        // calc's invocation interface, nil when it has none
 	names       []string          // the parameter each named argument binds, as calc's signature spells it
+	unbound     error             // the named argument calc has no parameter for, nil when every one binds
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
@@ -2057,28 +2058,34 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		ec.ctx.implementInvocation(target, sym)
 	}
 	if len(n.NamedArgs) > 0 {
-		target.names = ec.ctx.boundParameterNames(ec.scope, target.calc, n.NamedArgs)
+		target.names, target.unbound = ec.ctx.boundParameterNames(ec.scope, target.calc, n.NamedArgs)
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
 }
 
 // boundParameterNames is the parameter each named argument binds in callee, spelled as
-// callee's signature spells it; a label the model cannot place is kept as written.
-func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) []string {
+// callee's signature spells it. A label callee has no parameter for is an error, and is
+// kept as written; with no callee to place them against, every label is kept as written.
+func (ctx *Context) boundParameterNames(scope *symbols.Scope, callee *symbols.Symbol, named []ast.NamedArg) ([]string, error) {
 	names := make([]string, len(named))
+	var unbound error
 	for i, arg := range named {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			continue
 		}
 		names[i] = semantics.QualifiedNameText(arg.Name)
-		if callee != nil && ctx.model != nil {
-			if name, ok := ctx.model.BoundParameter(scope, callee, arg.Name); ok {
-				names[i] = name
-			}
+		if callee == nil || ctx.model == nil {
+			continue
+		}
+		if name, ok := ctx.model.BoundParameter(scope, callee, arg.Name); ok {
+			names[i] = name
+		} else if unbound == nil {
+			unbound = fmt.Errorf("%w: %s has no parameter named %q",
+				ErrUnknownParameter, ctx.qualifiedSymbolName(callee), names[i])
 		}
 	}
-	return names
+	return names, unbound
 }
 
 // implementInvocation records how a call of the selected sym is applied: by a
@@ -2149,6 +2156,9 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// they live on the context's argument stack rather than in a slice of their own.
 	if target.shape != nil && len(n.NamedArgs) == 0 {
 		return ec.invokeCalcShapeStacked(target.shape, exprs)
+	}
+	if target.unbound != nil {
+		return Value{}, target.unbound
 	}
 	// A built-in binds its arguments by its declared signature.
 	if target.builtin != nil {

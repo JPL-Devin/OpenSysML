@@ -291,6 +291,8 @@ func testActionCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 		package test {
 			private import ScalarValues::*;
 			action def A { in <ys> y : Integer; alias yy for y; out code : Integer; first start; action set { assign code := y + 10; } done; succession first start then set; succession first set then done; }
+			package Other { attribute y : Integer = 5; }
+			action def B { in 'Other::y' : Integer; out code : Integer; first start; action set { assign code := 'Other::y' + 10; } done; succession first start then set; succession first set then done; }
 			action def Outer {
 				attribute code : Integer = 0;
 				first start;
@@ -309,7 +311,7 @@ func testActionCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 		}
 		return ctx.ExecuteAction(outer)
 	}
-	for _, call := range []string{"A(ys = 3)", "A(yy = 3)", "A(A::y = 3)"} {
+	for _, call := range []string{"A(ys = 3)", "A(yy = 3)", "A(A::y = 3)", "B('Other::y' = 3)"} {
 		outputs, err := run(call)
 		if err != nil {
 			t.Fatalf("%s: %v", call, err)
@@ -324,6 +326,15 @@ func testActionCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 	}
 	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "y" of A`) {
 		t.Fatalf("A(y = 1, ys = 2): error = %v, want ErrDuplicateArgument naming y", err)
+	}
+	for _, call := range []string{"A(Other::y = 1)", "B(Other::y = 1)"} {
+		outputs, err := run(call)
+		if err == nil {
+			t.Fatalf("%s: expected a refusal, action returned %v", call, outputs)
+		}
+		if !errors.Is(err, ErrUnknownParameter) || !strings.Contains(err.Error(), `has no parameter named "Other::y"`) {
+			t.Fatalf("%s: error = %v, want ErrUnknownParameter naming Other::y", call, err)
+		}
 	}
 }
 
@@ -1218,16 +1229,21 @@ func testCalcCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 			calc def G { in b : Integer; alias bs for b; return : Integer = b * 2; }
 			calc def Base { in n : Integer; return : Integer; }
 			calc def Derived :> Base { return : Integer = n + 10; }
+			package Other { attribute x : Integer = 5; }
+			calc def H { in 'Other::x' : Integer; return : Integer = 'Other::x' * 3; }
 			calc viaShort { F(xs = 1) }
 			calc viaAlias { G(bs = 2) }
 			calc viaQualified { F(F::x = 3) }
 			calc viaInherited { Derived(Base::n = 4) }
+			calc viaUnrestricted { H('Other::x' = 5) }
 			calc twice { F(x = 1, xs = 2) }
+			calc elsewhere { F(Other::x = 1) }
+			calc elsewhereSpelled { H(Other::x = 1) }
 		}
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
-	for calc, want := range map[string]int64{"viaShort": 2, "viaAlias": 4, "viaQualified": 4, "viaInherited": 14} {
+	for calc, want := range map[string]int64{"viaShort": 2, "viaAlias": 4, "viaQualified": 4, "viaInherited": 14, "viaUnrestricted": 15} {
 		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
 		if sym == nil {
 			t.Fatalf("%s calc not found", calc)
@@ -1247,6 +1263,16 @@ func testCalcCallNamesAParameterAsTheCheckerDoes(t *testing.T) {
 	_, err := ctx.InvokeCalc(sym, nil, rootScope)
 	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
 		t.Fatalf("twice = %v, want ErrCalcArity naming x", err)
+	}
+	for _, calc := range []string{"elsewhere", "elsewhereSpelled"} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		_, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if !errors.Is(err, ErrUnknownParameter) || !strings.Contains(err.Error(), `has no parameter named "Other::x"`) {
+			t.Fatalf("%s = %v, want ErrUnknownParameter naming Other::x", calc, err)
+		}
 	}
 }
 

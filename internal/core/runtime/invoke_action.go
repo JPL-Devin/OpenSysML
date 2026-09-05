@@ -245,7 +245,10 @@ func bindArgumentList(ec *EvalContext, inv actionInvocation, callee *symbols.Sym
 		bound[in[i]] = true
 	}
 
-	names := ec.ctx.boundParameterNames(ec.scope, callee, inv.named)
+	names, err := ec.ctx.boundParameterNames(ec.scope, callee, inv.named)
+	if err != nil {
+		return err
+	}
 	for i, named := range inv.named {
 		name := names[i]
 		if name == "" {
