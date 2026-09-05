@@ -10,9 +10,10 @@
   masking it. Whether a KerML association or connector implicitly takes the binary base follows
   the same count, so one that redefines two ends of a three-ended general and inherits the third
   stays n-ary. A multiplicity bound whose result type resolves to anything but an Integer-conforming
-  data type — a feature typed by a class, a call to a function whose result is a class, or a
-  quantity such as `3 [kg]`, say — is rejected with `Must have a Natural value`; an unresolved or
-  untyped bound stays silent.
+  data type — a feature typed by a class, a bare `part`, `item`, `port`, `action` or `step` typed
+  only by its kind's library base, a call to a function whose result is a class, or a quantity
+  such as `3 [kg]`, say — is rejected with `Must have a Natural value`; an unresolved or untyped
+  bound stays silent.
 - **KerML binary connectors parse as the grammar reads them.** `connector a to b`,
   `connector [0..1] a to [1..*] b`, `connector e ::> a.x to b.y`, `connector e references x to y`
   and `connector $::P::a to b` declare an anonymous connector with two ends; only `connector c from a to b` names one. The

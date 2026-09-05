@@ -108,7 +108,7 @@ func (c *multiplicityBoundsChecker) boundConforms(scope *symbols.Scope, bound as
 	if prim := silent.featurePrimType(sym); prim != semantics.PrimUnknown {
 		return semantics.PrimConforms(prim, want)
 	}
-	return !c.model.DeclaresResolvedType(sym)
+	return !c.model.DeclaresResolvedType(sym, want)
 }
 
 // w8cWholeOperator reports the operators closed over want: division may yield a

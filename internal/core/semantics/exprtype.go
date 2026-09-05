@@ -212,10 +212,9 @@ func (m *Model) PrimTypeOf(sym *symbols.Symbol) PrimType {
 	return prim
 }
 
-// DeclaresResolvedType reports whether sym, or a feature it subsets or redefines,
-// resolves a declared type, so a class-typed feature is told apart from one that
-// is untyped or whose type is unresolved (which the name-resolution tier reports).
-func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
+// DeclaresResolvedType reports whether sym resolves a declared type — directly, via
+// subsetting/redefinition, or an implicit kind base no prim value can be of (Part, not Anything).
+func (m *Model) DeclaresResolvedType(sym *symbols.Symbol, prim PrimType) bool {
 	if m == nil || sym == nil {
 		return false
 	}
@@ -226,7 +225,13 @@ func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
 		queue = queue[1:]
 		bases := m.implicitBases(cur)
 		for _, sup := range m.DirectSupertypes(cur) {
-			if seen[sup] || slices.Contains(bases, sup) {
+			if seen[sup] {
+				continue
+			}
+			if slices.Contains(bases, sup) {
+				if m.kindBaseExcludes(sup, prim) {
+					return true
+				}
 				continue
 			}
 			if !sup.IsFeature() {
@@ -235,8 +240,26 @@ func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
 			seen[sup] = true
 			queue = append(queue, sup)
 		}
+		if m.kindBaseExcludes(m.implicitKerMLFeatureBase(cur), prim) {
+			return true
+		}
 	}
 	return false
+}
+
+// kindBaseExcludes reports whether no value of prim is of the type a kind base implies.
+func (m *Model) kindBaseExcludes(base *symbols.Symbol, prim PrimType) bool {
+	scalar := m.ScalarSymbol(prim)
+	if scalar == nil || base == nil {
+		return false
+	}
+	typ := base
+	if base.IsFeature() {
+		if typ = m.nearestDeclaredType(base); typ == nil {
+			return false
+		}
+	}
+	return !m.Conforms(scalar, typ)
 }
 
 // CouldHold reports whether a feature of the given type could hold a value of

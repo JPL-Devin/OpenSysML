@@ -1,6 +1,9 @@
 package passes
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestW8CMultiplicityBoundNotNatural(t *testing.T) {
 	cases := map[string]string{
@@ -71,6 +74,12 @@ func TestW8CMultiplicityBoundResultTypeNotNatural(t *testing.T) {
 		"class typed redef":  "class C { feature n : C; } class D specializes C { feature :>> n; feature f [n]; }",
 		"class typed chain":  "class C { feature n : C; feature m subsets n; feature k :> m; feature f [k]; }",
 		"real typed subset":  "class C { feature r : ScalarValues::Real; feature s subsets r; feature f [s]; }",
+		"bare step":          "step s; feature f [s];",
+		"bare behavior":      "behavior b; feature f [b];",
+		"bare connector":     "class C { connector c; feature f [c]; }",
+		"bare step subset":   "step s; feature t subsets s; feature f [t];",
+		"bare class":         "class C; feature f [C];",
+		"anything typed":     "feature a : Base::Anything; feature f [a];",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -79,6 +88,42 @@ func TestW8CMultiplicityBoundResultTypeNotNatural(t *testing.T) {
 				t.Errorf("want one %q, got %v", msgMultiplicityBoundNatural, msgs)
 			}
 		})
+	}
+}
+
+// A bare usage is typed by its kind's library base, so a part, item, port or
+// action used as a bound is rejected like an explicitly class-typed feature.
+func TestW8CMultiplicityBoundImplicitKindTypeSysML(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	part p;
+	part xs [p];
+	item i;
+	item ys [i];
+	port q;
+	part ws [q];
+	action act;
+	part us [act];
+	part sub :> p;
+	part vs [sub];
+	attribute n : Natural;
+	part ok [n];
+	attribute a;
+	part oka [a];
+	ref r;
+	part okr [r];
+	attribute m :> n;
+	part okm [0..m];
+}`
+	var got []string
+	for _, d := range constraintDiags(t, src) {
+		if d.Message == msgMultiplicityBoundNatural {
+			got = append(got, src[d.Span.Offset:d.Span.End()])
+		}
+	}
+	want := []string{"p", "i", "q", "act", "sub"}
+	if !slices.Equal(got, want) {
+		t.Errorf("bounds reported %v, want %v", got, want)
 	}
 }
 
@@ -149,6 +194,7 @@ func TestW8CMultiplicityBoundResultTypeSilent(t *testing.T) {
 		"natural redef":         "class C { feature n : ScalarValues::Natural; } class D specializes C { feature :>> n; feature f [n]; }",
 		"untyped":               "class C { feature u; feature f [u]; }",
 		"untyped subset":        "class C { feature u; feature v subsets u; feature f [v]; }",
+		"untyped package level": "feature u; feature f [u];",
 		"unresolved subset":     "class C { feature q : Undeclared; feature v subsets q; feature f [v]; }",
 		"unresolved type":       "class C { feature q : Undeclared; feature f [q]; }",
 		"unresolved bound":      "class C { feature f [nothere]; }",
