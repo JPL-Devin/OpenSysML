@@ -208,7 +208,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 366 files)
+## Results (pilot `2026-07`, 367 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -217,9 +217,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 32 | 25 | 11 | 286 | 9 | 1 | 1 | 276 |
+| `examples` | 33 | 25 | 2 | 547 | 0 | 1 | 1 | 546 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **338** | **65** | **347** | **43** | **2** | **20** | **302** |
+| **Total** | **367** | **338** | **56** | **608** | **34** | **2** | **20** | **572** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -284,13 +284,14 @@ What remains is adjudicated as extension notation this project supports delibera
 - **`choice` and `junction`** — no SysML v2 production exists for pseudostates, so the notation stays
   supported and stays demonstrated. `pseudostates-demo.sysml` is now the only file that writes it, and
   says so; its 1 only-ours warning, 1 severity-only pair and 5 pilot rows are that file alone.
-- **`attribute :>> best = <expression>` and a second objective** (`solver-demo.sysml`,
-  `robot.sysml`, `disposal-team-demo/team.sysml`) — the trade-study contract this project reads
-  (`internal/core/solve/doc.go`). The
-  library binds `best`, so the reference reports `Cannot override a binding feature value` for the
-  expression to improve — since the feature-value overriding round below we report it too, so
-  those nine rows are agreement, not divergence — and it admits one objective per analysis case
-  where we improve several lexicographically: 1 + 1 `unmapped` rows that stay the reference's.
+- **a second objective** (`solver-demo.sysml`, `robot.sysml`) — the reference admits one
+  objective per analysis case where we improve several lexicographically
+  (`internal/core/solve/doc.go`): 1 + 1 `unmapped` rows that stay the reference's. The objective's
+  value itself draws no row since the objective-evaluation round below: it is stated as the
+  library's `eval` calculation, which both sides accept.
+  The exemption is the analysis case alone; a `case`, `verification` or `use case` declaration
+  with a second objective is reported as the reference reports it, since no other case kind has
+  the lexicographic semantics.
 - **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
   a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
   in the view because that is what `%view` evaluates the exposed elements against. Declaring the
@@ -304,14 +305,15 @@ adjudicated where they are rather than rewritten away.
 ### The team demo
 
 `examples/disposal-team-demo/team.sysml` was written to exercise notation the robot demo does not
-reach. The reference reports four rows on it; since the feature-value overriding round we report
-the `best` one too, and none of the other three is a rule of ours that is missing:
+reach. The reference reports three rows on it, and none is a rule of ours that is missing (a
+fourth, on the objective's `attribute :>> best = robotMass;`, was reported by both sides between the
+feature-value overriding round and the objective-evaluation round, which restated the objective as
+the library's `eval` calculation):
 
 | Row | The reference's reading | Verdict |
 |---|---|---|
 | `:29` (2 `warning: Bound features should have conforming types`) | `attribute payload : MassValue = sum(robots.mass) + sum(cradles.mass);` — the value is an operator expression, and the reference compares the argument types of the implicit binding | Same family as `BindingConnector_Invalid2.sysml.xt:42`: our `W9CBoundFeatureTypesPass` checks feature endpoints, and no numbered constraint was found for argument-level conformance on an expression |
 | `:117` (`error: Referent must be time varying.` + the same warning) | `assign accepted := accepted + 1;` in a state's entry action, where `accepted` is an attribute of the enclosing `part def` | Reference-side asymmetry: the identical assignment written in an `action` of the same part def, nested or not, is clean on both sides, so the referent's `mayTimeVary` is not what the two implementations read differently — the state's entry action is |
-| `:271` (`error`, `unmapped`) | `attribute :>> best = robotMass;` in the analysis objective | The trade-study notation adjudicated in the bullet above; now reported by both sides |
 
 ### Package-keyword round
 
@@ -346,8 +348,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **302** |
-| pilot diagnostics | 123 | **347** |
+| only pilot | 82 | **572** |
+| pilot diagnostics | 123 | **608** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -374,7 +376,7 @@ view and analysis packages, and each is a construct the pinned artifact does not
 |---|---:|---|
 | `frame concern` in a view usage | 2 syntax | the member is not in its view grammar, and the cascade takes the file's closing brace |
 | `view … : StateTransitionView` / `: ActionFlowView`, `render asElementTable` | 3 `unresolved-reference`, 4 `kind-mismatch` | our standard view definitions and rendering, which its libraries do not publish |
-| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case |
+| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case (the rebinding rows retired with the objective-evaluation round, which states the value as the library's `eval`) |
 | a second objective for a lexicographic optimum | 2 `unmapped` | `Only one objective is allowed` |
 
 Nothing in the demo's structure, calculations, action or state machine draws a pilot diagnostic, so
@@ -477,7 +479,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 15 `unmapped`, 70 `kind-mismatch`, 181 `unresolved-reference` — of which
+`examples` 10 syntax, 15 `unmapped`, 242 `kind-mismatch`, 279 `unresolved-reference` — of which
 `relay-probe-demo/mission.sysml` carries none: it carried a `kind-mismatch` on its send of a
 `Telemetry` invocation until the send-argument round above, and the demo now writes the
 constructor, `send new Telemetry(…) via antenna`, which both implementations accept, so the row
@@ -510,6 +512,16 @@ so its size measures how much the document asks of the library, not conformance.
 only-pilot total as "one file the reference has no library for, plus the 48 rows the other files
 carry", not as a conformance movement.
 
+**`oosem-demo/oosem-demo.sysml` adds 270 pilot-only rows with the same single cause: the reference
+has no `OOSEM` library.** The example imports the object-oriented systems engineering method
+vocabulary this project bundles as an OpenSysML library ([the design record](oosem-library.md)),
+so every `#system`, `#systemRequirement`, `#logical` or `#moe` prefix and every `:> system`
+specialization the reference cannot resolve cascades into 98 `unresolved-reference` and 172
+`kind-mismatch` (`Must invoke a behavior or a behavioral feature` and its metadata-keyword
+cousins, 7 of them warnings). The `examples` only-pilot column moves 302 → 572 while only-ours
+stays at 20 and our diagnostics at 65: two files the reference has no library for, plus the 48
+rows the other files carry.
+
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
 resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — the parser now
 parses notation we used to reject. But `unresolved-reference` rises 27 → 36, `unmapped` 5 → 17 and
@@ -541,14 +553,14 @@ page's history.
 
 | Count | Now |
 |---|---:|
-| overall: fully agreeing / only ours / our diagnostics | **338 / 20 / 65** |
-| only pilot | **302** |
-| pilot diagnostics | **347** |
+| overall: fully agreeing / only ours / our diagnostics | **338 / 20 / 56** |
+| only pilot | **572** |
+| pilot diagnostics | **608** |
 | severity-only | **2** |
-| unmapped, our side | **28** |
+| unmapped, our side | **19** |
 | kerml-examples: only ours | **3** |
 | pilot-examples: only ours | **7** |
-| examples: only pilot | **276** |
+| examples: only pilot | **546** |
 
 The KerML root is now the *cleanest* of the three OMG roots in proportion: **3** only-ours against 6
 only-pilot — the only root where the reference reports more than we do — with 50 of 58 files fully
@@ -610,6 +622,34 @@ Two movements, both in `examples/`:
   (13), `self-model/surfaces.sysml` (4) and, through them, `self-model/identity.sysml` (1). Those
   bases now say `default =`, which is what a value meant to be overridden is, so neither side
   reports the override; every `%`-command transcript in the docs is unchanged.
+
+---
+
+### Objective-evaluation round
+
+The solver's objective contract is restated as the trade-study library intends: an objective
+states the value to improve by redefining the library's `eval` calculation
+(`objective o : MinimizeObjective { subject :>> selectedAlternative; in calc :>> eval { expression } }`)
+rather than by giving the bound `best` a value of its own. The rule set is unchanged — no
+diagnostic was added or removed — and the four OMG roots are unmoved; only our own `examples` move:
+
+| Count | Before | Now |
+|---|---:|---:|
+| overall: agreed diagnostics | 43 | **34** |
+| overall: our diagnostics | 65 | **56** |
+| overall: pilot diagnostics | 617 | **608** |
+| `examples`: agreed diagnostics | 9 | **0** |
+| `examples`: our diagnostics | 11 | **2** |
+| `examples`: pilot diagnostics | 556 | **547** |
+
+One movement: **the nine agreed rows of the feature-value overriding round retire.** Every
+`attribute :>> best = <expression>` in `solver-demo.sysml` (4), `disposal-robot-demo/robot.sysml`
+(4) and `disposal-team-demo/team.sysml` (1) is now `in calc :>> eval { <expression> }`, on which
+the pinned reference is silent (run over each migrated file: no diagnostic at the objective), as
+are we. `%optimize` reports the same optima it did (`examples_test.go` carries no solver carve-out
+any more), and the `Only one objective is allowed` rows on the two lexicographic demos stay the
+reference's, adjudicated above. `fully agreeing`, `only ours` and `only pilot` do not move: the
+retired rows were agreement.
 
 ## Adjudications
 

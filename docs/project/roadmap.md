@@ -95,7 +95,7 @@ before re-recording anything.
 |---|---|
 | OMG training corpus | **100/100 clean** — asserted, not ratcheted: no file reports a semantic error |
 | OMG pilot corpora (ratchet) | 213 files; 5 report a diagnostic, each adjudicated in [pilot-corpora.md](pilot-corpora.md) and [omg-issues.md](omg-issues.md) |
-| Stdlib parser conformance | 97/97 clean — 94 vendored OMG files and 3 non-normative OpenSysML extensions |
+| Stdlib parser conformance | 98/98 clean — 94 vendored OMG files and 4 non-normative OpenSysML extensions |
 | Execution conformance cases | 614 (`TestExecutionConformance`) |
 | Golden execution traces | 138 (`TestExecutionTrace`) |
 | Runtime robustness cases | 324 first-level subtests of `TestRuntimeRobustness` |
@@ -103,7 +103,7 @@ before re-recording anything.
 | Golden AST fixtures | 183 (`TestGolden`) |
 | Negative parser subtests | 225 first-level subtests of `TestNegative` (346 across every `*Negative*` parser test) |
 | Rejection oracle | 243 self-authored invalid models: 235 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
-| Validation census | 155 of 217 named constraints reported (143 faithful, 12 approximate), 6 not implemented, 1 deliberate, 55 unknown — with the KerML unknown-row adjudication |
+| Validation census | 156 of 217 named constraints reported (143 faithful, 13 approximate), 7 not implemented, 1 deliberate, 53 unknown — with the KerML unknown-row adjudications |
 | RDF corpus round trip | 305 of 345 models stable, 40 refused, no other verdict |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
@@ -1203,9 +1203,9 @@ census [validation-constraints.md](validation-constraints.md) (#822) and re-audi
 against the code and the corpus (#900, whose gate now also checks that the function each row cites
 exists and that each cited case belongs to its row). With #900 the census read **148 of 217
 reported — 137 faithful, 11 approximate — 6 not implemented, 0 deliberate, 0 known failure and 63
-unknown**, against 143 / 133 / 10 / 68 at the tag; the adjudication of the first sixteen unknown
-KerML rows then moved it to **155 reported — 143 faithful, 12 approximate — 6 not implemented,
-1 deliberate and 55 unknown**, each remaining unknown row now citing why the pilot never reports it.
+unknown**, against 143 / 133 / 10 / 68 at the tag; the adjudication of the unknown KerML rows then
+moved it to **156 reported — 143 faithful, 13 approximate — 7 not implemented, 1 deliberate and
+53 unknown**, each remaining unknown row now citing why the pilot never reports it.
 The oracle at the other end agrees: of 243
 self-authored invalid models, the pinned pilot and we both reject 235, the pilot alone rejects 0,
 and the 8 only we reject are control-node succession rules the pinned pilot leaves unimplemented

@@ -35,46 +35,12 @@ const (
 	valueKindCount
 )
 
-// FormatReal renders a Real as the shortest decimal that reads back as the same
-// float64, so no surface rounds a value away. A whole value keeps a ".0" so it
-// is not mistaken for an Integer.
-func FormatReal(f float64) string {
-	// An ordinary magnitude reads in full rather than in exponent notation, which
-	// 'g' would switch to well before a Real stops being readable as digits.
-	format := byte('f')
-	if abs := math.Abs(f); f != 0 && (abs < 1e-4 || abs >= 1e21) {
-		format = 'g'
-	}
-	text := strconv.FormatFloat(f, format, -1, 64)
-	if !strings.ContainsAny(text, ".eEnN") {
-		text += ".0"
-	}
-	return text
-}
-
-// FormatConst renders a scalar constant using the runtime's user-facing
-// numeric convention.
-func FormatConst(c semantics.Value) string {
-	switch c.Kind {
-	case semantics.ValInt:
-		return fmt.Sprintf("%d", c.Int)
-	case semantics.ValReal:
-		return FormatReal(c.Real)
-	case semantics.ValBool:
-		return fmt.Sprintf("%v", c.Bool)
-	case semantics.ValInfinity:
-		return "∞"
-	default:
-		return "<unknown const>"
-	}
-}
-
 // FormatValue renders a value with the notation used by user-facing runtime
 // results and diagnostics.
 func FormatValue(v Value) string {
 	switch v.Kind {
 	case ValConst:
-		return FormatConst(v.Const)
+		return semantics.FormatConst(v.Const)
 	case ValNull:
 		return "null"
 	case ValString:
@@ -110,15 +76,15 @@ func FormatValue(v Value) string {
 		if q == nil {
 			return "<unknown>"
 		}
-		return q.TextWithMagnitude(FormatConst(q.Num))
+		return q.TextWithMagnitude(semantics.FormatConst(q.Num))
 	case ValComplex:
 		return FormatComplex(v.Complex())
 	case ValArray:
 		return v.Array().Format(FormatValue)
 	case ValVector:
-		return v.Vector().format(FormatConst)
+		return v.Vector().format(semantics.FormatConst)
 	case ValVectorQuantity:
-		return v.VectorQuantity().format(FormatConst)
+		return v.VectorQuantity().format(semantics.FormatConst)
 	case ValExpr:
 		return "<expression>"
 	default:
@@ -134,7 +100,7 @@ func FormatComplex(z complex128) string {
 	if math.Signbit(im) {
 		sign, im = " - ", -im
 	}
-	return FormatReal(re) + sign + FormatReal(im) + "i"
+	return semantics.FormatReal(re) + sign + semantics.FormatReal(im) + "i"
 }
 
 func formatValueElements(elements []Value) []string {

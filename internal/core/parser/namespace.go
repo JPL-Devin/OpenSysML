@@ -887,6 +887,11 @@ func (p *Parser) leadingPrefixIsDefUsage() bool {
 	if t.KeywordID == "connect" {
 		return true
 	}
+	// `use case` is one kind spelled in two words: `#structuredUseCase use case u;`
+	if t.KeywordID == "use" {
+		n := p.peekN(i + 1)
+		return n.Kind == lexer.Keyword && n.KeywordID == "case"
+	}
 	_, isDef := p.definitionKind(t.KeywordID)
 	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage

@@ -62,7 +62,7 @@ func (r *Resolver) namespaceFQNOf(scope *symbols.Scope) string {
 	if r.idx == nil || scope.Owner() == nil || scope.Owner().Name == "" {
 		return ""
 	}
-	return withoutEmptySegments(r.idx.GetFQN(scope.Owner()))
+	return r.idx.GetFQN(scope.Owner())
 }
 
 // statesCondition reports whether filters already hold f's condition, which the
@@ -254,7 +254,7 @@ func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
 	if r.idx == nil {
 		return target.Name
 	}
-	if fqn := withoutEmptySegments(r.idx.GetFQN(target)); fqn != "" {
+	if fqn := r.idx.GetFQN(target); fqn != "" {
 		return fqn
 	}
 	return target.Name

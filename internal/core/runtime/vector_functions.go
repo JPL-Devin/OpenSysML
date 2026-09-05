@@ -26,7 +26,7 @@ func (v vectorOperand) hasUnits() bool { return v.units != nil }
 // axis is component i as a scalar quantity; a plain vector's is of dimension one.
 func (v vectorOperand) axis(i int) *Quantity {
 	if v.units == nil {
-		return &Quantity{Num: v.num[i], Unit: unitOne()}
+		return &Quantity{Num: v.num[i], Unit: semantics.UnitOne()}
 	}
 	return &Quantity{Num: v.num[i], Unit: v.units[i]}
 }
@@ -40,7 +40,7 @@ func (v vectorOperand) reals(name string) ([]float64, error) {
 			out[i] = asReal(n)
 			continue
 		}
-		converted, err := v.axis(i).convertTo(v.units[0])
+		converted, err := v.axis(i).ConvertTo(v.units[0])
 		if err != nil {
 			return nil, functionError(name, err)
 		}
@@ -194,7 +194,7 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 	if v.Kind != semantics.ValReal {
 		return v, nil
 	}
-	return realResult(v.Real)
+	return semantics.RealResult(v.Real)
 }
 
 // isNumeric reports whether a value is an Integer or a Real.
@@ -222,7 +222,7 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
 			)
 		}
-		return realResult(res)
+		return semantics.RealResult(res)
 	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
@@ -249,7 +249,7 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 func (ctx *Context) realVector(components []float64) (Value, error) {
 	elements := make([]semantics.Value, len(components))
 	for i, x := range components {
-		elem, err := realResult(x)
+		elem, err := semantics.RealResult(x)
 		if err != nil {
 			return Value{}, err
 		}
@@ -261,7 +261,7 @@ func (ctx *Context) realVector(components []float64) (Value, error) {
 // checkedReal wraps a computed Real as a runtime value, reporting a result that
 // is not a finite number.
 func checkedReal(x float64) (Value, error) {
-	res, err := realResult(x)
+	res, err := semantics.RealResult(x)
 	if err != nil {
 		return Value{}, err
 	}
@@ -484,7 +484,7 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 		return Value{}, err
 	}
 	if v.hasUnits() {
-		return ctx.scaleVectorQuantity(name, ast.OpMul, &Quantity{Num: x, Unit: unitOne()}, v)
+		return ctx.scaleVectorQuantity(name, ast.OpMul, &Quantity{Num: x, Unit: semantics.UnitOne()}, v)
 	}
 	scaled := make([]semantics.Value, v.dimension())
 	for i, elem := range v.num {
@@ -500,7 +500,7 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 // scaleVectorQuantity multiplies or divides each axis of a vector by a scalar
 // quantity, composing the units as the scalar QuantityCalculations do.
 func (ctx *Context) scaleVectorQuantity(name string, op ast.OperatorKind, x *Quantity, v vectorOperand) (Value, error) {
-	if v.dimension() == 0 && !x.Unit.none() {
+	if v.dimension() == 0 && !x.Unit.None() {
 		return Value{}, functionError(name, errEmptyVectorQuantity())
 	}
 	axes := make([]Value, v.dimension())
@@ -559,7 +559,7 @@ func vectorScalarDiv(name string, ctx *Context, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
 	}
 	if v.hasUnits() {
-		return ctx.scaleVectorQuantity(name, ast.OpDiv, &Quantity{Num: x, Unit: unitOne()}, v)
+		return ctx.scaleVectorQuantity(name, ast.OpDiv, &Quantity{Num: x, Unit: semantics.UnitOne()}, v)
 	}
 	quotients := make([]float64, v.dimension())
 	for i, elem := range v.num {

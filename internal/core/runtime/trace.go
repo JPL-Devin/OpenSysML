@@ -372,7 +372,7 @@ func formatConst(c semantics.Value) string {
 	case semantics.ValInt:
 		return strconv.FormatInt(c.Int, 10)
 	case semantics.ValReal:
-		return FormatReal(c.Real)
+		return semantics.FormatReal(c.Real)
 	case semantics.ValBool:
 		return strconv.FormatBool(c.Bool)
 	case semantics.ValInfinity:

@@ -43,6 +43,9 @@ within these records and means nothing outside this repository.
   pinned pilot and the specification text, and declined
 - **[HTML document backend](html-document-backend.md)** — the design for rendering documents as
   semantic, styleable HTML straight from the document IR
+- **[OOSEM library](oosem-library.md)** — the object-oriented systems engineering method as a
+  bundled OpenSysML library: what it defines, what it reuses from the standard domain libraries,
+  and the prior art it was checked against
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision

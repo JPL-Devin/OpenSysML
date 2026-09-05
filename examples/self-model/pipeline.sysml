@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 51;
+        attribute passCount : Integer = 53;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -227,6 +227,10 @@ package OpenSysMLPipeline {
             attribute :>> goType = "VariableFeaturePass";
             attribute :>> elementScoped = true;
         }
+        part endFeatures : ConstraintCheck {
+            attribute :>> goType = "EndFeaturePass";
+            attribute :>> elementScoped = true;
+        }
         part assignmentReferents : ConstraintCheck {
             attribute :>> goType = "AssignmentReferentPass";
             attribute :>> elementScoped = true;
@@ -238,6 +242,7 @@ package OpenSysMLPipeline {
             attribute :>> elementScoped = true;
         }
         part metadataAnnotations : TypeCheck { attribute :>> goType = "MetadataAnnotationPass"; }
+        part annotationOwnership : ConstraintCheck { attribute :>> goType = "AnnotationOwnershipPass"; }
         part occurrenceTyping : TypeCheck { attribute :>> goType = "W8DOccurrenceTypingPass"; }
         part connectorFeaturing : ConstraintCheck { attribute :>> goType = "W8DConnectorFeaturingPass"; }
         part flowEnds : ConstraintCheck { attribute :>> goType = "W8DFlowEndPass"; }
@@ -300,7 +305,7 @@ package OpenSysMLPipeline {
     // snapshot when that matches the files, and parsed from the files otherwise.
     #SemanticEngine part def StandardLibrary :> Stage {
         attribute :>> goPackage = "internal/core/libs";
-        attribute bundledFileCount : Integer = 97;
+        attribute bundledFileCount : Integer = 98;
         attribute cached : Boolean = true;
         attribute snapshotFile : String = "internal/core/libs/stdlib.snapshot";
         attribute snapshotEmbedded : Boolean = true;

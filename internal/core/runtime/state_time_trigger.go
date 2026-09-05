@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -34,7 +35,18 @@ func (e *StateExecutor) timeMagnitude(val Value, what string) (float64, error) {
 
 // checkTimeTriggerType refuses, before evaluating it, the trigger argument
 // validation refuses; one the declarations leave open is left to its value.
-func (e *StateExecutor) checkTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent) error {
+// The verdict is static, so it is judged once per transition and then reused.
+func (e *StateExecutor) checkTimeTriggerType(trans *lower.Transition, t *ast.TimeEvent) error {
+	if err, ok := e.timeTriggerVerdict[trans]; ok {
+		return err
+	}
+	err := e.judgeTimeTriggerType(trans.Scope, t)
+	e.timeTriggerVerdict[trans] = err
+	return err
+}
+
+// judgeTimeTriggerType is the uncached judgement checkTimeTriggerType records.
+func (e *StateExecutor) judgeTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent) error {
 	c := e.ctx.model.TimeEventConforms(scope, t)
 	if !c.Known || c.Holds {
 		return nil
@@ -60,7 +72,7 @@ func (e *StateExecutor) durationInClockUnits(q *Quantity, what string) (float64,
 		return 0, fmt.Errorf("%w: %s %s is not a time: %s does not measure a duration",
 			ErrIncommensurableUnits, what, q, q.Unit)
 	}
-	magnitude, err := q.convertTo(second)
+	magnitude, err := q.ConvertTo(second)
 	if err != nil {
 		return 0, fmt.Errorf("%s %s: %w", what, q, err)
 	}

@@ -434,7 +434,7 @@
     {
       "name": "validateFeatureMultiplicityDomain",
       "source": "kerml",
-      "status": "unknown"
+      "status": "not-implemented"
     },
     {
       "name": "validateFeatureOwnedCrossSubsetting",
@@ -479,7 +479,7 @@
     {
       "name": "validateFlowEndImplicitSubsetting",
       "source": "kerml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateFlowEndIsEnd",
