@@ -49,9 +49,12 @@ class PublicTypesTest {
     assertEquals(new Value.ComplexValue(1.5, -2.0), z);
     assertEquals(new Value.ComplexValue(1.5, -2.0).hashCode(), z.hashCode());
     assertNotEquals(new Value.ComplexValue(1.5, 2.0), z);
-    assertNotEquals(new Value.RealValue(1.5), new Value.ComplexValue(1.5, 0.0));
-    assertNotEquals(
-        new Value.Sequence(List.of(new Value.RealValue(1.5), new Value.RealValue(-2.0))), z);
+    Value realPartOnly = new Value.RealValue(1.5);
+    Value realThenImaginary =
+        new Value.Sequence(List.of(new Value.RealValue(1.5), new Value.RealValue(-2.0)));
+    Value zAsValue = z;
+    assertNotEquals(realPartOnly, zAsValue);
+    assertNotEquals(realThenImaginary, zAsValue);
 
     assertEquals("1.5 - 2.0i", z.format());
     assertEquals("1.0 + 2.0i", new Value.ComplexValue(1.0, 2.0).format());

@@ -74,9 +74,9 @@ type ChangeSet struct {
 	Uncarried []UncarriedProperty
 }
 
-// Representation is what a repository can hold of a graph; both sides compare
+// Carrier is what a repository can hold of a graph; both sides compare
 // under it, so a successful apply leaves nothing to diff.
-type Representation interface {
+type Carrier interface {
 	// Carry maps a triple onto the form the repository stores: ok false when it
 	// has no place for the predicate, err when it cannot represent the value.
 	Carry(triple rdf.Triple) (carried rdf.Triple, ok bool, err error)
@@ -99,7 +99,7 @@ type Options struct {
 	// NewID overrides the UUID source, for deterministic tests.
 	NewID func() (string, error)
 	// Representation is the repository's; nil compares the graphs as written.
-	Representation Representation
+	Representation Carrier
 }
 
 // Diff compares the local graph against the repository graph of the same
@@ -336,7 +336,7 @@ func identityPredicate(iri string) bool {
 // carries the id; two subjects sharing one id in one graph is an error. It also
 // tallies the properties the representation has no place for; a collection's
 // JSON annotation restates typed triples and is reconciled, not tallied.
-func viewOf(g *rdf.Graph, rep Representation) (map[string]*subjectView, []UncarriedProperty, error) {
+func viewOf(g *rdf.Graph, rep Carrier) (map[string]*subjectView, []UncarriedProperty, error) {
 	g, err := rdf.ReconcileCollections(g)
 	if err != nil {
 		return nil, nil, err

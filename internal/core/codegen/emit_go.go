@@ -11,6 +11,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
+const goAssign = "%s = %s"
+
 // goPrelude is the support library of a generated Go program. It mirrors
 // cPrelude: the same checks, the same errors, the same output format.
 const goPrelude = `package main
@@ -432,10 +434,10 @@ func (e *goEmitter) function(fn *Func) {
 		case p.Type.Many():
 			if p.Mult != MultAny || p.Range != RangeAny {
 				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
-				e.linef("%s = %s", goLocal(p.Name), v)
+				e.linef(goAssign, goLocal(p.Name), v)
 			}
 		case p.Range != RangeAny:
-			e.linef("%s = %s", goLocal(p.Name), goNarrowed(goLocal(p.Name), p.Range))
+			e.linef(goAssign, goLocal(p.Name), goNarrowed(goLocal(p.Name), p.Range))
 		}
 	}
 	e.resultRange = fn.ResultRange
@@ -478,7 +480,7 @@ func (e *goEmitter) stmt(s Stmt) {
 		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.declInit(s))
 		e.linef("_ = %s", goLocal(s.Name))
 	case Assign:
-		e.linef("%s = %s", goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
+		e.linef(goAssign, goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
 	case If:
 		e.linef("if %s {", e.expr(s.Cond))
 		e.indent++

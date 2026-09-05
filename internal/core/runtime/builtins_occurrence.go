@@ -4,26 +4,35 @@ import (
 	"fmt"
 )
 
+const (
+	occSameOp     = "OccurrenceFunctions::==="
+	occIsDuringOp = "OccurrenceFunctions::isDuring"
+	occCreateOp   = "OccurrenceFunctions::create"
+	occDestroyOp  = "OccurrenceFunctions::destroy"
+	occAddNewOp   = "OccurrenceFunctions::addNew"
+	occAddNewAtOp = "OccurrenceFunctions::addNewAt"
+)
+
 // The OccurrenceFunctions are built-ins over the objects' lifetimes: the call is
 // the performance they happen during, entered at the activation `entered` marks.
 func init() {
 	for name, fn := range map[string]builtinFunc{
-		"OccurrenceFunctions::===":      builtinOccurrenceSame,
-		"OccurrenceFunctions::isDuring": builtinOccurrenceIsDuring,
-		"OccurrenceFunctions::create":   builtinOccurrenceCreate,
-		"OccurrenceFunctions::destroy":  builtinOccurrenceDestroy,
-		"OccurrenceFunctions::addNew":   builtinOccurrenceAddNew,
-		"OccurrenceFunctions::addNewAt": builtinOccurrenceAddNewAt,
+		occSameOp:     builtinOccurrenceSame,
+		occIsDuringOp: builtinOccurrenceIsDuring,
+		occCreateOp:   builtinOccurrenceCreate,
+		occDestroyOp:  builtinOccurrenceDestroy,
+		occAddNewOp:   builtinOccurrenceAddNew,
+		occAddNewAtOp: builtinOccurrenceAddNewAt,
 	} {
 		builtins[name] = fn
 	}
 	for name, params := range map[string][]declaredParam{
-		"OccurrenceFunctions::===":      {optionalParam("x"), optionalParam("y")},
-		"OccurrenceFunctions::isDuring": {param("occ")},
-		"OccurrenceFunctions::create":   {param("occ")},
-		"OccurrenceFunctions::destroy":  {optionalParam("occ")},
-		"OccurrenceFunctions::addNew":   {optionalParam("group"), param("occ")},
-		"OccurrenceFunctions::addNewAt": {optionalParam("group"), param("occ"), param("index")},
+		occSameOp:     {optionalParam("x"), optionalParam("y")},
+		occIsDuringOp: {param("occ")},
+		occCreateOp:   {param("occ")},
+		occDestroyOp:  {optionalParam("occ")},
+		occAddNewOp:   {optionalParam("group"), param("occ")},
+		occAddNewAtOp: {optionalParam("group"), param("occ"), param("index")},
 	} {
 		builtinSignatures[name] = params
 	}
@@ -69,7 +78,7 @@ func occurrenceGroup(ec *EvalContext, name, param string, group Value) error {
 // builtinOccurrenceSame is `'==='(x, y)`: whether x and y are one occurrence.
 // Nothing is the same occurrence as nothing.
 func builtinOccurrenceSame(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::==="
+	const op = occSameOp
 	occurrences := make([]*Instance, 2)
 	for i, param := range []string{"x", "y"} {
 		elements := elementsOf(args[i])
@@ -93,7 +102,7 @@ func builtinOccurrenceSame(ec *EvalContext, args []Value) (Value, error) {
 // builtinOccurrenceIsDuring is `isDuring(occ)`: whether this performance of the
 // function happens during occ, which it does while occ has begun and not ended.
 func builtinOccurrenceIsDuring(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::isDuring"
+	const op = occIsDuringOp
 	inst, err := occurrenceArgument(ec, op, "occ", args[0])
 	if err != nil {
 		return Value{}, err
@@ -108,7 +117,7 @@ func builtinOccurrenceIsDuring(ec *EvalContext, args []Value) (Value, error) {
 // builtinOccurrenceCreate is `create(occ)`: occ starts during the call, which
 // is where the runtime first reached it; one reached before began already.
 func builtinOccurrenceCreate(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::create"
+	const op = occCreateOp
 	inst, err := occurrenceArgument(ec, op, "occ", args[0])
 	if err != nil {
 		return Value{}, err
@@ -122,7 +131,7 @@ func builtinOccurrenceCreate(ec *EvalContext, args []Value) (Value, error) {
 // builtinOccurrenceDestroy is `destroy(occ)`: occ ends during the call, with
 // every object it holds as a portion of itself; `destroy()` of nothing is nothing.
 func builtinOccurrenceDestroy(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::destroy"
+	const op = occDestroyOp
 	if isEmptyValue(args[0]) {
 		return nullValue(), nil
 	}
@@ -140,7 +149,7 @@ func builtinOccurrenceDestroy(ec *EvalContext, args []Value) (Value, error) {
 // call, is appended to group. The value is what `inout group` holds after, as
 // `SequenceFunctions::including` answers it: a call rebinds no argument.
 func builtinOccurrenceAddNew(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::addNew"
+	const op = occAddNewOp
 	if err := occurrenceGroup(ec, op, "group", args[0]); err != nil {
 		return Value{}, err
 	}
@@ -162,7 +171,7 @@ func builtinOccurrenceAddNew(ec *EvalContext, args []Value) (Value, error) {
 // during the call, is inserted into group at the positive index, which may be
 // one past its last element and no further. The value is what group holds after.
 func builtinOccurrenceAddNewAt(ec *EvalContext, args []Value) (Value, error) {
-	const op = "OccurrenceFunctions::addNewAt"
+	const op = occAddNewAtOp
 	if err := occurrenceGroup(ec, op, "group", args[0]); err != nil {
 		return Value{}, err
 	}
