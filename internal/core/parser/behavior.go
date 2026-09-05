@@ -56,24 +56,10 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		} else if p.atCalcBodyItem() {
 			body.add(p.parseActionMember())
 		} else {
-			// Try parsing as body member (parameters, doc, import, etc.)
-			// Body member expects: visibility + declaration keyword, or special patterns
-			// If we see expression-start that's NOT a declaration, parse as implicit return expression
-			// Check if current position looks like expression start (name, literal, if, etc.)
-			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
-			peek1 := p.peek()
-			peek2 := p.peekN(1)
-			// A keyword binary operator after the name continues an expression
-			// (`a and b`, `x as Real`), so it is not a declaration.
-			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
-				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon ||
-					(peek2.Kind == lexer.Keyword && !wordBinaryOpKeywords[peek2.KeywordID]) ||
-					peek2.Kind == lexer.LBracket)
-
-			// If expression-start but NOT name-declaration pattern, parse as implicit return
-			// A `var`-prefixed declaration is a member, not the value of an
-			// expression naming a feature `var` (KerML BasicFeaturePrefix).
-			if p.atUnaryExprStart() && !isNameDecl && !p.atVarDeclaration() {
+			// An expression start that does not declare a member is the body's
+			// trailing expression. A `var`-prefixed declaration is a member, not
+			// the value of an expression naming a feature `var` (KerML BasicFeaturePrefix).
+			if p.atUnaryExprStart() && !p.atNamedCalcMember() && !p.atVarDeclaration() {
 				// In a constraint body a bare expression is a condition the
 				// constraint states, not a calculated result.
 				if constraintConditions {
@@ -95,6 +81,24 @@ func (p *Parser) parseCalcBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after calc body")
 	return body.finish()
+}
+
+// atNamedCalcMember reports whether the cursor begins a member declaration a
+// calculation body reads without a kind keyword (SysML.xtext DefaultReferenceUsage):
+// a name that a specialization, multiplicity, value (`x = e;`), `;` or a keyword
+// that is not a binary operator (`a and b`, `x as Real`) follows.
+func (p *Parser) atNamedCalcMember() bool {
+	if !p.at(lexer.Identifier) && !p.at(lexer.UnrestrictedName) {
+		return false
+	}
+	cp := p.checkpoint()
+	p.parseIdentification()
+	t := p.peek()
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.Semicolon) ||
+		p.valueOperatorAt(0) || (t.Kind == lexer.Keyword && !wordBinaryOpKeywords[t.KeywordID])
+	p.restore(cp)
+	p.release()
+	return declared
 }
 
 // parseActionBodyMixed parses the body of an action or state node: both
@@ -520,26 +524,6 @@ func (p *Parser) parseActionMember() ast.Node {
 			en := &ast.ErrorNode{Message: "unknown action keyword: " + kw}
 			en.NodeSpan = p.spanFrom(start)
 			return en
-		}
-	}
-
-	// Check for bare assignment: identifier = expr; or identifier := expr;
-	// This is shorthand for assign identifier = expr;
-	if p.at(lexer.Identifier) {
-		nextTok := p.peekN(1)
-		if nextTok.Kind == lexer.Eq || nextTok.Kind == lexer.ColonEq {
-			// Parse as assignment
-			target := p.parseQualifiedName()
-			p.advance() // consume = or :=
-			value := p.ParseExpression()
-			p.expectStatementEnd(start, "expected ';' after assignment")
-
-			node := &ast.AssignmentActionNode{
-				Target: target,
-				Value:  value,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
 		}
 	}
 
@@ -1401,10 +1385,6 @@ func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string
 // expression. `if` also starts a conditional expression, which is told apart by
 // the '?' that follows its condition.
 func (p *Parser) atCalcStatement() bool {
-	if p.at(lexer.Identifier) {
-		next := p.peekN(1).Kind
-		return next == lexer.Eq || next == lexer.ColonEq
-	}
 	if !p.at(lexer.Keyword) {
 		return false
 	}
@@ -1541,41 +1521,15 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Parse optional feature modifiers after kind keyword
 	mods := p.parseFeatureModifiers()
 
-	// Check for leading relationship operators before name (e.g., return ::> result : Type)
-	// In this context, relationships apply to the parameter being defined (not to external target)
-	// So we consume the operator but DON'T parse target yet
-	var leadingRels []*ast.Relationship
-	for p.at(lexer.ColonGtGt) || p.at(lexer.ColonGt) || p.at(lexer.ColonColonGt) || p.at(lexer.ColonColon) {
-		tok := p.peek()
-		p.advance() // consume relationship operator
-
-		// Map token to relationship kind
-		var kind ast.RelationshipKind
-		switch tok.Kind {
-		case lexer.ColonGtGt:
-			kind = ast.RelRedefines
-		case lexer.ColonGt:
-			kind = ast.RelSpecializes
-		case lexer.ColonColonGt:
-			kind = ast.RelReferences
-		case lexer.ColonColon:
-			kind = ast.RelTyping // or namespace qualification - context dependent
-		}
-
-		// Create relationship with nil target (will be filled by parent scope context)
-		rel := &ast.Relationship{Kind: kind, Target: nil}
-		leadingRels = append(leadingRels, rel)
-	}
-
 	// Check for named or anonymous result parameter syntax
 	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
 	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
 	// Pattern 4: return name = expr;       (result parameter with initializer)
 	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
-	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
+	// Pattern 7: return :>> x : Type = expr; (anonymous, specialized before typed)
 	// Use lookahead to distinguish Pattern 1 from Pattern 4
-	if len(leadingRels) > 0 || p.atReturnedUsage() {
+	if p.atReturnedUsage() {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:        usageKind,
@@ -1591,9 +1545,6 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,
 		}
-
-		// Add leading relationships if any (e.g., ::> from `return ::> result`)
-		u.Relationships = append(u.Relationships, leadingRels...)
 
 		// Check if named (identifier before colon)
 		if p.atName() {
@@ -1801,7 +1752,7 @@ func (p *Parser) parseConstraintMembers(nested bool) []ast.Node {
 // relationship where a name would go (`:>> x = v;`) or a metadata usage (`@M { … }`).
 func (p *Parser) atConstraintBodyDeclaration() bool {
 	return p.atKeyword("return") || p.atDefUsageStart() || p.atRelationshipKeyword() ||
-		p.atKindlessFeatureTyping() || p.atMetadataMember()
+		p.atKindlessFeatureTyping() || p.atNamedCalcMember() || p.atMetadataMember()
 }
 
 // atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
