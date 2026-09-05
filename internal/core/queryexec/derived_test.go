@@ -416,6 +416,43 @@ calc def Hearts :> Query {
 	}
 }
 
+// TestExecuteReadsPackageAttributesAndKeepsElementReferences: a value naming a
+// package-level attribute reads that attribute's value; one naming a unit, an
+// enumeration literal or an object feature stays the element it names.
+func TestExecuteReadsPackageAttributesAndKeepsElementReferences(t *testing.T) {
+	fixture := derivedFixture(t, `
+attribute base : Integer = 2;
+attribute unitMass :> ISQ::mass = 5 [kg];
+enum def Color { red; blue; }
+part def Thing {
+	attribute engines : Integer = base;
+	attribute m :> ISQ::mass = unitMass;
+	attribute doubled :> ISQ::mass = unitMass * 2;
+	part engine;
+	attribute heart = engine;
+	attribute color : Color = Color::red;
+	attribute unit = SI::kg;
+}
+part yard { part thing : Thing; }
+calc def Things :> Query {
+	in root : Element;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		properties = ("name", "engines", "m", "doubled", "heart", "color", "unit")
+	)
+}
+`)
+	result := quantityRows(t, fixture, "Things", "yard")
+	if got := integerTexts(t, result, 1); !slices.Equal(got, []int64{2}) {
+		t.Errorf("engines = %v, want 2", got)
+	}
+	for column, want := range map[int]string{2: "5 [kg]", 3: "10 [kg]", 4: "Observatory::Thing::engine", 5: "Observatory::Color::red", 6: "SI::kilogram"} {
+		if got := cellTexts(t, result, column); !slices.Equal(got, []string{want}) {
+			t.Errorf("%s = %v, want %q", result.Columns()[column].Name(), got, want)
+		}
+	}
+}
+
 // TestExecuteRollsUpDerivedValuesOverSubsettedParts: `mass + sum(subcomponents.totalMass)`
 // recurses through parts subsetting a multiplicity-many part, each level reading
 // its own carrier, and `->collect`/`size` see the same collection.

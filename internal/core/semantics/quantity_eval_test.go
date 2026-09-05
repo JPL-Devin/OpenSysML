@@ -21,6 +21,8 @@ private import SI::*;
 private import ISQ::*;
 
 package Q {
+	attribute base : Integer = 2;
+	enum def Color { red; blue; }
 	part def Stage {
 		attribute mass :> ISQ::mass;
 	}
@@ -43,6 +45,9 @@ package Q {
 		attribute alias = dryMass;
 		attribute unit = SI::kg;
 		attribute chained = Stage::mass;
+		attribute shared = base;
+		attribute color : Color = Color::red;
+		attribute kind = Stage;
 	}
 }`
 
@@ -174,18 +179,20 @@ func TestUnfoldableQuantityValuesStayUnknown(t *testing.T) {
 }
 
 // TestDeclaredReferenceToAFeatureIsNotAConstant: a value that names an attribute
-// of a type reads that attribute as seen from the carrier, so it does not fold;
-// a value naming a package-level element (a unit) is that element.
+// reads that attribute — of the carrier, or of the package — so it does not
+// fold; a value naming a unit, an enumeration literal or a definition is that
+// element.
 func TestDeclaredReferenceToAFeatureIsNotAConstant(t *testing.T) {
 	m, idx := quantityFixture(t)
-	for _, property := range []string{"alias", "chained"} {
+	for _, property := range []string{"alias", "chained", "shared"} {
 		if value := declaredValue(t, m, idx, "Q::Folds", property); value.Kind != symbols.FilterValueUnknown {
 			t.Errorf("%s folded to %v, want unknown", property, value.Kind)
 		}
 	}
-	unit := declaredValue(t, m, idx, "Q::Folds", "unit")
-	if unit.Kind != symbols.FilterValueRef || unit.RefFQN != "SI::kilogram" {
-		t.Errorf("unit = %+v, want a reference to SI::kilogram", unit)
+	for property, want := range map[string]string{"unit": "SI::kilogram", "color": "Q::Color::red", "kind": "Q::Stage"} {
+		if value := declaredValue(t, m, idx, "Q::Folds", property); value.Kind != symbols.FilterValueRef || value.RefFQN != want {
+			t.Errorf("%s = %+v, want a reference to %s", property, value, want)
+		}
 	}
 }
 
