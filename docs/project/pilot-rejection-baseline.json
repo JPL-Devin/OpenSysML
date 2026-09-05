@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 235,
-        "digest": "sha256:0bf596d8088b5480448529e101204e2148612d23d61463c78647f76c4a0a5522"
+        "files": 236,
+        "digest": "sha256:91558f9bacc0c9eb8d937102ba71e09d078356e7b4bc94eb7cb90dc27b480cb7"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 235,
-    "bothReject": 227,
+    "cases": 236,
+    "bothReject": 228,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 105,
-      "bothReject": 97,
+      "cases": 106,
+      "bothReject": 98,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1882,6 +1882,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s51-enum-value-body-typed-outside-enumeration.sysml",
+      "source": "semantic",
+      "rule": "An enumeration must be typed by one enumeration definition — an expression body written as the value types the enumerated value by Evaluation, which the enumeration is not (SysML 7.7 validateEnumerationUsageType; pilot SysMLValidator checkOneType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2265,8 +2274,8 @@
       }
     ],
     "totals": {
-      "cases": 235,
-      "bothReject": 227,
+      "cases": 236,
+      "bothReject": 228,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0

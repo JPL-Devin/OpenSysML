@@ -205,6 +205,9 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 		return m.ExprResultType(scope, n.Operand)
 	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
 		return m.libSymbol(fqnAnything)
+	case *ast.BodyExpr:
+		// `{ … }` written as a value is the expression itself, an Evaluation.
+		return m.libSymbol(fqnEvaluation)
 	case *ast.ConstructorExpr:
 		if n.Type == nil || m.resolver == nil {
 			return nil
