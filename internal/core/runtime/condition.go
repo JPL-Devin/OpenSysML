@@ -24,7 +24,8 @@ type Condition struct {
 	// Expr is the condition's expression, nil for a group.
 	Expr ast.Node
 
-	// Scope is where Expr's names resolve, nil for a group.
+	// Scope is where Expr's names resolve, or the type a Conflict is found on;
+	// nil for a group.
 	Scope *symbols.Scope
 
 	// Group is the conditions a body states, all of which must hold; nil for a
@@ -115,7 +116,11 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
 	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
-		out = append(out, Condition{Conflict: conflict, Required: required})
+		scope := sym.Scope
+		if scope == nil {
+			scope = sym.OwnerScope
+		}
+		out = append(out, Condition{Conflict: conflict, Scope: scope, Required: required})
 	}
 	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
