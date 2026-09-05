@@ -95,7 +95,7 @@ before re-recording anything.
 |---|---|
 | OMG training corpus | **100/100 clean** — asserted, not ratcheted: no file reports a semantic error |
 | OMG pilot corpora (ratchet) | 213 files; 5 report a diagnostic, each adjudicated in [pilot-corpora.md](pilot-corpora.md) and [omg-issues.md](omg-issues.md) |
-| Stdlib parser conformance | 97/97 clean — 94 vendored OMG files and 3 non-normative OpenSysML extensions |
+| Stdlib parser conformance | 98/98 clean — 94 vendored OMG files and 4 non-normative OpenSysML extensions |
 | Execution conformance cases | 614 (`TestExecutionConformance`) |
 | Golden execution traces | 138 (`TestExecutionTrace`) |
 | Runtime robustness cases | 324 first-level subtests of `TestRuntimeRobustness` |
