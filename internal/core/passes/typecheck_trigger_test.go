@@ -493,6 +493,52 @@ func TestIndexedTriggerArgument(t *testing.T) {
 	}
 }
 
+// `xs.{…}` is the Anything-typed result of collect; `xs.?{…}` keeps elements of
+// xs and is typed as xs is. The pilot rejects each shape below and accepts the
+// select shapes kept silent.
+func TestCollectAndSelectTriggerArguments(t *testing.T) {
+	const collected = "found a collection `.{…}` maps to, typed Anything"
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"when counts.{in n; n > 3}", "trigger-when-boolean", collected},
+		{"when flags.{in f; f}", "trigger-when-boolean", collected},
+		{"when counts.?{in n; n > 3}", "trigger-when-boolean", "found Integer"},
+		{"when h.ok.{in f; f}", "trigger-when-boolean", collected},
+		{"after waits.{in w; w}", "trigger-after-duration", collected},
+		{"after counts.?{in n; n > 3}", "trigger-after-duration", "found Integer"},
+		{"after times.?{in i; true}", "trigger-after-duration", "found TimeInstantValue"},
+		{"at counts.?{in n; true}", "trigger-at-time-instant", "found Integer"},
+		{"at times.{in i; i}", "trigger-at-time-instant", collected},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, tc.found)
+	}
+	for _, trigger := range []string{
+		"when flags.?{in f; f}",
+		"when flags.?{in f; f}#(1)",
+		"after waits.?{in w; w > 1 [s]}",
+		"after d2.?{in w; true}",
+		"at times.?{in i; true}",
+		"when undeclared.?{in f; f}",
+		"when undeclared.{in f; f}",
+	} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+}
+
+// `{ … }` written as a trigger argument is the expression itself, an Evaluation,
+// whatever its result would be; the pilot rejects each shape below.
+func TestBodyTriggerArgumentIsRejected(t *testing.T) {
+	const body = "found an expression body `{ … }`"
+	wantTriggerDiag(t, "transition first a accept when { true } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when { x > 3 } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when { 5 } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept after { 5 [s] } then b;", "trigger-after-duration", body)
+	wantTriggerDiag(t, "transition first a accept after { d } then b;", "trigger-after-duration", body)
+	wantTriggerDiag(t, "transition first a accept at { t } then b;", "trigger-at-time-instant", body)
+	wantTriggerDiag(t, "entry action { accept when { flag }; }", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a if { true } then b;", "type.expr", body)
+	wantTriggerSilent(t, "transition first a accept when flags->ControlFunctions::forAll {in f; f} then b;")
+}
+
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare
 // name there names a signal and is not a condition.
 func TestTriggerBareWhenTransition(t *testing.T) {

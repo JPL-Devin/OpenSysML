@@ -20,6 +20,7 @@ const (
 	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
+	fqnEvaluation                 = "Performances::Evaluation"
 	fqnCollection                 = "Collections::Collection"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
@@ -111,6 +112,24 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		if c.Known && !c.Holds {
 			c.Found = fmt.Sprintf("a sequence of %d elements, typed Anything", len(n.Elements))
 			c.Untyped = true
+		}
+		return c
+	case *ast.CollectExpr:
+		// `xs.{…}` is the result of ControlFunctions::collect, typed Anything.
+		c := m.typeConformance(m.libSymbol(fqnAnything), want)
+		if c.Known && !c.Holds {
+			c.Found = "a collection `.{…}` maps to, typed Anything"
+			c.Untyped = true
+		}
+		return c
+	case *ast.SelectExpr:
+		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
+		return m.exprConformance(scope, n.Operand, want, byUnit)
+	case *ast.BodyExpr:
+		// `{ … }` written as a value is the expression itself, an Evaluation.
+		c := m.typeConformance(m.libSymbol(fqnEvaluation), want)
+		if c.Known && !c.Holds {
+			c.Found = "an expression body `{ … }`, a value that is the expression itself"
 		}
 		return c
 	case *ast.ConstructorExpr:

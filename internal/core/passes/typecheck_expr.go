@@ -190,6 +190,10 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 		return
 	}
 	got := ec.infer(scope, n)
+	if _, isBody := n.(*ast.BodyExpr); isBody {
+		// A body's value is the expression itself, not the result inferred above.
+		got = semantics.PrimUnknown
+	}
 	if got == semantics.PrimBoolean {
 		return
 	}
