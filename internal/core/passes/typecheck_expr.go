@@ -813,6 +813,10 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
+// msgInvocationParameterRedefinition opens the report of an argument that binds no `in`
+// parameter of the invoked type (KerML §8.3.4.8 validateInvocationExpressionParameterRedefinition).
+const msgInvocationParameterRedefinition = "Must correspond to one input parameter of the invoked type"
+
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
 // listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
@@ -845,7 +849,7 @@ func (ec *exprChecker) checkArguments(
 	}
 	switch {
 	case len(args) > len(params):
-		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		report(args[len(params)].Span(), "%s: %s takes %d argument(s), found %d", msgInvocationParameterRedefinition, sym.Name, len(params), len(args))
 		return
 	case complete && len(args) < required:
 		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
@@ -1034,7 +1038,7 @@ func (ec *exprChecker) checkNamedArguments(
 		return
 	}
 	if len(args) > len(params) {
-		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args)+len(e.NamedArgs))
+		report(args[len(params)].Span(), "%s: %s takes %d argument(s), found %d", msgInvocationParameterRedefinition, sym.Name, len(params), len(args)+len(e.NamedArgs))
 		return
 	}
 	bound := make([]bool, len(params))
@@ -1051,7 +1055,7 @@ func (ec *exprChecker) checkNamedArguments(
 		}
 		at := ec.namedParameter(scope, sym, params, arg.Name)
 		if at < 0 {
-			report(e.Span(), "%s has no parameter named %q", sym.Name, semantics.QualifiedNameText(arg.Name))
+			report(arg.Name.Span(), "%s: %s has no parameter named %q", msgInvocationParameterRedefinition, sym.Name, semantics.QualifiedNameText(arg.Name))
 			unknown = true
 			continue
 		}
