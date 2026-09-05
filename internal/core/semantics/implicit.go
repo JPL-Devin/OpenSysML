@@ -139,6 +139,7 @@ var implicitKerMLBases = map[string]string{
 // implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
 // every feature of that kind subsets (KerML 1.1 §8.4.2).
 var implicitKerMLFeatureBases = map[string]string{
+	"":             baseUsageFQN, // a member declared with no kind keyword (`end a;`) is a feature
 	"type":         baseUsageFQN,
 	"classifier":   baseUsageFQN,
 	"feature":      baseUsageFQN,
