@@ -115,3 +115,48 @@ func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
 		t.Fatalf("AllRedefinedFeatures(C's subject) = %v, want [A::s B::s]", got)
 	}
 }
+
+// Only the first owned objective redefines, and it takes the first objective
+// of each general; ObjectivesOf then reports what remains inherited.
+func TestObjectivesOfMasksOnlyTheFirstOfEachGeneral(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		case def C { objective o1; objective o2; }
+		case def C1 :> C { objective o5; }
+		case def B1 { objective b1; }
+		case def B2 { objective b2; }
+		case def D :> B1, B2;
+		case def D2 :> B1, B2 { objective d; }
+		case def E :> B1 { objective e1; objective e2; }
+		case def C3 :> C { objective o6 :>> o2; }
+	}`)
+	p := sym(t, root, "P")
+	c := nested(t, p.Scope, "C")
+	o1 := nested(t, c.Scope, "o1")
+	o2 := nested(t, c.Scope, "o2")
+	b1 := nested(t, nested(t, p.Scope, "B1").Scope, "b1")
+	b2 := nested(t, nested(t, p.Scope, "B2").Scope, "b2")
+
+	o5 := nested(t, nested(t, p.Scope, "C1").Scope, "o5")
+	if got := m.ImplicitRoleRedefinitions(o5); len(got) != 1 || got[0] != o1 {
+		t.Errorf("ImplicitRoleRedefinitions(C1::o5) = %v, want [o1]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "C1")); len(owned) != 1 || len(inherited) != 1 || inherited[0] != o2 {
+		t.Errorf("ObjectivesOf(C1) = %v, %v; want [o5], [o2]", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "D")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != b1 || inherited[1] != b2 {
+		t.Errorf("ObjectivesOf(D) = %v, %v; want [], [b1 b2]", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "D2")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(D2) = %v, %v; want [d], []", owned, inherited)
+	}
+	e := nested(t, p.Scope, "E")
+	if got := m.ImplicitRoleRedefinitions(nested(t, e.Scope, "e2")); len(got) != 0 {
+		t.Errorf("ImplicitRoleRedefinitions(E::e2) = %v, want none: only the first owned objective redefines", got)
+	}
+	if owned, inherited := m.ObjectivesOf(e); len(owned) != 2 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(E) = %v, %v; want [e1 e2], []", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "C3")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(C3) = %v, %v; want [o6], []: o6 redefines o2 by clause and o1 by role", owned, inherited)
+	}
+}

@@ -1,0 +1,1 @@
+- `Only one subject/objective is allowed` now counts inherited subjects and objectives the way the pilot does: a case or requirement whose generals together supply two is reported on its declaration, an owned one that redefines them (by clause or by position) silences them, and an owned one beside an unredefined inherited one is reported on the owned member.
