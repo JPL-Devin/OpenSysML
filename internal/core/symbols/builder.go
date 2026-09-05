@@ -134,6 +134,7 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 		sym.NamingTarget = namingTarget
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
+		buildCrossFeature(child, d)
 		buildMembers(child, d.Members)
 		buildConnectorEnds(child, d)
 		return true
@@ -489,6 +490,19 @@ func buildConnectorEnds(scope *Scope, u *ast.Usage) {
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 	}
+}
+
+// buildCrossFeature registers the cross feature an end declares inline ahead of
+// itself (`end x1 [0..1] feature x : C1`) as a member of the end.
+func buildCrossFeature(scope *Scope, u *ast.Usage) {
+	cross := u.CrossFeature
+	if cross == nil {
+		return
+	}
+	child := NewScope(scope, cross)
+	sym := newSymbol(cross.Ident, SymbolCrossFeature, cross, ast.VisibilityDefault, child, scope, nil)
+	defineIdent(scope, cross.Ident, sym)
+	scope.AddChild(child)
 }
 
 // transitionEffectName is the TransitionAction feature a transition's effect

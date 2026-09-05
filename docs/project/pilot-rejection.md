@@ -159,15 +159,15 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-234 case(s): 213 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept
+234 case(s): 223 both reject, 3 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 87 | 81 | 6 | 0 | 0 |
-| semantic | 105 | 90 | 7 | 8 | 0 |
+| grammar | 87 | 87 | 0 | 0 | 0 |
+| semantic | 105 | 94 | 3 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -178,9 +178,11 @@ and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, and to 234 with the
 three trigger-argument typing cases (`s48`–`s50`). The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
-named-argument validation that landed alongside closed one of them (`k33`) and the constructor
-argument checking of the send-action family closed another (`k34`), leaving 12 — and the
-SysML census opened nine more, six of them `grammar/` (see
+named-argument validation that landed alongside closed one of them (`k33`), the constructor
+argument checking of the send-action family closed another (`k34`), and the cross-subsetting
+rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 8 — and the
+SysML census opened nine more, six of them `grammar/`, since closed by the parser's body-kind
+rule for the members only one body kind offers (see
 [Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) landed
 with both implementations rejecting, as did `s47` (an enumeration definition specializing
 another) with `g68` (a definition nested in an enumeration body) and `s48`–`s50` (the
@@ -205,8 +207,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 205 agreements and 18 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 208 and 15. Reserved keywords recovered as declared
+the default mode the same corpus gives 220 agreements and 6 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 223 and 3. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -227,12 +229,17 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 13 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 7 named KerML constraints (`k16`–`k42`) the
-pinned validators enforce as errors and
-OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
-rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
-last three of those were severity-policy gaps — the pinned grammar excluded the spellings, while
+All 3 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source: 3 named KerML constraints (`k25`, `k26`, `k37`) the pinned validators enforce as errors and
+OpenSysML does not report. Every gap the
+corpus carried before is closed: the 6 SysML body-item spellings the constraint census opened
+(`g61`–`g66`) are rejected by the parser, which admits `subject`, `actor`, `stakeholder`,
+`objective`, `entry`/`do`/`exit` and `render` only in the body kinds whose grammar offers them. The
+cross-subsetting family the `semantic/` source opened (`k16`, `k17`, `k19`, `k42`) was closed by
+extending the cross-feature pass with the crossing-feature, crossed-feature, redefined-end
+specialization and at-most-one rules; `k42` is rejected by OpenSysML with the message the pilot's
+source intends (`At most one cross subsetting is allowed`) where the pinned pilot only crashes.
+Three earlier gaps were severity-policy gaps — the pinned grammar excluded the spellings, while
 OpenSysML retained recoverable trees and reported only warnings by default — and the approved
 policy closed them by reporting errors without removing that recovery.
 
@@ -242,19 +249,9 @@ silent in either mode.
 
 | Case (`cmd/pilot-reject/testdata/negative/`) | We | Pilot says | Likely root cause |
 | --- | --- | --- | --- |
-| `grammar/g61-actor-outside-requirement-body.sysml` | accepts | `mismatched input 'actor' expecting '}'` | `internal/core/parser` — the definition-body member dispatch admits `actor` in any body; the pilot's `ActorMember` is a requirement, case or viewpoint body item only |
-| `grammar/g62-subject-outside-requirement-body.sysml` | accepts | `mismatched input 'subject' expecting '}'` | `internal/core/parser` — same dispatch admits `subject` in a part def body (`SubjectMember` is a requirement or case body item) |
-| `grammar/g63-objective-outside-case-body.sysml` | accepts | `mismatched input 'objective' expecting '}'` | `internal/core/parser` — same dispatch admits `objective` outside a case body (`ObjectiveMember` is a `CaseBodyItem`) |
-| `grammar/g64-stakeholder-outside-requirement-body.sysml` | accepts | `mismatched input 'stakeholder' expecting '}'` | `internal/core/parser` — same dispatch admits `stakeholder` outside a requirement body |
-| `grammar/g65-entry-action-outside-state-body.sysml` | accepts | `mismatched input 'entry' expecting '}'` | `internal/core/parser/defusage.go` `atKindPrefix` — outside a state body, `entry` before `action` is taken as a kind prefix and dropped, so the member parses as a plain `action init` with no diagnostic; the pilot's `EntryActionMember` is a `StateBodyItem` |
-| `grammar/g66-render-outside-view-body.sysml` | accepts | `mismatched input 'render' expecting '}'` | `internal/core/parser` — `render` is parsed in a part def body; the pilot's `ViewRenderingMember` is a `ViewBodyItem` (`expose`, the sibling case `g67`, is already rejected by `expose-owning-namespace`) |
-| `semantic/k16-crosses-from-nonend.kerml` | accepts | `Cross subsetting must be owned by one of two or more end features` | `internal/core/passes/w10b_cross_features.go` — checks the shape of a `crosses` chain on association ends, not that the owner is an end of a type with two or more ends (`validateCrossSubsettingCrossingFeature`) |
-| `semantic/k17-crosses-not-through-opposite-end.kerml` | accepts | `Cross subsetting must chain through an opposite end feature` | `internal/core/passes/w10b_cross_features.go` — the opposite-end check does not reach a `crosses` that names the opposite end itself instead of chaining through it (`validateCrossSubsettingCrossedFeature`) |
-| `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
-| `semantic/k42-two-cross-subsettings.kerml` | accepts | `Error executing EValidator` (the pilot's `validateFeatureOwnedCrossSubsetting` check indexes the wrong list and throws before it can say `At most one cross subsetting is allowed`; filed as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794), body in [omg-issues.md](omg-issues.md#validatefeatureownedcrosssubsetting-indexes-the-wrong-list-and-throws-pilot-2026-07)) | `internal/core/passes` — the one-reference-subsetting check that rejects `k09` has no counterpart for a second `crosses` clause (`validateFeatureOwnedCrossSubsetting`) |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays. The six `grammar/` gaps share one cause: the pilot's grammar
@@ -550,7 +547,7 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | --- | --- | --- | --- | --- | --- |
 | `validateAcceptActionUsageParameters` | none: `AcceptNode` always parses a payload parameter | no violating model | — | — | — |
 | `validateActionUsageType` | `semantic/s01-action-typed-by-part-def.sysml` | both-reject | An action must be typed by action definitions. | An action must be typed by action definitions. | — |
-| `validateActorMembershipOwningType` | `grammar/g61-actor-outside-requirement-body.sysml` | pilot-only-rejects | mismatched input 'actor' expecting '}' / extraneous input '}' expecting EOF | — | `actor` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
+| `validateActorMembershipOwningType` | `grammar/g61-actor-outside-requirement-body.sysml` | both-reject | mismatched input 'actor' expecting '}' / extraneous input '}' expecting EOF | 'actor' declares an actor of a requirement or case and is only allowed in a requirement or case body; move it into the requirement or case it belongs to | — |
 | `validateAllocationUsageType` | `semantic/s02-allocation-typed-by-connection-def.sysml` | both-reject | An allocation must be typed by allocation definitions. | An allocation must be typed by allocation definitions. | — |
 | `validateAnalysisCaseUsageType` | `semantic/s03-analysis-typed-by-case-def.sysml` | both-reject | An analysis case must be typed by one analysis case definition. | An analysis case must be typed by one analysis case definition. | — |
 | `validateAssertConstraintUsageReference` | `semantic/s04-assert-references-non-constraint.sysml` | both-reject | Must reference a constraint. | assert target must be a constraint usage, found attributeUsage | — |
@@ -593,7 +590,7 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateItemUsageType` | none: `checkItemUsage` is commented out in the pinned validator | not enforced by the pilot | — | — | — |
 | `validateMetadataUsageType` | `semantic/s23-metadata-typed-by-part-def.sysml` | both-reject | A metadata usage must be typed by one metadata definition. / Must have a concrete type | A metadata usage must be typed by one metadata definition. | — |
 | `validateObjectiveMembershipIsComposite` | none: `objective` admits no `ref` prefix | no violating model | — | — | — |
-| `validateObjectiveMembershipOwningType` | `grammar/g63-objective-outside-case-body.sysml` | pilot-only-rejects | mismatched input 'objective' expecting '}' / extraneous input '}' expecting EOF | — | `objective` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
+| `validateObjectiveMembershipOwningType` | `grammar/g63-objective-outside-case-body.sysml` | both-reject | mismatched input 'objective' expecting '}' / extraneous input '}' expecting EOF | 'objective' declares the objective of a case and is only allowed in a case body; move it into the case it belongs to | — |
 | `validateOccurrenceUsageIndividualDefinition` | existing: `xpect/p25-two-individual-definitions.sysml` | both-reject | At most one individual definition is allowed. | At most one individual definition is allowed. | — |
 | `validateOccurrenceUsageIndividualUsage` | existing: `xpect/p33-individual-typed-by-plain-def.sysml` | both-reject | An individual must be typed by one individual definition. | An individual must be typed by one individual definition. | — |
 | `validateOccurrenceUsageIsPortion` | `semantic/s45-snapshot-outside-occurrence.sysml` | both-reject | Must be owned by an occurrence definition or usage. | Must be owned by an occurrence definition or usage. | — |
@@ -619,14 +616,14 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateRequirementVerificationMembershipKind` | none: `verify` fixes `kind = requirement` in the grammar | no violating model | — | — | — |
 | `validateRequirementVerificationMembershipOwningType` | existing: `xpect/p29-verify-outside-objective.sysml` | both-reject | A requirement verification must be in the objective of a verification case. | A requirement verification must be in the objective of a verification case. | — |
 | `validateSatisfyRequirementUsageReference` | `semantic/s32-satisfy-references-non-requirement.sysml` | both-reject | Must reference a requirement. | satisfy target must be a requirement usage, found constraintUsage | — |
-| `validateStakeholderMembershipOwningType` | `grammar/g64-stakeholder-outside-requirement-body.sysml` | pilot-only-rejects | mismatched input 'stakeholder' expecting '}' / extraneous input '}' expecting EOF | — | `stakeholder` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
+| `validateStakeholderMembershipOwningType` | `grammar/g64-stakeholder-outside-requirement-body.sysml` | both-reject | mismatched input 'stakeholder' expecting '}' / extraneous input '}' expecting EOF | 'stakeholder' declares a stakeholder of a requirement and is only allowed in a requirement body; move it into the requirement it belongs to | — |
 | `validateStateDefinitionParallelSubactions` | existing: `xpect/p19-parallel-state-with-transition.sysml` | both-reject | A parallel state cannot have successions or transitions. | A parallel state cannot have successions or transitions. | — |
 | `validateStateDefinitionSubactionKind` | existing: `xpect/p13-state-two-entry-actions.sysml` | both-reject | A state may have at most one entry action. | A state may have at most one entry action. | — |
-| `validateStateSubactionMembershioOwningType` | `grammar/g65-entry-action-outside-state-body.sysml` | pilot-only-rejects | mismatched input 'entry' expecting '}' / extraneous input '}' expecting EOF | — | `parser/defusage.go` `atKindPrefix` takes `entry` as a kind prefix of `action` and drops it, so the member parses as a plain `action init` |
+| `validateStateSubactionMembershioOwningType` | `grammar/g65-entry-action-outside-state-body.sysml` | both-reject | mismatched input 'entry' expecting '}' / extraneous input '}' expecting EOF | 'entry' declares the entry action of a state and is only allowed in a state body; move it into the state it belongs to | — |
 | `validateStateUsageParallelSubactions` | `semantic/s33-parallel-state-usage-with-succession.sysml` | both-reject | A parallel state cannot have successions or transitions. | A parallel state cannot have successions or transitions. | — |
 | `validateStateUsageSubactionKind` | `semantic/s34-state-usage-two-entry-actions.sysml` | both-reject | A state may have at most one entry action. | A state may have at most one entry action. | — |
 | `validateStateUsageType` | `semantic/s35-state-typed-by-part-def.sysml` | both-reject | A state must be typed by state definitions. | A state must be typed by state definitions. | — |
-| `validateSubjectMembershipOwningType` | `grammar/g62-subject-outside-requirement-body.sysml` | pilot-only-rejects | mismatched input 'subject' expecting '}' / extraneous input '}' expecting EOF | — | `subject` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
+| `validateSubjectMembershipOwningType` | `grammar/g62-subject-outside-requirement-body.sysml` | both-reject | mismatched input 'subject' expecting '}' / extraneous input '}' expecting EOF | 'subject' declares the subject of a requirement or case and is only allowed in a requirement or case body; move it into the requirement or case it belongs to | — |
 | `validateTransitionFeatureMembershipEffectAction` | none: `TransitionEffectMember` only parses an `ActionUsage` | no violating model | — | — | — |
 | `validateTransitionFeatureMembershipGuardExpression` | none: not observed with the full library loaded | not enforced by the pilot | — | — | — |
 | `validateTransitionFeatureMembershipOwningType` | none: `TransitionFeatureMembership` is only produced inside a `TransitionUsage` | no violating model | — | — | — |
@@ -643,7 +640,7 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateVariationMembershipOwningNamespace` | existing: `xpect/p08-variant-outside-variation.sysml` | both-reject | A variant must be an owned member of a variation. | A variant must be an owned member of a variation. | — |
 | `validateVerificationCaseUsageType` | `semantic/s39-verification-typed-by-case-def.sysml` | both-reject | A verification case must be typed by one verification case definition. | A verification case must be typed by one verification case definition. | — |
 | `validateViewDefinitionOnlyOnvViewRendering` | `semantic/s40-view-def-two-renderings.sysml` | both-reject | A view definition may have at most one view rendering. | A view definition may have at most one view rendering. | — |
-| `validateViewRenderingMembershipOwningType` | `grammar/g66-render-outside-view-body.sysml` | pilot-only-rejects | mismatched input 'render' expecting '}' / extraneous input '}' expecting EOF | — | `render` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
+| `validateViewRenderingMembershipOwningType` | `grammar/g66-render-outside-view-body.sysml` | both-reject | mismatched input 'render' expecting '}' / extraneous input '}' expecting EOF | 'render' declares the rendering of a view and is only allowed in a view body; move it into the view it belongs to | — |
 | `validateViewUsageOnlyOneRendering` | existing: `xpect/p30-two-view-renderings.sysml` | both-reject | A view may have at most one view rendering. | A view may have at most one view rendering. | — |
 | `validateViewUsageType` | `semantic/s41-view-typed-by-part-def.sysml` | both-reject | A view must be typed by one view definition. | A view must be typed by one view definition. | — |
 | `validateViewpointUsageType` | `semantic/s42-viewpoint-typed-by-requirement-def.sysml` | both-reject | A requirement must be typed by one requirement definition. / A viewpoint must be typed by one viewpoint definition. | A viewpoint must be typed by one viewpoint definition. | — |

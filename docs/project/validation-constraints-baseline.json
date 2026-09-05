@@ -29,7 +29,7 @@
     {
       "name": "validateActorMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAllocationUsageType",
@@ -262,7 +262,7 @@
     {
       "name": "validateCrossSubsettingCrossingFeature",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDataTypeSpecialization",
@@ -439,7 +439,7 @@
     {
       "name": "validateFeatureOwnedCrossSubsetting",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureOwnedReferenceSubsetting",
@@ -598,7 +598,7 @@
     {
       "name": "validateInvocationExpressionNoDuplicateParameterRedefinition",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateInvocationExpressionOwnedFeatures",
@@ -687,7 +687,7 @@
     {
       "name": "validateObjectiveMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOccurrenceUsageIndividualDefinition",
@@ -909,7 +909,7 @@
     {
       "name": "validateStakeholderMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateDefinitionParallelSubactions",
@@ -924,7 +924,7 @@
     {
       "name": "validateStateSubactionMembershioOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateUsageParallelSubactions",
@@ -950,7 +950,7 @@
     {
       "name": "validateSubjectMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSubsettingConstantConformance",
@@ -1108,7 +1108,7 @@
     {
       "name": "validateViewRenderingMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateViewUsageOnlyOneRendering",

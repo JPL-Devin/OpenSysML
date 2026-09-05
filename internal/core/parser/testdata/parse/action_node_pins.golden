@@ -48,7 +48,11 @@
               (LiteralInteger value="4")))
           (SuccessionEdge source="add" target="scaled")
           (Usage kind="action" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-            (InvocationExpr type="Adder"))
+            (InvocationExpr type="Adder"
+              (NamedArg name="b"
+                (LiteralInteger value="4"))
+              (NamedArg name="a"
+                (LiteralInteger value="3"))))
           (SuccessionEdge source="scaled" target="named")
           (Membership visibility="default"
             (Usage kind="action" name="fin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

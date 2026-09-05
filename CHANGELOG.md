@@ -207,6 +207,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `the call is ambiguous between several overloads`. A call that selects one overload still
   navigates, lists and renames as that overload.
 
+- **A parser benchmark over a real model, and its Apollo 11 figures on the landing page.**
+  `BenchmarkParseModel` in `internal/core/parser` parses every `.sysml` and `.kerml` file under
+  the directory `OPENSYSML_BENCH_MODEL` names, with no library, resolution or validation, so the
+  parser's own cost is measurable apart from a load's. Its figures for the public Apollo 11 model
+  (8 ms to parse, 0.37 s to validate) close the landing page and open the README, and
+  `docs/internals/performance.md` records the measurement, the commands to repeat it, and what
+  the run reports about the model.
+
 - **An Array, a vector and a vector quantity are runtime values of their own.** A
   `Collections::Array` usage shaped by its `dimensions` and `elements` evaluates to an Array
   value printed `Array(2, 3)[1, 2, 3, 4, 5, 6]`, whose `rank`, `flattenedSize`, `dimensions`
@@ -280,6 +288,27 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   or solving a constraint that states such a statement, an action node or a succession refuses —
   `statement in a constraint body is not executed by OpenSysML` — rather than reporting a
   verdict that ignored it. A case's own action steps are its procedure and still translate.
+
+- **A `crosses` clause is validated against the whole of KerML's cross-subsetting rules.** A
+  cross subsetting is now an error unless its owner is an end feature of a type that declares
+  two or more ends (`Cross subsetting must be owned by one of two or more end features`); the
+  crossed feature must be a two-step feature chain that, on a binary association or connection,
+  starts at the other end (`Cross subsetting must chain through an opposite end feature`), so
+  `end a : A crosses b;` and `end a : A crosses a.x;` are reported where before only a chain
+  through a non-end was; a feature may cross at most once (`At most one cross subsetting is
+  allowed`, reported on every clause after the first, as the reference implementation's source
+  intends where its pinned build only crashes); and an end that redefines another end — by a
+  `redefines` clause or by its position in an association that specializes another — must
+  cross a feature that specializes what the redefined end crosses (`Cross feature must
+  specialized redefined-end cross features`). The rules read the same for KerML `assoc` and
+  `connector` ends and for SysML `connection def` and `connection` ends. A cross feature an
+  end declares in its own body (`end a : A { member feature x : B; }`) or inline ahead of
+  itself (`end x [0..1] feature a : A;`) now implicitly subsets the cross feature of each end
+  its owner redefines, as the specification's implied specializations require, so the n-ary
+  association examples of the reference stay silent; the inline cross feature is a member of
+  its end, so `A::a::x` resolves to it.
+
+- **An invocation that binds one parameter twice is reported at the type tier.** `F(x = 1, x = 2)` is `F binds parameter "x" twice`, judged by the parameter the name resolves to rather than by its spelling: a positional argument followed by a named binding of the same parameter, a short name, an alias, a qualified name or a redefining name of the same parameter counts as the same binding, in KerML function calls, `calc` usages, `action a = A(…)` and `perform action a = A(…)` alike (KerML 1.1 §8.3.4.8 `validateInvocationExpressionNoDuplicateParameterRedefinition`). Overload selection resolves a qualified or aliased named argument against each candidate the same way. The constructor rule (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) now also reaches a constructor written as a feature chain's operand, `send new Sig(p = 1, p = 2).p to r`.
 
 - **Every enumeration definition is a variation, and its enumerated values are its variants.**
   `enum def F :> E;` is now rejected as a variation specializing another variation, as are an
@@ -567,6 +596,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the declared `occ`, since an expression call cannot write its `inout group` argument back;
   write the result with `assign spares := addNew(spares, spare)`.
 
+- **A member is rejected outside the body kind that owns it.** `subject` and `actor` belong to a
+  requirement or case body, `stakeholder` to a requirement body, `objective` to a case body,
+  `entry`, `do` and `exit` to a state body and `render` to a view body (SysML v2 `RequirementBody`,
+  `CaseBody`, `StateBody` and `ViewBody`). Written anywhere else — a part, an action, a package, a
+  nested usage of another kind — the parser now reports an error naming the owning body and the
+  fix (`'actor' declares an actor of a requirement or case and is only allowed in a requirement or
+  case body; move it into the requirement or case it belongs to`) where it used to accept the
+  member silently, or, for `entry action init;`, read it as a plain action. The OMG pilot rejects
+  the same models at the same tier. Every legitimate state form is unchanged, including `entry;`,
+  `entry; then s;`, inline and braced entry/do/exit actions, transitions and nested or parallel
+  states, and a member inside an `include`, `perform`, `exhibit`, `frame` or `satisfy` body is
+  judged by that body's kind.
+
 - **The Quantities and Units domain library's calculations compute over quantities.** Every
   `QuantityCalculations` declaration dispatches to the runtime's unit-aware arithmetic:
   `sqrt(9 [m**2])` is `3.0 [m]`, while `sqrt(9 [m])` and `sqrt(9 [rad])` — an angle is
@@ -783,7 +825,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   is reported as a value of dimension L². Triggers nested in action, state and transition
   bodies, including the body an action-target succession carries, are checked, and a body
   declared there now gets its own scope. An argument whose type only evaluation determines is
-  left to it, and an unresolved name is reported by name resolution alone.
+  left to it, and an unresolved name is reported by name resolution alone. A body `{ … }`
+  written as a value is the expression itself, not its result, wherever a value is typed: it is
+  reported as a trigger argument, bound to a typed feature (`attribute b : Boolean = { true }`),
+  passed to a typed parameter or given to an operator, as the reference validator reports it,
+  while its members are still checked. The check is gated
+  per trigger, so an unresolved name elsewhere in the document does not hide an invalid trigger,
+  and a workspace document that redeclares a library type's qualified name does not disable it.
 
 - **A census of the pilot's named validation constraints.** `docs/project/validation-constraints.md`
   lists every `validate*` constraint the pinned pilot validators name (217, re-extracted from the
@@ -1167,6 +1215,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   and the one known gap — the pilot keeps a `flow` or `message` written with no ends as the
   source, this implementation reads past it.
 
+- **An unrelated error in a package no longer hides its features' variability diagnostics.**
+  `Initialized feature must be variable` and `Only a variable feature can be constant` on a feature
+  declared directly in a package or namespace used to go unreported whenever any sibling member
+  later in that package failed a lower tier (an unresolved typing, say). A package has no typing of
+  its own to fail, so it now gates nothing: only the feature's own head, and the head of a
+  definition or usage that owns it, silence the rule.
+
 ### Changed
 
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
@@ -1335,6 +1390,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   behavioral feature. Write the constructor instead: `send new Def(args)`. The fixtures, the
   demo and the examples are migrated; invoking a behavioral feature (`send shutDown() to self`
   over an action) is unchanged.
+
+- **The site shows one menu button on a phone.** Below the theme's drawer breakpoint the
+  header's own menu button is hidden and its links — Guide, Reference, Roadmap, OpenMBEE and
+  the community wiki — appear as a row above the footer, leaving the drawer's button as the
+  only one in the header.
 
 - **The solver's design provenance is now credited.** The README's new Acknowledgements section, the solver sections of the guide, the REPL and environment references, the compliance record and the `internal/core/solve` package documentation name the `ConstraintSolverService` of OpenMBEE's [HMF (Hivecore Model Framework)](https://github.com/hivecore-dev/hmf) (Apache 2.0) as the design the constraint-solving capability set follows; the implementation itself remains independent.
 

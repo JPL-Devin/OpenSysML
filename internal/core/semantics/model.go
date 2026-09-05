@@ -177,6 +177,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return d.Relationships
 	case *ast.ConnectorEnd:
 		return d.Relationships
+	case *ast.CrossFeatureMember:
+		return d.Relationships
 	case *ast.BodyExpr:
 		// A body parameter is not a node of its own, so its symbol declares the
 		// body and names the parameter its typing is written on.
@@ -392,6 +394,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		seen[redefined] = true
 		out = append(out, redefined)
+	}
+
+	// The cross feature an end owns is implicitly typed by the end's types and
+	// subsets the cross feature of each end the end redefines (see crossing.go).
+	for _, general := range m.implicitCrossFeatureGenerals(sym) {
+		if general == sym || seen[general] {
+			continue
+		}
+		seen[general] = true
+		out = append(out, general)
 	}
 
 	// The subject or objective of a case, requirement or their usages implicitly

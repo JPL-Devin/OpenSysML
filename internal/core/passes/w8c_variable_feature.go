@@ -82,10 +82,10 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	return diags
 }
 
-// w8cVariabilityDownstream reports whether what u's variability rests on, its own
-// head before the value and its owner's head in this document, has a lower-tier failure.
+// w8cVariabilityDownstream reports a lower-tier failure in what u's variability
+// rests on: its own head before the value, or its owner's typing head in this document.
 func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) bool {
-	head := w8cDeclarationHead(u)
+	head := w8cHeadBefore(u, u.Members)
 	if u.Value != nil {
 		if at := u.Value.Span().Offset; at > head.Offset && at < head.End() {
 			head.Len = at - head.Offset
@@ -101,27 +101,44 @@ func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) b
 	if owner == nil || owner.Decl == nil {
 		return false
 	}
+	ownerHead, typed := w8cOwnerHead(owner.Decl)
+	if !typed {
+		return false
+	}
 	doc := symbols.DocNameOf(owner.OwnerScope)
 	if doc == "" {
 		doc = owner.DocName
 	}
-	return (doc == "" || doc == ctx.Name) && ctx.downstreamSpan(w8cDeclarationHead(owner.Decl))
+	return (doc == "" || doc == ctx.Name) && ctx.downstreamSpan(ownerHead)
 }
 
-// w8cDeclarationHead is a declaration's span before its first body member.
-func w8cDeclarationHead(node ast.Node) source.Span {
-	var members []ast.Node
+// w8cOwnerHead is the owner's head before its first body member, which fixes its type.
+// typed is false for owners whose notation alone fixes it (package, namespace, state node).
+func w8cOwnerHead(node ast.Node) (head source.Span, typed bool) {
 	switch d := node.(type) {
 	case *ast.Usage:
-		members = d.Members
+		return w8cHeadBefore(d, d.Members), true
 	case *ast.Definition:
-		members = d.Members
-	default:
-		return declarationHead(node)
+		return w8cHeadBefore(d, d.Members), true
+	case *ast.SubjectMember:
+		return w8cHeadBefore(d, d.Body), true
+	case *ast.PrefixMetadata:
+		return w8cHeadBefore(d, d.Body), true
+	case *ast.MultiplicityDecl:
+		return w8cHeadBefore(d, d.Members), true
+	case *ast.AssumeMember, *ast.RequireMember:
+		if oc, ok := ast.OwnedConstraintOf(d); ok {
+			return w8cHeadBefore(d, oc.Body), true
+		}
 	}
+	return source.Span{}, false
+}
+
+// w8cHeadBefore is a declaration's span before the first of its body members.
+func w8cHeadBefore(node ast.Node, body []ast.Node) source.Span {
 	span := node.Span()
-	if len(members) > 0 {
-		if at := members[0].Span().Offset; at > span.Offset && at < span.End() {
+	if len(body) > 0 {
+		if at := body[0].Span().Offset; at > span.Offset && at < span.End() {
 			span.Len = at - span.Offset
 		}
 	}

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -1122,7 +1123,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// `render` keyword, and the Kernel Semantic Library writes `in frame :
 		// SpatialFrame[1]`. Read the keyword as the declaration's own name
 		// unless what follows can begin the member form.
-		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
+		if memberKeywordNames[kw] && !p.atMemberKeywordUsedAsKeyword(kw) {
 			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
 		}
 
@@ -1131,6 +1132,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if kw == "connect" {
 			p.advance() // consume 'connect'
 			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
+		}
+
+		// A subject, actor, stakeholder, objective or rendering the body does
+		// not own is parsed as itself and then replaced by an ErrorNode.
+		if !p.bodyAdmitsMember(kw) {
+			en := p.misplacedMember(t)
+			applyPrefixes = func(ast.Node) ast.Node {
+				en.NodeSpan = p.spanFrom(start)
+				return en
+			}
 		}
 
 		p.advance() // consume the kind keyword
@@ -1279,12 +1290,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				p.advance() // consume '{'
 				// Parse body members
 				var members []ast.Node
+				leave := p.pushBodyContext(usageBodyContext(ast.UsageUseCase))
 				for !p.at(lexer.RBrace) && !p.atEOF() {
 					m := p.parseBodyMember()
 					if m != nil {
 						members = append(members, m)
 					}
 				}
+				leave()
 				p.expect(lexer.RBrace, msgExpectedBodyClose)
 				u.Members = members
 				u.HasBody = true
@@ -1580,9 +1593,18 @@ func defBodyContext(kind ast.DefinitionKind) bodyContext {
 	switch kind {
 	case ast.DefInterface:
 		return bodyInterface
-	case ast.DefAction, ast.DefState, ast.DefCalc, ast.DefCase,
-		ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase, ast.DefBehavior:
-		return bodyBehavior
+	case ast.DefAction, ast.DefBehavior:
+		return bodyAction
+	case ast.DefState:
+		return bodyState
+	case ast.DefCalc:
+		return bodyCalc
+	case ast.DefCase, ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase:
+		return bodyCase
+	case ast.DefRequirement, ast.DefConcern, ast.DefViewpoint:
+		return bodyRequirement
+	case ast.DefView:
+		return bodyView
 	}
 	return bodyOther
 }
@@ -1593,12 +1615,92 @@ func usageBodyContext(kind ast.UsageKind) bodyContext {
 	switch kind {
 	case ast.UsageInterface:
 		return bodyInterface
-	case ast.UsageAction, ast.UsageState, ast.UsageTransition, ast.UsageStep,
-		ast.UsageCalc, ast.UsageCase, ast.UsageAnalysisCase,
-		ast.UsageVerificationCase, ast.UsageUseCase, ast.UsageBehavior:
-		return bodyBehavior
+	case ast.UsageAction, ast.UsageTransition, ast.UsageStep, ast.UsageBehavior:
+		return bodyAction
+	case ast.UsageState:
+		return bodyState
+	case ast.UsageCalc:
+		return bodyCalc
+	case ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase:
+		return bodyCase
+	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint,
+		ast.UsageFramedConcern, ast.UsageObjective, ast.UsageSatisfy:
+		return bodyRequirement
+	case ast.UsageView:
+		return bodyView
 	}
 	return bodyOther
+}
+
+// bodyAdmitsMember reports whether the innermost body offers the member kw
+// introduces; a word the file's language does not reserve is a name instead.
+func (p *Parser) bodyAdmitsMember(kw string) bool {
+	m, ok := ownedMembers[kw]
+	if !ok || !p.reservedWord(kw) {
+		return true
+	}
+	return slices.Contains(m.bodies, p.bodyContext())
+}
+
+// ownedMember describes a member notation that only certain body kinds offer.
+type ownedMember struct {
+	role   string // what the member declares, for the diagnostic
+	owner  string // the kind of element whose body offers it
+	bodies []bodyContext
+}
+
+var ownedMembers = map[string]ownedMember{
+	"subject":     {"the subject of a requirement or case", "requirement or case", []bodyContext{bodyRequirement, bodyCase}},
+	"actor":       {"an actor of a requirement or case", "requirement or case", []bodyContext{bodyRequirement, bodyCase}},
+	"stakeholder": {"a stakeholder of a requirement", "requirement", []bodyContext{bodyRequirement}},
+	"objective":   {"the objective of a case", "case", []bodyContext{bodyCase}},
+	"entry":       {"the entry action of a state", "state", []bodyContext{bodyState}},
+	"do":          {"the do action of a state", "state", []bodyContext{bodyState}},
+	"exit":        {"the exit action of a state", "state", []bodyContext{bodyState}},
+	"render":      {"the rendering of a view", "view", []bodyContext{bodyView}},
+}
+
+// parseMisplacedStateSubaction reads an entry/do/exit member outside a state body
+// into one ErrorNode; nil when the cursor is not on one. A state body reads them itself.
+func (p *Parser) parseMisplacedStateSubaction(start int, trivia []ast.Trivia) ast.Node {
+	tok := p.peek()
+	if tok.Kind != lexer.Keyword || !isStateSubactionKeyword(tok.KeywordID) || p.bodyAdmitsMember(tok.KeywordID) {
+		return nil
+	}
+	kind := stateSubactionKind(tok.KeywordID)
+	var en *ast.ErrorNode
+	if kind != subactionDo && p.atPointPseudostate() {
+		en = p.misplacedMemberAs(tok, "an "+tok.KeywordID+" point of a state", "state")
+		pk := ast.PseudostateEntry
+		if kind == subactionExit {
+			pk = ast.PseudostateExit
+		}
+		p.advance()
+		p.advance()
+		p.parsePseudostate(start, tok.KeywordID+" point", pk)
+	} else {
+		en = p.misplacedMember(tok)
+		p.advance()
+		p.parseStateSubaction(start, kind)
+	}
+	en.NodeSpan = p.spanFrom(start)
+	en.SetLeadingTrivia(trivia)
+	return en
+}
+
+// misplacedMember reports a member written outside the body kind that owns it and
+// returns the ErrorNode standing in for it; the caller parses the member and spans the node.
+func (p *Parser) misplacedMember(kw lexer.Token) *ast.ErrorNode {
+	m := ownedMembers[kw.KeywordID]
+	return p.misplacedMemberAs(kw, m.role, m.owner)
+}
+
+// misplacedMemberAs is misplacedMember with the role and owner spelled by the caller.
+func (p *Parser) misplacedMemberAs(kw lexer.Token, role, owner string) *ast.ErrorNode {
+	msg := fmt.Sprintf("'%s' declares %s and is only allowed in a %s body; move it into the %s it belongs to",
+		kw.KeywordID, role, owner, owner)
+	p.error(kw.Span, msg)
+	return &ast.ErrorNode{Message: msg}
 }
 
 // isBehavioralKeyword checks if next token is a behavioral keyword
@@ -2284,9 +2386,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 func (p *Parser) parseSuccessionAsUsage(start int) ast.Node {
 	u := &ast.Usage{Kind: ast.UsageSuccession}
 	p.parseConnectorEnds(u, "")
-	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)
 	return u
+}
+
+// parseGenericBody parses the body of a member whose kind offers no members of
+// its own (SysML.xtext UsageBody), so it does not inherit the body around it.
+func (p *Parser) parseGenericBody() (members []ast.Node, hasBody bool) {
+	defer p.pushBodyContext(bodyOther)()
+	return p.parseDefUsageBody()
 }
 
 // parseDefUsageBody parses a definition/usage body: `;` (no body) or
@@ -2526,6 +2635,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseBodyMember()
 	}
 
+	if en := p.parseMisplacedStateSubaction(start, trivia); en != nil {
+		return en
+	}
+
 	// Check for `#MetadataType` prefix (user-defined keyword)
 	// Parse prefixes and then parse def/usage declaration
 	if p.at(lexer.Hash) {
@@ -2626,7 +2739,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// InitialNodeMember — which would declare a member shadowing end `a`.
 		// The one-ended `first a;` stays an initial node (extension notation).
 		if p.atChainedFirstSuccession() ||
-			(p.bodyContext() != bodyBehavior && p.atTwoEndedFirst()) {
+			(!p.bodyContext().carriesActions() && p.atTwoEndedFirst()) {
 			return p.parseSuccessionAsUsage(start)
 		}
 		firstTok := p.advance()
@@ -3148,7 +3261,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			p.parseUsageValue(u)
 
 			// Parse body or semicolon
-			members, hasBody := p.parseDefUsageBody()
+			members, hasBody := p.parseGenericBody()
 			u.Members = members
 			u.HasBody = hasBody
 
@@ -3200,7 +3313,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.parseUsageValue(u)
 
 		// Parse body or semicolon
-		members, hasBody := p.parseDefUsageBody()
+		members, hasBody := p.parseGenericBody()
 		u.Members = members
 		u.HasBody = hasBody
 
@@ -3254,7 +3367,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		if enumValue {
 			kind = ast.UsageEnumeration
 		}
-		members, hasBody := p.parseDefUsageBody()
+		members, hasBody := p.parseGenericBody()
 
 		u := &ast.Usage{
 			Kind:              kind,
@@ -3374,16 +3487,16 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 	return p.parseReferenceMemberUsage(start, ast.UsageAction, kw, "action", mods, p.parseActionBodyMixed, true)
 }
 
-// atMemberKeywordUsedAsKeyword reports whether the `frame` or `render` token at
-// the cursor introduces a member rather than being the name of the declaration
-// it starts. Both member forms continue with the referenced name or with the
-// notation's own kind keyword (SysML.xtext ViewRenderingUsage,
-// FramedConcernUsage), so anything else — a multiplicity, a specialization, a
-// type, a body — can only follow a name, and `frame` and `render` are legal
-// names in KerML.
+// memberKeywordNames are the SysML member keywords KerML does not reserve, so a
+// KerML declaration may carry one as its name (`in frame : SpatialFrame[1]`).
+var memberKeywordNames = map[string]bool{
+	"frame": true, "render": true, "subject": true, "actor": true,
+	"stakeholder": true, "objective": true,
+}
+
+// atMemberKeywordUsedAsKeyword reports whether the member keyword at the cursor
+// introduces a member (a name or its kind keyword follows) or names a KerML feature.
 func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
-	// SysML.xtext holds both literals, so neither can name a declaration there;
-	// only KerML, which has neither, reads them as names.
 	if p.src.Kind() != source.KindKerML {
 		return true
 	}
@@ -3392,10 +3505,12 @@ func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
 	case lexer.Identifier, lexer.UnrestrictedName:
 		return true
 	case lexer.Keyword:
-		if kw == "frame" {
+		switch kw {
+		case "frame":
 			return next.KeywordID == "concern"
+		case "render":
+			return next.KeywordID == "rendering"
 		}
-		return next.KeywordID == "rendering"
 	}
 	return false
 }
@@ -3462,7 +3577,9 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 		u.HasBody = false
 	case p.at(lexer.LBrace):
 		p.advance()
+		leave := p.pushBodyContext(usageBodyContext(kind))
 		u.Members = parseBody()
+		leave()
 		u.HasBody = true
 	case allowValue && (p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do")):
 		// A performed action written as a transition's effect is terminated by
@@ -3667,7 +3784,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		Direction:    mods.direction,
 		Multiplicity: mods.earlyMultiplicity,
 	}
-	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)
 	return u
 }
@@ -4376,6 +4493,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 	if p.at(lexer.LBrace) {
 		p.advance() // '{'
 		var body []ast.Node
+		leave := p.pushBodyContext(bodyOther)
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			if m := p.parseBodyMember(); m != nil {
 				body = append(body, m)
@@ -4385,6 +4503,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 			p.accept2(lexer.Semicolon)
 			body = append(body, expr)
 		}
+		leave()
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
 		pm.HasBody = true

@@ -1,0 +1,14 @@
+{#-
+  The theme's main.html only extends base.html. This one also puts the header menu's
+  links above the footer, shown where the header is too narrow for a second menu button.
+-#}
+{% extends "base.html" %}
+
+{% block footer %}
+  <nav class="osml-footer-menu" aria-label="Menu">
+    <div class="osml-footer-menu__inner md-grid">
+      {% include "partials/menu-links.html" %}
+    </div>
+  </nav>
+  {{ super() }}
+{% endblock %}

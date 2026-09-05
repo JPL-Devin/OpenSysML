@@ -20,6 +20,7 @@ const (
 	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
+	fqnEvaluation                 = "Performances::Evaluation"
 	fqnCollection                 = "Collections::Collection"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
@@ -111,6 +112,24 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		if c.Known && !c.Holds {
 			c.Found = fmt.Sprintf("a sequence of %d elements, typed Anything", len(n.Elements))
 			c.Untyped = true
+		}
+		return c
+	case *ast.CollectExpr:
+		// `xs.{…}` is the result of ControlFunctions::collect, typed Anything.
+		c := m.typeConformance(m.libSymbol(fqnAnything), want)
+		if c.Known && !c.Holds {
+			c.Found = "a collection `.{…}` maps to, typed Anything"
+			c.Untyped = true
+		}
+		return c
+	case *ast.SelectExpr:
+		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
+		return m.exprConformance(scope, n.Operand, want, byUnit)
+	case *ast.BodyExpr:
+		// `{ … }` written as a value is the expression itself, an Evaluation.
+		c := m.typeConformance(m.libSymbol(fqnEvaluation), want)
+		if c.Known && !c.Holds {
+			c.Found = "an expression body `{ … }`, the expression itself"
 		}
 		return c
 	case *ast.ConstructorExpr:
@@ -371,8 +390,35 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		if e.Operator == ast.OpAdd && m.operandsConformTo(scope, e, m.libSymbol(fqnString)) {
 			return m.typeConformance(m.libSymbol(fqnString), want)
 		}
+		if found, ok := m.nonArithmeticOperand(scope, e); ok {
+			return Conformance{Known: true, Found: fmt.Sprintf("`%s` over %s, which no arithmetic function takes", e.Operator, found)}
+		}
 	}
 	return conformanceUnknown()
+}
+
+// nonArithmeticOperand finds an operand known to be neither a quantity, a number
+// nor a String, so no arithmetic function is selected and e has no result type.
+func (m *Model) nonArithmeticOperand(scope *symbols.Scope, e *ast.OperatorExpr) (string, bool) {
+	for _, operand := range e.Operands {
+		found := ""
+		for _, fqn := range []string{fqnScalarQuantityValue, fqnNumericalValue, fqnString} {
+			typ := m.libSymbol(fqn)
+			if typ == nil {
+				return "", false
+			}
+			c := m.exprConformance(scope, operand, typ, false)
+			if !c.Known || c.Holds || c.Untyped {
+				found = ""
+				break
+			}
+			found = c.Found
+		}
+		if found != "" {
+			return found, true
+		}
+	}
+	return "", false
 }
 
 // quantityArithmetic reports whether e selects a QuantityCalculations function:

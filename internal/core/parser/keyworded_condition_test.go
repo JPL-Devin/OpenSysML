@@ -27,7 +27,7 @@ func TestKeywordedConditionIsRejected(t *testing.T) {
 		{"require in requirement def", "requirement def R { require power > 0; }"},
 		{"require in concern", "concern def C { require power > 0; }"},
 		{"require in viewpoint", "viewpoint v { require power > 0; }"},
-		{"require in objective", "objective o { require power > 0; }"},
+		{"require in objective", "case def C { objective o { require power > 0; } }"},
 		{"require in nested requirement", "case def C { requirement r { require power > 0; } }"},
 	}
 	for _, c := range cases {

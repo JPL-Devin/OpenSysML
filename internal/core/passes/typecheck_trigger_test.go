@@ -40,6 +40,7 @@ const triggerFixture = `package P {
 		attribute ok : Boolean;
 	}
 	calc def Twice { in d : DurationValue; return : DurationValue = d + d; }
+	calc def Timed { in e : Performances::Evaluation; return : DurationValue = 1 [s]; }
 	calc def Later { in t : TimeInstantValue; return : TimeInstantValue = t; }
 	calc def Len { return : LengthValue; }
 	calc def IsOk { return : Boolean; }
@@ -429,6 +430,39 @@ func TestSequenceTriggerArgumentIsRejected(t *testing.T) {
 	wantTriggerSilent(t, "assert constraint { (flag, ready) }")
 }
 
+// A workspace document that redeclares a library type's qualified name does not
+// stand in for the library's declaration, so the trigger rules keep judging.
+func TestTriggerTypesSurviveWorkspaceDuplicates(t *testing.T) {
+	const fixture = `package ISQBase { attribute def DurationValue; }
+	package Time { attribute def TimeInstantValue; }
+	package ScalarValues { datatype Boolean; }
+	package P {
+		state def S {
+			state a;
+			state b;
+			transition first a accept %s then b;
+		}
+	}`
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"after 5", "trigger-after-duration", "found Natural"},
+		{"after true", "trigger-after-duration", "found Boolean"},
+		{"at 5", "trigger-at-time-instant", "found Natural"},
+		{"at 5 [SI::s]", "trigger-at-time-instant", "found a quantity in second"},
+		{"when 5", "trigger-when-boolean", "found Natural"},
+		{"when 5 [SI::s]", "trigger-when-boolean", "found a quantity in second"},
+	} {
+		diags := libraryTypeDiags(t, strings.Replace(fixture, "%s", tc.trigger, 1))
+		if len(diags) != 1 || diags[0].Code != tc.code || !strings.Contains(diags[0].Message, tc.found) {
+			t.Errorf("%q beside duplicated library names: got %v, want one %s (%s)", tc.trigger, diags, tc.code, tc.found)
+		}
+	}
+	for _, trigger := range []string{"after 5 [SI::s]", "when true", "when 5 > 3"} {
+		if diags := libraryTypeDiags(t, strings.Replace(fixture, "%s", trigger, 1)); len(diags) != 0 {
+			t.Errorf("%q beside duplicated library names: got %v, want silence", trigger, diags)
+		}
+	}
+}
+
 // `seq#(i)` is one element of seq, of seq's type; a Collection (every quantity
 // value is one) is indexed as Anything. The pilot rejects each shape below.
 func TestIndexedTriggerArgument(t *testing.T) {
@@ -458,6 +492,130 @@ func TestIndexedTriggerArgument(t *testing.T) {
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
+}
+
+// `xs.{…}` is the Anything-typed result of collect; `xs.?{…}` keeps elements of
+// xs and is typed as xs is. The pilot rejects each shape below and accepts the
+// select shapes kept silent.
+func TestCollectAndSelectTriggerArguments(t *testing.T) {
+	const collected = "found a collection `.{…}` maps to, typed Anything"
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"when counts.{in n; n > 3}", "trigger-when-boolean", collected},
+		{"when flags.{in f; f}", "trigger-when-boolean", collected},
+		{"when counts.?{in n; n > 3}", "trigger-when-boolean", "found Integer"},
+		{"when h.ok.{in f; f}", "trigger-when-boolean", collected},
+		{"after waits.{in w; w}", "trigger-after-duration", collected},
+		{"after counts.?{in n; n > 3}", "trigger-after-duration", "found Integer"},
+		{"after times.?{in i; true}", "trigger-after-duration", "found TimeInstantValue"},
+		{"at counts.?{in n; true}", "trigger-at-time-instant", "found Integer"},
+		{"at times.{in i; i}", "trigger-at-time-instant", collected},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, tc.found)
+	}
+	for _, trigger := range []string{
+		"when flags.?{in f; f}",
+		"when flags.?{in f; f}#(1)",
+		"after waits.?{in w; w > 1 [s]}",
+		"after d2.?{in w; true}",
+		"at times.?{in i; true}",
+		"when undeclared.?{in f; f}",
+		"when undeclared.{in f; f}",
+	} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+}
+
+// `{ … }` written as a trigger argument is the expression itself, an Evaluation,
+// whatever its result would be; the pilot rejects each shape below.
+func TestBodyTriggerArgumentIsRejected(t *testing.T) {
+	const body = "found an expression body `{ … }`"
+	wantTriggerDiag(t, "transition first a accept when { true } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when { x > 3 } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when { 5 } then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept after { 5 [s] } then b;", "trigger-after-duration", body)
+	wantTriggerDiag(t, "transition first a accept after { d } then b;", "trigger-after-duration", body)
+	wantTriggerDiag(t, "transition first a accept at { t } then b;", "trigger-at-time-instant", body)
+	wantTriggerDiag(t, "entry action { accept when { flag }; }", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a if { true } then b;", "type.expr", body)
+	wantTriggerDiag(t, "transition first a accept when ({ true }) then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when { true }#(1) then b;", "trigger-when-boolean", body)
+	wantTriggerDiag(t, "transition first a accept when not { true } then b;", "type.expr", "operator 'not' requires a Boolean operand, found Expression")
+	wantTriggerDiag(t, "transition first a accept when { true } and flag then b;", "type.expr", "operator 'and' requires Boolean operands, found Expression and Boolean")
+	wantTriggerDiag(t, "transition first a accept after { 5 [s] } + d then b;", "trigger-after-duration", "`+` over an expression body `{ … }`")
+	wantTriggerDiag(t, "transition first a accept at { t } + d then b;", "trigger-at-time-instant", "`+` over an expression body `{ … }`")
+	wantTriggerSilent(t, "transition first a accept when flags->ControlFunctions::forAll {in f; f} then b;")
+	diags := triggerDiags(t, "transition first a accept when { true } == true then b;")
+	if len(diags) != 1 || diags[0].Severity != SeverityWarning || !strings.Contains(diags[0].Message, "comparing Expression with Boolean is always false") {
+		t.Errorf("`{ true } == true`: want the equality warning alone, got %v", diags)
+	}
+}
+
+// A declaration a trigger argument's body makes is typed as one in any other
+// body, and a trigger written inside it is checked; the pilot rejects each.
+func TestTriggerBodyMembersAreTyped(t *testing.T) {
+	const bad = "cannot bind Natural value to a feature typed by Boolean"
+	for _, tc := range []struct{ trigger, want string }{
+		{"accept after Timed({ attribute bad : Boolean = 5; d }) then b;", bad},
+		{"accept when flags->ControlFunctions::forAll { in f; attribute bad : Boolean = 5; f } then b;", bad},
+		{"accept when flags->ControlFunctions::forAll { in f; attribute wait : DurationValue = 5; f } then b;", "cannot bind Natural value to a feature typed by DurationValue"},
+		{"accept after Timed({ action inner { accept after 7; } d }) then b;", "an 'after' trigger's delay must be a DurationValue, found Natural"},
+		{"accept when flags->ControlFunctions::forAll { in f; action inner { accept when x; } f } then b;", "a 'when' trigger's condition must be Boolean, found Integer"},
+	} {
+		diags := triggerDiags(t, "transition first a "+tc.trigger)
+		if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.want) {
+			t.Errorf("%q: want one diagnostic containing %q, got %v", tc.trigger, tc.want, diags)
+		}
+	}
+	wantTriggerSilent(t, "transition first a accept after Timed({ attribute wait : DurationValue = 5 [s]; wait }) then b;")
+	wantTriggerSilent(t, "transition first a accept when flags->ControlFunctions::forAll { in f; attribute ok : Boolean = f; ok } then b;")
+	wantTriggerSilent(t, "transition first a accept after Timed({ action inner { accept after 7 [s]; } d }) then b;")
+	diags := triggerDiags(t, "transition first a accept when { attribute bad : Boolean = 5; flag } then b;")
+	if len(diags) != 2 || !strings.Contains(diags[0].Message, "found an expression body") || !strings.Contains(diags[1].Message, bad) {
+		t.Errorf("bare body with a bad member: want the body and the binding diagnostics, got %v", diags)
+	}
+}
+
+// A trigger written inside a `{ … }` body is checked wherever the body is
+// written: as a feature value, an assignment value, an invocation argument, a
+// guard, a sequence element, an indexed operand or a collection body.
+func TestTriggerInBodyValuedExpression(t *testing.T) {
+	const after = "an 'after' trigger's delay must be a DurationValue, found Natural"
+	for _, tc := range []struct{ body, code, want string }{
+		{"attribute v = { action inner { accept after 5; } d };", "trigger-after-duration", after},
+		{"attribute v = Timed({ action inner { accept after 5; } d });", "trigger-after-duration", after},
+		{"attribute v = Timed(e = { action inner { accept at 5; } d });", "trigger-at-time-instant", "an 'at' trigger's time must be a TimeInstantValue, found Natural"},
+		{"entry { assign x := Timed({ action inner { accept when x; } d }); }", "trigger-when-boolean", "a 'when' trigger's condition must be Boolean, found Integer"},
+		{"entry { assign untyped := { action inner { accept after 5; } d }; }", "trigger-after-duration", after},
+		{"do action run { assign untyped := { action inner { accept after 5; } d }; }", "trigger-after-duration", after},
+		{"attribute v = (true, { action inner { accept after 5; } d });", "trigger-after-duration", after},
+		{"attribute v = { action inner { accept after 5; } d }#(1);", "trigger-after-duration", after},
+		{"attribute v = { in p; action inner { accept after 5; } p };", "trigger-after-duration", after},
+		{"attribute v = flags->ControlFunctions::forAll { in f; action inner { accept after 5; } f };", "trigger-after-duration", after},
+		// A body-local declaration is what the trigger inside the body names.
+		{"attribute v = { attribute inner : Integer = 5; action i2 { accept after inner; } d };", "trigger-after-duration", "an 'after' trigger's delay must be a DurationValue, found Integer"},
+		// An unrelated unresolved name elsewhere does not hide the trigger.
+		{"part broken : Missing; attribute v = { action inner { accept after 5; } d };", "trigger-after-duration", after},
+	} {
+		wantTriggerDiag(t, tc.body, tc.code, tc.want)
+	}
+	diags := triggerDiags(t, "transition first a if { action inner { accept after 5; } true } then b;")
+	if len(diags) != 2 || !strings.Contains(diags[0].Message, "transition guard must be Boolean") || !strings.Contains(diags[1].Message, after) {
+		t.Errorf("body guard with a bad trigger: want the guard and the trigger diagnostics, got %v", diags)
+	}
+	wantTriggerSilent(t, "attribute v = { action inner { accept after 5 [s]; } d };")
+	wantTriggerSilent(t, "attribute v = { attribute inner : DurationValue = 5 [s]; action i2 { accept after inner; } d };")
+	wantTriggerSilent(t, "attribute v = { action inner { accept after missing; } d };")
+}
+
+// Arithmetic over an operand that is no quantity, number or String selects no
+// function, so it has no result type; the pilot rejects each shape below.
+func TestTriggerArithmeticOverNonArithmeticOperand(t *testing.T) {
+	wantTriggerDiag(t, "transition first a accept after true + d then b;", "trigger-after-duration", "found `+` over Boolean, which no arithmetic function takes")
+	wantTriggerDiag(t, "transition first a accept after h + d then b;", "trigger-after-duration", "found `+` over Holder")
+	wantTriggerDiag(t, "transition first a accept after d * flag then b;", "trigger-after-duration", "found `*` over Boolean")
+	wantTriggerDiag(t, "transition first a accept at t + h then b;", "trigger-at-time-instant", "found `+` over Holder")
+	wantTriggerSilent(t, "transition first a accept after untyped + d then b;")
+	wantTriggerSilent(t, "transition first a accept after undeclared + d then b;")
 }
 
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare
@@ -559,6 +717,28 @@ func TestSuccessionBodyDeclarationScope(t *testing.T) {
 	if len(diags) != 1 || diags[0].Code != "unresolved" || diags[0].Span.Offset != strings.LastIndex(src, "n;") {
 		t.Fatalf("want one unresolved reference, the outer `= n`, got %v", diags)
 	}
+}
+
+// A deferred event is a trigger like any other: each of its arguments is judged
+// by the rule for its kind, and each is gated on its own lower-tier faults.
+func TestTriggerOnDeferredEvents(t *testing.T) {
+	const after = "an 'after' trigger's delay must be a DurationValue, found Natural"
+	for _, tc := range []struct{ body, code, want string }{
+		{"defer after 5;", "trigger-after-duration", after},
+		{"defer at 5;", "trigger-at-time-instant", "an 'at' trigger's time must be a TimeInstantValue, found Natural"},
+		{"defer when x;", "trigger-when-boolean", "a 'when' trigger's condition must be Boolean, found Integer"},
+		{"defer Sig, after 5, at t;", "trigger-after-duration", after},
+		{"defer after missing, when x;", "trigger-when-boolean", "a 'when' trigger's condition must be Boolean, found Integer"},
+		{"state c { defer after 5; }", "trigger-after-duration", after},
+	} {
+		wantTriggerDiag(t, "attribute def Sig; "+tc.body, tc.code, tc.want)
+	}
+	diags := triggerDiags(t, "defer after 5, at 5, when x;")
+	if len(diags) != 3 {
+		t.Errorf("defer with three bad events: want three diagnostics, got %v", diags)
+	}
+	wantTriggerSilent(t, "attribute def Sig; defer Sig, after 5 [s], at t, when flag, after d + d;")
+	wantTriggerSilent(t, "defer after missing, at missing, when missing;")
 }
 
 // An argument the type tier cannot type — an unresolved name, which the name
