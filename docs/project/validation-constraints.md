@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 128 of 217 named constraints are reported by OpenSysML — 117 ✅ faithful and 11 ⚠️ approximate; 11 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 78 ❔ unknown.
+**Census:** 129 of 217 named constraints are reported by OpenSysML — 118 ✅ faithful and 11 ⚠️ approximate; 10 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 78 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -145,7 +145,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateInstantiationExpressionInstantiatedType` | KerML | An instantiation expression names an instantiated type (`Must have an invoked/instantiated type`; a probe naming nothing fails name resolution first in both tools, so the probe names a package) | internal/core/passes/typecheck_expr.go:exprChecker.inferConstructor | same wording, followed by what the name is (`Q is a package, not a type`) | `semantic/send-constructor-non-type.sysml` | ✅ faithful |
 | `validateInstantiationExpressionResult` | KerML | An instantiation expression owns its result parameter | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateInvocationExpressionInstantiatedType` | KerML | An invocation expression invokes a behavior or a behavioral feature | internal/core/passes/typecheck_expr.go:inferInvocation | — | none | ✅ faithful |
-| `validateInvocationExpressionNoDuplicateParameterRedefinition` | KerML | An invocation expression binds each parameter at most once (`Parameter already bound`) | — | — | none | ❌ not implemented |
+| `validateInvocationExpressionNoDuplicateParameterRedefinition` | KerML | An invocation expression binds each parameter at most once (`Parameter already bound`) | internal/core/passes/typecheck_expr.go:checkNamedArguments | `F binds parameter "x" twice` — the duplicate is found by the resolved parameter (a positional argument followed by a named binding of the same parameter, an alias or a redefining name count), reported at the second binding | `semantic/k33-parameter-bound-twice.kerml` | ✅ faithful |
 | `validateInvocationExpressionOwnedFeatures` | KerML | Each owned feature of an invocation expression is an in parameter (`Must be an in parameter`); no model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateInvocationExpressionParameterRedefinition` | KerML | Each named argument of an invocation redefines one input parameter of the invoked type (`Must correspond to one input parameter of the invoked type`) | internal/core/passes/typecheck_expr.go:checkArguments | `F has no parameter named "y"` | none | ⚠️ approximate |
 | `validateLibraryPackageNotStandard` | KerML | A user library package is not marked standard (warning) | internal/core/passes/w9c_owned_name_and_library.go:W9CUserStandardLibraryPass.Run | — | none | ✅ faithful |

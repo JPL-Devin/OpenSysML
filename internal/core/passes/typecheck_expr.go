@@ -464,6 +464,10 @@ func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedNam
 // rather than of the enclosing scope (SysML 7.6.6), which is how a calc usage's
 // `out` feature — inherited from the calc it is typed by — is reached.
 func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) semantics.PrimType {
+	// A constructed head's arguments are checked where they are written.
+	if c, isConstructor := chainHead(e).(*ast.ConstructorExpr); isConstructor {
+		ec.inferConstructor(scope, c)
+	}
 	sym, ok := ec.resolver.ResolveTarget(scope, e)
 	if !ok || sym == nil {
 		// An unresolved chain is reported by the name-resolution tier; typing it
@@ -471,6 +475,18 @@ func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureCha
 		return semantics.PrimUnknown
 	}
 	return ec.featurePrimType(sym)
+}
+
+// chainHead returns the operand below every nested `.member` of a chain.
+func chainHead(e *ast.FeatureChainExpr) ast.Node {
+	head := e.Operand
+	for {
+		inner, ok := head.(*ast.FeatureChainExpr)
+		if !ok {
+			return head
+		}
+		head = inner.Operand
+	}
 }
 
 // featurePrimType returns the scalar type of the feature sym declares, falling
@@ -753,7 +769,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(e, sym, args, argTypes, params, considered)
+	ec.checkArguments(scope, e, sym, args, argTypes, params, considered)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
@@ -763,6 +779,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
 // listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
+	scope *symbols.Scope,
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
@@ -778,7 +795,7 @@ func (ec *exprChecker) checkArguments(
 		}
 	}
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
+		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report)
 		return
 	}
 	// Arguments bind in order, so a call must reach the last required parameter.
@@ -963,11 +980,14 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 }
 
 // checkNamedArguments reports named arguments that name no `in` parameter of sym or do
-// not bind to it, and default-less parameters no argument names.
+// not bind to it, a parameter bound twice (by whichever name or position), and default-less
+// parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
+	scope *symbols.Scope,
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
-	namedTypes []semantics.Argument,
+	args []ast.Node,
+	argTypes argumentTypes,
 	params []parameter,
 	report func(source.Span, string, ...any),
 ) {
@@ -977,41 +997,72 @@ func (ec *exprChecker) checkNamedArguments(
 		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
 		return
 	}
-	byName := make(map[string]parameter, len(params))
-	for _, p := range params {
-		byName[p.name()] = p
+	if len(args) > len(params) {
+		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args)+len(e.NamedArgs))
+		return
 	}
-	bound := make(map[string]bool, len(e.NamedArgs))
+	bound := make([]bool, len(params))
+	for i, arg := range args {
+		bound[i] = true
+		if mismatch := ec.argumentMismatch(arg, argTypes.positional[i], params[i]); mismatch != "" {
+			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
+		}
+	}
 	unknown := false
 	for i, arg := range e.NamedArgs {
-		name, ok := namedArgumentName(arg)
-		if !ok {
+		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			continue
 		}
-		p, declared := byName[name]
-		if !declared {
-			report(e.Span(), "%s has no parameter named %q", sym.Name, name)
+		at := ec.namedParameter(scope, sym, params, arg.Name)
+		if at < 0 {
+			report(e.Span(), "%s has no parameter named %q", sym.Name, semantics.QualifiedNameText(arg.Name))
 			unknown = true
 			continue
 		}
-		if bound[name] {
-			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
+		p := params[at]
+		if bound[at] {
+			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, p.name())
 			continue
 		}
-		bound[name] = true
-		if mismatch := ec.argumentMismatch(arg.Value, namedTypes[i], p); mismatch != "" {
-			report(arg.Value.Span(), "argument %s of %s %s", name, sym.Name, mismatch)
+		bound[at] = true
+		if mismatch := ec.argumentMismatch(arg.Value, argTypes.named[i], p); mismatch != "" {
+			report(arg.Value.Span(), "argument %s of %s %s", p.name(), sym.Name, mismatch)
 		}
 	}
 	// A misspelt name is the likelier cause of a parameter left unbound.
 	if unknown {
 		return
 	}
-	for _, p := range params {
-		if !bound[p.name()] && p.required(ec.model) {
+	for i, p := range params {
+		if !bound[i] && p.required(ec.model) {
 			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
 		}
 	}
+}
+
+// namedParameter is the index in params of the parameter a named argument binds, or -1:
+// the one named as written, else the one the name resolves to within sym.
+func (ec *exprChecker) namedParameter(
+	scope *symbols.Scope,
+	sym *symbols.Symbol,
+	params []parameter,
+	name *ast.QualifiedName,
+) int {
+	if len(name.Parts) == 1 {
+		if i := indexOfName(params, name.Parts[0].Text); i >= 0 {
+			return i
+		}
+	}
+	target, ok := ec.model.LookupBinding(scope, sym, name)
+	if !ok {
+		return -1
+	}
+	for i, p := range params {
+		if p.usage == target.Decl {
+			return i
+		}
+	}
+	return -1
 }
 
 // parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.

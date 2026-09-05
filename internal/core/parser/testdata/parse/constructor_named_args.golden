@@ -1,0 +1,40 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ConstructorNamedArgs" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="T" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="C" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=T
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=T
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="t" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="positional" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=C
+            (*ast.QualifiedName))
+          (ConstructorExpr type="C"
+            (FeatureReference name="t")
+            (FeatureReference name="t"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=C
+            (*ast.QualifiedName))
+          (ConstructorExpr type="C"
+            (NamedArg name="x"
+              (FeatureReference name="t"))
+            (NamedArg name="y"
+              (FeatureReference name="t")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="empty" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=C
+            (*ast.QualifiedName))
+          (ConstructorExpr type="C"))))))
