@@ -1,6 +1,6 @@
 # SysML v1 to v2 migration report: vehicle.xmi
 # exported by MagicDraw UML
-# migrated 86 element(s): 66 mapped, 12 approximated, 8 unmapped (3 skipped as profile or library content)
+# migrated 89 element(s): 69 mapped, 12 approximated, 8 unmapped (3 skipped as profile or library content)
 
 ## unmapped (8)
 «Verify» Abstraction	Requirements::<Abstraction>	_dep_verify_block	(a verify whose client is not a test case has no v2 form)
@@ -26,7 +26,7 @@ Property	Vehicle Design::Vehicle::sharedCharger	_prop_charger	-> 'Vehicle Design
 «FlowPort» Port	Vehicle Design::Vehicle::speedOut	_port_speedOut	-> 'Vehicle Design'::Vehicle::speedOut	(a port typed by a DataType is written as a port holding one directed attribute)
 Property	Vehicle Design::Vehicle::totalMass	_prop_total	-> 'Vehicle Design'::Vehicle::totalMass	(opaque expression copied verbatim (language SysML))
 
-## mapped (66)
+## mapped (69)
 Comment	<Comment>	_cmt_model
 Package	Empty Package	_pkg_unused	-> 'Empty Package'
 Model	Model	eee_1045467100313_135436_1	(the root model's members are written at the top level)
@@ -68,6 +68,9 @@ Property	Vehicle Design::MassLimit::m	_cp_m	-> 'Vehicle Design'::MassLimit::m
 «Block» Class	Vehicle Design::System	_blk_system	-> 'Vehicle Design'::System
 Package	Vehicle Design::Value Types	_pkg_types	-> 'Vehicle Design'::'Value Types'
 Enumeration	Vehicle Design::Value Types::Color	_enum_color	-> 'Vehicle Design'::'Value Types'::Color
+EnumerationLiteral	Vehicle Design::Value Types::Color::blue	_lit_blue	-> 'Vehicle Design'::'Value Types'::Color::blue
+EnumerationLiteral	Vehicle Design::Value Types::Color::green	_lit_green	-> 'Vehicle Design'::'Value Types'::Color::green
+EnumerationLiteral	Vehicle Design::Value Types::Color::red	_lit_red	-> 'Vehicle Design'::'Value Types'::Color::red
 «ValueType» DataType	Vehicle Design::Value Types::Mass	_vt_mass	-> 'Vehicle Design'::'Value Types'::Mass
 «ValueType» DataType	Vehicle Design::Value Types::Speed	_vt_speed	-> 'Vehicle Design'::'Value Types'::Speed
 Property	Vehicle Design::Value Types::StartSignal::key	_sig_start_key	-> 'Vehicle Design'::'Value Types'::StartSignal::key

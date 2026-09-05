@@ -31,7 +31,12 @@ returned over the service yet.
   projects (`.mdzip` files the model refers to) are not read; elements they hold appear as
   external proxies and are reported as unmapped where they are relationship ends.
 - `xmi:Extension` elements — diagrams, layout, MagicDraw-internal state — are skipped; the
-  report says so once per skipped profile or library package.
+  report says so once per skipped profile or library package. A package is library content
+  when it is a profile, is marked «ModelLibrary» or «auxiliaryResource», or is a document root
+  beside the model bearing a standard library name; a user package named `SysML` or
+  `Libraries` inside the model is migrated like any other.
+- A type referenced by `href` is a `ScalarValues` type only when the href points into the UML
+  or SysML primitive libraries; a used project's own `Real` stays external.
 
 ## Mapping
 
@@ -47,6 +52,8 @@ returned over the service yet.
 | «TestCase» | `verification def` | approximated: its behavior is not migrated |
 | InstanceSpecification with slots | `individual def` / `individual` with attribute values | mapped |
 | Association with a name, «AssociationBlock» | `connection def` | mapped |
+| Anonymous association with a classifier-owned end | nothing: the end property carries it | mapped |
+| Anonymous association owning every end | a named `connection def` | approximated |
 | Value property | `attribute`, with multiplicity and default | mapped |
 | Composite part property | `part` | mapped |
 | Reference property (no aggregation) | `ref part` | mapped |

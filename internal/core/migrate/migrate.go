@@ -291,6 +291,7 @@ func (m *migration) classifier(e *xmi.Element) {
 			m.comments(e)
 			for _, lit := range e.Owned("ownedLiteral") {
 				m.w.line(writeName(lit.Name) + ";")
+				m.add(lit, Mapped, m.v2Name(lit), "")
 			}
 			m.stereotypeComments(e)
 		})
@@ -510,18 +511,30 @@ func (m *migration) verificationBody(e *xmi.Element) {
 	m.scope = saved
 }
 
+// ownsEveryEnd reports whether no classifier property carries the association:
+// every member end is owned by the association itself.
+func ownsEveryEnd(e *xmi.Element, ends []*xmi.Element) bool {
+	for _, end := range ends {
+		if end.Parent != e {
+			return false
+		}
+	}
+	return true
+}
+
 // association writes an association or association block as a connection def
-// with its member ends, or, for an anonymous association whose ends are
-// written as the classifiers' properties, nothing.
+// with its member ends. An anonymous association with a classifier-owned end
+// is already written as that property, so it writes nothing.
 func (m *migration) association(e *xmi.Element) {
 	ends := m.model.Refs(e, "memberEnd")
-	if e.Name == "" && e.Type == "Association" {
-		m.add(e, Mapped, "", "the anonymous association is written as its member-end properties")
-		return
-	}
 	name := e.Name
 	if name == "" {
+		if e.Type == "Association" && !ownsEveryEnd(e, ends) {
+			m.add(e, Mapped, "", "the anonymous association is written as its member-end properties")
+			return
+		}
 		name = m.nameFor(e)
+		m.add(e, Approximated, m.v2Name(e), "the anonymous "+e.Type+" owns every end, so it is written as connection def "+name)
 	}
 	header := "connection def " + writeName(name)
 	if gens, _ := m.generals(e, catConnectionDef); gens != "" {
@@ -822,20 +835,16 @@ func (m *migration) multiplicity(p *xmi.Element) string {
 			upper = "1"
 		}
 	}
+	// UML defaults an omitted bound to 1.
 	switch {
 	case lower == "" && upper == "":
 		return ""
 	case lower == "":
-		if upper == "1" {
-			return ""
-		}
-		return "[" + upper + "]"
+		lower = "1"
 	case upper == "":
-		if lower == "1" {
-			return ""
-		}
-		return "[" + lower + "..*]"
-	case lower == upper:
+		upper = "1"
+	}
+	if lower == upper {
 		if lower == "1" {
 			return ""
 		}

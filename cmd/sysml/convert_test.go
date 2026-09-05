@@ -335,3 +335,29 @@ func TestLoadingXMIDirectlyPointsAtMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrationReportRefusedBeforeEveryMode(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := filepath.Join(dir, "report.txt")
+	for _, args := range [][]string{
+		{model, "-migration-report", report},
+		{model, "-validate", "-migration-report", report},
+		{model, "-compile", "P::F", "-o", filepath.Join(dir, "f"), "-migration-report", report},
+		{model, "-sync-diff", filepath.Join(dir, "g.ttl"), "-migration-report", report},
+		{model, "-render-all", filepath.Join(dir, "views"), "-migration-report", report},
+		{model, "-render-documents", filepath.Join(dir, "docs"), "-migration-report", report},
+	} {
+		res := runCommand(t, exec.Command(binary, args...))
+		if res.status != 2 || !strings.Contains(res.stderr, "-migration-report accompanies -convert") {
+			t.Errorf("%v: status %d, stderr:\n%s", args[1:], res.status, res.stderr)
+		}
+		if _, err := os.Stat(report); err == nil {
+			t.Errorf("%v: report written", args[1:])
+		}
+	}
+}

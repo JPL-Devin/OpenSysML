@@ -297,6 +297,11 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
 		return 2
 	}
+	if migrationReport != "" && convertFormat == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -migration-report accompanies -convert of a SysML v1 model; write `sysml model.xmi -convert sysml -migration-report report.txt`")
+		return 2
+	}
+
 	if compileCalc != "" {
 		switch {
 		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
@@ -397,11 +402,6 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
-	}
-
-	if migrationReport != "" && convertFormat == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -migration-report accompanies -convert of a SysML v1 model; write `sysml model.xmi -convert sysml -migration-report report.txt`")
-		return 2
 	}
 
 	if convertFormat != "" {

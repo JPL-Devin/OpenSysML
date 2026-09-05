@@ -98,16 +98,31 @@ var libraryRoots = map[string]bool{
 	"Libraries":                         true,
 }
 
-// isLibrary reports whether e sits in profile or bundled-library content.
+// isLibrary reports whether e sits in profile or bundled-library content: a
+// profile, a document root beside the user's model with a library name, or a
+// package the model marks as a library or auxiliary resource.
 func isLibrary(e *xmi.Element) bool {
 	for cur := e; cur != nil; cur = cur.Parent {
-		if cur.Type == "Profile" {
+		if cur.Type == "Profile" || cur.HasStereotype("ModelLibrary", "modelLibrary", "auxiliaryResource") {
 			return true
 		}
-		if cur.Parent == nil || cur.Parent.Type == "Model" || cur.Parent.Parent == nil {
-			if libraryRoots[cur.Name] {
-				return true
-			}
+		if cur.Parent == nil && cur.Type != "Model" && libraryRoots[cur.Name] {
+			return true
+		}
+	}
+	return false
+}
+
+// primitiveLibraryHref reports whether an href points into the UML or SysML
+// primitive type libraries rather than into another user project.
+func primitiveLibraryHref(href string) bool {
+	path := href
+	if i := strings.IndexByte(href, '#'); i >= 0 {
+		path = href[:i]
+	}
+	for _, lib := range []string{"PrimitiveTypes", "PrimitiveValueTypes", "/spec/UML/", "/spec/SysML/", "MD_customization_for_SysML"} {
+		if strings.Contains(path, lib) {
+			return true
 		}
 	}
 	return false
@@ -125,7 +140,10 @@ func scalarValue(t *xmi.Element) string {
 		return ""
 	}
 	if t.IsProxy() {
-		return name
+		if primitiveLibraryHref(t.Href) {
+			return name
+		}
+		return ""
 	}
 	if t.Type == "PrimitiveType" {
 		return name
