@@ -39,7 +39,15 @@ SECTION_BY_KEY = {s.lower(): s for s in SECTIONS}
 FRAGMENT_NAME = re.compile(r"^(?P<slug>[A-Za-z0-9][A-Za-z0-9._-]*)\.(?P<section>[a-z]+)\.md$")
 UNRELEASED = re.compile(r"^## Unreleased[ \t]*\n", re.MULTILINE)
 VERSION_HEADING = re.compile(r"^## (?!Unreleased)", re.MULTILINE)
-SECTION_HEADING = re.compile(r"^### (?P<name>.+?)\s*$", re.MULTILINE)
+SECTION_HEADING = re.compile(r"^### (?P<name>.*)$", re.MULTILINE)
+# Semantic Versioning 2.0.0, as published at semver.org.
+_NUM = r"(?:0|[1-9][0-9]*)"
+_PRE_ID = rf"(?:{_NUM}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+VERSION = re.compile(
+    rf"^{_NUM}\.{_NUM}\.{_NUM}"
+    rf"(?:-{_PRE_ID}(?:\.{_PRE_ID})*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 class FragmentError(Exception):
@@ -112,7 +120,7 @@ def _split_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
     sections: list[tuple[str, str]] = []
     for i, h in enumerate(heads):
         content_end = heads[i + 1].start() if i + 1 < len(heads) else len(body)
-        sections.append((h.group("name"), body[h.end() : content_end]))
+        sections.append((h.group("name").strip(), body[h.end() : content_end]))
     return preamble, sections
 
 
@@ -156,11 +164,11 @@ def fold(text: str, entries: dict[str, list[str]]) -> str:
     return text[:start] + out + text[end:]
 
 
-def render(dry_run: bool = False) -> int:
+def render(dry_run: bool = False) -> None:
     paths = fragments()
     if not paths:
         print("no fragments under changes/unreleased/")
-        return 0
+        return
     text = CHANGELOG.read_text(encoding="utf-8")
     start, end = _unreleased_bounds(text)
     entries: dict[str, list[str]] = {}
@@ -174,20 +182,25 @@ def render(dry_run: bool = False) -> int:
     if dry_run:
         start, end = _unreleased_bounds(new)
         sys.stdout.write("## Unreleased\n" + new[start:end])
-        return 0
+        return
     CHANGELOG.write_text(new, encoding="utf-8")
     for p in paths:
         p.unlink()
     print(f"folded {len(paths)} fragment(s) into CHANGELOG.md")
-    return 0
 
 
 def release(version: str, date: str | None) -> int:
-    rc = render()
-    if rc:
-        return rc
     version = version.lstrip("v")
-    date = date or _dt.date.today().isoformat()
+    if not VERSION.match(version):
+        raise SystemExit(f"version {version!r} is not a semantic version")
+    if date is None:
+        date = _dt.date.today().isoformat()
+    else:
+        try:
+            date = _dt.date.fromisoformat(date).isoformat()
+        except ValueError:
+            raise SystemExit(f"date {date!r} is not YYYY-MM-DD") from None
+    render()
     text = CHANGELOG.read_text(encoding="utf-8")
     m = UNRELEASED.search(text)
     if not m:
@@ -212,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "check":
         return check()
     if a.cmd == "render":
-        return render(dry_run=a.dry_run)
+        render(dry_run=a.dry_run)
+        return 0
     return release(a.version, a.date)
 
 

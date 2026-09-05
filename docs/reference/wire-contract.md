@@ -441,7 +441,7 @@ present is an unspecified execution failure. The other common in-body failures, 
 {"error":"symbol not found: Demo::Nope"}                                    Instantiate
 {"error":"state machine not found: Test::NoMachine"}                        ExecuteState
 {"error":"action execution failed: initialize action: invalid action flow: no initial node found in action noStart"}
-{"error":"evaluation failed: member nothing not found in instance"}         Evaluate
+{"error":"evaluation failed: object has no such feature: member nothing not found in instance"}  Evaluate
 {"error":"evaluation failed: unresolved reference: sqrt — did you mean RealFunctions::sqrt or QuantityCalculations::sqrt?"}
 ```
 

@@ -9,7 +9,7 @@ package test {
         
         succession first init then active;
         transition first active do {
-            counter = counter + 1;
+            assign counter := counter + 1;
         } then done;
     }
 }

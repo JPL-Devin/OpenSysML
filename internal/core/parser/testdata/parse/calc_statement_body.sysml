@@ -4,8 +4,8 @@ package CalcStatements {
         attribute acc : Integer = 1;
         attribute i : Integer = 1;
         while i <= n {
-            acc = acc * i;
-            i = i + 1;
+            assign acc := acc * i;
+            assign i := i + 1;
         }
         return : Integer = acc;
     }
@@ -37,7 +37,7 @@ package CalcStatements {
         in n : Integer;
         attribute i : Integer = n;
         loop {
-            i = i - 1;
+            assign i := i - 1;
         } until i <= 0;
         return : Integer = i;
     }

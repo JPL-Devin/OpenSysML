@@ -1,0 +1,6 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "evaluate": "test::labelled",
+  "result": {"type": "String", "value": "grid"}
+}

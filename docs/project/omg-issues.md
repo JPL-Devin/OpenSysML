@@ -12,6 +12,7 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 | Library file | Declaration | What the vendored body says | What we implement | Why |
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
+| `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
 ## `includingAt` — the vendored declaration
@@ -73,6 +74,68 @@ than truncating or answering a Rational (`runtime/library_operators.go`
 
 ---
 
+## `VectorCalculations::inner`/`norm` — a `Number` where the scalar calculations return a quantity
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/VectorCalculations.sysml`:
+
+```sysml
+	calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }
+	calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }
+	calc def angle :> VectorFunctions::angle { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }
+```
+
+and from `QuantityCalculations.sysml` in the same directory:
+
+```sysml
+	calc def '*' specializes NumericalFunctions::'*' { in x: ScalarQuantityValue[1]; in y: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+	calc def '/' specializes NumericalFunctions::'/' { in x: ScalarQuantityValue[1]; in y: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+	calc def sqrt{ in x: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+```
+
+````markdown
+**Library inconsistency, question rather than bug report:** the scalar
+quantity calculations keep the quantity through an operation —
+`QuantityCalculations::'*'`, `'/'` and `sqrt` all declare
+`return : ScalarQuantityValue[1]`, so `sqrt(q * q)` of a length `q` is a
+length — but the vector quantity calculations drop it: `VectorCalculations::inner`
+and `norm` declare `return : Number[1]` over `VectorQuantityValue` operands.
+The norm of a length vector is therefore a bare number, and the inner product of
+two length vectors a bare number too, although each is a quantity of the operands'
+unit (or its square) in the same way `q * q` is. Only `angle` is naturally
+dimensionless. Is `Number[1]` the intended return for `inner` and `norm`, with
+the unit understood to be implied by the operands, or should they return
+`ScalarQuantityValue[1]` as the scalar calculations do? (A redefinition of
+`VectorFunctions::inner`/`norm`, whose returns are `Number`, could not narrow
+to `ScalarQuantityValue` since that is not a `Number`; a resolution would need
+the vector calculations declared independently of `VectorFunctions`, as
+`QuantityCalculations::'*'` is of `NumericalFunctions::'*'` only by
+specialization.)
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates none of these: asked through `build/pilot-evaluator/eval-sysml` for
+`VectorFunctions::norm(CartesianVectorOf((3.0, 4.0)))`,
+`VectorCalculations::norm(...)`, a `Number` attribute bound to the former,
+`QuantityCalculations::sqrt(q * q)` and `q * q` over `q : ScalarQuantityValue = 2 [m]`,
+it answers the unevaluated `InvocationExpression norm`, `InvocationExpression sqrt`
+and `OperatorExpression *` for every case, so it offers no reference for either
+reading.
+
+OpenSysML follows the declarations: the checker types `inner`, `norm` and `angle`
+of vector quantities as `Number` (a `ScalarQuantityValue` feature bound to one is a
+static error, a `Number` feature is accepted), and the runtime answers the bare
+number computed over the vector's `num` components — `norm(⟨3.0, 4.0⟩ [m])` is
+`5.0`, `inner(⟨1.0, 2.0⟩ [m], ⟨3.0, 4.0⟩ [m])` is `11.0` — the unit dropped by
+declaration (`runtime/vector_functions.go`; conformance
+`calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
+results as declared (`runtime/quantity_functions.go`).
+
+---
+
 ## Defects in published OMG example models
 
 These rows are true positives found by OpenSysML's static analysis in models published with the
@@ -96,6 +159,19 @@ entries of the declared errata overlay — the geometry row with a correction, t
 dynamics rows without one — quoted verbatim with their derivations in
 [the fourth section](#the-errata-overlay-entries-for-these-models).
 
+### Defects in the public Apollo 11 model (`airbus/apollo-11-sysml-v2` at `6e9c93f`)
+
+The same arity check finds two defects in a third-party model that is not an OMG corpus.
+OpenSysML loads the model with these three errors and nothing else; the pinned pilot's batch
+validator over the whole model reports no diagnostic (see the arity row in
+[the next section](#defects-in-the-pilot-implementation)). **Not filed**: nothing has been
+posted to that repository, and no maintainer has authorised a report.
+
+| File | Expression as published | Defect |
+|---|---|---|
+| `Analysis/CalculationsPackage.sysml:111` | `return deltaV :> ISQ::speed = isp * g0 * ln(m0 / mf);` | `ln` is the alias of `CoSMAQuantitiesAndUnitsPackage::naturalLogarithm`, declared `calc <ln> naturalLogarithm { in x: DataValue[1]; in y: DataValue[1]; return : DataValue[1]; }` — two inputs, one argument. A natural logarithm takes one argument; the second `in` is the slip |
+| `Analysis/CalculationsPackage.sysml:124` and `:135` | `return deltaV :> ISQ::speed = calculateDeltaV(isp, initialMass, finalMass);` | `calculateDeltaV` declares `in isp`, `in g0`, `in m0`, `in mf` — four inputs, three arguments, so `g0` (standard gravity) is never supplied |
+
 ---
 
 ## Defects in the pilot implementation
@@ -115,6 +191,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
+| `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors the section above records | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
@@ -514,6 +591,46 @@ included, while `SequenceFunctions::includingAt` with the same index throws
 outside an executing performance? If so, is `OccurrenceFunctions::'==='` intended
 to agree with the `===` operator, and `isDuring` to reject an argument that is
 not an `Occurrence`, as the declared parameter types say?
+````
+
+### A positional invocation with too few arguments validates clean (pilot `2026-05`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream, to the pilot or to the model's repository.
+
+````markdown
+**Question, not a bug report:** is the number of positional arguments of an
+`InvocationExpression` meant to be checked against the invoked behavior's `in`
+parameters? KerML 7.4.9 binds the i-th positional argument to the i-th input
+parameter of the invoked behavior, so a call with fewer arguments leaves an input
+unbound, and one with more has an argument that binds nothing.
+
+The release's SysML validator (`jupyter-sysml-kernel-0.60.1-all.jar`, tag
+`2026-05`) over the public `airbus/apollo-11-sysml-v2` model (commit `6e9c93f`)
+reports no diagnostic for either of these:
+
+```sysml
+calc <ln> naturalLogarithm { in x: DataValue[1]; in y: DataValue[1]; return : DataValue[1]; }
+
+calc def calculateDeltaV {
+    in isp :> specificImpulse;
+    in g0 :> ISQ::acceleration;
+    in m0 :> ISQ::mass;
+    in mf :> ISQ::mass;
+    return deltaV :> ISQ::speed = isp * g0 * ln(m0 / mf);
+}
+
+calc def calculateStageDeltaV {
+    // …
+    return deltaV :> ISQ::speed = calculateDeltaV(isp, initialMass, finalMass);
+}
+```
+
+A second implementation reports `naturalLogarithm requires 2 argument(s), found 1`
+and `calculateDeltaV requires 4 argument(s), found 3`, which the model's authors
+would presumably want to hear about. Is silence here a deliberate reading of the
+specification (an unbound input is legal and merely unvalued), or a check that has
+not been implemented yet?
 ````
 
 ---

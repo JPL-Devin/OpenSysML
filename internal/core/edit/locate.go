@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -156,41 +157,12 @@ func (m Model) terminator(usage *ast.Usage) (source.Span, bool) {
 	return last, found
 }
 
-// nameTaken names what the new name already means where sym is declared, with
-// sym's own binding hidden — a sibling, or a name reached through an enclosing
-// namespace, an import or inheritance. Renaming onto such a name says something
-// the caller did not ask for: a sibling makes the qualified name ambiguous, and
-// anything else is shadowed, so every expression reading that name silently
-// starts reading the renamed element. Neither is diagnosed by re-analysis, since
-// the name still resolves.
-func (m Model) nameTaken(sym *symbols.Symbol, newName string) (string, bool) {
-	if sym.OwnerScope == nil {
-		return "", false
-	}
-	other, ok := m.resolver().LookupNameExcluding(sym.OwnerScope, newName, sym.Decl)
-	if !ok || symbols.SameElement(other, sym) {
-		return "", false
-	}
-	if fqn := m.Index.GetFQN(other); fqn != "" {
-		return fqn, true
-	}
-	return other.Name, true
-}
-
-// resolver is a resolver with a semantic model attached, as every other caller
-// builds one: without one, members reached through inheritance or a reference
-// subsetting are invisible both to a lookup and to a reference's resolution.
-func (m Model) resolver() *resolve.Resolver {
+// resolver is a resolver and semantic model set up as the checker's: inherited and
+// subsetted members are visible, and a call's overloads are told apart by argument type.
+func (m Model) resolver() (*resolve.Resolver, *semantics.Model) {
 	r := resolve.New(m.Index)
-	r.SetModel(semantics.NewModel(r))
-	return r
-}
-
-// referenceSite names where a reference is made: the namespace containing it,
-// or the name as written when that namespace has no FQN.
-func referenceSite(r *resolve.Resolver, ref resolve.Reference, text string) string {
-	if fqn := r.ReferringNamespaceFQN(ref.Scope); fqn != "" {
-		return fqn
-	}
-	return text
+	sem := semantics.NewModel(r)
+	r.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(r, sem))
+	return r, sem
 }

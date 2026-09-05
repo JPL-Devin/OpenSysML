@@ -911,7 +911,7 @@ func TestSignalGoesToTheSiblingMachineThatFiresOnIt(t *testing.T) {
 					t.Fatalf("left.ProcessNextEvent: %v", err)
 				}
 			}
-			if inFlight := len(ctx.PendingMessages()) == 1; inFlight != tc.leftStepLeavesItInFlight {
+			if (len(ctx.PendingMessages()) == 1) != tc.leftStepLeavesItInFlight {
 				t.Fatalf("after stepping left: %d messages in flight, want left to leave it = %v", len(ctx.PendingMessages()), tc.leftStepLeavesItInFlight)
 			}
 			if tc.leftStepLeavesItInFlight {
@@ -1063,7 +1063,7 @@ func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignalMessage(Bump): %v", err)
 	}
-	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, dimmer)
+	goMsg, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, dimmer)
 	if err != nil {
 		t.Fatalf("SignalMessage(Go): %v", err)
 	}
@@ -1073,13 +1073,13 @@ func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
 	}
 
 	ctx.PostMessage(bump)
-	if d, err := life.State.Decide(go_); err != nil || d.Enabled() {
+	if d, err := life.State.Decide(goMsg); err != nil || d.Enabled() {
 		t.Fatalf("Decide(Go) with base 1 = %+v, %v; want nothing enabled", d, err)
 	}
 	if threshold.Materialized || threshold.Value.Kind != ValInvalid {
 		t.Errorf("threshold = %+v after Decide; want it unmaterialized as before", threshold)
 	}
-	ctx.PostMessage(go_)
+	ctx.PostMessage(goMsg)
 
 	if err := life.State.ProcessNextEvent(); err != nil {
 		t.Fatalf("ProcessNextEvent(Bump): %v", err)
@@ -1087,7 +1087,7 @@ func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
 	if got := FormatValue(dimmer.FeatureValues["base"].HeldValue()); got != "5" {
 		t.Fatalf("base = %s after Bump, want 5", got)
 	}
-	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition idle_on" {
+	if d, err := life.State.Decide(goMsg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition idle_on" {
 		t.Errorf("Decide(Go) with base 5 = %+v, %v; want idle_on firing", d, err)
 	}
 	if err := life.State.ProcessNextEvent(); err != nil {
@@ -1140,7 +1140,7 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	if !ok {
 		t.Fatal("the controller exhibits no machine")
 	}
-	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
+	goMsg, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
 	if err != nil {
 		t.Fatalf("SignalMessage(Go): %v", err)
 	}
@@ -1154,7 +1154,7 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	}
 	instances, behaviors, messages := len(ctx.instances), len(ctx.objectBehaviors), len(ctx.messages)
 
-	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+	if d, err := life.State.Decide(goMsg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
 		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the level the sensor's machine set", d, err)
 	}
 	if d, err := life.State.Decide(halt); err != nil || d.Enabled() {
@@ -1171,7 +1171,7 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 		t.Fatalf("state after Decide = %s, want off", got)
 	}
 
-	ctx.PostMessage(go_)
+	ctx.PostMessage(goMsg)
 	if err := life.State.ProcessNextEvent(); err != nil {
 		t.Fatalf("ProcessNextEvent(Go): %v", err)
 	}
@@ -1421,12 +1421,12 @@ func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
 		t.Fatalf("SignalMessage(Kick): %v", err)
 	}
 	ctx.PostMessage(kick)
-	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
+	goMsg, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
 	if err != nil {
 		t.Fatalf("SignalMessage(Go): %v", err)
 	}
 
-	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+	if d, err := life.State.Decide(goMsg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
 		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the level the sensor's machine set", d, err)
 	}
 	pending := ctx.PendingMessages()
@@ -1437,7 +1437,7 @@ func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
 		t.Errorf("Kick after Decide = %+v; want the argument alone, no occurrence cached by the probe", pending[0])
 	}
 
-	ctx.PostMessage(go_)
+	ctx.PostMessage(goMsg)
 	if err := life.State.ProcessNextEvent(); err != nil {
 		t.Fatalf("ProcessNextEvent(Go): %v", err)
 	}
@@ -1583,14 +1583,14 @@ func TestPreviewsLeaveACarriedObjectsConnectorIdentitiesKept(t *testing.T) {
 	if !ok {
 		t.Fatal("the carried object runs no machine")
 	}
-	go_, err := ctx.SignalMessage(lookupOne(t, ctx.resolver.Index(), "Demo::Go"), nil, obj)
+	goMsg, err := ctx.SignalMessage(lookupOne(t, ctx.resolver.Index(), "Demo::Go"), nil, obj)
 	if err != nil {
 		t.Fatalf("SignalMessage(Go): %v", err)
 	}
 	instances := len(ctx.instances)
 
 	// The guard reads through the named connector, materializing it under the probe.
-	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+	if d, err := life.State.Decide(goMsg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
 		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the rate read through link", d, err)
 	}
 	if link.Materialized || len(ctx.instances) != instances {
@@ -1611,7 +1611,7 @@ func TestPreviewsLeaveACarriedObjectsConnectorIdentitiesKept(t *testing.T) {
 		t.Errorf("after the probe: anonymous %v keeping %v; want none materialized keeping %d", obj.anonymous, obj.keptAnonymous, anonymousID)
 	}
 
-	ctx.PostMessage(go_)
+	ctx.PostMessage(goMsg)
 	if err := life.State.ProcessNextEvent(); err != nil {
 		t.Fatalf("ProcessNextEvent(Go): %v", err)
 	}

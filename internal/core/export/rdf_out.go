@@ -505,7 +505,20 @@ func (e *encoder) mint(node ast.Node, fqn string) (rdf.Term, error) {
 // its owner; a metaclass this mapping invents is typed in the OpenSysML namespace.
 // lines is the text of the member, wrapper and all, unless inline: one written
 // on its owner's own lines is part of the owner's text.
-func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibility, fqn string, ownerTerm rdf.Term, index int, metaclass rdf.Term, lines region, inline bool) {
+type memberHead struct {
+	node       ast.Node
+	visibility ast.Visibility
+	fqn        string
+	owner      rdf.Term
+	index      int
+	metaclass  rdf.Term
+	lines      region
+	inline     bool
+}
+
+func (e *encoder) head(subject rdf.Term, h memberHead) {
+	node, visibility, fqn, ownerTerm, index, metaclass, lines, inline :=
+		h.node, h.visibility, h.fqn, h.owner, h.index, h.metaclass, h.lines, h.inline
 	e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
 	e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
 	// The id an API reader addresses the element by, which is the id its own
@@ -555,7 +568,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	// A bare expression among a body's members is the result the body computes.
 	result := isExpressionMember(node)
 	head := func(metaclass rdf.Term) {
-		e.head(subject, node, visibility, fqn, ownerTerm, index, metaclass, lines, inline)
+		e.head(subject, memberHead{node: node, visibility: visibility, fqn: fqn, owner: ownerTerm,
+			index: index, metaclass: metaclass, lines: lines, inline: inline})
 	}
 
 	switch n := node.(type) {
@@ -1103,28 +1117,50 @@ func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
 		if end == nil {
 			continue
 		}
-		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target)
+		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target, end.Multiplicity)
 	}
 	if n.FlowEnds != nil {
-		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From)
-		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To)
-		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload)
+		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
+		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
+		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
+	}
+	// `bind [m] a = [n] b` relates the features it references and its value node.
+	if n.Kind == ast.UsageBinding && len(n.ConnectorEnds) == 0 {
+		index := 0
+		for _, rel := range n.Relationships {
+			if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+				continue
+			}
+			e.bindingEnd(subject, owner, fmt.Sprintf("end%d", index), index, "", rel.Target, rel.Multiplicity)
+			index++
+		}
+		if n.Value != nil {
+			value := rdf.ExpressionIRI(subject, pValue)
+			e.graph.Add(subject, e.sysx(xRelatedFeature), value)
+			e.endMarks(value, owner, index, "", n.ValueMultiplicity)
+		}
 	}
 }
 
 // bindingEnd emits one end as an expression node, tagged with its position.
-func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node) {
+func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
 	if target == nil {
 		return
 	}
 	e.expression(subject, e.sysx(xRelatedFeature), slot, owner, target)
-	end := rdf.ExpressionIRI(subject, slot)
+	e.endMarks(rdf.ExpressionIRI(subject, slot), owner, index, role, mult)
+}
+
+// endMarks tags an end node with its position, role and the bounds of the
+// multiplicity written ahead of it (`connect [1] a to [0..1] b`).
+func (e *encoder) endMarks(end rdf.Term, owner string, index int, role string, mult *ast.Multiplicity) {
 	if index >= 0 {
 		e.graph.Add(end, e.sysx(xEndIndex), rdf.Int(index))
 	}
 	if role != "" {
 		e.graph.Add(end, e.sysx(xEndRole), rdf.String(role))
 	}
+	e.multiplicity(end, owner, mult)
 }
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
@@ -1198,8 +1234,8 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 			return err
 		}
 		// A prefix is written in its owner's head, so its text is the owner's.
-		e.head(prefixSubject, prefix, ast.VisibilityDefault, prefixFQN, subject, index,
-			rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]), region{}, true)
+		e.head(prefixSubject, memberHead{node: prefix, visibility: ast.VisibilityDefault, fqn: prefixFQN,
+			owner: subject, index: index, metaclass: rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]), inline: true})
 		if err := e.metadataUsage(prefixSubject, prefixFQN, fqn, prefix, "#"); err != nil {
 			return err
 		}
@@ -1441,6 +1477,9 @@ func headNodes(n *ast.Usage) []ast.Node {
 	if n.Multiplicity != nil {
 		add(n.Multiplicity)
 	}
+	if n.ValueMultiplicity != nil {
+		add(n.ValueMultiplicity)
+	}
 	if n.CrossFeature != nil {
 		add(n.CrossFeature)
 	}
@@ -1452,6 +1491,9 @@ func headNodes(n *ast.Usage) []ast.Node {
 	for _, rel := range n.Relationships {
 		if rel != nil {
 			add(rel, rel.Target)
+			if rel.Multiplicity != nil {
+				add(rel.Multiplicity)
+			}
 		}
 	}
 	for _, end := range n.ConnectorEnds {

@@ -16,10 +16,10 @@ package test {
 		}
 		state B;
 		state late {
-			entry { log = log * 10 + 8; }
+			entry { assign log := log * 10 + 8; }
 		}
 		state C {
-			entry { log = log * 10 + 3; }
+			entry { assign log := log * 10 + 3; }
 		}
 
 		succession first start then A;

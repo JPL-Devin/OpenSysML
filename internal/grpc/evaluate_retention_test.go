@@ -72,7 +72,7 @@ package Demo {
 	// A name that resolves to nothing is spell-checked, and the spellings are
 	// memoized by name: a request's misspelling is the request's too.
 	for i := 0; i < 50; i++ {
-		if msg := evaluate(fmt.Sprintf("nosuch%d(1.0) + masss%d", i, i)); msg == "" {
+		if evaluate(fmt.Sprintf("nosuch%d(1.0) + masss%d", i, i)) == "" {
 			t.Fatalf("expression %d: unresolved names evaluated", i)
 		}
 	}

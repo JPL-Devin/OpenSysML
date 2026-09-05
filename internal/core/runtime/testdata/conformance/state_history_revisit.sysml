@@ -17,7 +17,7 @@ package Test {
         transition first start then first;
         transition first first then second;
         transition first second if departures == 0 do {
-            departures = departures + 1;
+            assign departures := departures + 1;
         } then away;
         transition first second if departures > 0 then done;
         transition first away then resume;

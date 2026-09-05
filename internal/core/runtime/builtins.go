@@ -41,14 +41,15 @@ func init() {
 		// by the library as the sequence operation over the collection's
 		// elements.
 		"CollectionFunctions::#":           builtinCollectionIndex,
-		"CollectionFunctions::size":        builtinSequenceSize,
-		"CollectionFunctions::isEmpty":     builtinSequenceIsEmpty,
-		"CollectionFunctions::notEmpty":    builtinSequenceNotEmpty,
-		"CollectionFunctions::contains":    builtinCollectionContains,
-		"CollectionFunctions::containsAll": builtinCollectionContainsAll,
-		"CollectionFunctions::head":        builtinSequenceHead,
-		"CollectionFunctions::tail":        builtinSequenceTail,
-		"CollectionFunctions::last":        builtinSequenceLast,
+		"CollectionFunctions::array#":      builtinArrayIndex,
+		"CollectionFunctions::size":        overCollectionElements(builtinSequenceSize),
+		"CollectionFunctions::isEmpty":     overCollectionElements(builtinSequenceIsEmpty),
+		"CollectionFunctions::notEmpty":    overCollectionElements(builtinSequenceNotEmpty),
+		"CollectionFunctions::contains":    overCollectionElements(builtinCollectionContains),
+		"CollectionFunctions::containsAll": overCollectionElements(builtinCollectionContainsAll),
+		"CollectionFunctions::head":        overCollectionElements(builtinSequenceHead),
+		"CollectionFunctions::tail":        overCollectionElements(builtinSequenceTail),
+		"CollectionFunctions::last":        overCollectionElements(builtinSequenceLast),
 
 		// ControlFunctions: the operations whose argument is a body the
 		// operation itself decides the evaluation of.
