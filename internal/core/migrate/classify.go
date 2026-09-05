@@ -206,17 +206,14 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 		if e.HasStereotype("Unit", "QuantityKind") {
 			return catUnmapped, "units and quantity kinds are not migrated; use the SI and ISQ libraries"
 		}
-		c := m.model.Ref(e, "classifier")
-		if c == nil {
+		if len(m.model.Refs(e, "classifier")) == 0 {
 			return catUnmapped, "an instance specification without a classifier has no v2 form"
 		}
-		if c.IsProxy() || isLibrary(c) {
-			return catUnmapped, "the instance's classifier " + c.Name + " is outside the document or in a library, so it has no v2 definition to specialize"
+		written, note := m.instanceClassifiers(e)
+		if len(written) == 0 {
+			return catUnmapped, note
 		}
-		if cc, _ := m.classify(c); cc.keyword() == "" {
-			return catUnmapped, "the instance's classifier " + qualifiedName(c) + " is not migrated"
-		}
-		return catIndividualDef, ""
+		return catIndividualDef, note
 	case "Activity", "OpaqueBehavior", "Interaction", "StateMachine", "FunctionBehavior":
 		if e.HasStereotype("TestCase") {
 			return catVerificationDef, "the test case's behavior is not migrated; only its verified requirements are"
@@ -258,4 +255,23 @@ func rootOf(e *xmi.Element) *xmi.Element {
 		e = e.Parent
 	}
 	return e
+}
+
+// instanceClassifiers splits an instance's classifiers into those it can
+// specialize in v2 and a note over those it cannot.
+func (m *migration) instanceClassifiers(e *xmi.Element) ([]*xmi.Element, string) {
+	var written []*xmi.Element
+	var notes []string
+	for _, c := range m.model.Refs(e, "classifier") {
+		if c.IsProxy() || isLibrary(c) {
+			notes = append(notes, "the instance's classifier "+c.Name+" is outside the document or in a library, so it has no v2 definition to specialize")
+			continue
+		}
+		if cc, _ := m.classify(c); cc.keyword() == "" {
+			notes = append(notes, "the instance's classifier "+qualifiedName(c)+" is not migrated")
+			continue
+		}
+		written = append(written, c)
+	}
+	return written, strings.Join(notes, "; ")
 }

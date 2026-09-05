@@ -332,8 +332,12 @@ func (m *migration) generals(e *xmi.Element, cat category) (string, string) {
 		refs = append(refs, m.ref(target, m.scope))
 	}
 	if cat == catIndividualDef {
-		if c := m.model.Ref(e, "classifier"); c != nil {
+		written, _ := m.instanceClassifiers(e)
+		for _, c := range written {
 			refs = append(refs, m.ref(c, m.scope))
+		}
+		if d := m.dangling(e, "classifier"); d != "" {
+			notes = append(notes, d)
 		}
 	}
 	return strings.Join(refs, ", "), strings.Join(notes, "; ")
@@ -1057,7 +1061,7 @@ type pair struct{ client, supplier *xmi.Element }
 
 // dependencyPairs expands a dependency into its client–supplier pairs; a note
 // with no pairs says why it cannot be written, a note beside pairs which
-// references were dangling.
+// references were dangling or reached outside the document.
 func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
 	clients := m.model.Refs(d, "client")
 	suppliers := m.model.Refs(d, "supplier")
@@ -1066,13 +1070,18 @@ func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
 		return nil, joinNotes("the dependency's client or supplier is not in the document", missing)
 	}
 	var pairs []pair
+	external := 0
 	for _, c := range clients {
 		for _, s := range suppliers {
 			if c.IsProxy() || s.IsProxy() {
-				return nil, "the dependency reaches outside the document"
+				external++
+				continue
 			}
 			pairs = append(pairs, pair{c, s})
 		}
+	}
+	if external > 0 {
+		missing = joinNotes(missing, fmt.Sprintf("%d pair(s) reach outside the document and are not written", external))
 	}
 	return pairs, missing
 }
@@ -1306,10 +1315,9 @@ func (m *migration) derive(d *xmi.Element, name string, derived, original *xmi.E
 		return "", "both ends of a derive must be requirements"
 	}
 	if name == "" {
-		name = "Derive " + derived.Name
-	}
-	if !m.taken[m.scope][name] {
-		name = m.freshName(m.scope, name)
+		name = m.freshName(m.scope, "Derive "+derived.Name)
+	} else {
+		m.take(m.scope, name)
 	}
 	if _, ok := m.names[d]; !ok && d.Name == "" {
 		m.names[d] = name

@@ -304,10 +304,12 @@ func TestConvertMigratesXMI(t *testing.T) {
 		args []string
 		want string
 	}{
-		"xmi as target":          {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
-		"report without xmi":     {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
-		"report without convert": {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
-		"notation read as xmi":   {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
+		"xmi as target":                              {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
+		"report without xmi":                         {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
+		"report without convert":                     {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
+		"notation read as xmi":                       {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
+		"report over the model":                      {[]string{xmi, "-convert", "sysml", "-o", textReport, "-migration-report", textReport}, "-migration-report and -o both name"},
+		"report over the model, spelled differently": {[]string{xmi, "-convert", "sysml", "-o", filepath.Join(filepath.Dir(textReport), ".", filepath.Base(textReport)), "-migration-report", textReport}, "-migration-report and -o both name"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			out, err := exec.Command(binary, tc.args...).CombinedOutput()

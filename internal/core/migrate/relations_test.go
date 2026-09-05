@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/migrate"
 )
 
@@ -226,5 +227,53 @@ func TestDependencyStereotypeTagsAreKept(t *testing.T) {
 	es := entriesFor(r, "_d")
 	if len(es) != 1 || !strings.Contains(es[0].Note, "«Critical» «Reviewed»") {
 		t.Errorf("entries = %+v", es)
+	}
+}
+
+func TestExternalEndKeepsLocalDependencyPairs(t *testing.T) {
+	for name, members := range map[string]string{
+		"external supplier": `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" client="_a" supplier="_b">
+      <supplier href="other.xmi#_ext"/>
+    </packagedElement>`,
+		"external client": `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" client="_a" supplier="_b">
+      <client href="other.xmi#_ext"/>
+    </packagedElement>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := migrateDocument(t, members, `<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/>`)
+			wantLine(t, r.Notation, "dependency A to B;")
+			es := entriesFor(r, "_d")
+			if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "1 pair(s) reach outside the document") {
+				t.Errorf("entries = %+v", es)
+			}
+			for _, d := range errors(t, "ext.sysml", r.Notation) {
+				t.Errorf("%v", d)
+			}
+		})
+	}
+}
+
+func TestRepeatedAnonymousDerivationsGetDistinctNames(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_r1" name="R1"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r2" name="R2"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r3" name="R3"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_d1" client="_r3" supplier="_r1"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_d2" client="_r3" supplier="_r2"/>`,
+		`<sysml:Requirement xmi:id="_s1" base_Class="_r1"/><sysml:Requirement xmi:id="_s2" base_Class="_r2"/><sysml:Requirement xmi:id="_s3" base_Class="_r3"/>
+  <sysml:DeriveReqt xmi:id="_s4" base_Abstraction="_d1"/><sysml:DeriveReqt xmi:id="_s5" base_Abstraction="_d2"/>`)
+	wantLine(t, r.Notation, "connection def 'Derive R3' :> RequirementDerivation::Derivation {")
+	wantLine(t, r.Notation, "connection def 'Derive R3 2' :> RequirementDerivation::Derivation {")
+	for _, d := range errors(t, "derive.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+	if _, err := export.Convert("derive.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatal(err)
 	}
 }

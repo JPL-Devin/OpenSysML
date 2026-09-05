@@ -60,6 +60,9 @@ func runConvert(files []string) error {
 	if migrationReport != "" && from != export.FormatXMI {
 		return fmt.Errorf("-migration-report describes a SysML v1 migration, and %s input is not migrated; pass it with -from xmi or a .xmi/.mdzip file", from)
 	}
+	if migrationReport != "" && outputPath != "" && samePath(migrationReport, outputPath) {
+		return fmt.Errorf("-migration-report and -o both name %s; the report would be replaced by the model", outputPath)
+	}
 	var out []byte
 	if from == export.FormatXMI {
 		var report *migrate.Report
@@ -112,6 +115,19 @@ func writeMigrationReport(report *migrate.Report) error {
 	}
 	fmt.Fprintf(os.Stderr, "wrote %s (migration report: %s)\n", migrationReport, report.Summary())
 	return nil
+}
+
+// samePath reports whether a and b name one file: the same file on disk, or
+// the same absolute path when one does not exist yet.
+func samePath(a, b string) bool {
+	if fa, err := os.Stat(a); err == nil {
+		if fb, err := os.Stat(b); err == nil {
+			return os.SameFile(fa, fb)
+		}
+	}
+	aa, errA := filepath.Abs(a)
+	ab, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && aa == ab
 }
 
 // parseTargetFormat resolves the -convert value, explaining the flag when a file

@@ -227,3 +227,24 @@ func TestBooleanLiteralForms(t *testing.T) {
 		t.Errorf("entries = %+v", es)
 	}
 }
+
+func TestInstanceWithSeveralClassifiers(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Activity" xmi:id="_act" name="Drive"/>
+    <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_both" name="both" classifier="_a _b"/>
+    <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_mixed" name="mixed" classifier="_a _act"/>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/>`)
+	wantLine(t, r.Notation, "individual def both :> A, B;")
+	wantLine(t, r.Notation, "individual def mixed :> A;")
+	if es := entriesFor(r, "_both"); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+		t.Errorf("both entries = %+v", es)
+	}
+	if es := entriesFor(r, "_mixed"); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "Drive is not migrated") {
+		t.Errorf("mixed entries = %+v", es)
+	}
+	for _, d := range errors(t, "multi.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
