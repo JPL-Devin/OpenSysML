@@ -203,3 +203,34 @@ func TestValueCollectionOfReferencesIsNotCountedStatically(t *testing.T) {
 		attribute xs : ScalarValues::Integer[2] = (src, src);
 	}`)
 }
+
+// A feature typed by several types, or a value so typed, binds when any one
+// pairing of their types conforms one way or the other (KerML 8.3.4.3); only
+// wholly unrelated types are rejected. The pinned pilot agrees.
+func TestValueMultiTypedFeaturesConformByAnyPairing(t *testing.T) {
+	wantNoValueDiags(t, `package P {
+		part vb : M::Vehicle, M::Boat;
+		part v : M::Vehicle = vb;
+		part b : M::Boat = vb;
+		part t : M::Truck = vb;
+		part w : M::Vehicle, M::Boat = t;
+		calc def GivesVB { return : M::Vehicle, M::Boat; }
+		part b2 : M::Boat = GivesVB();
+		part t2 : M::Truck = GivesVB();
+	}`)
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		part vb : M::Vehicle, M::Boat;
+		part p : Plane = vb;
+	}`, "cannot bind a value of type Vehicle, Boat to a feature typed by Plane")
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		part p : Plane;
+		part vb : M::Vehicle, M::Boat = p;
+	}`, "cannot bind a value of type Plane to a feature typed by Vehicle, Boat")
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		calc def GivesVB { return : M::Vehicle, M::Boat; }
+		part p : Plane = GivesVB();
+	}`, "cannot bind a value of type Vehicle, Boat to a feature typed by Plane")
+}
