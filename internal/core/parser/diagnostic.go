@@ -23,7 +23,7 @@ type Diagnostic struct {
 // same syntax error words it the same way.
 const (
 	msgExpectedActionBrace  = "expected '}' after action expression"
-	msgExpectedReturnSemi   = "expected ';' after return parameter"
+	msgExpectedReturnEnd    = "expected '{' or ';' after return parameter"
 	msgExpectedBodyClose    = "expected '}' to close body"
 	msgExpectedBraceOrSemi  = "expected '{' or ';'"
 	msgExpectedBodyMember   = "expected a body member"

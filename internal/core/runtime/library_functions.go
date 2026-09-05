@@ -25,12 +25,6 @@ var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluabl
 // declarations the arguments fit equally well, none more specific than the rest.
 var ErrAmbiguousInvocation = errors.New("ambiguous invocation")
 
-// noVectorCollection is why the aggregations over a collection of vectors are
-// not evaluable: a sequence of them flattens, losing the grouping the
-// aggregation sums over.
-const noVectorCollection = "a collection of vectors has no representation: " +
-	"a sequence of vectors flattens into one sequence of elements"
-
 // libraryPi is the value of TrigFunctions::pi. The library fixes it by an
 // invariant rather than a value (round(pi * 1E20) == 314159265358979323846.0),
 // 21 significant digits, of which a Real carries the nearest float64.
@@ -144,8 +138,9 @@ func init() {
 }
 
 // registerVectorFunctions registers VectorFunctions (Kernel Function Library).
-// A vector is the sequence of its elements, which is what the library's own
-// NumericalVectorValue is: `elements` with a `dimension` equal to their number.
+// A vector is a ValVector, the NumericalVectorValue of its `elements`; a bare
+// sequence of numbers is read as one where a vector is required, so the
+// operator forms keep working over `(1, 2, 3)`.
 // The abstract declarations over VectorValue and their Cartesian specializations
 // compute alike over that representation, so both are registered.
 func registerVectorFunctions() {
@@ -174,8 +169,8 @@ func registerVectorFunctions() {
 	registerValueFunction("VectorFunctions::cartesianVectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
 	registerValueFunction("VectorFunctions::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
 
-	registerUnevaluable("VectorFunctions::sum0", []declaredParam{optionalParam("coll"), param("zero")}, noVectorCollection)
-	registerUnevaluable("VectorFunctions::sum", []declaredParam{optionalParam("coll")}, noVectorCollection)
+	registerDeclaredFunction("VectorFunctions::sum0", []declaredParam{optionalParam("coll"), param("zero")}, vectorSum0)
+	registerValueFunction("VectorFunctions::sum", []string{"coll"}, 0, vectorSum)
 }
 
 // registerComplexFunctions registers ComplexFunctions (Kernel Function Library).
@@ -766,17 +761,21 @@ func init() {
 		return NewComplex(complex(0, 1)), nil
 	})
 
-	// cartesian3DZeroVector = cartesianZeroVector#(3). cartesianZeroVector itself
-	// is the 1-, 2- and 3-dimensional zero vectors as one feature of three
-	// vectors, which has no representation here.
+	// cartesianZeroVector is the 1-, 2- and 3-dimensional zero vectors as one
+	// feature of three vectors; cartesian3DZeroVector = cartesianZeroVector#(3).
 	registerLibraryFeature("VectorFunctions::cartesian3DZeroVector", func(ctx *Context) (Value, error) {
 		return ctx.realVector([]float64{0, 0, 0})
 	})
-	registerLibraryFeature("VectorFunctions::cartesianZeroVector", func(*Context) (Value, error) {
-		return Value{}, fmt.Errorf(
-			"%w: VectorFunctions::cartesianZeroVector: %s",
-			ErrUnevaluableLibraryFunction, noVectorCollection,
-		)
+	registerLibraryFeature("VectorFunctions::cartesianZeroVector", func(ctx *Context) (Value, error) {
+		zeros := make([]Value, 3)
+		for i := range zeros {
+			vec, err := ctx.realVector(make([]float64, i+1))
+			if err != nil {
+				return Value{}, err
+			}
+			zeros[i] = vec
+		}
+		return ctx.newSequence(zeros)
 	})
 }
 
@@ -820,460 +819,6 @@ func degreesFromRadians(args []semantics.Value) (semantics.Value, error) {
 // radiansFromDegrees is TrigFunctions::rad, `theta_deg * pi / 180`.
 func radiansFromDegrees(args []semantics.Value) (semantics.Value, error) {
 	return realResult(asReal(args[0]) * libraryPi / 180)
-}
-
-// ---------------------------------------------------------------------------
-// VectorFunctions.
-// ---------------------------------------------------------------------------
-
-// vectorElements views a vector argument as the sequence of its elements, which
-// is what VectorValues declares a NumericalVectorValue to be: a sequence is that
-// vector, one number the one-dimensional vector of it, and null the empty vector.
-func vectorElements(name, param string, val Value) ([]semantics.Value, error) {
-	return labelledVectorElements(name, fmt.Sprintf("%q", param), val)
-}
-
-// labelledVectorElements is vectorElements reporting the parameter by a
-// rendered label, which names an anonymous parameter by position.
-func labelledVectorElements(name, label string, val Value) ([]semantics.Value, error) {
-	elements := elementsOf(val)
-	out := make([]semantics.Value, len(elements))
-	for i, elem := range elements {
-		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
-			return nil, fmt.Errorf(
-				"%w: function %s parameter %s requires a vector of numeric values, element %d is %s",
-				ErrTypeMismatch, name, label, i+1, describeValue(elem),
-			)
-		}
-		out[i] = elem.Const
-	}
-	return out, nil
-}
-
-// vectorElementsFeature is the KerML feature holding a NumericalVectorValue's
-// components, which the runtime represents as the collection of them.
-const vectorElementsFeature = "elements"
-
-// isNumericVector reports whether a value is a numerical vector: a non-empty
-// collection of numeric elements.
-func isNumericVector(val Value) bool {
-	elements := elementsOf(val)
-	if len(elements) == 0 {
-		return false
-	}
-	for _, elem := range elements {
-		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
-			return false
-		}
-	}
-	return true
-}
-
-// realElements is vectorElements widened to Real, for the CartesianVectorValue
-// operations, whose elements the library declares Real.
-func realElements(name, param string, val Value) ([]float64, error) {
-	elements, err := vectorElements(name, param, val)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]float64, len(elements))
-	for i, elem := range elements {
-		out[i] = asReal(elem)
-	}
-	return out, nil
-}
-
-// vectorValue builds a vector from its elements, charging them against the run's
-// element budget as any other materialized collection. An element that is not a
-// finite value of its kind is reported rather than carried into the vector.
-func (ctx *Context) vectorValue(elements []semantics.Value) (Value, error) {
-	if err := ctx.chargeElements(int64(len(elements))); err != nil {
-		return Value{}, err
-	}
-	out := make([]Value, len(elements))
-	for i, elem := range elements {
-		checked, err := checkedNumeric(elem)
-		if err != nil {
-			return Value{}, err
-		}
-		out[i] = Value{Kind: ValConst, Const: checked}
-	}
-	return sequenceOf(out), nil
-}
-
-// checkedNumeric screens a computed numeric value, so an arithmetic result that
-// overflowed the Real range is reported rather than returned as an infinity.
-func checkedNumeric(v semantics.Value) (semantics.Value, error) {
-	if v.Kind != semantics.ValReal {
-		return v, nil
-	}
-	return realResult(v.Real)
-}
-
-// isNumeric reports whether a value is an Integer or a Real.
-func isNumeric(v semantics.Value) bool {
-	return v.Kind == semantics.ValInt || v.Kind == semantics.ValReal
-}
-
-// elementArith applies an arithmetic operator to two numeric elements, reporting
-// a result outside the range of its kind rather than wrapping or infinite.
-func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (semantics.Value, error) {
-	if a.Kind == semantics.ValInt && b.Kind == semantics.ValInt {
-		result, ok := semantics.IntArith(op, a.Int, b.Int)
-		if !ok {
-			return semantics.Value{}, fmt.Errorf(
-				"%w: function %s has a result outside the Integer range",
-				semantics.ErrArithmeticOverflow, name,
-			)
-		}
-		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
-	}
-	if a.IsNumeric() && b.IsNumeric() {
-		res, ok := semantics.RealArith(op, toReal(a), toReal(b))
-		if !ok {
-			return semantics.Value{}, fmt.Errorf(
-				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
-			)
-		}
-		return realResult(res)
-	}
-	res, ok := semantics.EvalBinary(op, a, b)
-	if !ok {
-		// A sum, difference or product of two numbers is declined only for leaving
-		// the Real range; anything else is an operator the arguments do not define.
-		switch op {
-		case ast.OpAdd, ast.OpSub, ast.OpMul:
-			if isNumeric(a) && isNumeric(b) {
-				return semantics.Value{}, fmt.Errorf(
-					"%w: function %s has a result outside the Real range",
-					semantics.ErrArithmeticOverflow, name,
-				)
-			}
-		}
-		return semantics.Value{}, fmt.Errorf(
-			"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
-		)
-	}
-	return checkedNumeric(res)
-}
-
-// realVector builds a vector of Reals, reporting an element that is not a finite
-// Real rather than carrying an infinity into it.
-func (ctx *Context) realVector(components []float64) (Value, error) {
-	elements := make([]semantics.Value, len(components))
-	for i, x := range components {
-		elem, err := realResult(x)
-		if err != nil {
-			return Value{}, err
-		}
-		elements[i] = elem
-	}
-	return ctx.vectorValue(elements)
-}
-
-// checkedReal wraps a computed Real as a runtime value, reporting a result that
-// is not a finite number.
-func checkedReal(x float64) (Value, error) {
-	res, err := realResult(x)
-	if err != nil {
-		return Value{}, err
-	}
-	return Value{Kind: ValConst, Const: res}, nil
-}
-
-// argumentOmitted reports an argument as not given for a [0..1] parameter: null,
-// and equally an empty collection, which KerML holds to be the same no value.
-func argumentOmitted(val Value) bool {
-	return len(elementsOf(val)) == 0
-}
-
-// scalarArg reads a scalar numeric argument: the NumericalValue a scalar-vector
-// product or a Complex component is declared as.
-func scalarArg(name, param string, val Value) (semantics.Value, error) {
-	if val.Kind != ValConst || !val.Const.IsNumeric() {
-		return semantics.Value{}, fmt.Errorf(
-			"%w: function %s parameter %q requires a numeric value",
-			ErrTypeMismatch, name, param,
-		)
-	}
-	return val.Const, nil
-}
-
-// combineElements applies an arithmetic operator elementwise to two vectors of
-// equal dimension, keeping the elements' kind as the library's declaration over
-// NumericalValue does: two Integer vectors give an Integer vector.
-func combineElements(name string, op ast.OperatorKind, v, w []semantics.Value) ([]semantics.Value, error) {
-	if len(v) != len(w) {
-		return nil, fmt.Errorf(
-			"%w: function %s requires vectors of equal dimension, got %d and %d",
-			ErrTypeMismatch, name, len(v), len(w),
-		)
-	}
-	out := make([]semantics.Value, len(v))
-	for i := range v {
-		res, err := elementArith(name, op, v[i], w[i])
-		if err != nil {
-			return nil, err
-		}
-		out[i] = res
-	}
-	return out, nil
-}
-
-// zeroLike is the zero of a numeric value's kind, which negation subtracts from.
-func zeroLike(v semantics.Value) semantics.Value {
-	if v.Kind == semantics.ValInt {
-		return semantics.Value{Kind: semantics.ValInt}
-	}
-	return semantics.Value{Kind: semantics.ValReal}
-}
-
-// vectorIsZero is isZeroVector and its Cartesian specialization: a zero vector
-// is one whose every element is zero.
-func vectorIsZero(name string, _ *Context, args []Value) (Value, error) {
-	elements, err := vectorElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	for _, elem := range elements {
-		if asReal(elem) != 0 {
-			return boolValue(false), nil
-		}
-	}
-	return boolValue(true), nil
-}
-
-// vectorAdd is VectorFunctions::'+' and 'cartesian+': the sum of two vectors of
-// equal dimension, or, given one argument, that vector.
-func vectorAdd(name string, ctx *Context, args []Value) (Value, error) {
-	v, err := vectorElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	if argumentOmitted(args[1]) {
-		return ctx.vectorValue(v)
-	}
-	w, err := vectorElements(name, "w", args[1])
-	if err != nil {
-		return Value{}, err
-	}
-	sum, err := combineElements(name, ast.OpAdd, v, w)
-	if err != nil {
-		return Value{}, err
-	}
-	return ctx.vectorValue(sum)
-}
-
-// vectorSubtract is VectorFunctions::'-' and 'cartesian-': the difference of two
-// vectors of equal dimension, or, given one argument, the vector that added to it
-// gives the zero vector.
-func vectorSubtract(name string, ctx *Context, args []Value) (Value, error) {
-	v, err := vectorElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	if argumentOmitted(args[1]) {
-		zeros := make([]semantics.Value, len(v))
-		for i, elem := range v {
-			zeros[i] = zeroLike(elem)
-		}
-		negated, err := combineElements(name, ast.OpSub, zeros, v)
-		if err != nil {
-			return Value{}, err
-		}
-		return ctx.vectorValue(negated)
-	}
-	w, err := vectorElements(name, "w", args[1])
-	if err != nil {
-		return Value{}, err
-	}
-	difference, err := combineElements(name, ast.OpSub, v, w)
-	if err != nil {
-		return Value{}, err
-	}
-	return ctx.vectorValue(difference)
-}
-
-// vectorOf is VectorFunctions::VectorOf, the NumericalVectorValue of a non-empty
-// list of components, whose kind it keeps.
-func vectorOf(name string, ctx *Context, args []Value) (Value, error) {
-	components, err := vectorElements(name, "components", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	if len(components) == 0 {
-		return Value{}, fmt.Errorf(
-			"%w: function %s requires at least one component (components: NumericalValue[1..*])",
-			ErrMultiplicityViolation, name,
-		)
-	}
-	return ctx.vectorValue(components)
-}
-
-// cartesianVectorOf is VectorFunctions::CartesianVectorOf, whose components the
-// library declares Real, so an Integer component widens.
-func cartesianVectorOf(name string, ctx *Context, args []Value) (Value, error) {
-	components, err := realElements(name, "components", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	return ctx.realVector(components)
-}
-
-// cartesianThreeVectorOf is VectorFunctions::CartesianThreeVectorOf, which
-// declares its components Real[3].
-func cartesianThreeVectorOf(name string, ctx *Context, args []Value) (Value, error) {
-	components, err := realElements(name, "components", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	if len(components) != 3 {
-		return Value{}, fmt.Errorf(
-			"%w: function %s requires 3 components (components: Real[3]), got %d",
-			ErrMultiplicityViolation, name, len(components),
-		)
-	}
-	return ctx.realVector(components)
-}
-
-// scalarVectorMult is the scalar product with the scalar first, which the library
-// also aliases as VectorFunctions::'*'.
-func scalarVectorMult(name string, ctx *Context, args []Value) (Value, error) {
-	return scaleVector(name, ctx, args[0], "x", args[1], "v")
-}
-
-// vectorScalarMult is the same product with the vector first, which the library
-// defines as scalarVectorMult(x, v).
-func vectorScalarMult(name string, ctx *Context, args []Value) (Value, error) {
-	return scaleVector(name, ctx, args[1], "x", args[0], "v")
-}
-
-// scaleVector multiplies every element of a vector by a scalar, keeping the
-// elements' kind.
-func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, vector Value, vectorParam string) (Value, error) {
-	x, err := scalarArg(name, scalarParam, scalar)
-	if err != nil {
-		return Value{}, err
-	}
-	elements, err := vectorElements(name, vectorParam, vector)
-	if err != nil {
-		return Value{}, err
-	}
-	scaled := make([]semantics.Value, len(elements))
-	for i, elem := range elements {
-		res, err := elementArith(name, ast.OpMul, x, elem)
-		if err != nil {
-			return Value{}, err
-		}
-		scaled[i] = res
-	}
-	return ctx.vectorValue(scaled)
-}
-
-// vectorScalarDiv is VectorFunctions::vectorScalarDiv. The library defines it as
-// scalarVectorMult(1.0 / x, v); dividing each element is the same quotient
-// without the reciprocal's rounding.
-func vectorScalarDiv(name string, ctx *Context, args []Value) (Value, error) {
-	elements, err := vectorElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	x, err := scalarArg(name, "x", args[1])
-	if err != nil {
-		return Value{}, err
-	}
-	if asReal(x) == 0 {
-		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
-	}
-	quotients := make([]float64, len(elements))
-	for i, elem := range elements {
-		quotients[i] = asReal(elem) / asReal(x)
-	}
-	return ctx.realVector(quotients)
-}
-
-// vectorInner is the inner product of two vectors of equal dimension, keeping the
-// elements' kind: two Integer vectors have an Integer inner product.
-func vectorInner(name string, _ *Context, args []Value) (Value, error) {
-	v, err := vectorElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	w, err := vectorElements(name, "w", args[1])
-	if err != nil {
-		return Value{}, err
-	}
-	products, err := combineElements(name, ast.OpMul, v, w)
-	if err != nil {
-		return Value{}, err
-	}
-	sum := semantics.Value{Kind: semantics.ValInt}
-	for _, product := range products {
-		next, err := elementArith(name, ast.OpAdd, sum, product)
-		if err != nil {
-			return Value{}, err
-		}
-		sum = next
-	}
-	checked, err := checkedNumeric(sum)
-	if err != nil {
-		return Value{}, err
-	}
-	return Value{Kind: ValConst, Const: checked}, nil
-}
-
-// vectorNorm is the norm (magnitude) of a vector, the square root of its inner
-// product with itself.
-func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
-	elements, err := realElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	return checkedReal(euclideanNorm(elements))
-}
-
-// euclideanNorm is the square root of the sum of the squares.
-func euclideanNorm(elements []float64) float64 {
-	sum := 0.0
-	for _, x := range elements {
-		sum += x * x
-	}
-	return math.Sqrt(sum)
-}
-
-// vectorAngle is the angle between two vectors of equal dimension,
-// arccos(inner(v, w) / (norm(v) * norm(w))). A zero vector points nowhere, so
-// there is no angle to it.
-func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
-	v, err := realElements(name, "v", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	w, err := realElements(name, "w", args[1])
-	if err != nil {
-		return Value{}, err
-	}
-	if len(v) != len(w) {
-		return Value{}, fmt.Errorf(
-			"%w: function %s requires vectors of equal dimension, got %d and %d",
-			ErrTypeMismatch, name, len(v), len(w),
-		)
-	}
-	normV, normW := euclideanNorm(v), euclideanNorm(w)
-	if normV == 0 || normW == 0 {
-		return Value{}, fmt.Errorf(
-			"%w: function %s has no angle to a zero vector",
-			semantics.ErrArithmeticDomain, name,
-		)
-	}
-	inner := 0.0
-	for i := range v {
-		inner += v[i] * w[i]
-	}
-	// Rounding can carry the cosine of two parallel vectors just outside
-	// [-1.0, 1.0], where the arc cosine has no value; the angle there is 0 or pi.
-	cosine := math.Max(-1, math.Min(1, inner/(normV*normW)))
-	return checkedReal(math.Acos(cosine))
 }
 
 // ---------------------------------------------------------------------------

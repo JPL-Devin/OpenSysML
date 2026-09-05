@@ -15,8 +15,8 @@ package Compiled {
 		attribute total : Integer = 0;
 		attribute i : Integer = 1;
 		while i <= n {
-			total = total + i;
-			i = i + 1;
+			assign total := total + i;
+			assign i := i + 1;
 		}
 		return : Integer = total;
 	}
@@ -73,9 +73,9 @@ package Compiled {
 		in x : Integer;
 		attribute r : Integer = 0;
 		if x > 0 {
-			r = 1;
+			assign r := 1;
 		} else if x < 0 {
-			r = -1;
+			assign r := -1;
 		}
 		return : Integer = r;
 	}
@@ -84,7 +84,7 @@ package Compiled {
 		in limit : Integer;
 		attribute i : Integer = 0;
 		while true {
-			i = i + 1;
+			assign i := i + 1;
 			if i * i > limit {
 				return : Integer = i;
 			}
@@ -97,11 +97,11 @@ package Compiled {
 		attribute steps : Integer = 0;
 		while x != 1.0 {
 			if x % 2.0 == 0.0 {
-				x = x / 2;
+				assign x := x / 2;
 			} else {
-				x = 3 * x + 1;
+				assign x := 3 * x + 1;
 			}
-			steps = steps + 1;
+			assign steps := steps + 1;
 		}
 		return : Integer = steps;
 	}
@@ -159,7 +159,7 @@ package Compiled {
 		in n : Integer;
 		attribute i : Integer = 0;
 		loop {
-			i = i + 1;
+			assign i := i + 1;
 		} until i >= n;
 		return : Integer = i;
 	}
@@ -171,7 +171,7 @@ package Compiled {
 		attribute i : Integer = 0;
 		attribute done : Boolean = false;
 		loop {
-			i = i + 1;
+			assign i := i + 1;
 			attribute done : Boolean = i >= n;
 		} until done;
 		return : Integer = i;
@@ -181,7 +181,7 @@ package Compiled {
 		in n : Integer;
 		attribute i : Integer = 0;
 		while i < n {
-			i = i + 3;
+			assign i := i + 3;
 		} until i > 7;
 		return : Integer = i;
 	}
@@ -215,7 +215,7 @@ package Compiled {
 	calc def Pos {
 		in n : Positive;
 		attribute k : Positive = n;
-		k = k - 1;
+		assign k := k - 1;
 		return : Integer = k;
 	}
 
@@ -292,11 +292,11 @@ package Compiled {
 		calc def IdE { in x : Integer[0..*]; in y : Integer[0..*]; return : Boolean = x === y; }
 		calc def IxS { in x : Integer[0..*]; in i : Integer; return : Integer = x#(i); }
 		calc def PowS { in x : Integer[0..*]; return : Integer = x ** 2; }
-		calc def WhS { in x : Boolean[0..*]; attribute n : Integer = 0; while x { n = n + 1; } return : Integer = n; }
+		calc def WhS { in x : Boolean[0..*]; attribute n : Integer = 0; while x { assign n := n + 1; } return : Integer = n; }
 		calc def RetS { in x : Integer[0..*]; return : Integer = x; }
 		calc def LocS { in x : Integer[0..*]; attribute y : Integer = x; return : Integer = y; }
 		calc def LocU { in x : Integer[0..*]; attribute y : Integer; return : Integer[0..*] = y; }
-		calc def LocU2 { in x : Integer; attribute y : Integer[0..*]; y = x; return : Integer[0..*] = y; }
+		calc def LocU2 { in x : Integer; attribute y : Integer[0..*]; assign y := x; return : Integer[0..*] = y; }
 		calc def MinE { in x : Integer[0..*]; return : Integer = x->minimize {in v; v}; }
 		calc def MinR { in x : Integer[0..*]; return : Real = x->minimize {in v; v / 2}; }
 		calc def RedN { in x : Integer[0..*]; return : Integer = x->reduce {in a; in b; a + b} + 1; }
@@ -332,12 +332,12 @@ package Compiled {
 		calc def IncAt { in x : Integer[0..*]; in i : Integer; return : Integer[0..*] = includingAt(x, 9, i); }
 		calc def Sub3 { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = subsequence(x, i, j); }
 		calc def ExAt { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = excludingAt(x, i, j); }
-		calc def ForR { in x : Integer[0..*]; attribute s : Real = 0.0; for v in x { s = s + v; } return : Real = s; }
-		calc def Churn { in n : Integer; attribute i : Integer = 0; attribute total : Integer = 0; attribute keep : Integer[0..*] = (); while i < n { attribute s : Integer[0..*] = 1..100; total = total + size(s); keep = including(keep, i); i = i + 1; } return : Integer = total + size(keep); }
-		calc def ChurnFor { in n : Integer; attribute keep : Real[0..*] = (); for i in 1..n { attribute s : Real[0..*] = (1..100)->collect {in v : Integer; v / 2}; if i % 2 == 0 { keep = including(keep, s#(i % 100 + 1)); } } return : Real[0..*] = keep; }
-		calc def UntilSeq { in n : Integer; attribute i : Integer = 0; attribute keep : Integer[0..*] = (); loop { i = i + 1; attribute s : Integer[0..*] = including((), i * 10); keep = union(keep, (size(s) + 100, size(s) + 101, size(s) + 102)); } until s#(size(s)) >= n or size(including(s, i)) > 1 and i > 200; return : Integer[0..*] = keep; }
-		calc def ChurnNest { in n : Integer; attribute keep : Integer[0..*] = (); attribute inner : Integer[0..*] = (); attribute i : Integer = 0; while i < n { inner = (); for v in 1..50 { inner = including(inner, v); } keep = including(keep, size(inner)); for w in keep { i = i + 0; } i = i + 1; } return : Integer = size(keep) + size(inner); }
-		calc def ForB { in n : Integer; attribute s : Integer = 0; for v in 1..n { for w in 1..v { s = s + w; } } return : Integer = s; }
+		calc def ForR { in x : Integer[0..*]; attribute s : Real = 0.0; for v in x { assign s := s + v; } return : Real = s; }
+		calc def Churn { in n : Integer; attribute i : Integer = 0; attribute total : Integer = 0; attribute keep : Integer[0..*] = (); while i < n { attribute s : Integer[0..*] = 1..100; assign total := total + size(s); assign keep := including(keep, i); assign i := i + 1; } return : Integer = total + size(keep); }
+		calc def ChurnFor { in n : Integer; attribute keep : Real[0..*] = (); for i in 1..n { attribute s : Real[0..*] = (1..100)->collect {in v : Integer; v / 2}; if i % 2 == 0 { assign keep := including(keep, s#(i % 100 + 1)); } } return : Real[0..*] = keep; }
+		calc def UntilSeq { in n : Integer; attribute i : Integer = 0; attribute keep : Integer[0..*] = (); loop { assign i := i + 1; attribute s : Integer[0..*] = including((), i * 10); assign keep := union(keep, (size(s) + 100, size(s) + 101, size(s) + 102)); } until s#(size(s)) >= n or size(including(s, i)) > 1 and i > 200; return : Integer[0..*] = keep; }
+		calc def ChurnNest { in n : Integer; attribute keep : Integer[0..*] = (); attribute inner : Integer[0..*] = (); attribute i : Integer = 0; while i < n { assign inner := (); for v in 1..50 { assign inner := including(inner, v); } assign keep := including(keep, size(inner)); for w in keep { assign i := i + 0; } assign i := i + 1; } return : Integer = size(keep) + size(inner); }
+		calc def ForB { in n : Integer; attribute s : Integer = 0; for v in 1..n { for w in 1..v { assign s := s + w; } } return : Integer = s; }
 		calc def RS { in x : Integer[0..*]; return : Real = RealFunctions::sum(x); }
 		calc def MaxS { in x : Real[0..*]; return : Real = x->maximize {in v; v}; }
 	}
@@ -411,7 +411,7 @@ package Refused {
 	calc def Narrowed {
 		in n : Integer;
 		attribute x : Integer = n;
-		x = x / 2;
+		assign x := x / 2;
 		return : Integer = x;
 	}
 

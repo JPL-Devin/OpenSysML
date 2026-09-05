@@ -9,6 +9,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+const controlNodeSource = "control-node"
+
 // CodeControlNodeOwner marks a control node declared outside an action
 // definition or usage (SysML v2 8.3.17.6 validateControlNodeOwningType).
 const CodeControlNodeOwner = "control-node-owner"
@@ -53,7 +55,7 @@ type ControlNodeSuccessionPass struct{}
 func (ControlNodeSuccessionPass) Level() PassLevel { return LevelConstraint }
 
 // ElementScoped: each control node is its own subject.
-func (ControlNodeSuccessionPass) ElementScoped() {}
+func (ControlNodeSuccessionPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (ControlNodeSuccessionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
@@ -171,7 +173,7 @@ func (c *controlNodeChecker) checkOwner(node, owner ast.Node) {
 		Message: fmt.Sprintf("%s is declared %s; declare it in the body of an action definition or usage",
 			controlNodeText(node), where),
 		Code:   CodeControlNodeOwner,
-		Source: "control-node",
+		Source: controlNodeSource,
 	})
 }
 
@@ -254,12 +256,12 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 		}
 		own := owner == nil || c.declares(owner, node)
 		for _, s := range f.incoming {
-			c.checkEndMultiplicity(owner, own, node, s, s.Target, 1, 1, "into", "target",
-				CodeControlNodeIncomingMultiplicity)
+			c.checkEndMultiplicity(owner, own, node, s, s.Target, endRule{1, 1, "into", "target",
+				CodeControlNodeIncomingMultiplicity})
 		}
 		for _, s := range f.outgoing {
-			c.checkEndMultiplicity(owner, own, node, s, s.Source, 1, 1, "out of", "source",
-				CodeControlNodeOutgoingMultiplicity)
+			c.checkEndMultiplicity(owner, own, node, s, s.Source, endRule{1, 1, "out of", "source",
+				CodeControlNodeOutgoingMultiplicity})
 		}
 		switch node.(type) {
 		case *ast.ForkNode:
@@ -269,8 +271,8 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 			c.checkCount(owner, own, node, f.incoming, "incoming",
 				"merge the flows before the decision", CodeDecisionIncomingSuccessions)
 			for _, s := range f.outgoing {
-				c.checkEndMultiplicity(owner, own, node, s, s.Target, 0, 1, "out of", "target",
-					CodeDecisionOutgoingMultiplicity)
+				c.checkEndMultiplicity(owner, own, node, s, s.Target, endRule{0, 1, "out of", "target",
+					CodeDecisionOutgoingMultiplicity})
 			}
 		case *ast.JoinNode:
 			c.checkCount(owner, own, node, f.outgoing, "outgoing",
@@ -279,8 +281,8 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 			c.checkCount(owner, own, node, f.outgoing, "outgoing",
 				"follow the merge with a fork or decision node to branch", CodeMergeOutgoingSuccessions)
 			for _, s := range f.incoming {
-				c.checkEndMultiplicity(owner, own, node, s, s.Source, 0, 1, "into", "source",
-					CodeMergeIncomingMultiplicity)
+				c.checkEndMultiplicity(owner, own, node, s, s.Source, endRule{0, 1, "into", "source",
+					CodeMergeIncomingMultiplicity})
 			}
 		}
 	}
@@ -351,7 +353,7 @@ func (c *controlNodeChecker) checkCount(owner *symbols.Symbol, own bool, node as
 		Message: fmt.Sprintf("%s has %d %s successions; a %s node may have at most one — %s",
 			controlNodeText(node), len(succs), side, controlNodeKind(node), fix),
 		Code:   code,
-		Source: "control-node",
+		Source: controlNodeSource,
 	})
 }
 
@@ -359,8 +361,16 @@ func (c *controlNodeChecker) checkCount(owner *symbols.Symbol, own bool, node as
 // than lower..upper. An end that writes none is implied to have the required
 // one (SysML v2 7.17.3: the rules hold in the abstract syntax even when the
 // notation does not show them), so only a written multiplicity can be wrong.
+type endRule struct {
+	lower, upper int64
+	direction    string
+	endName      string
+	code         string
+}
+
 func (c *controlNodeChecker) checkEndMultiplicity(owner *symbols.Symbol, own bool, node ast.Node,
-	s semantics.ActionSuccession, end semantics.ActionSuccessionEnd, lower, upper int64, direction, endName, code string) {
+	s semantics.ActionSuccession, end semantics.ActionSuccessionEnd, rule endRule) {
+	lower, upper, direction, endName, code := rule.lower, rule.upper, rule.direction, rule.endName, rule.code
 	if end.Multiplicity == nil || (!own && s.Owner != owner) || c.ctx.DownstreamOfFailure(end.Multiplicity) {
 		return
 	}
@@ -382,7 +392,7 @@ func (c *controlNodeChecker) checkEndMultiplicity(owner *symbols.Symbol, own boo
 		Message: fmt.Sprintf("succession %s %s has %s multiplicity %s; successions %s a %s node must have %s multiplicity %s",
 			direction, controlNodeText(node), endName, r.Text(), direction, controlNodeKind(node), endName, want.Text()),
 		Code:   code,
-		Source: "control-node",
+		Source: controlNodeSource,
 	})
 }
 

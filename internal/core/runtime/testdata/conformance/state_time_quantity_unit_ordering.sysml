@@ -16,7 +16,7 @@ package test {
 					accept after 1 [min] then sDone;
 				}
 				state sDone {
-					entry { log = log * 10 + 2; }
+					entry { assign log := log * 10 + 2; }
 				}
 
 				transition first sstart then sWaiting;
@@ -29,7 +29,7 @@ package test {
 					accept after 30 [s] then fDone;
 				}
 				state fDone {
-					entry { log = log * 10 + 1; }
+					entry { assign log := log * 10 + 1; }
 				}
 
 				transition first fstart then fWaiting;

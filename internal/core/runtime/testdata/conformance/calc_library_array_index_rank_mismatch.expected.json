@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "multiplicity violation: CollectionFunctions::'array#': 1 indexes address an array of rank 2"
+}
