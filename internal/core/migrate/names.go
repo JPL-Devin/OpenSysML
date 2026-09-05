@@ -139,12 +139,25 @@ func (m *migration) ref(target *xmi.Element, scope *xmi.Element) string {
 		// A top-level declaration: visible everywhere unless shadowed.
 		for _, inner := range chain {
 			if m.nameTaken(inner, target.Name) && target.Name != "" {
-				return m.qualified(segs)
+				return m.qualifiedFrom(segs, chain)
 			}
 		}
 		return writeName(segs[len(segs)-1])
 	}
-	return m.qualified(segs)
+	return m.qualifiedFrom(segs, chain)
+}
+
+// qualifiedFrom writes segs as a qualified name that resolves from inside the
+// scopes of chain: from the global namespace ($::) when one of them declares a
+// member named like its first segment, which would shadow the relative path.
+func (m *migration) qualifiedFrom(segs []string, chain []*xmi.Element) string {
+	q := m.qualified(segs)
+	for _, s := range chain {
+		if m.nameTaken(s, segs[0]) {
+			return "$::" + q
+		}
+	}
+	return q
 }
 
 func (m *migration) qualified(segs []string) string {

@@ -63,6 +63,9 @@ func runConvert(files []string) error {
 	if migrationReport != "" && outputPath != "" && samePath(migrationReport, outputPath) {
 		return fmt.Errorf("-migration-report and -o both name %s; the report would be replaced by the model", outputPath)
 	}
+	if migrationReport != "" && input != "-" && samePath(migrationReport, input) {
+		return fmt.Errorf("-migration-report names the model being migrated, %s; the report would replace it", input)
+	}
 	var out []byte
 	if from == export.FormatXMI {
 		var report *migrate.Report

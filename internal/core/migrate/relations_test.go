@@ -309,3 +309,36 @@ func TestRepeatedAnonymousDerivationsGetDistinctNames(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestShadowedReferencesAreGlobal checks a reference whose relative spelling a
+// nearer declaration would capture is written from the global namespace.
+func TestShadowedReferencesAreGlobal(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Package" xmi:id="_p" name="P">
+      <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Package" xmi:id="_q" name="Q">
+      <packagedElement xmi:type="uml:Class" xmi:id="_qa" name="A"/>
+      <packagedElement xmi:type="uml:Class" xmi:id="_qp" name="P"/>
+      <packagedElement xmi:type="uml:Class" xmi:id="_h" name="H">
+        <ownedAttribute xmi:type="uml:Property" xmi:id="_x" name="x" type="_a" aggregation="composite"/>
+        <ownedAttribute xmi:type="uml:Property" xmi:id="_y" name="y" type="_b" aggregation="composite"/>
+        <ownedAttribute xmi:type="uml:Property" xmi:id="_z" name="z" type="_qa" aggregation="composite"/>
+      </packagedElement>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_a"/>
+  <sysml:Block xmi:id="_s2" base_Class="_b"/>
+  <sysml:Block xmi:id="_s3" base_Class="_qa"/>
+  <sysml:Block xmi:id="_s4" base_Class="_qp"/>
+  <sysml:Block xmi:id="_s5" base_Class="_h"/>`)
+	wantLine(t, r.Notation, "part x : $::A;")
+	wantLine(t, r.Notation, "part y : $::P::B;")
+	wantLine(t, r.Notation, "part z : A;")
+	for _, d := range errors(t, "shadow.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+	if _, err := export.Convert("shadow.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatal(err)
+	}
+}
