@@ -216,11 +216,11 @@ nor double-counted as two independent disagreements.
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/sysml-examples` | 99 | 95 | 7 | 0 | 0 | 0 | 7 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/kerml-examples` | 58 | 50 | 4 | 6 | 0 | 0 | 4 | 6 |
+| `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
 | `examples` | 32 | 25 | 11 | 286 | 9 | 1 | 1 | 276 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **337** | **66** | **347** | **43** | **2** | **21** | **302** |
+| **Total** | **366** | **338** | **65** | **347** | **43** | **2** | **20** | **302** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -228,11 +228,7 @@ positives from the reference's **own** corpora: `pilot-examples` 16 → **7** an
 retired one more of `pilot-examples` by publishing the conforming type its
 [non-conforming redefinition](omg-issues.md) named, leaving 6, and the quantity-dimension error on
 `Analysis Examples/Dynamics.sysml`:13 — a published product bound to a return typed by another
-dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**, and
-`kerml-examples` then takes one more, 3 → **4**: `Simple Tests/Behaviors.kerml`:14 invokes a
-one-input behavior with no argument at the head of a feature chain (`A().y`), which our
-argument-count check now reaches and the pinned `validate-kerml` does not report — the same
-question [omg-issues.md](omg-issues.md) drafts for positional argument counts. The
+dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**. The
 `examples` root carries 1, the non-standard-notation warning on the `junction` of
 `pseudostates-demo.sysml`, the one demo that keeps the pseudostate notation because no SysML v2
 spelling of it exists. It carried 64 before the demos were rewritten to standard notation: the
@@ -240,7 +236,7 @@ succession shorthands retired 30, removing `initial <state>;` and `transition <s
 retired 27 more, and the standard-notation round below retired the last 7. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **11**. `severity-only` (2) holds pairs of the same shape:
+reference corpora is **10**. `severity-only` (2) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -577,7 +573,7 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`, 1 `kind-mismatch`; `kerml-examples` 4 `unmapped`; `examples` 1 syntax; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
 `examples` 10 syntax, 15 `unmapped`, 70 `kind-mismatch`, 181 `unresolved-reference` — of which
@@ -647,13 +643,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **337 / 21 / 66** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **338 / 20 / 65** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
-| `kerml-examples`: only ours | **3** | **4** |
+| `kerml-examples`: only ours | **3** | **3** |
 | `examples`: only pilot | **40** | **276** |
 | `examples`: fully agreeing | **15** | **25** |
-| `unmapped`, our side | **20** | **29** |
+| `unmapped`, our side | **20** | **28** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession

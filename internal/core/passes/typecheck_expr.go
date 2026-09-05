@@ -105,7 +105,7 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, d f
 	for _, element := range valueElements(value) {
 		var got semantics.PrimType
 		if inv, ok := element.(*ast.InvocationExpr); ok && node != nil {
-			got = ec.inferNodeInvocation(valueScope, inv, node)
+			got = ec.inferNodeInvocation(valueScope, inv, node, true)
 		} else {
 			got = ec.infer(valueScope, element)
 		}
@@ -476,7 +476,7 @@ func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureCha
 	case *ast.ConstructorExpr:
 		ec.inferConstructor(scope, head)
 	case *ast.InvocationExpr:
-		ec.inferInvocation(scope, head)
+		ec.inferNodeInvocation(scope, head, nil, false)
 	}
 	sym, ok := ec.resolver.ResolveTarget(scope, e)
 	if !ok || sym == nil {
@@ -731,12 +731,14 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 // inferInvocation checks a call's arguments against the `in` parameters of the declaration
 // SelectInvocation chose and types it by its result; a receiver `x->f(a)` is the first argument.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	return ec.inferNodeInvocation(scope, e, nil)
+	return ec.inferNodeInvocation(scope, e, nil, true)
 }
 
 // inferNodeInvocation is inferInvocation for an invocation performed by node,
 // whose body parameters redefine the invoked ones; node is nil for a bare call.
-func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol) semantics.PrimType {
+// complete is whether every required parameter must be bound: a call heading a
+// feature chain reads a feature of its result, which the reference accepts unbound.
+func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol, complete bool) semantics.PrimType {
 	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
 	argTypes := ec.argumentTypes(scope, e)
@@ -800,7 +802,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, args, argTypes, params, considered)
+	ec.checkArguments(scope, e, sym, args, argTypes, params, considered, complete)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
@@ -808,7 +810,8 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 }
 
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
-// listing considered (the other declarations the call could name) on each report.
+// listing considered (the other declarations the call could name) on each report;
+// a required parameter left unbound is reported only when complete.
 func (ec *exprChecker) checkArguments(
 	scope *symbols.Scope,
 	e *ast.InvocationExpr,
@@ -817,6 +820,7 @@ func (ec *exprChecker) checkArguments(
 	argTypes argumentTypes,
 	params []parameter,
 	considered []*symbols.Symbol,
+	complete bool,
 ) {
 	report := ec.errorf
 	if len(considered) > 1 {
@@ -826,7 +830,7 @@ func (ec *exprChecker) checkArguments(
 		}
 	}
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report)
+		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report, complete)
 		return
 	}
 	// Arguments bind in order, so a call must reach the last required parameter.
@@ -840,7 +844,7 @@ func (ec *exprChecker) checkArguments(
 	case len(args) > len(params):
 		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
 		return
-	case len(args) < required:
+	case complete && len(args) < required:
 		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
@@ -1008,8 +1012,8 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 }
 
 // checkNamedArguments reports named arguments that name no `in` parameter of sym or do
-// not bind to it, a parameter bound twice (by whichever name or position), and default-less
-// parameters no argument names.
+// not bind to it, a parameter bound twice (by whichever name or position), and, when
+// complete, default-less parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
 	scope *symbols.Scope,
 	e *ast.InvocationExpr,
@@ -1018,6 +1022,7 @@ func (ec *exprChecker) checkNamedArguments(
 	argTypes argumentTypes,
 	params []parameter,
 	report func(source.Span, string, ...any),
+	complete bool,
 ) {
 	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
 	// reports the same call.
@@ -1058,7 +1063,7 @@ func (ec *exprChecker) checkNamedArguments(
 		}
 	}
 	// A misspelt name is the likelier cause of a parameter left unbound.
-	if unknown {
+	if unknown || !complete {
 		return
 	}
 	for i, p := range params {
