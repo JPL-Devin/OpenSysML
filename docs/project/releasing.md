@@ -189,10 +189,18 @@ one alongside it).
    See [packaging/homebrew/README.md](../../packaging/homebrew/README.md).
 
 3. **Say what is not signed.** macOS binaries are not Developer ID signed or
-   notarized and Windows binaries are not Authenticode signed, so a browser
-   download trips Gatekeeper or SmartScreen. Point release notes at
+   notarized, so a browser download trips Gatekeeper. Point release notes at
    [MACOS_DISTRIBUTION.md](macos-distribution.md), which gives the workarounds
-   and what signing would take.
+   and what signing would take. Windows binaries are Authenticode signed through
+   SignPath Foundation once the application below is approved; until then, and
+   for a release whose signing request nobody approved, only the unsigned
+   Windows assets exist and SmartScreen warns — say so in the notes.
+
+4. **Approve the Windows signing request.** When SignPath is configured, the
+   tag also runs [`release-windows.yml`](../../.github/workflows/release-windows.yml),
+   which parks a signing request in SignPath until an Approver approves it
+   (see [Windows Authenticode signing](#windows-authenticode-signing)). No
+   approval, no `*-signed*` assets on the release.
 
 ### The signed checksum manifest
 
@@ -229,6 +237,108 @@ manifest changed after signing, an expired certificate, or `sigstore` not
 installed. The `.sha256` served beside a binary is still never a reason to trust
 it — same origin as the binary — and remains behind
 `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`.
+
+### Windows Authenticode signing
+
+The policy users see is the [Code signing policy](../../README.md#code-signing-policy)
+in the README; this is the maintainer side of it. SignPath Foundation signs
+open-source Windows binaries for free, on two conditions this section keeps
+satisfied: the binaries must be built by a build system SignPath can verify the
+origin of, and each signing request must be approved by hand.
+
+**Why GitHub Actions, and why CircleCI stays.** SignPath verifies the origin of
+an artifact through a *trusted build system* connector, and its supported
+systems are GitHub Actions, GitLab, Jenkins, Azure DevOps, TeamCity and
+AppVeyor — not CircleCI. So the Windows binaries a release signs are rebuilt by
+[`.github/workflows/release-windows.yml`](../../.github/workflows/release-windows.yml)
+on the same `v*` tag, with the Makefile targets and the exact `VERSION`,
+`COMMIT`, `BUILD_TIME` and `GO_VERSION` derivation `build-release` uses, so
+both builds stamp the same version, commit and Windows `VERSIONINFO` (only the
+build timestamp differs).
+CircleCI keeps publishing everything it publishes today, unsigned Windows zips
+included, together with `SHA256SUMS.txt` and its cosign bundle.
+
+The signed files are **additional** assets — `sysml-windows-amd64-signed.zip`,
+`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe`
+(with a `.sha256` sidecar, as the unsigned one has) and
+`opensysml-windows-amd64-signed.zip`, listed in `SHA256SUMS-windows-signed.txt`.
+They do not replace the unsigned ones, on purpose: the cosign-signed manifest is
+what the Python and Node clients trust, and its certificate identity is this
+project's CircleCI pipeline. A GitHub Actions job cannot re-sign that manifest
+under the CircleCI identity, and overwriting `sysml-windows-amd64.zip` with a
+signed zip would leave `SHA256SUMS.txt` describing bytes that are no longer on
+the release. The `-signed` names keep every line of the manifest true and every
+existing download link and client pin working. `SHA256SUMS-windows-signed.txt`
+is a convenience for humans; the verifiable statement about a signed file is its
+Authenticode signature (`Get-AuthenticodeSignature` in PowerShell, or
+`osslsigncode verify`), and `opensysml` keeps downloading the unsigned
+`sysml-grpc-windows-amd64.exe` it can verify against the manifest.
+
+**Applying.** A maintainer applies once at <https://signpath.org/apply>
+with the repository URL `https://github.com/Open-MBEE/OpenSysML`. The
+conditions at <https://signpath.org/terms> ask for what the README's policy
+section provides: an OSI-approved license (Apache-2.0), the sentence naming
+SignPath.io and SignPath Foundation, the Authors / Reviewers / Approvers roles
+with links to the GitHub teams that hold them, the privacy statement, and MFA
+for everyone in those roles. Before applying, make sure the three teams the
+README links to actually exist in the Open-MBEE organization (or edit the
+README to the teams that do) and that every member has MFA enabled on GitHub.
+
+**Configuring, once approved.** SignPath creates an organization for the
+project; in it, create a project for this repository with an *artifact
+configuration* describing a zip of `.exe` files to be Authenticode-signed (the
+workflow uploads the three executables as one artifact, and the metadata
+restriction should require `ProductName` `OpenSysML`), a *release* signing
+policy with manual approval, and a trusted build system link to GitHub Actions
+for `Open-MBEE/OpenSysML` following
+<https://docs.signpath.io/trusted-build-systems/github>. Then, in the GitHub
+repository settings:
+
+| Where | Name | Value |
+|---|---|---|
+| Secret | `SIGNPATH_API_TOKEN` | the API token of the SignPath CI user for the project |
+| Variable | `SIGNPATH_ORGANIZATION_ID` | the SignPath organization ID (a GUID) |
+| Variable | `SIGNPATH_PROJECT_SLUG` | the project slug, e.g. `OpenSysML` |
+| Variable | `SIGNPATH_SIGNING_POLICY_SLUG` | the release policy slug, e.g. `release-signing` |
+
+With any of the four missing the workflow builds the binaries, checks their
+`VERSIONINFO` against the tag, keeps them as a workflow artifact, and stops:
+nothing is submitted and nothing is uploaded to the release. Try it before the
+first real tag with **Run workflow** (`workflow_dispatch`), which stamps the
+`version` input instead of a tag and never publishes; tick `submit` to also
+exercise the SignPath round trip, which creates a real signing request an
+Approver has to approve or deny.
+
+**Every release needs an approval.** On a `v*` tag the workflow first waits
+(up to 90 minutes) for `publish-github-release` to put `SHA256SUMS.txt.bundle`
+on the release and checks that the tag still resolves to the commit it built —
+CircleCI publishes only after the suite and `build-release` passed on the tag,
+so a tag CircleCI rejected is never signed. It then submits the artifact and
+waits (up to about four hours) for the request to complete.
+An Approver — a member of the Approvers team listed in the README, with MFA on
+their SignPath account — opens the request in SignPath, checks that it points at
+the expected commit and workflow run, and approves it. The job then downloads
+the signed executables, checks their `VERSIONINFO` still carries the tag,
+packages the `-signed` assets and uploads them to the release with
+`softprops/action-gh-release`, overwriting only assets of those names. If the
+request is denied or the wait times out, the job fails and the release simply
+has no signed Windows assets; re-run the job after the request is approved, or
+leave it unsigned and say so in the notes. SignPath also revokes signing for
+projects whose Authors, Reviewers or Approvers do not keep MFA enabled, so keep
+the team membership current.
+
+**VERSIONINFO.** SignPath enforces the metadata a signed file carries.
+`packaging/windows/<cmd>.winres.json` holds the static fields (`ProductName`
+`OpenSysML`, `CompanyName`, `FileDescription`, `LegalCopyright`,
+`OriginalFilename`), and the Makefile's `build-sysml`, `build-lsp` and
+`build-grpc` targets run `go-winres` (pinned by `GO_WINRES_VERSION`, a build
+tool that ends up nowhere in the product) for `GOOS=windows` only, writing
+`cmd/<cmd>/rsrc_windows_<arch>.syso` with `ProductVersion` and `FileVersion`
+set to the same `VERSION` the `-ldflags` carry. The `.syso` files are ignored
+by Git and by every non-Windows build. `make windows-versioninfo-check
+EXE=dist/sysml-windows-amd64.exe VERSION=v0.5.0` extracts the resource from a
+built binary and fails unless all of that is true; the workflow runs it on the
+unsigned and again on the signed executables.
 
 ### Pinned release digests
 

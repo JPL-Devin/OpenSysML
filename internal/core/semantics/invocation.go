@@ -55,6 +55,14 @@ func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs
 	if m == nil || e == nil {
 		return &InvocationSelection{}
 	}
+	if m.typingArgs[e] {
+		// Typing an argument of e led back to e: select on arity alone, unmemoized,
+		// so the typed selection is not answered from this provisional one.
+		if e.Type == nil {
+			return &InvocationSelection{}
+		}
+		return m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), untypedArguments(e), performs)
+	}
 	return m.SelectInvocation(scope, e, m.callArguments(scope, e), performs)
 }
 
@@ -70,10 +78,12 @@ func (m *Model) SelectCallAmong(scope *symbols.Scope, e *ast.InvocationExpr, nam
 // callArguments types e's arguments as the checker does when its typing is
 // installed, else lists them untyped.
 func (m *Model) callArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument {
-	if m.arguments != nil {
-		return m.arguments.InvocationArguments(scope, e)
+	if m.arguments == nil || m.typingArgs[e] {
+		return untypedArguments(e)
 	}
-	return untypedArguments(e)
+	m.typingArgs[e] = true
+	defer delete(m.typingArgs, e)
+	return m.arguments.InvocationArguments(scope, e)
 }
 
 // untypedArguments lists e's arguments, the receiver first, with nothing known of their types.

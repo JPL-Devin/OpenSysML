@@ -1,14 +1,9 @@
 # Tier gating per element (roadmap L2)
 
-> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
-> development round of this project — chronological, with no meaning outside this repository — and
-> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
-> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
->
-> **Oracle figures in this record are as measured at the round it documents;
+> This is an engineering record. **Oracle figures in it are as measured when the mechanism landed;
 > they are not the current baseline.** The current baseline is the generated block in
-> [README](../../README.md) and [architecture](../internals/architecture.md),
-> regenerated and gated by `make docs-counts`.
+> [README](../../README.md) and [architecture](../internals/architecture.md), regenerated and gated
+> by `make docs-counts`.
 
 Roadmap item **L2** recorded that `Registry.Run` skipped *every* pass at a strictly higher level
 once any pass emitted a blocking error, for the whole document, while the reference (EMF/Xtext)
@@ -23,8 +18,8 @@ The gate is now two gates, and a pass says in code which one applies to it.
 - **Document-scoped (unchanged default).** A pass with no marker is still skipped once a strictly
   lower level reported a blocking diagnostic. Passes whose subject is the file — imports, notation,
   syntax — legitimately stay here: there is no element to ask about.
-- **Element-scoped (opt-in).** `passes.ElementScoped` is the generalization of wave 11D's
-  `SelfGated` marker, which that wave shipped for exactly one pass. An `ElementScoped` pass runs
+- **Element-scoped (opt-in).** `passes.ElementScoped` generalizes an earlier marker that exempted
+  exactly one pass, the metadata-metaclass rule. An `ElementScoped` pass runs
   even when a lower tier failed, and must gate itself per subject by asking
   `Context.DownstreamOfFailure(ref)` about the reference its subject's meaning rests on.
 
@@ -42,7 +37,7 @@ Two passes opt in, and each names its subject:
 
 | Pass | Subject | Reference it rests on |
 |---|---|---|
-| `MetadataTypePass` (`w8c_metadata_type.go`) | one annotation | the metaclass the annotation names (this is 11D's rule, now expressed through the general mechanism) |
+| `MetadataTypePass` (`w8c_metadata_type.go`) | one annotation | the metaclass the annotation names |
 | `ElementFilterPass` (`filter.go`) | one filter condition | the type named by a classification operator (`@`, `@@`, `istype`, `hastype`) **and** every operand of any operator whose result is Boolean regardless — the classification set, `not`/`and`/`or`/`xor`/`implies`, and the comparisons `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=` |
 
 `ElementFilterPass` gates only the checks that need something unresolved to have resolved. An
@@ -69,12 +64,12 @@ rule at that line too.
 
 ## Measurements (fresh cache, pinned pilot `2026-05` / `0.60.1`)
 
-Re-measured after merging `main` at `b21a30eb` (wave 12B's annotation-body LSP work, PR #499): every
+Re-measured after merging `main` at `b21a30eb` (the annotation-body LSP work, PR #499): every
 figure below is from a fresh-cache run of that merged tree, with the base column re-run on
 `b21a30eb` itself. #499 moves none of the three oracles, so the controls are the same as those first
 measured on `0d4eb14f`.
 
-| Oracle | Base `b21a30eb` | Wave 12A |
+| Oracle | Base `b21a30eb` | With per-element gating |
 |---|---|---|
 | Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / 54 disagree | **identical** |
 | Differential | 353 files, 317 fully agreeing; 25 agreed, 119 only ours, 73 only the pilot's | 353 files, 317 fully agreeing; **32 agreed**, **119 only ours**, **66 only the pilot's** |
@@ -120,13 +115,13 @@ behind the gate. The table records their current disposition after Step 3.
 | Row | Declared | Ours | Category | Owner |
 |---|---|---|---|---|
 | `AssignmentActionUsage_invalid.sysml.xt:44` | `Referent must be time varying.` | word-for-word agreement | closed in Step 3 | element-scoped constraint validation derives the referent's `mayTimeVary` property |
-| `AssociationTest_CrossFeatures_invalid.kerml.xt:52` | `Must be the cross feature` | nothing at the line; our cross-feature rules fire at line 42 in the same file | unimplemented obligation | wave 11E row E2, parser — the nested `end x1 [0..1] feature x : C1 crosses y.b` form. The file's own constraint-tier diagnostics are reported, so nothing in it was ever gated |
+| `AssociationTest_CrossFeatures_invalid.kerml.xt:52` | `Must be the cross feature` | nothing at the line; our cross-feature rules fire at line 42 in the same file | unimplemented obligation (since closed) | the parser — the nested `end x1 [0..1] feature x : C1 crosses y.b` form. The file's own constraint-tier diagnostics are reported, so nothing in it was ever gated |
 | `InterfaceUsage_Invalid.sysml.xt:49` | `Cannot have more than two ends` (declared *beside* `An interface definition end must be a port.`, which we do report) | only the port rule | pilot limitation | the normative library types `Interfaces::Interface`'s participants `[2..*]`; two ends is a property of `BinaryInterface`. SysML v2 §7.14.1 permits a general interface to have three or more ends |
 | `InterfaceUsage_Invalid.sysml.xt:78` | `Duplicate of inherited member name 'self' from Part, Port` (warning) | word-for-word agreement | closed in Step 3 | exactly two-ended interfaces receive `Interfaces::BinaryInterface`; positional end redefinition then supplies the inherited port end |
-| `Must have a concrete type` family (11D) | — | — | not present | the string appears in neither oracle report at this pin, so there is no row to close |
+| `Must have a concrete type` family | — | — | not present | the string appears in neither oracle report at this pin, so there is no row to close |
 
 The gate is not on any row's path, measured rather than argued. Later closure or adjudication does
-not change that wave 12A finding.
+not change that finding.
 
 One pre-existing defect surfaced while checking the concrete-type family and is **not** caused by
 this change — it reproduces identically on the base commit. Our `Must have a concrete type` is
