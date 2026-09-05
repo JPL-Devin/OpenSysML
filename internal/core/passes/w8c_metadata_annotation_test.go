@@ -270,6 +270,25 @@ func TestMetadataAnnotatedElementIsReadByIdentityNotByName(t *testing.T) {
 	}
 }
 
+// A model declaring the library feature's qualified name does not hide the
+// library feature: the restriction is still read from the bundled declaration.
+func TestMetadataAnnotatedElementSurvivesAShadowingDeclaration(t *testing.T) {
+	kerml := `package P {
+	metaclass M { :>> annotatedElement : KerML::Class; }
+	class C { feature f; }
+	@M about C, C::f;
+}
+package Metaobjects { metaclass Metaobject { feature annotatedElement; } }`
+	var got []string
+	for _, f := range findingsWithCode(metadataDiags(t, kerml), "metadata-annotated-element") {
+		got = append(got, strings.TrimSpace(f.Text)+" => "+f.Msg)
+	}
+	want := []string{"@M about C, C::f; => Cannot annotate Feature"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 // The SysML spelling reads the same feature, redefined to a SysML metaclass.
 func TestMetadataAnnotatedElementInSysML(t *testing.T) {
 	src := `package P {

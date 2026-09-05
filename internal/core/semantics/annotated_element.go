@@ -139,13 +139,13 @@ func (m *Model) annotatedElementFeatures(def *symbols.Symbol) []*symbols.Symbol 
 	return all
 }
 
-// specializesAnnotatedElement reports whether a feature is Metaobject's
+// specializesAnnotatedElement reports whether a feature is the library's Metaobject
 // annotatedElement or specializes it, by redefinition or subsetting at any distance.
 func (m *Model) specializesAnnotatedElement(feature *symbols.Symbol) bool {
 	if feature == nil || !feature.IsFeature() {
 		return false
 	}
-	root := m.symbolByFQN(annotatedElementFQN)
+	root := m.libSymbol(annotatedElementFQN)
 	if root == nil {
 		return false
 	}
