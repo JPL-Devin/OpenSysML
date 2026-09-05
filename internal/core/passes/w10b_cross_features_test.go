@@ -1,6 +1,9 @@
 package passes
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const w10bCrossSrc = `package AssociationTest {
 	class C1 { feature a : C2; }
@@ -90,4 +93,331 @@ func TestW10BCrossFeaturesMalformedInput(t *testing.T) {
 			t.Fatalf("%s fired on malformed input: %v", code, diags)
 		}
 	}
+}
+
+var w10bCrossCodes = []string{
+	codeCrossSubsettingOwner, codeCrossSubsettingAtMostOne, codeCrossSubsettingChain,
+	codeCrossFeatureType, codeCrossFeatureSpecialization,
+}
+
+// expectCrossDiag asserts exactly one diagnostic with code, its message, and
+// the source text it points at.
+func expectCrossDiag(t *testing.T, src string, diags []Diagnostic, code, msg, text string) {
+	t.Helper()
+	got := only(diags, code)
+	if len(got) != 1 {
+		t.Fatalf("%s: got %d diagnostics, want 1: %v", code, len(got), got)
+	}
+	if got[0].Message != msg {
+		t.Errorf("%s: message = %q, want %q", code, got[0].Message, msg)
+	}
+	if got[0].Severity != SeverityError {
+		t.Errorf("%s: severity = %v, want an error", code, got[0].Severity)
+	}
+	if spanned := strings.TrimSpace(spanText(src, got[0])); spanned != text {
+		t.Errorf("%s: span text = %q, want %q", code, spanned, text)
+	}
+}
+
+// expectNoCrossDiags asserts that none of the crossing rules fired.
+func expectNoCrossDiags(t *testing.T, diags []Diagnostic) {
+	t.Helper()
+	for _, code := range w10bCrossCodes {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on a well-formed model: %v", code, got)
+		}
+	}
+}
+
+// A cross subsetting must be owned by an end feature: a plain feature of a
+// class has none to cross from (KerML validateCrossSubsettingCrossingFeature).
+func TestW10BCrossSubsettingFromNonEnd(t *testing.T) {
+	const src = `package P {
+		class A {
+			feature p : A;
+			feature q : A crosses p.q;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingOwner, msgCrossSubsettingOwner, "p.q")
+	for _, code := range []string{codeCrossSubsettingChain, codeCrossFeatureType, codeCrossFeatureSpecialization} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on a non-end feature, whose chain is not adjudicated: %v", code, got)
+		}
+	}
+}
+
+// An end of an association with a single end has no opposite end to cross.
+func TestW10BCrossSubsettingSingleEnd(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; }
+		assoc OneEnd { end a : A crosses a.x; }
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingOwner, msgCrossSubsettingOwner, "a.x")
+}
+
+// A crossed feature must be a chain of two features; naming the opposite end
+// itself, or chaining three features, is not one
+// (KerML validateCrossSubsettingCrossedFeature).
+func TestW10BCrossSubsettingNotAChain(t *testing.T) {
+	for _, tc := range []struct{ name, target string }{
+		{"opposite end itself", "a"},
+		{"three features", "a.x.y"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `package P {
+				class A { feature x : A; feature y : A; }
+				assoc S {
+					end a : A;
+					end b : A crosses ` + tc.target + `;
+				}
+			}`
+			diags := constraintDiagsKerML(t, src)
+			expectCrossDiag(t, src, diags, codeCrossSubsettingChain, msgCrossSubsettingChain, tc.target)
+			if got := only(diags, codeCrossSubsettingOwner); len(got) != 0 {
+				t.Errorf("owner rule fired on an end of a two-ended association: %v", got)
+			}
+		})
+	}
+}
+
+// With more than two ends the chain may start at any other end.
+func TestW10BCrossSubsettingThreeEndsClean(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; }
+		assoc Three {
+			end a : A;
+			end b : A;
+			end c : A crosses a.x;
+		}
+	}`
+	expectNoCrossDiags(t, constraintDiagsKerML(t, src))
+}
+
+// A feature owns at most one cross subsetting; each one after the first is
+// reported (KerML validateFeatureOwnedCrossSubsetting).
+func TestW10BCrossSubsettingAtMostOne(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; feature y : A; }
+		assoc S {
+			end a : A;
+			end b : A crosses a.x crosses a.y;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingAtMostOne, msgCrossSubsettingAtMostOne, "a.y")
+	for _, code := range []string{codeCrossSubsettingOwner, codeCrossSubsettingChain, codeCrossFeatureType} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on the well-formed first crossing: %v", code, got)
+		}
+	}
+}
+
+// Every cross subsetting is checked for its owner and chain shape, not only
+// the first; the type rule reads Feature::crossFeature, which the first defines.
+func TestW10BCrossSubsettingLaterClauseChain(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; feature y : A; }
+		assoc S {
+			end a : A;
+			end b : A crosses a.x crosses b.y;
+		}
+		class C {
+			feature p : A;
+			feature q : A crosses p.x crosses p.y;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingChain, msgCrossSubsettingChain, "b.y")
+	if got := only(diags, codeCrossSubsettingAtMostOne); len(got) != 2 {
+		t.Errorf("at-most-one: got %d diagnostics, want one per excess clause: %v", len(got), got)
+	}
+	if got := only(diags, codeCrossSubsettingOwner); len(got) != 2 {
+		t.Errorf("owner: got %d diagnostics, want one per clause of the non-end: %v", len(got), got)
+	}
+	for _, code := range []string{codeCrossFeatureType, codeCrossFeatureSpecialization} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired although the first crossing is well-formed: %v", code, got)
+		}
+	}
+}
+
+// An end that redefines an end of a general association, by name or by
+// position, must cross a feature specializing the redefined end's cross
+// feature (KerML validateFeatureCrossFeatureSpecialization).
+func TestW10BCrossFeatureSpecializationRedefinedEnds(t *testing.T) {
+	for _, tc := range []struct{ name, ends string }{
+		{"explicit redefinition", "end a2 : A redefines a; end b2 : A redefines b crosses a2.y;"},
+		{"positional redefinition", "end a2 : A; end b2 : A crosses a2.y;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `package P {
+				class A { feature x : A; feature y : A; }
+				assoc S { end a : A; end b : A crosses a.x; }
+				assoc T specializes S { ` + tc.ends + ` }
+			}`
+			diags := constraintDiagsKerML(t, src)
+			expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "a2.y")
+			if got := only(diags, codeCrossSubsettingChain); len(got) != 0 {
+				t.Errorf("chain rule fired on a chain through the opposite end: %v", got)
+			}
+		})
+	}
+}
+
+// A redefining end whose cross feature subsets the inherited one, or crosses
+// the same feature, is well-formed.
+func TestW10BCrossFeatureSpecializationClean(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; feature y : A subsets x; }
+		assoc S { end a : A; end b : A crosses a.x; }
+		assoc T specializes S { end a2 : A redefines a; end b2 : A redefines b crosses a2.y; }
+		assoc U specializes S { end a2 : A; end b2 : A crosses a2.x; }
+	}`
+	expectNoCrossDiags(t, constraintDiagsKerML(t, src))
+}
+
+// A cross feature declared in an end's body implicitly subsets the cross
+// feature of each end its owner redefines, so crossing it is well-formed.
+func TestW10BCrossFeatureSpecializationOwnedCrossFeatureClean(t *testing.T) {
+	const src = `package P {
+		class A; class B; class C;
+		assoc S {
+			end a : A crosses a::via.ax { member feature ax : A; member feature via : A { public import ax; } }
+			end b : B;
+			end c : C;
+		}
+		assoc T specializes S {
+			end a2 : A redefines a crosses a2::via.ax2 { member feature ax2 : A; member feature via : A { public import ax2; } }
+			end b2 : B redefines b;
+			end c2 : C redefines c;
+		}
+		assoc U specializes T {
+			end a3 : A crosses a3::via.ax3 { member feature ax3 : A; member feature via : A { public import ax3; } }
+			end b3 : B;
+			end c3 : C;
+		}
+		assoc V specializes S {
+			end a4 : A redefines a crosses a4::via.other { member feature ax4 : A; feature other : A; member feature via : A { public import other; } }
+			end b4 : B redefines b;
+			end c4 : C redefines c;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "a4::via.other")
+	for _, code := range []string{codeCrossSubsettingOwner, codeCrossSubsettingAtMostOne, codeCrossSubsettingChain, codeCrossFeatureType} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on well-formed ends: %v", code, got)
+		}
+	}
+}
+
+// A cross feature an end declares inline ahead of itself (`end x1 [0..1]
+// feature x`) is the cross feature a redefining end must specialize; one the
+// redefining end declares inline itself implicitly does.
+func TestW10BCrossFeatureSpecializationInlineCrossFeature(t *testing.T) {
+	const src = `package P {
+		class C1;
+		class C2 { feature g : C1; }
+		assoc A {
+			end x1 [0..1] feature x : C1;
+			end feature y : C2;
+		}
+		assoc B specializes A {
+			end feature x2 : C1 redefines x crosses y2.g;
+			end feature y2 : C2 redefines y;
+		}
+		assoc B2 specializes A {
+			end x3 [0..1] feature x2 : C1 redefines x;
+			end feature y2 : C2 redefines y;
+		}
+		assoc B3 specializes A {
+			end feature x2 : C1 redefines x { member feature x4 : C1; }
+			end feature y2 : C2 redefines y;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "y2.g")
+	if got := only(diags, codeCrossFeatureSpecialization); len(got) != 1 {
+		t.Errorf("expected the one crossing of an unrelated feature, got %v", got)
+	}
+	for _, code := range []string{codeCrossSubsettingOwner, codeCrossSubsettingAtMostOne, codeCrossSubsettingChain, codeCrossFeatureType} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on well-formed ends: %v", code, got)
+		}
+	}
+}
+
+// The inline cross feature spelling is shared with SysML connection ends.
+func TestW10BCrossFeatureSpecializationInlineCrossFeatureSysML(t *testing.T) {
+	const src = `package P {
+		part def Person { part friends : Person[*]; }
+		part def Pet { part owners : Person[*]; }
+		connection def Owns {
+			end owners [0..*] part owner : Person;
+			end ref pet : Pet;
+		}
+		connection def Sub :> Owns {
+			end ref owner2 : Person redefines owner crosses pet2.owners;
+			end ref pet2 : Pet redefines pet;
+		}
+		connection def Sub2 :> Owns {
+			end owners2 [0..*] part owner2 : Person redefines owner;
+			end ref pet2 : Pet redefines pet;
+		}
+	}`
+	diags := constraintDiags(t, src)
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "pet2.owners")
+	if got := only(diags, codeCrossFeatureSpecialization); len(got) != 1 {
+		t.Errorf("expected the one crossing of an unrelated feature, got %v", got)
+	}
+}
+
+// The constraints are KerML-owned but reachable from SysML connection
+// definitions and part usages.
+func TestW10BCrossSubsettingSysML(t *testing.T) {
+	const src = `package P {
+		part def Person { part pets : Pet[*]; part friends : Person[*]; }
+		part def Pet { part owners : Person[*]; }
+		connection def Owns {
+			end owner : Person crosses pet.owners;
+			end pet : Pet crosses owner.pets;
+		}
+		connection def NotAChain {
+			end owner : Person crosses pet;
+			end pet : Pet crosses owner.pets crosses owner.friends;
+		}
+		part def Holder {
+			part p : Person;
+			part q : Person crosses p.friends;
+		}
+		connection def Sub :> Owns {
+			end owner2 : Person redefines owner crosses pet2.owners;
+			end pet2 : Pet redefines pet crosses owner2.friends;
+		}
+	}`
+	diags := constraintDiags(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingChain, msgCrossSubsettingChain, "pet")
+	expectCrossDiag(t, src, diags, codeCrossSubsettingAtMostOne, msgCrossSubsettingAtMostOne, "owner.friends")
+	expectCrossDiag(t, src, diags, codeCrossSubsettingOwner, msgCrossSubsettingOwner, "p.friends")
+	expectCrossDiag(t, src, diags, codeCrossFeatureType, msgCrossFeatureType, "owner2.friends")
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "owner2.friends")
+}
+
+// A connection definition may redefine one inherited end and cross through the
+// other, which it inherits; the inherited end counts toward the two required.
+func TestW10BCrossSubsettingSysMLInheritedEndClean(t *testing.T) {
+	const src = `package P {
+		part def Person { part pets : Pet[*]; }
+		part def Pet { part owners : Person[*]; }
+		connection def Owns {
+			end owner : Person crosses pet.owners;
+			end pet : Pet crosses owner.pets;
+		}
+		connection def Sub :> Owns {
+			end owner2 : Person redefines owner crosses pet.owners;
+		}
+	}`
+	expectNoCrossDiags(t, constraintDiags(t, src))
 }
