@@ -10,12 +10,12 @@ Read the chapters in order the first time through; each one builds on the ones b
 6. [Behavior: actions and state machines](06-behavior.md) — running and debugging behavior
 7. [Saving, and converting to RDF](07-saving-and-rdf.md) — `%save`, `-convert`, round trips
 8. [Editors](08-editors.md) — `sysml-lsp` and the VS Code extension
-9. [From your own program](09-python.md) — the Go, Python, Node, Java and Rust clients
+9. [From your own program](09-clients.md) — the Go, Python, Node, Java and Rust clients
 10. [Troubleshooting](10-troubleshooting.md) — diagnosing a run that stops early
 
-Chapter 9 has a section for each client: Go, Python, Node/TypeScript, Java and Rust. The Python
-section is the longest because that client is the oldest and most complete, not because it is the
-preferred one. [Client libraries](../reference/clients.md) explains which to choose and what each covers.
+Chapter 9 does one task in all five clients side by side — Go, Python, Node/TypeScript, Java and
+Rust, in tabs — and then has a section per client for what only that one has.
+[Client libraries](../reference/clients.md) explains which to choose and what each covers.
 
 If you want to look up a specific detail rather than read through, the [reference](../reference/)
 covers the CLI flags, the REPL commands, the environment variables, the service API, the client

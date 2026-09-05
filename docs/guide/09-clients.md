@@ -21,8 +21,187 @@ exposes. Only Python and Go are published so far.
 [Client libraries](../reference/clients.md) lays out what each covers and how to choose;
 [the troubleshooting chapter](10-troubleshooting.md) covers runs that stop short.
 
-Python has the longest section below because it is the oldest and most complete client, not because
-it is the intended one.
+## The same task, five ways
+
+One model, one task, in each language: parse a file, evaluate an attribute against an object, look
+up a definition, instantiate it. Pick your language in the tabs; the sections after them go into
+what only that client has.
+
+```sysml
+// vehicle.sysml
+package Demo {
+  part def Vehicle {
+    attribute mass = 1500.0;
+  }
+  part sedan : Vehicle {
+    attribute :>> mass = 1800.0;
+  }
+}
+```
+
+### Install it
+
+=== "Go"
+
+    ```sh
+    go get github.com/Open-MBEE/OpenSysML@latest
+    ```
+
+    Nothing else: the engine and the SysML standard library are in the module.
+
+=== "Python"
+
+    ```bash
+    pip install opensysml
+    export OPENSYSML_GRPC_VERSION=latest   # or install sysml-grpc yourself
+    ```
+
+=== "Node"
+
+    ```bash
+    npm install @opensysml/client          # once the first release is published
+    export OPENSYSML_GRPC_VERSION=latest
+    ```
+
+=== "Java"
+
+    ```xml
+    <dependency>
+      <groupId>org.openmbee</groupId>
+      <artifactId>opensysml-client</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    ```
+
+    Not published yet: `make build && mvn -f clients/java/pom.xml install` from a checkout.
+
+=== "Rust"
+
+    ```toml
+    [dependencies]
+    opensysml = { git = "https://github.com/Open-MBEE/OpenSysML.git", branch = "main" }
+    ```
+
+    Not published yet, so take it from git or a path. Rust 1.83 or later.
+
+The four service clients each need a `sysml-grpc` binary to start, and all of them look for it in
+the same places, `$OPENSYSML_BINARY` first ([Getting the service binary](#getting-the-service-binary)).
+The Go API needs none: it is the engine.
+
+### Parse, evaluate, look up, instantiate
+
+=== "Go"
+
+    ```go
+    client, err := opensysml.New()
+    if err != nil { log.Fatal(err) }
+    defer client.Close()
+
+    model, err := client.ParseFile(ctx, "vehicle.sysml")
+    mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
+    vehicle, err := client.LookupSymbol(ctx, model, "Demo::Vehicle")
+    built, err := client.Instantiate(ctx, model, "Demo::Vehicle")
+
+    fmt.Println(mass)                       // 1800
+    fmt.Println(vehicle.Kind, vehicle.ID)   // partDef Demo::Vehicle
+    fmt.Println(built.Root.TypeSymbolID)    // Demo::Vehicle
+    ```
+
+=== "Python"
+
+    ```python
+    import opensysml
+
+    model = opensysml.load("vehicle.sysml")
+
+    print(model.eval("mass", subject="Demo::sedan"))    # 1800.0
+    vehicle = model.get("Demo::Vehicle")
+    print(vehicle.kind, vehicle.id)                     # partDef Demo::Vehicle
+    built = model.instantiate("Demo::Vehicle")
+    print(built.type_symbol_id, built.mass)             # Demo::Vehicle 1500.0
+    ```
+
+=== "Node"
+
+    ```ts
+    import { load } from "@opensysml/client";
+
+    await using model = await load("vehicle.sysml");
+
+    await model.eval("mass", { subject: "Demo::sedan" });  // { kind: "real", value: 1800 }
+    const vehicle = await model.symbol("Demo::Vehicle");
+    vehicle.kind; vehicle.id;                              // partDef, Demo::Vehicle
+    const built = await model.instantiate("Demo::Vehicle");
+    built.root.typeId;                                     // Demo::Vehicle
+    built.get("mass");                                     // { kind: "single", value: … }
+    ```
+
+=== "Java"
+
+    ```java
+    try (Connection connection = Connection.open()) {
+      Model model = connection.load(Path.of("vehicle.sysml"));
+
+      Value mass = model.evalWithSubject("mass", "Demo::sedan");  // RealValue[value=1800.0]
+      Symbol vehicle = model.symbol("Demo::Vehicle");             // partDef, Demo::Vehicle
+      Instantiation built = model.instantiate("Demo::Vehicle");
+
+      System.out.println(built.root().typeSymbolId());            // Demo::Vehicle
+    }
+    ```
+
+=== "Rust"
+
+    ```rust
+    use opensysml::{load, EvalOptions};
+
+    let model = load("vehicle.sysml")?;
+
+    let subject = EvalOptions { subject: Some("Demo::sedan".into()), ..Default::default() };
+    let mass = model.evaluate("mass", &subject)?;   // Real(1800.0)
+    let vehicle = model.symbol("Demo::Vehicle")?;   // partDef, Demo::Vehicle
+    let built = model.instantiate("Demo::Vehicle")?;
+
+    println!("{}", built.instance.type_symbol_id());  // Demo::Vehicle
+    ```
+
+Names differ, answers do not: one engine parses the file and one runtime computes `mass`, so
+`1800.0` is the same number arrived at the same way whichever tab you read. Broken source is not a
+failed call in any of them — it parses, and the errors arrive as the model's diagnostics.
+
+### When a call goes wrong
+
+Each client keeps two failures apart, because the service does: a call that was **refused** (no such
+symbol, a capability missing, a service that would not start) and a call that **succeeded** with an
+answer reporting a model failure (an expression that will not evaluate). A false verdict from a
+constraint is neither — it is an answer about the model.
+
+=== "Go"
+
+    `*StatusError` for the first (`errors.Is(err, opensysml.CodeNotFound)`), `*FailureError` for the
+    second (`errors.Is(err, opensysml.ErrFailure)`).
+
+=== "Python"
+
+    `ServiceError` for the first, with a subclass per status a caller acts on
+    (`ModelNotFoundError`, `ServiceTimeoutError`, …); `ExecutionError`, `SymbolNotFoundError` and
+    `ModelError` for the second. Everything descends from `OpenSysMLError`, and each also inherits
+    the built-in it stands in for, so `except KeyError` catches a missing symbol.
+
+=== "Node"
+
+    `ServiceError` for the first, carrying the Connect `code`; `EvaluationError` and
+    `SymbolNotFoundError` for the second. Both are `instanceof OpenSysMLError`.
+
+=== "Java"
+
+    `ServiceException` for the first, `ModelException` for the second, both unchecked and both
+    `OpenSysMLException`. `TransportException`, `CapabilityException` and `ServiceStartException`
+    name the specific refusals.
+
+=== "Rust"
+
+    One `Error` enum: `Error::Service` for the first, `Error::Model` for the second.
 
 ## From Go
 
