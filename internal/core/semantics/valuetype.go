@@ -230,7 +230,7 @@ func (m *Model) indexResultType(scope *symbols.Scope, n *ast.IndexExpr) *symbols
 }
 
 // featureResultType is a feature's declared type, else that of the value typing
-// it (KerML checkFeatureValuationSpecialization); a self-referential value types nothing.
+// it (KerML checkFeatureValuationSpecialization), else what it redefines or subsets has.
 func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
 	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = alias
@@ -238,16 +238,40 @@ func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
 	if !sym.IsFeature() {
 		return nil
 	}
-	if typ := m.nearestDeclaredType(sym); typ != nil {
-		return typ
-	}
-	value := m.typingValue(sym)
-	if value == nil || m.valuing[sym] {
+	return m.inheritedResultType(sym, map[*symbols.Symbol]bool{})
+}
+
+func (m *Model) inheritedResultType(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) *symbols.Symbol {
+	if seen[sym] {
 		return nil
 	}
-	m.valuing[sym] = true
-	defer delete(m.valuing, sym)
-	return m.ExprResultType(sym.OwnerScope, value)
+	seen[sym] = true
+	var features []*symbols.Symbol
+	base := m.implicitBase(sym)
+	for _, super := range m.DirectSupertypes(sym) {
+		if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
+			super = alias
+		}
+		switch {
+		case super == base:
+		case super.Kind.IsDefinition():
+			return super
+		case super.IsFeature():
+			features = append(features, super)
+		}
+	}
+	// A self-referential value types nothing.
+	if value := m.typingValue(sym); value != nil && !m.valuing[sym] {
+		m.valuing[sym] = true
+		defer delete(m.valuing, sym)
+		return m.ExprResultType(sym.OwnerScope, value)
+	}
+	for _, f := range features {
+		if typ := m.inheritedResultType(f, seen); typ != nil {
+			return typ
+		}
+	}
+	return nil
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as
