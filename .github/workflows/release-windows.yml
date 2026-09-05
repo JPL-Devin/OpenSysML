@@ -176,10 +176,9 @@ jobs:
             echo "Waiting for CircleCI to publish release $TAG..."
             sleep 60
           done
-          published=$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)
-          resolved=$(gh api "repos/$GH_REPO/commits/$published" --jq .sha)
+          resolved=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
           if [ "$resolved" != "$COMMIT" ]; then
-            echo "Error: release $TAG points at $resolved, this workflow built $COMMIT; not signing."
+            echo "Error: tag $TAG resolves to $resolved, this workflow built $COMMIT; not signing."
             exit 1
           fi
 

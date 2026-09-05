@@ -311,7 +311,7 @@ Approver has to approve or deny.
 
 **Every release needs an approval.** On a `v*` tag the workflow first waits
 (up to 90 minutes) for `publish-github-release` to put `SHA256SUMS.txt.bundle`
-on the release and checks that the release points at the commit it built —
+on the release and checks that the tag still resolves to the commit it built —
 CircleCI publishes only after the suite and `build-release` passed on the tag,
 so a tag CircleCI rejected is never signed. It then submits the artifact and
 waits (up to about four hours) for the request to complete.
