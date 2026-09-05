@@ -11,7 +11,7 @@ const importKeyword = "import"
 // ImportVisibilityPass reports an `import` written without the visibility
 // indicator ImportPrefix makes mandatory (KerML.xtext:169-172, SysML.xtext:241-244).
 // The reference rejects the bare form, so it is an error in every mode (D2,
-// docs/project/wave10-decisions.md); the form still parses and reads, so the
+// docs/project/adjudications.md); the form still parses and reads, so the
 // finding is notation and gates no higher tier.
 type ImportVisibilityPass struct{}
 

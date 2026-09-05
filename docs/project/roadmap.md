@@ -226,7 +226,7 @@ baseline `%instantiate L::b; %eval in b : isSolid` answers `true` and `voids` `[
 the mirror gap and is not in that PR: its translatable subset does not take library-declared
 conditions, and `solve`'s
 differential harness still indexes the standard library as ordinary documents (`parseLibraries`)
-to reach them. [wave12c-lossless-library-records.md](wave12c-lossless-library-records.md) records
+to reach them. [lossless-library-records.md](lossless-library-records.md) records
 what was measured.
 
 ## L4 — every Kernel Function Library declaration dispatches by name
