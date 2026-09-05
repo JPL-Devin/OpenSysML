@@ -792,6 +792,39 @@ func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
 	}
 }
 
+// A TargetTransitionUsage names no source: it may open with its guard alone, or
+// with the `transition` keyword followed straight by its clauses (SysML.xtext
+// `TargetTransitionUsage`).
+func TestParseStateBody_SourcelessTransitionForms(t *testing.T) {
+	nodes := parseStateBodyTest(t, `{
+		if ready then Stopped;
+		if ready do action finalize then Stopped;
+		transition if ready then Stopped;
+		transition then Stopped;
+		transition accept go if ready do action finalize then Stopped;
+	}`)
+	if len(nodes) != 5 {
+		t.Fatalf("expected 5 nodes, got %d", len(nodes))
+	}
+	for i, tc := range []struct{ trigger, guard, effect bool }{
+		{false, true, false}, {false, true, true}, {false, true, false}, {false, false, false}, {true, true, true},
+	} {
+		trans, ok := nodes[i].(*ast.TransitionMember)
+		if !ok {
+			t.Fatalf("node %d: expected *ast.TransitionMember, got %T", i, nodes[i])
+		}
+		if trans.Source != nil {
+			t.Errorf("node %d: expected no source, got %+v", i, trans.Source.Parts)
+		}
+		if (trans.Trigger != nil) != tc.trigger || (trans.Guard != nil) != tc.guard || (len(trans.Effect) == 1) != tc.effect {
+			t.Errorf("node %d: trigger %v guard %v effect %d", i, trans.Trigger != nil, trans.Guard != nil, len(trans.Effect))
+		}
+		if trans.Target == nil || len(trans.Target.Parts) != 1 || trans.Target.Parts[0].Text != "Stopped" {
+			t.Errorf("node %d: expected target Stopped, got %+v", i, trans.Target)
+		}
+	}
+}
+
 func TestParseStateBody_Complete(t *testing.T) {
 	input := `{
 		entry { action initialize; }

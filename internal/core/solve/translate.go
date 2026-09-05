@@ -315,6 +315,9 @@ func (t *translator) condition(cond runtime.Condition) (*Term, error) {
 	if cond.Statement != nil {
 		return nil, t.refuse(cond.Statement, "body statement", "OpenSysML does not execute a statement in a constraint body")
 	}
+	if cond.Conflict != nil {
+		return nil, t.refuse(cond.Conflict.Node, "conflicting result expression", "only one owned or inherited result expression is allowed")
+	}
 	if cond.Negated {
 		t.branched++
 		defer func() { t.branched-- }()
@@ -939,6 +942,9 @@ func conditionOrigin(cond runtime.Condition) (*symbols.Symbol, source.Span) {
 	}
 	if cond.Statement != nil {
 		span = cond.Statement.Span()
+	}
+	if cond.Conflict != nil {
+		span = cond.Conflict.Node.Span()
 	}
 	return owner, span
 }

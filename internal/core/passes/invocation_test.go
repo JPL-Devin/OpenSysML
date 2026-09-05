@@ -145,14 +145,14 @@ func TestInvocationOverloadQuantities(t *testing.T) {
 		package C {
 			private import A::*;
 			private import B::*;
-			attribute m : MassValue = 2 [kg];
+			attribute mass : MassValue = 2 [kg];
 			attribute l : LengthValue = 3 [m];
 			attribute %s
 		}
 	}`
-	wantLibraryClean(t, fmt.Sprintf(model, `w : Boolean = weigh(m);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `w : Boolean = weigh(mass);`))
 	wantLibraryClean(t, fmt.Sprintf(model, `w : String = weigh(l);`))
-	wantLibraryDiag(t, fmt.Sprintf(model, `w : String = weigh(m);`),
+	wantLibraryDiag(t, fmt.Sprintf(model, `w : String = weigh(mass);`),
 		"type.expr", "cannot bind Boolean value to a feature typed by String")
 }
 
@@ -170,16 +170,16 @@ func TestInvocationOverloadDisjointDeclaredTypes(t *testing.T) {
 			private import A::*;
 			private import B::*;
 			private import D::*;
-			attribute m : MassValue = 2 [kg];
+			attribute mass : MassValue = 2 [kg];
 			attribute q : Quantities::ScalarQuantityValue = 3 [m];
 			attribute %s
 		}
 	}`
-	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(m);`), "type.expr",
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(mass);`), "type.expr",
 		"argument 1 of weigh expects VolumeValue, found MassValue (candidates: P::A::weigh, P::B::weigh)")
-	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(x = m);`), "type.expr",
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(x = mass);`), "type.expr",
 		"argument x of weigh expects VolumeValue, found MassValue (candidates: P::A::weigh, P::B::weigh)")
-	wantLibraryDiag(t, fmt.Sprintf(model, `w = single(m);`), "type.expr",
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = single(mass);`), "type.expr",
 		"argument 1 of single expects VolumeValue, found MassValue")
 	wantLibraryClean(t, fmt.Sprintf(model, `w = weigh(q);`))
 	wantLibraryClean(t, fmt.Sprintf(model, `w = single(q);`))

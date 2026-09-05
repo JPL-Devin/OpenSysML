@@ -62,22 +62,36 @@ class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
         return sysml_pb2.ParseFileResponse(model_hash="fake-hash", root=root)
 
 
-@pytest.fixture
-def fake_service():
-    """Start a FakeService on an ephemeral port; yields a factory of connections."""
-    servers = []
+class FakeServices:
+    """The fake services one test starts, by port."""
 
-    def start(**kwargs):
+    def __init__(self):
+        self._servers = {}
+
+    def __call__(self, port=0, **kwargs):
+        """Start a FakeService on ``port`` (0 for an ephemeral one); returns the port."""
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
         sysml_pb2_grpc.add_SysMLServiceServicer_to_server(FakeService(**kwargs), server)
-        port = server.add_insecure_port("localhost:0")
+        port = server.add_insecure_port(f"localhost:{port}")
         server.start()
-        servers.append(server)
+        self._servers[port] = server
         return port
 
-    yield start
-    for server in servers:
-        server.stop(None)
+    def stop(self, port):
+        """Stop the service on ``port``, returning once it has let the port go."""
+        self._servers.pop(port).stop(None).wait()
+
+    def stop_all(self):
+        for port in list(self._servers):
+            self.stop(port)
+
+
+@pytest.fixture
+def fake_service():
+    """Yields the FakeServices of this test, stopped after it."""
+    services = FakeServices()
+    yield services
+    services.stop_all()
 
 
 def test_old_service_reports_no_capabilities(fake_service):
@@ -159,6 +173,25 @@ def test_generation_succeeds_against_a_service_reporting_type_facts(
 
     assert _run_generate(monkeypatch, tmp_path, port, source, output) == 0
     assert "SYSML_MODEL_HASH" in output.read_text()
+
+
+def test_generation_asks_the_service_now_on_a_port_an_older_one_had(
+    monkeypatch, tmp_path, fake_service
+):
+    """A run against a recycled port is answered by the service on it now.
+
+    Ephemeral ports get reused, so a run must not carry over the handshake a
+    previous run had with the service that held the port before.
+    """
+    source = tmp_path / "demo.sysml"
+    source.write_text(MODEL)
+    output = tmp_path / "demo_types.py"
+    port = fake_service(capabilities=[], answers_handshake=False)
+    assert _run_generate(monkeypatch, tmp_path, port, source, output) == 1
+    fake_service.stop(port)
+
+    assert fake_service(port=port, capabilities=[CAPABILITY_TYPE_FACTS]) == port
+    assert _run_generate(monkeypatch, tmp_path, port, source, output) == 0
 
 
 def test_remedy_survives_a_platform_with_no_release_build():
