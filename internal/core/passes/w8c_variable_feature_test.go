@@ -327,3 +327,28 @@ func TestW8CVariableFeatureRulesStillGateOnATypedOwnerHead(t *testing.T) {
 		t.Errorf("unexpected constant or owner messages in %v", got)
 	}
 }
+
+func TestW8CVariableFeatureRulesSurviveAnUnresolvedOwnerValue(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	attribute def Plain;
+	attribute ok : Plain = missing {
+		attribute y : Integer := 1;
+		constant attribute k : Integer = 2;
+	}
+	attribute broken : Missing = 3 {
+		attribute hidden : Integer := 4;
+	}
+}`
+	// An owner's value is no part of its typing head: only its type gates its members.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 1 {
+		t.Errorf("want one %q (ok::y), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 1 {
+		t.Errorf("want one %q (ok::k), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected owner messages in %v", got)
+	}
+}
