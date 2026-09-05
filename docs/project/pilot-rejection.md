@@ -158,7 +158,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-234 case(s): 226 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+235 case(s): 227 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 87 | 0 | 0 | 0 |
 | semantic | 105 | 97 | 0 | 8 | 0 |
-| xpect | 34 | 34 | 0 | 0 | 0 |
+| xpect | 35 | 35 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
 the pinned pilot does not implement; they are not permissiveness gaps on our side and are

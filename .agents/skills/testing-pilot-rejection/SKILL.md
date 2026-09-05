@@ -35,7 +35,7 @@ As of the `semantic/` source (named pilot constraints, KerML and SysML, the cont
 succession rules, the feature-value overriding rule, the enumeration-variation rules, the send-action cases,
 the metadata typing, annotated-element and body rules, the trigger-argument typing rules, the owning-body member rules, the cross-subsetting rules, and the association arity, binary-link end
 count and multiplicity-bound typing rules), with a fresh library cache:
-`234 case(s): 226 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept`,
+`235 case(s): 227 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
 candidate the pilot accepts because it does not enforce the named constraint is not a case either:
