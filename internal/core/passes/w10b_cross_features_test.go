@@ -42,6 +42,45 @@ func TestW10BCrossFeatureTypeAndChain(t *testing.T) {
 	}
 }
 
+// The cross feature's types must equal the end's, an untyped feature counting
+// as typed by Anything (KerML validateFeatureCrossFeatureType, pilot-confirmed).
+func TestW10BCrossFeatureTypeEffectiveTypes(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"untyped crossed feature", `package P {
+			class A { feature x; }
+			assoc S { end a : A; end b : A crosses a.x; }
+		}`, "a.x"},
+		{"untyped end", `package P {
+			class A { feature x : A; }
+			assoc S { end a : A; end b crosses a.x; }
+		}`, "a.x"},
+		{"owned cross feature typed differently", `package P {
+			class A; class B;
+			assoc S { end a : A { member feature ac : B [0..1]; } end b : A; }
+		}`, "member feature ac : B [0..1];"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := constraintDiagsKerML(t, tc.src)
+			expectCrossDiag(t, tc.src, diags, codeCrossFeatureType, msgCrossFeatureType, tc.want)
+		})
+	}
+}
+
+// Types inherited through redefinition or subsetting, and an owned cross
+// feature's implied typing by its end, count toward the comparison.
+func TestW10BCrossFeatureTypeEffectiveTypesClean(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; feature y subsets x; }
+		assoc S { end a : A; end b : A crosses a.x; }
+		assoc T specializes S { end a2 redefines a; end b2 redefines b crosses a2.y; }
+		assoc U { end a : A { member feature ac [0..1]; } end b : A { member feature bc : A [0..1]; } }
+		class Z { feature z; }
+		assoc V { end a : Z; end b crosses a.z; }
+		class C specializes A { feature p : A; feature q : A; connector k { end ka ::> p; end kb ::> q crosses ka.x; } }
+	}`
+	expectNoCrossDiags(t, constraintDiagsKerML(t, src))
+}
+
 // A specialized association's end must cross a feature specializing the cross
 // feature of the end it redefines.
 func TestW10BCrossFeatureSpecialization(t *testing.T) {
@@ -190,6 +229,25 @@ func TestW10BCrossSubsettingThreeEndsClean(t *testing.T) {
 			end a : A;
 			end b : A;
 			end c : A crosses a.x;
+		}
+	}`
+	expectNoCrossDiags(t, constraintDiagsKerML(t, src))
+}
+
+// With more than two ends the chain starts at the feature cross-multiplying the
+// other ends, which the crossing end owns (the spec's ProductSelection3 shape).
+func TestW10BCrossSubsettingThreeEndsCrossMultiplyingRootClean(t *testing.T) {
+	const src = `package P {
+		class A; class B; class C;
+		assoc Three {
+			end a : A crosses a::bc.inA {
+				member feature inA : A [0..1] featured by B_C {
+					member feature B_C : C featured by B;
+				}
+				member feature bc : inA::B_C featured by Three { public import inA; }
+			}
+			end b : B;
+			end c : C;
 		}
 	}`
 	expectNoCrossDiags(t, constraintDiagsKerML(t, src))

@@ -26,6 +26,7 @@ const (
 func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 	crosses := semantics.CrossSubsettings(sym)
 	if len(crosses) == 0 {
+		cc.checkOwnedCrossFeatureType(sym)
 		return
 	}
 	cc.checkDeclaredCrossFeature(sym)
@@ -44,6 +45,7 @@ func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 			continue
 		}
 		base, crossed, isChain := cc.model.CrossedFeatureChain(sym, rel)
+		// Only a two-ended owner pins the chain root (KerML validateCrossSubsettingCrossedFeature).
 		if !isChain || len(ends) == 2 && !w10bIsOppositeEnd(ends, sym, base) {
 			cc.addRedefineDiag(rel.Target, msgCrossSubsettingChain, codeCrossSubsettingChain)
 		}
@@ -62,6 +64,16 @@ func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 	if !cc.w10bSpecializesRedefinedCross(sym, cross) {
 		cc.addRedefineDiag(rel.Target, msgCrossSpecialization, codeCrossFeatureSpecialization)
 	}
+}
+
+// checkOwnedCrossFeatureType reports an end whose body-declared cross feature has
+// types other than the end's own.
+func (cc *constraintChecker) checkOwnedCrossFeatureType(end *symbols.Symbol) {
+	cross := cc.model.OwnedCrossFeature(end)
+	if cross == nil || cross.Decl == nil || cc.w10bSameTypes(cross, end) {
+		return
+	}
+	cc.addRedefineDiag(cross.Decl, msgCrossFeatureType, codeCrossFeatureType)
 }
 
 // checkDeclaredCrossFeature reports an end that declares its cross feature inline
@@ -110,15 +122,59 @@ func w10bIsOppositeEnd(ends []*symbols.Symbol, end, base *symbols.Symbol) bool {
 	return false
 }
 
-// w10bSameTypes reports whether a cross feature and its end declare the same
-// type, which is what the crossing requires.
+// w10bSameTypes reports whether a cross feature and its end have the same
+// effective types, an untyped feature counting as typed by its kind's base.
 func (cc *constraintChecker) w10bSameTypes(cross, end *symbols.Symbol) bool {
-	crossType := extractUsageType(cc, cross)
-	endType := extractUsageType(cc, end)
-	if crossType == nil || endType == nil {
-		return true // nothing declared to compare
+	crossTypes := cc.w10bFeatureTypes(cross)
+	endTypes := cc.w10bFeatureTypes(end)
+	if len(crossTypes) == 0 || len(endTypes) == 0 {
+		return true // nothing resolved to compare
 	}
-	return crossType == endType
+	return w10bCoversTypes(crossTypes, endTypes) && w10bCoversTypes(endTypes, crossTypes)
+}
+
+// w10bFeatureTypes returns a feature's effective types, a feature with none
+// taking those of the feature it reference-subsets, else of the base feature
+// its kind implicitly subsets.
+func (cc *constraintChecker) w10bFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	seen := map[*symbols.Symbol]bool{}
+	for !seen[sym] {
+		seen[sym] = true
+		if types := cc.model.FeatureTypes(sym); len(types) > 0 {
+			return types
+		}
+		ref := cc.model.ReferencedFeature(sym)
+		if ref == nil {
+			break
+		}
+		sym = ref
+	}
+	fqn, ok := cc.model.FeatureBaseFQN(sym)
+	if !ok || cc.resolver == nil {
+		return nil
+	}
+	for _, base := range cc.resolver.Index().LookupQualified(fqn) {
+		if base != nil && base != sym {
+			return cc.model.FeatureTypes(base)
+		}
+	}
+	return nil
+}
+
+func w10bCoversTypes(types, want []*symbols.Symbol) bool {
+	for _, w := range want {
+		found := false
+		for _, t := range types {
+			if symbols.SameElement(t, w) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // w10bSpecializesRedefinedCross reports whether cross specializes the cross
