@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "result": {"type": "Vector", "elements": [
+    {"type": "Real", "value": 5.0},
+    {"type": "Real", "value": 7.0},
+    {"type": "Real", "value": 9.0}
+  ]}
+}

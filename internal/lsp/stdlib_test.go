@@ -285,7 +285,7 @@ func TestLibraryDocumentIsReadOnly(t *testing.T) {
 	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc2.InvalidRequest || !strings.Contains(rpcErr.Message, "read-only") {
 		t.Fatalf("DidChange err = %v, want a read-only refusal", err)
 	}
-	if got := string(ws.LibraryDocument(baseName).Content); got != text {
+	if string(ws.LibraryDocument(baseName).Content) != text {
 		t.Error("a refused change altered the library document")
 	}
 	if ws.Document(baseName) != nil {

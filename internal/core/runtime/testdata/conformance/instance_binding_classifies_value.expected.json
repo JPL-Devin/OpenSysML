@@ -1,0 +1,20 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sheet",
+  "libraries": true,
+  "slots": {
+    "sq.edges": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "sq.e1.ends": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "sq.e4.ends": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "broken.edges": {"error": "type mismatch: cannot write 3 (an Integer) to a feature typed by Segment"}
+  },
+  "identical": [
+    ["sq.edges.1", "sq.e1"],
+    ["sq.edges.4", "sq.e4"]
+  ],
+  "distinct": [
+    ["sq.edges.1", "sq.edges.2"]
+  ]
+}

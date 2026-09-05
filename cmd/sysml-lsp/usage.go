@@ -6,6 +6,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
+const lspCommand = "sysml-lsp"
+
 // options is what the command line resolves to.
 type options struct {
 	strict      bool
@@ -35,7 +37,7 @@ func registerFlags(fs *flag.FlagSet) *options {
 // docFlags is a flag set holding the server's flags, for rendering the help or
 // the man page without a command line to parse.
 func docFlags() *flag.FlagSet {
-	fs := flag.NewFlagSet("sysml-lsp", flag.ContinueOnError)
+	fs := flag.NewFlagSet(lspCommand, flag.ContinueOnError)
 	registerFlags(fs)
 	return fs
 }
@@ -44,7 +46,7 @@ func docFlags() *flag.FlagSet {
 // setting documented for one is documented for the other.
 func doc() usage.Doc {
 	return usage.Doc{
-		Command:    "sysml-lsp",
+		Command:    lspCommand,
 		ManSection: 1,
 		Summary:    "Language Server for SysML v2 and KerML",
 		Synopsis:   []string{"[options]"},
@@ -61,7 +63,7 @@ func doc() usage.Doc {
 		Sections: []usage.Section{{
 			Title: "Starting the server",
 			Examples: []usage.Example{
-				usage.Ex("sysml-lsp", "What an editor runs"),
+				usage.Ex(lspCommand, "What an editor runs"),
 				usage.Ex("sysml-lsp -stdio", "The same, for a client that names the transport"),
 				usage.Ex("sysml-lsp -strict", "Serve strict conformance from the start"),
 			},

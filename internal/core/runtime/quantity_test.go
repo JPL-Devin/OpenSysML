@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
@@ -431,5 +432,63 @@ func TestQuantityAndIndexNotationsCoexist(t *testing.T) {
 	// bracket says the expression is a quantity.
 	if _, err := evalIn(t, ctx, scope, "speeds [m]"); !errors.Is(err, ErrNotAQuantity) {
 		t.Errorf("speeds [m] error = %v, want ErrNotAQuantity", err)
+	}
+}
+
+// TestNotAQuantityHintIsStatic: a bracket naming no unit reports the index
+// notation over an operand declared a collection, without evaluating the operand —
+// the diagnostic materializes no object and runs no calc.
+func TestNotAQuantityHintIsStatic(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			private import VectorFunctions::*;
+			attribute notAUnit = 3.0;
+			attribute grid : Array {
+				:>> dimensions = (2, 2);
+				:>> elements = (1, 2, 3, 4);
+			}
+			attribute v : VectorValues::CartesianVectorValue = VectorOf((1, 2));
+			attribute speeds : Real[3] = (1.0, 2.0, 3.0);
+			attribute one : Real = 1.0;
+			calc def pick { return : Array = grid; }
+		}
+	`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	const hint = "with `#(…)`"
+	for _, tc := range []struct{ src, want string }{
+		{"grid [notAUnit]", "index an array " + hint},
+		{"v [notAUnit]", "index a vector " + hint},
+		{"speeds [notAUnit]", "index a sequence " + hint},
+		{"one [notAUnit]", ""},
+		{"pick() [notAUnit]", ""},
+		{"1.5 [notAUnit]", ""},
+	} {
+		before := len(ctx.InstanceIDs())
+		_, err := evalIn(t, ctx, pkg.Scope, tc.src)
+		if !errors.Is(err, ErrNotAQuantity) {
+			t.Errorf("%s: error = %v, want ErrNotAQuantity", tc.src, err)
+			continue
+		}
+		if tc.want == "" && strings.Contains(err.Error(), hint) {
+			t.Errorf("%s: %v hints at indexing an operand not declared a collection", tc.src, err)
+		}
+		if tc.want != "" && !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want it to say %q", tc.src, err, tc.want)
+		}
+		if after := len(ctx.InstanceIDs()); after != before {
+			t.Errorf("%s: materialized %d object(s) while reporting the error", tc.src, after-before)
+		}
+	}
+	// The objects the operands name are materialized by evaluating them, not by the diagnostic.
+	if _, err := evalIn(t, ctx, pkg.Scope, "pick()"); err != nil {
+		t.Fatalf("pick(): %v", err)
+	}
+	if len(ctx.InstanceIDs()) == 0 {
+		t.Error("pick() materialized no object: the effect the diagnostic must not have is not observable")
 	}
 }

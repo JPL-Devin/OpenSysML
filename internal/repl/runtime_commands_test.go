@@ -748,6 +748,28 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.0")
 }
 
+// An attribute shaped as a Collections::Array by its own dimensions and elements
+// binds no value expression, yet names one Array value; its derived features
+// read out of that value, and a valueless attribute of another type still
+// reports that it holds none.
+func TestEvalArrayShapedByItsFeatures(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Grid {
+		private import ScalarValues::*;
+		private import Collections::*;
+		attribute cells : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+		attribute bare : Integer;
+	}`)
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, run(t, s, "%eval Grid::cells"), "= Array(2, 3)[1, 2, 3, 4, 5, 6]")
+	wants(t, run(t, s, "%eval Grid::cells.rank"), "= 2")
+	wants(t, run(t, s, "%eval Grid::cells.flattenedSize"), "= 6")
+	wants(t, run(t, s, "%eval CollectionFunctions::'array#'(Grid::cells, (2, 1))"), "= 4")
+	wants(t, run(t, s, "%eval Grid::bare"), "has no value to evaluate")
+}
+
 // A require/assume constraint binding a value reads that value, as a constraint
 // usage's `= expr` does; one binding none holds no value to evaluate.
 func TestEvalReadsRequirementConstraintValues(t *testing.T) {

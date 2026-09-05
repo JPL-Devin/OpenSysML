@@ -98,7 +98,7 @@ func TestW8CMetadataTypeMustBeAMetaclass(t *testing.T) {
 			t.Errorf("message %q, want %q", d.Message, msgMetadataMetaclass)
 		}
 	}
-	if n := len(only(diags, "metadata-concrete-type")); n != 0 {
+	if len(only(diags, "metadata-concrete-type")) != 0 {
 		t.Errorf("a concrete non-metaclass is not reported as abstract: %v", diags)
 	}
 }

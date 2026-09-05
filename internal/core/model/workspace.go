@@ -469,16 +469,7 @@ func invocationSelection(resolver *resolve.Resolver, sem *semantics.Model, ref r
 	if ref.Invocation == nil {
 		return nil
 	}
-	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation, performs(ref))
-}
-
-// performs is the kind of call site a reference is: an action performance when
-// the call is an action usage's value, else an expression.
-func performs(ref resolve.Reference) semantics.Performs {
-	if ref.Performed {
-		return semantics.PerformsAction
-	}
-	return semantics.PerformsBehavior
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation, semantics.CallSite(ref))
 }
 
 // calledDeclaration is what a call's name denotes once its arguments are read: the

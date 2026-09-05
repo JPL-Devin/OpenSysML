@@ -58,10 +58,12 @@ class CensusTest(unittest.TestCase):
         self.assertTrue(out.endswith("| f | x | y | ✅ Faithful |\n"))
 
     def test_page_without_block_or_rows_is_an_error(self):
+        without_block = PAGE.replace("<!-- doc-counts:begin census -->\n", "")
+        without_rows = PAGE.split("### Calc")[0]
         with self.assertRaises(ValueError):
-            census.census(PAGE.replace("<!-- doc-counts:begin census -->\n", ""))
+            census.census(without_block)
         with self.assertRaises(ValueError):
-            census.census(PAGE.split("### Calc")[0])
+            census.census(without_rows)
 
     def test_malformed_markers_are_an_error(self):
         begin, end = census.BEGIN, census.END
@@ -77,8 +79,9 @@ class CensusTest(unittest.TestCase):
                 census.census(page)
 
     def test_known_failure_rows_are_an_error(self):
+        with_known_failure = PAGE.replace("⛔ Deliberate", "🚧 Known failure")
         with self.assertRaises(ValueError):
-            census.census(PAGE.replace("⛔ Deliberate", "🚧 Known failure"))
+            census.census(with_known_failure)
 
     def test_real_page_renders(self):
         text = (HERE.parent / "docs" / "project" / "spec-compliance.md").read_text(encoding="utf-8")

@@ -152,8 +152,8 @@ func TestRenameShortNamesOfEveryDeclarationKind(t *testing.T) {
 			kind:    "alias target long name leaves the alias's own names",
 			src:     "package P {\n\tpart def B;\n\talias <a> A for B;\n\tpart p : a;\n\tpart q : A;\n\tpart r : B;\n}\n",
 			cursor:  "B;\n\talias",
-			newName: "Base",
-			want:    []string{"alias <a> A for Base;", "part p : a;", "part q : A;", "part r : Base;"},
+			newName: "Blk",
+			want:    []string{"alias <a> A for Blk;", "part p : a;", "part q : A;", "part r : Blk;"},
 		},
 	}
 	for _, tt := range tests {
@@ -173,7 +173,7 @@ func TestRenameShortNameAcrossDocuments(t *testing.T) {
 		cursor, newName, wantDecl, wantUses string
 	}{
 		{"Old;", "Fresh", "package P {\n\tpart def <O> Fresh;\n}\n", "package Q {\n\tpart a : P::O;\n\tpart b : P::Fresh;\n}\n"},
-		{"O> Old", "Q", "package P {\n\tpart def <Q> Old;\n}\n", "package Q {\n\tpart a : P::Q;\n\tpart b : P::Old;\n}\n"},
+		{"O> Old", "N", "package P {\n\tpart def <N> Old;\n}\n", "package Q {\n\tpart a : P::N;\n\tpart b : P::Old;\n}\n"},
 	} {
 		ws := model.NewWorkspace()
 		declName := openRenameDoc(t, ws, "/tmp/short_decl.sysml", decl)

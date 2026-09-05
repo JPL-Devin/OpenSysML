@@ -27,7 +27,7 @@ def is_rule_row(line: str) -> bool:
 
 
 def count_rules(markdown: str) -> dict[str, int]:
-    counts = {m: 0 for m in MARKERS}
+    counts = dict.fromkeys(MARKERS, 0)
     counts["self-assessed"] = 0
     unrefereed = False
     for line in markdown.splitlines():

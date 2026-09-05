@@ -6,6 +6,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
+const grpcCommand = "sysml-grpc"
+
 // options is what the command line resolves to.
 type options struct {
 	port           int
@@ -50,7 +52,7 @@ func registerFlags(fs *flag.FlagSet) *options {
 // docFlags is a flag set holding the command's flags, for rendering the help or
 // the man page without a command line to parse.
 func docFlags() *flag.FlagSet {
-	fs := flag.NewFlagSet("sysml-grpc", flag.ContinueOnError)
+	fs := flag.NewFlagSet(grpcCommand, flag.ContinueOnError)
 	registerFlags(fs)
 	return fs
 }
@@ -59,7 +61,7 @@ func docFlags() *flag.FlagSet {
 // transport documented for one is documented for the other.
 func doc() usage.Doc {
 	return usage.Doc{
-		Command:    "sysml-grpc",
+		Command:    grpcCommand,
 		ManSection: 1,
 		Summary:    "serve SysML v2 parsing, resolution and semantic services over gRPC",
 		Synopsis:   []string{"[options]"},
@@ -77,7 +79,7 @@ func doc() usage.Doc {
 		Sections: []usage.Section{{
 			Title: "Serving",
 			Examples: []usage.Example{
-				usage.Ex("sysml-grpc", "Serve gRPC, gRPC-Web and Connect on port 50051"),
+				usage.Ex(grpcCommand, "Serve gRPC, gRPC-Web and Connect on port 50051"),
 				usage.Ex("sysml-grpc -port 0 -report-address", "Let the kernel choose the port and report it"),
 				usage.Ex("sysml-grpc -transport grpc -port 50051", "Serve grpc-go only"),
 				usage.Ex("sysml-grpc -transport stdio", "Speak the protocol over a pipe (a prototype)"),
