@@ -115,14 +115,16 @@ func (m *Model) resultConformance(scope *symbols.Scope, node ast.Node, want *sym
 	if !m.Conforms(want, result) {
 		return found
 	}
+	unknown := false
 	for _, operand := range operands {
 		c := m.resultConformance(scope, operand, want)
-		if !c.Known {
-			return conformanceUnknown()
-		}
-		if c.Holds {
+		if c.Known && c.Holds {
 			return c
 		}
+		unknown = unknown || !c.Known
+	}
+	if unknown {
+		return conformanceUnknown()
 	}
 	return found
 }
