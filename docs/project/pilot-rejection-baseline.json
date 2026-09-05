@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 243,
-        "digest": "sha256:521eb683402481a8fd8b2196198f4f94e6322e3902cdf632e0621364aa2dadcc"
+        "files": 244,
+        "digest": "sha256:5357399c301b6fd26b783d9b4d5b6f5318deae658c997aaca8de1e59ef89d3ed"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 243,
-    "bothReject": 235,
+    "cases": 244,
+    "bothReject": 236,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 111,
-      "bothReject": 103,
+      "cases": 112,
+      "bothReject": 104,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1954,6 +1954,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s55-viewpoint-inherits-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a viewpoint is a requirement and so a constraint, and may not inherit result expressions from two generals (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2337,8 +2346,8 @@
       }
     ],
     "totals": {
-      "cases": 243,
-      "bothReject": 235,
+      "cases": 244,
+      "bothReject": 236,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0

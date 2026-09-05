@@ -78,8 +78,8 @@ func TestResultExpressionReferenceSubsettingBody(t *testing.T) {
 	resultExpressionDiags(t, src, "x > 1.0", "2.0")
 }
 
-// A type inheriting result expressions from two generals is invalid on its own,
-// and is reported at its declaration.
+// A type inheriting result expressions from two generals is invalid on its own
+// and is reported at its declaration; requirements and viewpoints are constraints.
 func TestResultExpressionTwoInherited(t *testing.T) {
 	const src = `package P {
 		private import ScalarValues::*;
@@ -87,8 +87,21 @@ func TestResultExpressionTwoInherited(t *testing.T) {
 		constraint def A { x > 0.0 }
 		constraint def B { x < 9.0 }
 		constraint def C :> A, B;
+		requirement def R :> A, B;
+		concern def K :> A, B;
+		viewpoint def V :> A, B;
+		constraint a : A;
+		constraint b : B;
+		viewpoint def VD;
+		viewpoint v : VD :> a, b;
+		viewpoint v1 : VD :> a;
 	}`
-	resultExpressionDiags(t, src, "constraint def C :> A, B;")
+	resultExpressionDiags(t, src,
+		"constraint def C :> A, B;",
+		"requirement def R :> A, B;",
+		"concern def K :> A, B;",
+		"viewpoint def V :> A, B;",
+		"viewpoint v : VD :> a, b;")
 }
 
 // A redefinition that states no result — empty, braced, documented or nesting

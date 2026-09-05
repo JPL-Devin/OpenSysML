@@ -40,7 +40,7 @@ func FunctionLike(sym *symbols.Symbol) bool {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		switch d.Kind {
-		case ast.DefCalc, ast.DefConstraint, ast.DefRequirement, ast.DefConcern,
+		case ast.DefCalc, ast.DefConstraint, ast.DefRequirement, ast.DefConcern, ast.DefViewpoint,
 			ast.DefCase, ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase,
 			ast.DefPredicate, ast.DefBool:
 			return true
@@ -48,7 +48,7 @@ func FunctionLike(sym *symbols.Symbol) bool {
 	case *ast.Usage:
 		switch d.Kind {
 		case ast.UsageCalc, ast.UsageExpr, ast.UsageConstraint, ast.UsageRequirement,
-			ast.UsageConcern, ast.UsageFramedConcern, ast.UsageSatisfy, ast.UsageObjective,
+			ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern, ast.UsageSatisfy, ast.UsageObjective,
 			ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
 			ast.UsagePredicate, ast.UsageBool:
 			return true

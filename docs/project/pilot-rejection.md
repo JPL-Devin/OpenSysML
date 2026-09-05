@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-243 case(s): 235 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+244 case(s): 236 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 89 | 89 | 0 | 0 | 0 |
-| semantic | 111 | 103 | 0 | 8 | 0 |
+| semantic | 112 | 104 | 0 | 8 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -183,7 +183,8 @@ expression body (`s51`), to 239 with the three result-expression ownership cases
 inherited result expression), to 241 with the two reference-subsetting ones (`s54`, `k44`), and to 243 with `g69`/`k20` (a calculation or
 function body listing a second bare expression: the pinned `CalculationBodyPart`/`FunctionBodyPart` admit one
 `ResultExpressionMember`, so the pilot stops at the second expression, `missing '}' at 'x'`, while we read it as a
-second result expression under the same one-result rule).
+second result expression under the same one-result rule), and to 244 with `s55` (a viewpoint definition, a
+requirement and so a constraint, inheriting result expressions from two generals).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
