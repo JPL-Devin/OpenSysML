@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -31,6 +32,7 @@ type CachedModel struct {
 	// another and an import between them is satisfied.
 	Documents []*CachedDocument
 	Index     *symbols.Index // For symbol lookups by FQN
+	Library   libs.Source    // the files the library in Index was built from, for their spans' text
 
 	symCtxOnce sync.Once
 	symCtx     *SymbolContext

@@ -86,50 +86,63 @@ func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 
 // EffectiveNameOf returns a declaration's name, including one inherited through a unique redefinition.
 func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
-	return m.effectiveIdentifierOf(sym, declaredName, make(map[*symbols.Symbol]bool))
+	return inheritedIdentifier(sym, declaredName, m.soleRedefinedFeature)
 }
 
 // EffectiveShortNameOf is Element::shortName: the declared short name, or the
-// one inherited through a unique redefinition (KerML 1.1 §8.2.4).
+// one of the feature an unnamed feature takes its identifiers from (KerML 1.1
+// §8.2.4, §8.3.3.3).
 func (m *Model) EffectiveShortNameOf(sym *symbols.Symbol) string {
-	return m.effectiveIdentifierOf(sym, declaredShortName, make(map[*symbols.Symbol]bool))
+	return inheritedIdentifier(sym, declaredShortName, m.namingFeature)
 }
 
 func declaredName(sym *symbols.Symbol) string      { return sym.Name }
 func declaredShortName(sym *symbols.Symbol) string { return sym.ShortName }
 
-// effectiveIdentifierOf reads the identifier sym declares, or the one the single
-// feature it redefines has (KerML 1.1 §8.3.3.3 effectiveName/effectiveShortName).
-func (m *Model) effectiveIdentifierOf(sym *symbols.Symbol, declared func(*symbols.Symbol) string, seen map[*symbols.Symbol]bool) string {
-	if sym == nil || seen[sym] {
-		return ""
+// inheritedIdentifier reads the identifier sym declares, or the one the feature
+// from names has, following that relation until a declared identifier or a cycle.
+func inheritedIdentifier(sym *symbols.Symbol, declared func(*symbols.Symbol) string, from func(*symbols.Symbol) *symbols.Symbol) string {
+	seen := make(map[*symbols.Symbol]bool)
+	for sym != nil && !seen[sym] {
+		if id := declared(sym); id != "" {
+			return id
+		}
+		seen[sym] = true
+		sym = from(sym)
 	}
-	if id := declared(sym); id != "" {
-		return id
-	}
-	seen[sym] = true
+	return ""
+}
 
-	var targets []*symbols.Symbol
-	known := make(map[*symbols.Symbol]bool)
-	add := func(candidates []*symbols.Symbol) {
-		for _, candidate := range candidates {
-			if candidate == nil || candidate == sym || known[candidate] {
-				continue
-			}
-			known[candidate] = true
-			targets = append(targets, candidate)
+// namingFeature is the feature an unnamed feature takes its identifiers from:
+// the one it reference-subsets, else the single one it redefines (KerML 1.1
+// §8.3.3.3 effectiveName/effectiveShortName).
+func (m *Model) namingFeature(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil {
+		return nil
+	}
+	if ref := m.ReferencedFeature(sym); ref != nil {
+		return ref
+	}
+	return m.soleRedefinedFeature(sym)
+}
+
+// soleRedefinedFeature is the one feature sym redefines, by clause or by
+// position, or nil when it redefines none or several.
+func (m *Model) soleRedefinedFeature(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil {
+		return nil
+	}
+	var target *symbols.Symbol
+	for _, candidate := range m.directRedefinedFeatures(sym) {
+		switch {
+		case candidate == nil || candidate == sym || candidate == target:
+		case target == nil:
+			target = candidate
+		default:
+			return nil
 		}
 	}
-	if m != nil {
-		add(m.RedefinedFeatures(sym))
-		add(m.ImplicitParameterRedefinitions(sym))
-		add(m.implicitEndRedefinitions(sym))
-		add(m.ImplicitRoleRedefinitions(sym))
-	}
-	if len(targets) != 1 {
-		return ""
-	}
-	return m.effectiveIdentifierOf(targets[0], declared, seen)
+	return target
 }
 
 // DeclaresRedefinition reports whether sym carries a `redefines`/`:>>` clause,

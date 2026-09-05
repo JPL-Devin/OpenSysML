@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // documentedModel builds a model whose documentation is readable: the source
@@ -94,5 +95,43 @@ func TestEffectiveShortNameFollowsTheRedefinedFeature(t *testing.T) {
 	}
 	if got := m.EffectiveShortNameOf(redefining); got != "p1" {
 		t.Fatalf("EffectiveShortNameOf = %q, want p1", got)
+	}
+}
+
+func TestEffectiveShortNameFollowsTheReferencedFeature(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		action def Provide;
+		action <pp> providePower : Provide;
+		part vehicle { perform providePower; }
+	}`)
+	perform := sym(t, sym(t, sym(t, root, "P").Scope, "vehicle").Scope, "providePower")
+	if perform.ShortName != "" {
+		t.Fatalf("declared short name = %q, want none", perform.ShortName)
+	}
+	if got := m.EffectiveShortNameOf(perform); got != "pp" {
+		t.Fatalf("EffectiveShortNameOf = %q, want pp", got)
+	}
+	if got := m.EffectiveNameOf(perform); got != "providePower" {
+		t.Fatalf("EffectiveNameOf = %q, want providePower", got)
+	}
+}
+
+func TestEffectiveShortNameOfAReferenceOutranksItsRedefinition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A { part <r> redefined; part <s> subsetted; }
+		part def B :> A { ref part :>> redefined ::> subsetted; }
+	}`)
+	b := sym(t, sym(t, root, "P").Scope, "B")
+	var feature *symbols.Symbol
+	for _, member := range b.Scope.Members() {
+		if member.Kind == symbols.SymbolPartUsage {
+			feature = member
+		}
+	}
+	if feature == nil {
+		t.Fatal("B declares no part usage")
+	}
+	if got := m.EffectiveShortNameOf(feature); got != "s" {
+		t.Fatalf("EffectiveShortNameOf = %q, want s", got)
 	}
 }

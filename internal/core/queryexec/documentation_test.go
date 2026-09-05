@@ -204,6 +204,50 @@ calc def Q :> Query {
 	}
 }
 
+// A `perform` usage declares no short name of its own: it carries the one of
+// the action it reference-subsets, everywhere the property is read.
+func TestExecuteShortNameFollowsAReferenceSubsetting(t *testing.T) {
+	const performing = `
+action def Provide;
+action <pp> providePower : Provide;
+action <ss> steer : Provide;
+part spec {
+	perform providePower;
+	perform action turn references steer;
+}
+`
+	fixture := loadExecutionFixture(t, performing+`
+calc def Q :> Query {
+	in root : Element;
+	Project(
+		source = WhereFeature(
+			source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "ActionUsage"),
+			feature = "shortName", operator = "startsWith", value = "p"
+		),
+		properties = ("shortName", "name", "declaredShortName"),
+		columns = (Column(name = "label", expression = Element::shortName + "/" + Element::name))
+	)
+}`)
+	result, err := fixture.execute(t, "Q", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "spec"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := cellStrings(t, result, "shortName"); !slices.EqualFunc(got, [][]string{{"pp"}}, slices.Equal) {
+		t.Fatalf("shortName cells = %q, want pp", got)
+	}
+	if got := cellStrings(t, result, "name"); !slices.EqualFunc(got, [][]string{{"providePower"}}, slices.Equal) {
+		t.Fatalf("name cells = %q", got)
+	}
+	if got := cellStrings(t, result, "declaredShortName"); !slices.EqualFunc(got, [][]string{nil}, slices.Equal) {
+		t.Fatalf("declaredShortName cells = %q, want absent", got)
+	}
+	if got := cellStrings(t, result, "label"); !slices.EqualFunc(got, [][]string{{"pp/providePower"}}, slices.Equal) {
+		t.Fatalf("label cells = %q", got)
+	}
+}
+
 // A computed column is one value per row, so an element with two doc bodies
 // fails the column the way every multi-valued feature does.
 func TestExecuteComputedDocumentationReportsSeveralBodies(t *testing.T) {

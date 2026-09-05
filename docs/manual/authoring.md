@@ -340,8 +340,9 @@ theme can style terms and descriptions apart; PDF follows the Markdown form.
 A cell with several values (an element with two `doc` comments) joins them
 with spaces, as a list item does. A row whose term is absent renders its
 description alone and vice versa; a row with neither writes nothing in
-Markdown and an empty group in HTML. As with a list, an empty result leaves
-no trace.
+Markdown and an empty group in HTML. An empty result follows a list's: it
+leaves no trace in Markdown, while HTML keeps the empty `<dl>` — as it keeps
+an empty `<ul>` — so the block stays addressable by name and query.
 
 Both column names are checked against the query's statically-known
 projection at planning time; a name the query does not project is a typed

@@ -23,6 +23,9 @@ func TestMarkdownDefinitions(t *testing.T) {
 	if strings.Contains(got, "\n\n\n") || strings.Contains(got, " — \n") || strings.Contains(got, "\n — ") {
 		t.Errorf("an entry without term or description left a dangling separator or blank block:\n%s", got)
 	}
+	if strings.Contains(got, "missingNotes") || strings.Contains(got, "MissingSubsystems") {
+		t.Errorf("a definitions block over an empty result left a trace:\n%s", got)
+	}
 }
 
 // TestMarkdownDefinitionsEscaping checks a term cannot break out of its
@@ -61,5 +64,11 @@ func TestHTMLDefinitions(t *testing.T) {
 	}
 	if open, close := strings.Count(got, "<dt "), strings.Count(got, "</dt>"); open != close || open != 4 {
 		t.Errorf("%d terms opened, %d closed, want 4", open, close)
+	}
+	// An empty result keeps its list, as an empty <ul> does, so the block stays
+	// addressable by name and query; it just has no groups.
+	empty := `<dl class="sysml-definitions" data-content="definitions" data-name="missingNotes" data-query="Observatory::MissingSubsystems">` + "\n</dl>\n"
+	if !strings.Contains(got, empty) {
+		t.Errorf("rendering does not contain the empty block %q\n%s", empty, got)
 	}
 }

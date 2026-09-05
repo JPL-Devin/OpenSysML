@@ -341,6 +341,14 @@ package Observatory {
 						in root = telescope;
 					}
 				}
+
+				part missingNotes : Definitions {
+					attribute redefines term = "name";
+					attribute redefines description = "mass";
+					calc rows : MissingSubsystems {
+						in root = telescope;
+					}
+				}
 			}
 		}
 

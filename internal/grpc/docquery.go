@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/docir"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
@@ -296,7 +297,8 @@ func docPlanCode(kind docplan.ErrorKind) connect.Code {
 }
 
 // cachedSourceText reads notation from whichever of the model's documents a span
-// belongs to, for the labels a diagram rendering takes verbatim.
+// belongs to, and behind them from the library files its index holds, for the
+// labels a diagram rendering takes verbatim.
 func cachedSourceText(model *CachedModel) view.SourceText {
 	sources := make(map[string]*source.SourceFile, len(model.Documents))
 	for _, doc := range model.Documents {
@@ -304,16 +306,10 @@ func cachedSourceText(model *CachedModel) view.SourceText {
 			sources[doc.Source.Name()] = doc.Source
 		}
 	}
-	if len(sources) == 0 {
+	if len(sources) == 0 && model.Library == nil {
 		return nil
 	}
-	return func(name string, span source.Span) string {
-		sf, ok := sources[name]
-		if !ok {
-			return ""
-		}
-		return sf.Text(span)
-	}
+	return source.TextOf(sources, libs.Text(model.Library))
 }
 
 // docIRCode is the status a document-evaluation failure reports as: a failed

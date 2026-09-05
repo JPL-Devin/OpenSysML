@@ -102,9 +102,11 @@ func (w *Workspace) SetConformanceMode(mode conformance.Mode) {
 // NewIndexWithStdlib returns an index carrying the standard library for a
 // consumer that resolves library names outside a workspace — the REPL's
 // runtime, which has to resolve the measurement unit a quantity expression
-// names. It shares the one library index every model reads.
-func NewIndexWithStdlib() *symbols.Index {
-	return libs.NewModelIndex()
+// names. It shares the one library index every model reads, and hands out the
+// source holding the bytes that index was built from.
+func NewIndexWithStdlib() (*symbols.Index, libs.Source) {
+	base, src := libs.SharedLibrary()
+	return symbols.NewOverlay(base), src
 }
 
 // Open registers an authoritative open buffer for name and reindexes.

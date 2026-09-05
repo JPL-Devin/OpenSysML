@@ -2,15 +2,15 @@ package lexer
 
 import "strings"
 
-// CommentBody reads the prose a comment token carries: the `/* */`, `//* */` or
-// `//` delimiters come off, as does each line's indentation and the `*` margin a
-// block comment runs down its left edge. Lines keep their breaks.
+// CommentBody reads the prose a comment token carries: the `/* */`, `/** */`,
+// `//* */` or `//` delimiters come off, as does each line's indentation and the
+// `*` margin a block comment runs down its left edge. Lines keep their breaks.
 func CommentBody(raw string) string {
 	raw = strings.TrimSpace(raw)
 	block := false
 	for _, open := range []string{"//*", "/*"} {
 		if rest, ok := strings.CutPrefix(raw, open); ok {
-			raw, block = strings.TrimSuffix(rest, "*/"), true
+			raw, block = trimDocOpener(strings.TrimSuffix(rest, "*/")), true
 			break
 		}
 	}
@@ -28,6 +28,17 @@ func CommentBody(raw string) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// trimDocOpener drops the second `*` of a `/**` opener: one glued to the
+// delimiter and followed by nothing or whitespace. A `*` that opens text, as in
+// `/* *important* */` or `/**bold**`, is the author's and stays.
+func trimDocOpener(body string) string {
+	rest, ok := strings.CutPrefix(body, "*")
+	if !ok || (rest != "" && strings.IndexByte(" \t\r\n", rest[0]) < 0) {
+		return body
+	}
+	return rest
 }
 
 // hasMargin reports whether the continuation lines of a block comment all open
