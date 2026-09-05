@@ -1606,11 +1606,8 @@ func (idx *Index) resetDirectChildrenCachesLocked(generation uint64) {
 	}
 }
 
-// LookupDirectChildrenNamed returns the direct children of prefix that answer
-// to name — by their own last name segment or by their short name — in the
-// order LookupDirectChildren lists them. A wildcard import's members are
-// searched by name far more often than enumerated, so this costs the matches
-// rather than a scan of every member.
+// LookupDirectChildrenNamed returns the direct children of prefix whose leaf
+// name or short name is name, in LookupDirectChildren order, without a scan.
 func (idx *Index) LookupDirectChildrenNamed(prefix, name string) []*Symbol {
 	if prefix == "" || name == "" {
 		return nil
@@ -1621,9 +1618,8 @@ func (idx *Index) LookupDirectChildrenNamed(prefix, name string) []*Symbol {
 	}, name)
 }
 
-// LookupDirectChildrenNamedFrom is LookupDirectChildrenNamed as seen from the
-// namespace named by fromFQN ("" meaning from outside), like
-// LookupDirectChildrenFrom.
+// LookupDirectChildrenNamedFrom is LookupDirectChildrenNamed with the visibility
+// of LookupDirectChildrenFrom, as seen from fromFQN ("" meaning from outside).
 func (idx *Index) LookupDirectChildrenNamedFrom(prefix, fromFQN, name string) []*Symbol {
 	if prefix == "" || name == "" {
 		return nil
