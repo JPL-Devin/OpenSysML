@@ -1,0 +1,1 @@
+- **An alias declared in a calc or action body is not executed.** `alias b for a;` inside a behavior body was lowered as a statement and failed the calculation with "not executable"; it is now a declaration like any other.

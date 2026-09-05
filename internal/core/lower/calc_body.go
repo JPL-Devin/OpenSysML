@@ -35,7 +35,7 @@ func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 				continue
 			}
 			stmts = append(stmts, stmt)
-		case *ast.Definition, *ast.Documentation, *ast.Comment, *ast.Import:
+		case *ast.Definition, *ast.Documentation, *ast.Comment, *ast.Import, *ast.Alias:
 			// Declares a member of the calculation, not a step of it.
 		case *ast.SuccessionEdge:
 			// A calculation body runs its steps in declaration order, so a
