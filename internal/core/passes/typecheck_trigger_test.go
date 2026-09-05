@@ -40,6 +40,7 @@ const triggerFixture = `package P {
 		attribute ok : Boolean;
 	}
 	calc def Twice { in d : DurationValue; return : DurationValue = d + d; }
+	calc def Timed { in e : Performances::Evaluation; return : DurationValue = 1 [s]; }
 	calc def Later { in t : TimeInstantValue; return : TimeInstantValue = t; }
 	calc def Len { return : LengthValue; }
 	calc def IsOk { return : Boolean; }
@@ -546,6 +547,31 @@ func TestBodyTriggerArgumentIsRejected(t *testing.T) {
 	diags := triggerDiags(t, "transition first a accept when { true } == true then b;")
 	if len(diags) != 1 || diags[0].Severity != SeverityWarning || !strings.Contains(diags[0].Message, "comparing Expression with Boolean is always false") {
 		t.Errorf("`{ true } == true`: want the equality warning alone, got %v", diags)
+	}
+}
+
+// A declaration a trigger argument's body makes is typed as one in any other
+// body, and a trigger written inside it is checked; the pilot rejects each.
+func TestTriggerBodyMembersAreTyped(t *testing.T) {
+	const bad = "cannot bind Natural value to a feature typed by Boolean"
+	for _, tc := range []struct{ trigger, want string }{
+		{"accept after Timed({ attribute bad : Boolean = 5; d }) then b;", bad},
+		{"accept when flags->ControlFunctions::forAll { in f; attribute bad : Boolean = 5; f } then b;", bad},
+		{"accept when flags->ControlFunctions::forAll { in f; attribute wait : DurationValue = 5; f } then b;", "cannot bind Natural value to a feature typed by DurationValue"},
+		{"accept after Timed({ action inner { accept after 7; } d }) then b;", "an 'after' trigger's delay must be a DurationValue, found Natural"},
+		{"accept when flags->ControlFunctions::forAll { in f; action inner { accept when x; } f } then b;", "a 'when' trigger's condition must be Boolean, found Integer"},
+	} {
+		diags := triggerDiags(t, "transition first a "+tc.trigger)
+		if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.want) {
+			t.Errorf("%q: want one diagnostic containing %q, got %v", tc.trigger, tc.want, diags)
+		}
+	}
+	wantTriggerSilent(t, "transition first a accept after Timed({ attribute wait : DurationValue = 5 [s]; wait }) then b;")
+	wantTriggerSilent(t, "transition first a accept when flags->ControlFunctions::forAll { in f; attribute ok : Boolean = f; ok } then b;")
+	wantTriggerSilent(t, "transition first a accept after Timed({ action inner { accept after 7 [s]; } d }) then b;")
+	diags := triggerDiags(t, "transition first a accept when { attribute bad : Boolean = 5; flag } then b;")
+	if len(diags) != 2 || !strings.Contains(diags[0].Message, "found an expression body") || !strings.Contains(diags[1].Message, bad) {
+		t.Errorf("bare body with a bad member: want the body and the binding diagnostics, got %v", diags)
 	}
 }
 

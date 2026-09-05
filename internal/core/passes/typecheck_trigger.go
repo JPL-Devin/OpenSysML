@@ -35,12 +35,16 @@ func (TriggerArgumentPass) Run(ctx *Context, name string, root *ast.RootNamespac
 	if rootScope == nil {
 		return nil
 	}
-	c := &triggerArgumentChecker{
-		ctx:  ctx,
-		expr: &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()},
+	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()}
+	// An argument's body members are typed as the type pass does, triggers included.
+	bodies := &typeChecker{resolver: ctx.Resolver(), expr: expr, lang: ctx.Kind}
+	c := &triggerArgumentChecker{ctx: ctx, expr: expr}
+	expr.walkMembers = func(scope *symbols.Scope, members []ast.Node) {
+		bodies.walk(scope, members)
+		c.walk(scope, members)
 	}
 	c.walk(rootScope, root.Members)
-	return c.expr.diags
+	return append(bodies.diags, expr.diags...)
 }
 
 type triggerArgumentChecker struct {
