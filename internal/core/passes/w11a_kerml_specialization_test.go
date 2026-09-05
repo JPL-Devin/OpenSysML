@@ -118,6 +118,8 @@ func TestW11ASpecializationFamiliesSysMLDefinitions(t *testing.T) {
 		{"attribute def A; state def SD :> A;", []string{msgW11ASpecializeAttributeDef}},
 		{"attribute def A; calc def CA :> A;", []string{msgW11ASpecializeAttributeDef}},
 		{"attribute def A; constraint def CO :> A;", []string{msgW11ASpecializeAttributeDef}},
+		{"attribute def A; bool def BD :> A;", []string{msgW11ASpecializeAttributeDef}},
+		{"part def PD; bool def BD :> PD;", []string{msgW11ASpecializeStructure}},
 		{"attribute def A; requirement def R :> A;", []string{msgW11ASpecializeAttributeDef}},
 		{"attribute def A; use case def UC :> A;", []string{msgW11ASpecializeAttributeDef}},
 		{"attribute def A; connection def CD :> A;", []string{msgW11ASpecializeAttributeDef}},
