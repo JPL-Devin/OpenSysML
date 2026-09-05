@@ -107,6 +107,19 @@ func TestFeatureValueOverridingImplicitParameterRedefinition(t *testing.T) {
 	overridingDiags(t, src, "= 2", "= 5", "= 3")
 }
 
+// An unnamed result parameter is named by its owner, not by a dangling `::`.
+func TestFeatureValueOverridingUnnamedResult(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Real;
+		calc def Base { in x : Real; return : Real = x; }
+		calc def Own :> Base { return : Real = x + 1.0; }
+	}`
+	diags := overridingDiags(t, src, "= x + 1.0")
+	if msg := diags[0].Message; !strings.Contains(msg, "of the unnamed feature of P::Base:") {
+		t.Errorf("message %q does not name the result by its owner", msg)
+	}
+}
+
 // Nested and named-redefinition shapes reach the same binding.
 func TestFeatureValueOverridingNestedAndRenamed(t *testing.T) {
 	const src = `package P {
