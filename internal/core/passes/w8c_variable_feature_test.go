@@ -243,3 +243,91 @@ func TestW8CVariableFeatureRulesAreElementScoped(t *testing.T) {
 		t.Errorf("unexpected owner messages in %v", got)
 	}
 }
+
+func TestW8CVariableFeatureRulesSurviveUnrelatedPackageMemberFailures(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	attribute before : Integer := 1;
+	constant attribute kBefore : Integer = 2;
+	part unrelated : Missing;
+	attribute after : Integer := 3;
+	constant attribute kAfter : Integer = 4;
+	attribute broken : Missing := 5;
+	constant attribute kBroken : Missing = 6;
+}`
+	// A package has no typing to fail, so a member's failure gates only that member:
+	// the features before and after `unrelated` are reported, `broken` and `kBroken`
+	// are not.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 2 {
+		t.Errorf("want two %q (before, after), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 2 {
+		t.Errorf("want two %q (kBefore, kAfter), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected owner messages in %v", got)
+	}
+}
+
+func TestW8CVariableFeatureRulesSurviveUnrelatedNestedOwnerFailures(t *testing.T) {
+	src := `package Outer {
+	private import ScalarValues::*;
+	part unrelatedOuter : Missing;
+	package Inner {
+		attribute before : Integer := 1;
+		part unrelatedInner : Missing;
+		constant attribute kAfter : Integer = 2;
+		namespace N {
+			attribute n : Integer := 3;
+			part unrelatedN : Missing;
+		}
+	}
+}
+library package Lib {
+	private import ScalarValues::*;
+	attribute l : Integer := 4;
+	part unrelatedLib : Missing;
+	constant attribute kl : Integer = 5;
+}`
+	// Nested packages, namespaces and library packages gate nothing either, however
+	// deep the unrelated failure sits.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 3 {
+		t.Errorf("want three %q (Inner::before, N::n, Lib::l), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 2 {
+		t.Errorf("want two %q (Inner::kAfter, Lib::kl), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected owner messages in %v", got)
+	}
+}
+
+func TestW8CVariableFeatureRulesStillGateOnATypedOwnerHead(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	part unrelated : Missing;
+	attribute def AD :> Missing {
+		attribute w : Integer := 1;
+	}
+	attribute def Plain;
+	attribute a : Missing {
+		attribute x : Integer := 2;
+		constant attribute k : Integer = 3;
+	}
+	attribute ok : Plain {
+		attribute y : Integer := 4;
+		attribute unrelatedNested : Missing;
+	}
+}`
+	// A definition or usage owner still gates through its own head: the members of
+	// `AD` and `a` stay silent while `ok`'s body failure hides nothing of `ok::y`.
+	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
+	if got[msgInitialValueNotVariable] != 1 {
+		t.Errorf("want one %q (ok::y), got %v", msgInitialValueNotVariable, got)
+	}
+	if got[msgConstantNotVariable] != 0 || got[msgVariableFeatureOwner] != 0 {
+		t.Errorf("unexpected constant or owner messages in %v", got)
+	}
+}
