@@ -179,6 +179,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkMultiplicityRange`, the `validateMultiplicityRangeResultTypes` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a multiplicity bound naming a package-level feature typed by `ScalarValues::Natural` or `Integer` (`feature k : Natural; feature d [k];`, both owned by a package) reports `Must have a Natural value`; the same bound inside a type (`class T { feature k : Natural; feature d [k]; }`) is accepted | established from the pinned `KerMLValidator.xtend` lines 1333–1339, `FeatureReferenceExpression_modelLevelEvaluable_InvocationDelegate` and `MultiplicityRange_valueOf_InvocationDelegate`: a reference to a feature with no featuring type and no value is deemed model-level evaluable, its evaluation yields the feature rather than a `LiteralInteger`, `valueOf` returns the `-2` null marker and the check reports it; a reference to a type's member is not evaluable and is judged by its type through `isInteger`. The method carries `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Reproduced with the model below through `validate-kerml`; [pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round) records how OpenSysML judges both spellings by the referent's type | **not filed** — drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.logic` — `ConnectorAdapter.getDefaultSupertype`, with `KerMLValidator.checkConnectorBinarySpecialization` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a connector owning two ends that redefine two ends of a three-ended general (`connector m : N { end redefines a references x; end redefines b references y; }`) reports `Cannot have more than two ends`, while the same shape spelled as an association (`assoc B specializes N { end redefines a : T; end redefines b : T; }`) is accepted | established from the pinned `ConnectorAdapter.xtend` (`getDefaultSupertype` counts `TypeUtil.getOwnedEndFeaturesOf(target)`, two here, so the connector is given `Links::binaryLinks`) and `KerMLValidator.xtend` (`checkConnectorBinarySpecialization` then counts three `connectorEnd`s), reproduced with the model below through `validate-kerml`; KerML 1.1 8.3.4.5.3 implies `Links::binaryLinks` only for `connectorEnd->size() = 2`, which counts the inherited end. [pilot-differential.md](pilot-differential.md#binary-link-specialization-round) records how OpenSysML counts effective ends for the base | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors [performance.md](../internals/performance.md#a-real-model-apollo-11) records — defects in that model, not in any OMG material, so they are not rows of this page | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
@@ -555,6 +556,48 @@ returns its `-2` null marker, and the result-types error fires. The method is an
 `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Is a package-level
 feature meant to be a valid bound (judged by its type like a member), or is a bound that cannot
 be evaluated to a literal meant to be rejected?
+````
+
+---
+
+### A connector inheriting a third end is given the binary base (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML counts a declaration's effective ends — owned and
+inherited — when choosing between `Links::links` and `Links::binaryLinks`
+(`internal/core/semantics/implicit.go`, `connector.go`); the adjudication is in
+[pilot-differential.md](pilot-differential.md#binary-link-specialization-round).
+
+````markdown
+### `ConnectorAdapter.getDefaultSupertype` makes a connector with an inherited third end binary
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    class T;
+    assoc N { end a : T; end b : T; end c : T; }
+    assoc B specializes N { end redefines a : T; end redefines b : T; }
+    class C {
+        feature x : T; feature y : T; feature z : T;
+        connector m : N { end redefines a references x; end redefines b references y; }
+    }
+}
+```
+
+reports `Cannot have more than two ends` at line 7 (`connector m`) and accepts line 4
+(`assoc B`). Both declarations own two ends that redefine `a` and `b` and inherit `c`, so each
+has three ends. `ConnectorAdapter.getDefaultSupertype` chooses between `Links::links` and
+`Links::binaryLinks` by `TypeUtil.getOwnedEndFeaturesOf(target).size()`, which is two, so `m`
+implicitly subsets `binaryLinks`; `checkConnectorBinarySpecialization` then finds three
+`connectorEnd`s on a `BinaryLink`-conforming connector and reports the error. KerML 1.1
+8.3.4.5.3 (`validateConnectorBinarySpecialization`) implies `Links::binaryLinks` only when
+`connectorEnd->size() = 2`, and `connectorEnd` includes inherited ends, so the specification
+leaves `m` n-ary. `AssociationAdapter` counts owned ends the same way, but
+`checkAssociationBinarySpecialization` inspects owned ends only, so `B` escapes. Should the
+adapters count the derived `connectorEnd`/`associationEnd` rather than the owned end features,
+or is a subtype meant to redefine every end of its general?
 ````
 
 ---

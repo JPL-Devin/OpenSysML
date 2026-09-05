@@ -6,7 +6,9 @@
   A connector, binding, succession, flow or association that conforms to `Links::BinaryLink` yet
   has more than two ends — positional `(x, y, z)` ends, declared `end` features and inherited
   ends counted alike — reports each end past the second, with the redefinition check no longer
-  masking it. A multiplicity bound whose result type resolves to anything but an Integer-conforming
+  masking it. Whether a KerML association or connector implicitly takes the binary base follows
+  the same count, so one that redefines two ends of a three-ended general and inherits the third
+  stays n-ary. A multiplicity bound whose result type resolves to anything but an Integer-conforming
   data type — a feature typed by a class, a call to a function whose result is a class, or a
   quantity such as `3 [kg]`, say — is rejected with `Must have a Natural value`; an unresolved or
   untyped bound stays silent.

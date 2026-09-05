@@ -2386,6 +2386,34 @@ adjudicated toward the specification rather than the referee:
   reference as a bound (`MultiplicityExpressionMember`), so no arithmetic bound reaches its
   validator and the difference has no referee row; it is a reading of the library.
 
+### Binary-link specialization round
+
+`validateAssociationBinarySpecialization` and `validateConnectorBinarySpecialization`
+(KerML 1.1 8.3.4.4.2, 8.3.4.5.3) are constraint-tier rules of ours (`passes/constraint.go`,
+`semantics/connector.go`): an association or connector that conforms to `Links::BinaryLink` with
+more than two effective ends — owned, positional and inherited ends together — is reported at
+each end past the second. Which base a declaration takes implicitly follows the same effective
+count (`semantics/implicit.go`): KerML 1.1 asks that an association with
+`associationEnd->size() = 2` specialize `Links::BinaryLink` and a connector with
+`connectorEnd->size() = 2` subset `Links::binaryLinks`, and both derived properties include the
+inherited ends. One point where the pilot's `ConnectorAdapter.getDefaultSupertype`
+(`org.omg.sysml.adapter`, pinned `c7fc737`) and our rule part is adjudicated toward the
+specification:
+
+- **A connector owning two ends that redefine two of an n-ary general's ends stays n-ary.**
+  `connector m : N { end redefines a references x; end redefines b references y; }` with
+  `assoc N { end a; end b; end c; }` has three connector ends — the two it owns and the `c` it
+  inherits — so the specification implies no binary base, and we give it `Links::links`. The
+  pilot's adapter counts owned end features only, gives `m` `Links::binaryLinks`, and its
+  `checkConnectorBinarySpecialization` then reports `Cannot have more than two ends` on a
+  connector the specification's own implication never made binary; its `AssociationAdapter`
+  counts the same way, yet the association check inspects owned ends alone, so the association
+  spelling of the same shape (`assoc B specializes N { end redefines a; end redefines b; }`) is
+  accepted by both sides. The corpus has no such row — its binary-ends cases (`k24`, `k26`) declare
+  the binary base — and the four OMG roots contain no connector of that shape;
+  [omg-issues.md](omg-issues.md#a-connector-inheriting-a-third-end-is-given-the-binary-base-pilot-2026-07)
+  drafts the question.
+
 ## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
