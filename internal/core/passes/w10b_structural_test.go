@@ -1,6 +1,11 @@
 package passes
 
-import "testing"
+import (
+	"slices"
+	"sort"
+	"strings"
+	"testing"
+)
 
 // A second entry/do/exit action, a second return parameter and a composite
 // usage owned by a port each draw the reference's diagnostic, on the extra
@@ -127,6 +132,57 @@ func TestW10BRedefinedPortMayNotOwnCompositeUsages(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("a redefined port with a composite nested part must be reported")
+	}
+}
+
+// A variant port under a port owner has no owning type, so it must be referential;
+// the pilot reports each composite one down a chain of variations and no other.
+func TestW10BVariantPortMustBeReferential(t *testing.T) {
+	const src = `package P {
+		port def PD;
+		part def D;
+		port def Q {
+			port p1 : PD;
+			variation port vp : PD {
+				variant port a : PD;
+				variant abstract port b : PD;
+				variant port c : PD { port n : PD; }
+				variant ref port ok1 : PD;
+				variant in port ok2 : PD;
+				variant end port ok3 : PD;
+				variant p1;
+			}
+			variation ref part vpart : D {
+				variant variation port vq : PD {
+					variant port d : PD;
+				}
+			}
+		}
+		part holder {
+			port q : Q {
+				variation port vp2 : ~PD {
+					variant port e : ~PD;
+				}
+			}
+			part x {
+				variation port vp3 : PD {
+					variant port fine : PD;
+				}
+			}
+		}
+	}`
+	var got []int
+	for _, d := range typeDiags(t, src) {
+		switch d.Message {
+		case msgVariantPortComposite:
+			got = append(got, 1+strings.Count(src[:d.Span.Offset], "\n"))
+		case msgPortDefComposite, msgPortUsageComposite:
+			t.Errorf("unexpected %q at offset %d", d.Message, d.Span.Offset)
+		}
+	}
+	sort.Ints(got)
+	if want := []int{7, 8, 9, 16, 17, 24}; !slices.Equal(got, want) {
+		t.Errorf("variant port diagnostics on lines %v, want %v", got, want)
 	}
 }
 

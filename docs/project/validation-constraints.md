@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 148 of 217 named constraints are reported by OpenSysML — 137 ✅ faithful and 11 ⚠️ approximate; 6 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 63 ❔ unknown.
+**Census:** 149 of 217 named constraints are reported by OpenSysML — 138 ✅ faithful and 11 ⚠️ approximate; 6 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 62 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -259,7 +259,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validatePerformActionUsageReference` | SysML | A perform action usage references an action | internal/core/passes/w11a_usage_typing.go:W11AUsageTypingPass.Run | — | `semantic/s24-perform-references-non-action.sysml` | ✅ faithful |
 | `validatePortDefinitionConjugatedPortDefinition` | SysML | A port definition has exactly one conjugated port definition (implicit element; not expressible in text) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validatePortDefinitionOwnedUsagesNotComposite` | SysML | Owned usages of a port definition other than ports are referential | internal/core/passes/w10b_structural.go:W10BStructuralPass.Run | — | `xpect/p26-port-def-nonreferential-usage.sysml` | ✅ faithful |
-| `validatePortUsageIsReference` | SysML | A port usage is referential (the grammar admits no composite `port`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validatePortUsageIsReference` | SysML | A port usage whose owning type is not a port definition or port usage must be referential (`A port usage must be referential.`). Observable only on a variant: `PortUsageAdapter.postProcess` clears `isComposite` for every other owner, but a `variant port a : PD;` under a `variation port` owned by a port definition or port usage keeps it, and the variant has no owning type | internal/core/passes/w10b_structural.go:W10BStructuralPass.Run | — | `semantic/s52-variant-port-composite.sysml` | ✅ faithful |
 | `validatePortUsageNestedUsagesNotComposite` | SysML | Nested usages of a port usage other than ports are referential | internal/core/passes/w10b_structural.go:W10BStructuralPass.Run | — | `semantic/s25-port-nested-composite-part.sysml` | ✅ faithful |
 | `validatePortUsageType` | SysML | A port is typed by port definitions | internal/core/passes/typecheck.go:compatibleTyping (messages in internal/core/passes/w10b_usage_typing.go:pilotTypingMessage) | — | `semantic/s26-port-typed-by-part-def.sysml` | ✅ faithful |
 | `validateReferenceUsageIsReference` | SysML | A reference usage is referential (implied by `ref`; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
