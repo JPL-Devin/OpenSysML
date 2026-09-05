@@ -42,6 +42,10 @@ type Condition struct {
 	// Required distinguishes a required condition from an assumption, which is
 	// trusted rather than required to hold.
 	Required bool
+
+	// Constraint is the named constraint usage stating the condition through
+	// its type, whose parameter values it reads; nil reads the checked element's.
+	Constraint *symbols.Symbol
 }
 
 // Label renders the condition as written, negation and grouping included.
@@ -193,13 +197,27 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
 	if owner := ctx.namedConstraintOf(scopedMember{node: member, scope: scope}); owner != nil {
-		return ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+		start := len(out)
+		out = ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+		setConstraint(out[start:], owner)
+		return out
 	}
 	bodyScope := symbols.ConstraintBodyScope(scope, member)
 	for _, nested := range body {
 		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
 	return out
+}
+
+// setConstraint marks conds as stated by owner, a nested named constraint's own
+// conditions excepted: the innermost usage's parameter values are the ones read.
+func setConstraint(conds []Condition, owner *symbols.Symbol) {
+	for i := range conds {
+		if conds[i].Constraint == nil {
+			conds[i].Constraint = owner
+		}
+		setConstraint(conds[i].Group, owner)
+	}
 }
 
 // unexecutedStatement returns the first statement conds state, groups included,
@@ -722,6 +740,9 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+	if cond.Constraint != nil {
+		features = ctx.constraintFeatures(features, cond.Constraint)
+	}
 	holds := true
 	if cond.Group != nil {
 		for _, sub := range cond.Group {
@@ -793,6 +814,23 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 			expr = nil
 		}
 		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope()}
+	}
+	return out
+}
+
+// constraintFeatures overlays the features of a named constraint usage stating a
+// condition on those of the checked element: its parameters mask same-named ones.
+func (ctx *Context) constraintFeatures(features map[string]scopedExpr, constraint *symbols.Symbol) map[string]scopedExpr {
+	own := ctx.conditionFeatures(constraint)
+	if len(own) == 0 {
+		return features
+	}
+	out := make(map[string]scopedExpr, len(features)+len(own))
+	for name, feat := range features {
+		out[name] = feat
+	}
+	for name, feat := range own {
+		out[name] = feat
 	}
 	return out
 }

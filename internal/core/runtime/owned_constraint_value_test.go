@@ -120,3 +120,41 @@ func TestOwnedConstraintIsDescribedByItsNotation(t *testing.T) {
 		t.Errorf("err = %v, want it described as a require constraint usage", err)
 	}
 }
+
+// A require constraint typed by a definition reads the parameter values its own
+// body binds (`in x = m;`), where the requirement evaluates it; a redefinition
+// rebinding one parameter keeps the others.
+func TestOwnedConstraintParametersBindInRequirement(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			private import ScalarValues::Real;
+			constraint def Below { in x : Real; in limit : Real; x < limit }
+			requirement def Base {
+				attribute m : Real = 300.0;
+				require constraint n : Below { in x = m; in limit = 400.0; }
+			}
+			requirement def Sub :> Base {
+				require constraint :>> n { in limit = 200.0; }
+			}
+			requirement base : Base;
+			requirement sub : Sub;
+		}
+	`)
+	for _, tc := range []struct {
+		req  string
+		want bool
+	}{{"base", true}, {"sub", false}} {
+		sym := requirementNamed(t, pkg, tc.req)
+		holds, err := ctx.EvaluateRequirementOn(sym, sym.OwnerScope, nil)
+		if tc.want {
+			if err != nil || !holds {
+				t.Errorf("%s: holds = %v, err = %v; want satisfied", tc.req, holds, err)
+			}
+			continue
+		}
+		var violation *ViolationError
+		if !errors.As(err, &violation) {
+			t.Errorf("%s: err = %v; want a violation of x < limit", tc.req, err)
+		}
+	}
+}
