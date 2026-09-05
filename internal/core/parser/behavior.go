@@ -56,24 +56,10 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		} else if p.atCalcBodyItem() {
 			body.add(p.parseActionMember())
 		} else {
-			// Try parsing as body member (parameters, doc, import, etc.)
-			// Body member expects: visibility + declaration keyword, or special patterns
-			// If we see expression-start that's NOT a declaration, parse as implicit return expression
-			// Check if current position looks like expression start (name, literal, if, etc.)
-			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
-			peek1 := p.peek()
-			peek2 := p.peekN(1)
-			// A keyword binary operator after the name continues an expression
-			// (`a and b`, `x as Real`), so it is not a declaration.
-			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
-				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon ||
-					(peek2.Kind == lexer.Keyword && !wordBinaryOpKeywords[peek2.KeywordID]) ||
-					peek2.Kind == lexer.LBracket)
-
-			// If expression-start but NOT name-declaration pattern, parse as implicit return
-			// A `var`-prefixed declaration is a member, not the value of an
-			// expression naming a feature `var` (KerML BasicFeaturePrefix).
-			if p.atUnaryExprStart() && !isNameDecl && !p.atVarDeclaration() {
+			// An expression start that does not declare a member is the body's
+			// trailing expression. A `var`-prefixed declaration is a member, not
+			// the value of an expression naming a feature `var` (KerML BasicFeaturePrefix).
+			if p.atUnaryExprStart() && !p.atNamedCalcMember() && !p.atVarDeclaration() {
 				// In a constraint body a bare expression is a condition the
 				// constraint states, not a calculated result.
 				if constraintConditions {
@@ -95,6 +81,25 @@ func (p *Parser) parseCalcBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after calc body")
 	return body.finish()
+}
+
+// atNamedCalcMember reports whether the cursor begins a kind-less member declaration
+// (SysML.xtext DefaultReferenceUsage) rather than an expression or a `done;` node.
+func (p *Parser) atNamedCalcMember() bool {
+	if !p.atName() && !p.at(lexer.Lt) {
+		return false
+	}
+	if _, ok := p.atActionNodeWord(); ok {
+		return false
+	}
+	cp := p.checkpoint()
+	p.parseIdentification()
+	t := p.peek()
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.LBrace) || p.at(lexer.Semicolon) ||
+		p.valueOperatorAt(0) || (t.Kind == lexer.Keyword && !wordBinaryOpKeywords[t.KeywordID])
+	p.restore(cp)
+	p.release()
+	return declared
 }
 
 // parseActionBodyMixed parses the body of an action or state node: both
@@ -520,26 +525,6 @@ func (p *Parser) parseActionMember() ast.Node {
 			en := &ast.ErrorNode{Message: "unknown action keyword: " + kw}
 			en.NodeSpan = p.spanFrom(start)
 			return en
-		}
-	}
-
-	// Check for bare assignment: identifier = expr; or identifier := expr;
-	// This is shorthand for assign identifier = expr;
-	if p.at(lexer.Identifier) {
-		nextTok := p.peekN(1)
-		if nextTok.Kind == lexer.Eq || nextTok.Kind == lexer.ColonEq {
-			// Parse as assignment
-			target := p.parseQualifiedName()
-			p.advance() // consume = or :=
-			value := p.ParseExpression()
-			p.expectStatementEnd(start, "expected ';' after assignment")
-
-			node := &ast.AssignmentActionNode{
-				Target: target,
-				Value:  value,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
 		}
 	}
 
@@ -989,8 +974,17 @@ func (p *Parser) enterTransitionEffect() func() {
 func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Parse target (feature reference or qualified name)
+	// The target names the feature assigned (SysML.xtext TargetParameter ends
+	// in a FeatureChainMember); an expression there is an error.
 	target := p.ParseExpression()
+	if _, failed := target.(*ast.ErrorNode); target != nil && !failed && !namesFeature(target) {
+		const msg = "an assignment target names a feature or a feature chain, not an expression; " +
+			"assign to the feature that holds the value"
+		p.error(target.Span(), msg)
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = target.Span()
+		target = en
+	}
 
 	// Expect ':=' operator
 	if !p.at(lexer.ColonEq) {
@@ -1401,10 +1395,6 @@ func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string
 // expression. `if` also starts a conditional expression, which is told apart by
 // the '?' that follows its condition.
 func (p *Parser) atCalcStatement() bool {
-	if p.at(lexer.Identifier) {
-		next := p.peekN(1).Kind
-		return next == lexer.Eq || next == lexer.ColonEq
-	}
 	if !p.at(lexer.Keyword) {
 		return false
 	}
@@ -1491,20 +1481,20 @@ func continuesCondition(tok lexer.Token) bool {
 	return isOperator
 }
 
-// atReturnedUsage reports whether `return` is followed by a usage declaration
-// rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
-// specialization begins one, as does a name a specialization or a
-// multiplicity follows (`return y[*] subsets A;`).
+// atReturnedUsage reports whether `return` opens a usage (`'return' UsageElement`, SysML.xtext:1961):
+// a specialization or multiplicity, or an identification (`<s>`? name?) a specialization, `[`,
+// a value, `{` or `;` follows. A value or body alone declares nothing (FeatureDeclaration).
 func (p *Parser) atReturnedUsage() bool {
-	if p.atFeatureSpecialization() {
+	if p.atFeatureSpecialization() || p.at(lexer.LBracket) {
 		return true
 	}
-	if !p.atName() {
+	if !p.atName() && !p.at(lexer.Lt) {
 		return false
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket)
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket) || p.at(lexer.LBrace) ||
+		p.at(lexer.Semicolon) || p.valueOperatorAt(0)
 	p.restore(cp)
 	p.release()
 	return declared
@@ -1541,42 +1531,9 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Parse optional feature modifiers after kind keyword
 	mods := p.parseFeatureModifiers()
 
-	// Check for leading relationship operators before name (e.g., return ::> result : Type)
-	// In this context, relationships apply to the parameter being defined (not to external target)
-	// So we consume the operator but DON'T parse target yet
-	var leadingRels []*ast.Relationship
-	for p.at(lexer.ColonGtGt) || p.at(lexer.ColonGt) || p.at(lexer.ColonColonGt) || p.at(lexer.ColonColon) {
-		tok := p.peek()
-		p.advance() // consume relationship operator
-
-		// Map token to relationship kind
-		var kind ast.RelationshipKind
-		switch tok.Kind {
-		case lexer.ColonGtGt:
-			kind = ast.RelRedefines
-		case lexer.ColonGt:
-			kind = ast.RelSpecializes
-		case lexer.ColonColonGt:
-			kind = ast.RelReferences
-		case lexer.ColonColon:
-			kind = ast.RelTyping // or namespace qualification - context dependent
-		}
-
-		// Create relationship with nil target (will be filled by parent scope context)
-		rel := &ast.Relationship{Kind: kind, Target: nil}
-		leadingRels = append(leadingRels, rel)
-	}
-
-	// Check for named or anonymous result parameter syntax
-	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
-	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
-	// Pattern 4: return name = expr;       (result parameter with initializer)
-	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
-	// Pattern 6: return [modifiers] name : Type { body } (with body)
-	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
-	// Use lookahead to distinguish Pattern 1 from Pattern 4
-	if len(leadingRels) > 0 || p.atReturnedUsage() {
-		// Parse as result parameter (named or anonymous usage with typing)
+	// A result parameter is a usage, every part optional:
+	// `return [modifiers] <s>? name? : Type[mult] = expr { body }`.
+	if p.atReturnedUsage() {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1592,11 +1549,7 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 
-		// Add leading relationships if any (e.g., ::> from `return ::> result`)
-		u.Relationships = append(u.Relationships, leadingRels...)
-
-		// Check if named (identifier before colon)
-		if p.atName() {
+		if p.atName() || p.at(lexer.Lt) {
 			u.Ident = p.parseIdentification()
 		}
 
@@ -1644,88 +1597,30 @@ func (p *Parser) parseResultMember() ast.Node {
 		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
 		p.parseUsageValue(u)
 
-		// Check for body or semicolon
 		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
 			members, hasBody := p.parseDefUsageBody()
 			u.Members = members
 			u.HasBody = hasBody
 		} else {
-			// Neither body nor semicolon → error
-			p.error(p.peek().Span, "expected '{' or ';' after return parameter")
+			p.error(p.peek().Span, msgExpectedReturnEnd)
 		}
 
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
 
-	// Check for Pattern 5: return [kind] [modifiers] name [body/semicolon] (no type, no value)
-	// `return` introduces a return parameter, so a lone name after it declares
-	// that parameter (`calc acc : Acceleration { return a; }`) rather than
-	// referencing one.
-	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
-		u := &ast.Usage{
-			Kind:        usageKind,
-			Direction:   ast.DirOut,
-			IsResult:    true,
-			IsAbstract:  mods.isAbstract,
-			IsReference: mods.isReference,
-			IsEnd:       mods.isEnd,
-			IsConstant:  mods.isConstant,
-			IsComposite: mods.isComposite,
-			IsPortion:   mods.isPortion,
-			IsDerived:   mods.isDerived,
-			IsOrdered:   mods.isOrdered,
-			IsNonunique: mods.isNonunique,
+	// A value or body alone declares no result (FeatureDeclaration names, specializes
+	// or bounds it); the remainder is read so the members after it are kept.
+	if p.valueOperatorAt(0) || p.at(lexer.LBrace) {
+		const msg = "expected the result's name, specialization or multiplicity after 'return'"
+		p.error(p.peek().Span, msg)
+		p.parseUsageValue(&ast.Usage{})
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
+			p.parseDefUsageBody()
 		}
-		u.Ident = p.parseIdentification()
-
-		// Check for body or semicolon
-		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
-			u.Members = bodyMembers
-			if !hasBody {
-				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-			}
-		} else {
-			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-		}
-
-		u.NodeSpan = p.spanFrom(start)
-		return u
-	}
-
-	// Check for Pattern 4: return [kind] [modifiers] name = expr [body] (result parameter with initializer, no type, no mult)
-	// Lookahead: name followed directly by a value operator
-	if p.atName() && p.valueOperatorAt(1) {
-		u := &ast.Usage{
-			Kind:        usageKind,
-			Direction:   ast.DirOut,
-			IsResult:    true,
-			IsAbstract:  mods.isAbstract,
-			IsReference: mods.isReference,
-			IsEnd:       mods.isEnd,
-			IsConstant:  mods.isConstant,
-			IsComposite: mods.isComposite,
-			IsPortion:   mods.isPortion,
-			IsDerived:   mods.isDerived,
-			IsOrdered:   mods.isOrdered,
-			IsNonunique: mods.isNonunique,
-		}
-		u.Ident = p.parseIdentification()
-		p.parseUsageValue(u)
-
-		// Check for optional body or semicolon
-		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
-			u.Members = bodyMembers
-			if !hasBody {
-				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-			}
-		} else {
-			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
-		}
-		u.NodeSpan = p.spanFrom(start)
-		return u
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Anything else after `return` is an expression, which no production admits:
@@ -1801,7 +1696,7 @@ func (p *Parser) parseConstraintMembers(nested bool) []ast.Node {
 // relationship where a name would go (`:>> x = v;`) or a metadata usage (`@M { … }`).
 func (p *Parser) atConstraintBodyDeclaration() bool {
 	return p.atKeyword("return") || p.atDefUsageStart() || p.atRelationshipKeyword() ||
-		p.atKindlessFeatureTyping() || p.atMetadataMember()
+		p.atKindlessFeatureTyping() || p.atNamedCalcMember() || p.atMetadataMember()
 }
 
 // atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)

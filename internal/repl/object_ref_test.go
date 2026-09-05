@@ -814,7 +814,7 @@ func TestQuotedNestedPerformerSurvivesUnrelatedDeclaration(t *testing.T) {
 	state def Check {
 		entry; then checking;
 		state checking {
-			accept after 5 then checked;
+			accept after 5 [SI::s] then checked;
 		}
 		state checked;
 	}
@@ -878,7 +878,7 @@ func TestStateMachineObjectsByReference(t *testing.T) {
 	state def Modes {
 		entry; then off;
 		state off {
-			accept after 2 then on;
+			accept after 2 [SI::s] then on;
 		}
 		state on;
 	}
@@ -1024,7 +1024,7 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 	state def Check {
 		entry; then checking;
 		state checking {
-			accept after 5 then checked;
+			accept after 5 [SI::s] then checked;
 		}
 		state checked;
 	}
@@ -1125,7 +1125,7 @@ func TestQuotedNamesHoldingSeparatorsStayOneSegment(t *testing.T) {
 	state def Check {
 		entry; then checking;
 		state checking {
-			accept after 5 then checked;
+			accept after 5 [SI::s] then checked;
 		}
 		state checked;
 	}

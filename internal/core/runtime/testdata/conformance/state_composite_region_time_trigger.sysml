@@ -12,16 +12,16 @@ package test {
 				entry; then lstart;
 				state lstart;
 				state Grouping {
-					exit { log = log * 10 + 2; }
+					exit { assign log := log * 10 + 2; }
 
 					state Step1 {
-						exit { log = log * 10 + 1; }
+						exit { assign log := log * 10 + 1; }
 					}
 
 					accept after 5 then Recovered;
 				}
 				state Recovered {
-					entry { log = log * 10 + 3; }
+					entry { assign log := log * 10 + 3; }
 				}
 
 				transition first lstart then Step1;

@@ -236,6 +236,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   transformations and a measurement reference passed as an argument value stay typed
   unevaluable, each with the reason.
 
+- **An `assert` must reference a constraint, and an `assign` must name a feature.** `assert c`,
+  `assert not c` and `assert constraint c` now report `assert target must be a constraint usage,
+  found partUsage` when `c` is not a constraint usage (a requirement usage counts, and a feature
+  chain is judged by its last feature), sharing the referent-kind check `satisfy` already had.
+  `assign PD := 1;` where `PD` is a part definition, a package, a datatype or any other
+  non-feature now reports `An assignment must have a referent.` followed by what the target is
+  declared as, instead of being accepted; an unresolved target keeps its name-resolution error as
+  the first and only diagnostic, and only a feature reaches the time-varying rule. Both rules
+  are refereed against the pinned pilot, which rejects the same models at the same positions.
+
 - **Composed units render in one canonical form.** A unit an operation composes is a sorted
   product of powers of the units the operands were written in — `3 [m] * 3 [m]`,
   `(3 [m]) ** 2` and `(3 [m] * 3 [m]) / 3 [m]` print `9 [m**2]`, `9 [m**2]` and `3.0 [m]` rather
@@ -320,6 +330,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   pinned pilot reports. `var attribute x : Integer := 1;` in an `item def`, `constant attribute c = 1;`
   on a part, and `:=` anywhere inside an occurrence stay silent, as does every model under `examples/`
   and the OMG corpora.
+  The rule is element-scoped: an error elsewhere in the document does not silence it, only a
+  lower-tier failure in the feature's own declaration or its owner's does.
 
 - **A call selects the overload its arguments fit, and the checker and the runtime select the
   same one.** A name visible as several function or calc declarations — owned, inherited,
@@ -758,6 +770,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   is `Must have an invoked/instantiated type` at the name, and the runtime refuses an unresolved
   or non-type `new` target at the send instead of posting a message that names nothing.
 
+- **The argument of an `accept after`, `at` or `when` trigger is typed.** An `after` delay must
+  be a `DurationValue`, an `at` time a `TimeInstantValue` and a `when` condition a Boolean, as
+  the SysML v2 `TriggerInvocationExpression` constraints require and the reference validator
+  enforces; `accept after 5` is reported as `trigger-after-duration` with the unit-bearing
+  spelling suggested (`after 5 [s]`), and `trigger-at-time-instant` and `trigger-when-boolean`
+  name the other two. The judgement is semantic rather than syntactic: a quantity literal is
+  typed by the unit it is written in, a feature by its declared type through inheritance,
+  redefinition, aliases and feature chains (a feature declared by nothing but a value takes the
+  value's type), a call by the result of the overload its arguments select, and arithmetic by
+  the dimension of its value — so `after Twice(d) + 5 [s]` is silent and `after Len() * Len()`
+  is reported as a value of dimension L². Triggers nested in action, state and transition
+  bodies, including the body an action-target succession carries, are checked, and a body
+  declared there now gets its own scope. An argument whose type only evaluation determines is
+  left to it, and an unresolved name is reported by name resolution alone.
+
 - **A census of the pilot's named validation constraints.** `docs/project/validation-constraints.md`
   lists every `validate*` constraint the pinned pilot validators name (217, re-extracted from the
   pinned jar into `docs/project/validation-constraints-baseline.json`) with what it checks, where
@@ -796,6 +823,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **A gRPC request reuses the parsed model's resolver and semantics across requests.** The name resolver and semantic side tables are built once per content hash and shared under a lock; runtime instances stay request-local. `VerifyConstraint` 2.4 s → 12 ms, 29% faster than 0.4.3. `Evaluate` runs under `Resolver.Scratch`, which forgets what the request's own expression nodes memoized — the spellings suggested for their unresolved names included — so the shared resolver does not grow per request.
 - **Instantiating an object allocates its feature values in one block and memoizes its redefinition groups and behaving parts per type.** Per-object instantiation is 2× faster than before the fix (35 allocations, was 54).
 - **Control-node succession validation asks whether one member is visible instead of enumerating all of them.** `ActionSuccessions` uses `Model.HasMember`, which stops at the first match, and the contributor lists it walks are memoized. Validating a 12 000-element model is 26% faster and allocates 13% less than before the fixes.
+
+- **Resolving a name through a wildcard import costs the matches, not the namespace.** Each
+  unqualified name reaching `import ISQ::*` or another large library namespace used to be
+  compared against every member the import surfaces, so a model leaning on the quantity and
+  unit libraries spent much of its load time in that scan. The index now answers a wildcard
+  import's members by name; the public Apollo 11 model (28 files, 7.2k lines) validates in
+  about 0.33 s instead of 0.54 s, allocating 168 MiB instead of 218 MiB, with identical
+  diagnostics.
 
 ### Fixed
 
@@ -836,6 +871,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
   variant" / "not a literal" reports, are unchanged.
 
+- **A calculation's `return` may specialize without a name or a typing.**
+  `return :> ISQ::power = force * speed;`, `return deltaV :> ISQ::speed = v1 - v0;` and
+  `return :> ISQ::length[*] = xs;` used to be rejected with `expected '{' or ';' after return
+  parameter` followed by a cascade of `expected a body member`; they now declare the result
+  parameter with its subsetting, as the pilot implementation reads them. A `return :>` that
+  names no target is reported once, without a cascade.
+- **A calculation's result may be identified by a short name.** `return <r> result : Real = x;`,
+  `return <r> :> ISQ::length = x;`, `return <r> = x;` and `return <r>;` used to be refused as a
+  return expression; they now declare the result parameter under its short name, as the pilot
+  implementation reads them.
+- **A calculation's result may open with a multiplicity, or carry a body right after its name.**
+  `return [*] = xs;`, `return [*] :> xs;`, `return r { doc /* … */ }` and `return <r> { … }` used to
+  be refused as a return expression; they now declare the result parameter, as the pilot
+  implementation reads them. A `return` followed only by a value or a body (`return = e;`,
+  `return { … }`) declares nothing and is reported once, without a cascade. A kind-less member
+  followed directly by a body (`twice { doc /* … */ }`) in a calculation or constraint body is
+  likewise the declaration it is, not a trailing expression.
+
 - **`%run-query` and `-run-query` accept a value of a type the session declares.** The REPL
   reads names from the document's own scope tree while the runtime model reads the index, so
   a parameter typed by a `part def` or `enum def` of the loaded model refused that model's
@@ -868,6 +921,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   selecting among actions only. A feature typed by a calc — the model's own or a library
   function such as `ref root : sqrt;` — is called as that calc by an expression and by a
   `send`, which delivers the computed value rather than a message named after the feature.
+
+- **A kind-less feature may be identified by a short name.** `<a> alpha = 1;`, `<b> :> alpha = 2;`
+  and `<t> twice = n * 2;` used to be rejected with `expected a namespace member` or `expected a
+  body member` in every namespace, definition body, calculation body and nested statement body;
+  they now declare the feature under its short name (SysML `DefaultReferenceUsage` over an
+  `Identification`), as the pilot implementation reads them. A keyword of the other language is
+  an ordinary name there too: `<chains> links = 3;` and `<s> featured = 1;` in a `.sysml` file,
+  `<s> part = 1;` and `<attribute> y = 2;` in a `.kerml` file.
 
 - A calc parameter default that re-invoked its own calc reported the recursion limit with one wrapped line per frame, building the message with the square of the depth (over 12 GiB under the race detector for a library specialization) and getting the test suite killed on memory-limited CI. A failing default now counts as a frame of its calc, so the frames collapse into a count as a calc body's already did.
 
@@ -1215,6 +1276,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   and outputs — are listed under its row, apart from the performer's own values of the same name.
   A nested object's behaviors are listed under its own row. Nothing is invented: a machine that
   has not started reads `not started`, one that reached its end reads `completed`.
+
+- **A kind-less `x = e;` or `x := e;` in a behavioral body declares a feature; an assignment
+  is spelled `assign x := e;`.** In a calculation body, a constraint body, a `while`/`loop`/`for`/`if`
+  body, a state's entry/`do`/exit block or a transition effect, `x = e;` used to be OpenSysML's
+  own shorthand for assigning `x`. It now reads as the standard notation does — a member of the
+  body declared only by its name and value (SysML.xtext `DefaultReferenceUsage`), the reading the
+  pilot implementation gives it — so `calc def c { in n : Integer; twice = n * 2; twice + 1 }`
+  declares a local `twice` that the trailing expression reads, and
+  `assert constraint { flag = true; }` declares `flag` rather than writing it. A model that
+  relied on the shorthand must write `assign x := e;`: an `x = e;` in such a body no longer
+  updates an output, a local or a state attribute, and a calc whose outputs were written that
+  way reports them as never assigned. The bundled fixtures have been migrated.
 
 - **Compliance census counted at docs build.** `docs/project/spec-compliance.md` no longer carries a literal rule census, and `README.md`/`docs/internals/architecture.md` no longer restate the rule total; `scripts/mkdocs_census.py` counts the rows when the documentation site is built. Adding a compliance row no longer rewrites any shared line, and `make docs-counts` regenerates only the oracle-baseline figures.
 

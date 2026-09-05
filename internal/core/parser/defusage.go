@@ -544,13 +544,20 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 	return false
 }
 
-// keywordlessFeatureAt reports whether the tokens from offset off declare a
-// feature with no kind keyword (KerML.xtext Feature over BasicFeaturePrefix
-// FeatureDeclaration): a name followed by a specialization, a multiplicity, a
-// body, or nothing at all.
+// keywordlessFeatureAt reports whether the tokens at offset off declare a feature with
+// no kind keyword: an identification (`<s>`? name?) followed by a declaration tail.
 func (p *Parser) keywordlessFeatureAt(off int) bool {
+	if p.peekN(off).Kind == lexer.Lt {
+		if !p.atNameAt(off+1) || p.peekN(off+2).Kind != lexer.Gt {
+			return false
+		}
+		off += 3
+		if !p.atNameAt(off) {
+			return p.keywordlessDeclarationTailAt(off)
+		}
+	}
 	t := p.peekN(off)
-	if t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+	if !p.atNameAt(off) {
 		return false
 	}
 	// KerML reserves `var`, so it prefixes a declaration and never names one.
@@ -558,11 +565,17 @@ func (p *Parser) keywordlessFeatureAt(off int) bool {
 		p.src.Text(t.Span) == varPrefixWord {
 		return false
 	}
-	switch next := p.peekN(off + 1); next.Kind {
+	return p.keywordlessDeclarationTailAt(off + 1)
+}
+
+// keywordlessDeclarationTailAt reports whether the token off positions ahead
+// continues a keyword-less feature declaration after its identification.
+func (p *Parser) keywordlessDeclarationTailAt(off int) bool {
+	switch next := p.peekN(off); next.Kind {
 	case lexer.LBracket, lexer.Semicolon, lexer.LBrace:
 		return true
 	default:
-		return beginsDeclarationTail(next, p.peekN(off+2))
+		return beginsDeclarationTail(next, p.peekN(off+1))
 	}
 }
 
@@ -1998,7 +2011,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				// The right side is the second ConnectorEndMember (SysML.xtext:1020),
 				// so it names a feature; an expression there is an error.
 				u.Value = p.ParseExpression()
-				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !bindingEndReference(u.Value) {
+				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !namesFeature(u.Value) {
 					const msg = "a binding end names a feature, not an expression; " +
 						"declare a feature with the expression as its value and bind to that"
 					p.error(u.Value.Span(), msg)
@@ -3484,9 +3497,10 @@ func (p *Parser) parseBindingEnd(u *ast.Usage) {
 	}
 }
 
-// bindingEndReference reports whether a parsed value names a feature, as a
-// binding's right end must (SysML.xtext:1020 ConnectorEndMember).
-func bindingEndReference(n ast.Node) bool {
+// namesFeature reports whether a parsed expression names a feature, as a
+// binding's right end (SysML.xtext ConnectorEndMember) and an assignment's
+// target (SysML.xtext TargetParameter) must.
+func namesFeature(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
 		return true

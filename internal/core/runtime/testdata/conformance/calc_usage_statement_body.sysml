@@ -9,7 +9,7 @@ package test {
 		in n : Integer;
 		attribute doubled : Integer = 0;
 		while doubled < n {
-			doubled = doubled + 2;
+			assign doubled := doubled + 2;
 		}
 		out reached = doubled;
 		out margin = reached - n;

@@ -178,6 +178,8 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 		c.walkMembers(site, childScopeOr(scope, n), n.States)
 	case *ast.InitialNode:
 		c.walkMembers(site, childScopeOr(scope, n), n.Members)
+	case *ast.SuccessionEdge:
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		c.walkMembers(site, childScopeOr(scope, m), ast.NodeBodyMembers(m))
 	case *ast.SendStatement:
