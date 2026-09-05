@@ -1078,13 +1078,12 @@ func (m *migration) dependencyPairs(d *xmi.Element) (pairs []pair, failed int, n
 			pairs = append(pairs, pair{c, s})
 		}
 	}
-	if missing != "" {
-		failed = 1
-	}
 	if external > 0 {
 		missing = joinNotes(missing, fmt.Sprintf("%d pair(s) reach outside the document and are not written", external))
 	}
-	return pairs, failed + external, missing
+	// Every pair with a dangling end fails too.
+	total := (len(clients) + len(m.model.Unresolved(d, "client"))) * (len(suppliers) + len(m.model.Unresolved(d, "supplier")))
+	return pairs, total - len(pairs), missing
 }
 
 // placement is the outcome of placing a Satisfy or Verify: where each pair was
