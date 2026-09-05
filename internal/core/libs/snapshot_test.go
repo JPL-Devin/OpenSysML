@@ -2,11 +2,15 @@ package libs
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/pack"
@@ -72,14 +76,35 @@ func TestSnapshotIndexMatchesFreshLoad(t *testing.T) {
 	}
 }
 
+// snapshotKindDigest pins the SymbolKind numbering the snapshot stream persists
+// under snapshotFormatVersion; a kind added or moved renumbers the ones after it.
+const snapshotKindDigest = "3b1c2c20eb06ad99"
+
+func TestSnapshotFormatVersionPinsSymbolKinds(t *testing.T) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "format %d\n", snapshotFormatVersion)
+	for k := symbols.SymbolUnknown; k <= symbols.SymbolMultiplicity; k++ {
+		fmt.Fprintf(&b, "%d=%s\n", int(k), k)
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	if got := hex.EncodeToString(sum[:8]); got != snapshotKindDigest {
+		t.Fatalf("SymbolKind numbering changed under snapshot format %d (digest %s, want %s).\n"+
+			"The snapshot stream persists kinds as integers: bump snapshotFormatVersion so a "+
+			"blob in the old numbering is refused, regenerate stdlib.snapshot with "+
+			"`go generate ./internal/core/libs`, then update snapshotKindDigest.",
+			snapshotFormatVersion, got, snapshotKindDigest)
+	}
+}
+
 func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	if _, err := DecodeSnapshot(stdlibSnapshot, "0000"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("digest mismatch: got %v, want ErrSnapshotStale", err)
 	}
 	// A blob in the previous or a later format is refused before its stream
-	// is read, so a layout change never decodes into shifted fields.
+	// is read, so a layout change never decodes into shifted fields. Format 8
+	// numbered the kinds before SymbolCrossFeature was added.
 	digest := NewLoader(EmbeddedSource(), nil).setDigest()
-	for _, version := range []uint64{snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
+	for _, version := range []uint64{8, snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
 		other := binary.AppendUvarint([]byte(snapshotMagic), version)
 		other = binary.AppendUvarint(other, uint64(len(digest)))
 		other = append(other, digest...)
