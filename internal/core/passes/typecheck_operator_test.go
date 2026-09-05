@@ -306,3 +306,88 @@ func TestQuantityUnitInEveryExpressionPosition(t *testing.T) {
 		"21:48 found Natural",
 	)
 }
+
+// A filter condition and a multiplicity bound are judged by rules of their own,
+// yet the operators they write get the operator rules too, once each. The pinned
+// pilot warns at the same positions in the filter conditions.
+func TestOperatorRulesInFilterConditions(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C;
+	package Q1 { filter (1 as C) == 1; }
+	package Q2 { filter (1 as Integer) == 1; }
+	package Q3 { filter (1, 2)[1] == 1; }
+	package Q4 { private import Q1::*[(1 as C) == 1]; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:23 cast argument is typed by Integer, unrelated to the target C",
+		"7:37 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.kerml", codeBracketOperator, kerml, "6:22 `x[i]` is not an index in KerML")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C;
+	package Q1 { filter (1 as C) == 1; }
+	package Q2 { filter (1 as Integer) == 1; }
+}`, "4:23 cast argument is typed by Integer, unrelated to the target C")
+}
+
+func TestOperatorRulesInMultiplicityBounds(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	feature n : Integer;
+	feature a : K[((1 as C) as Integer)..(2 as Integer)];
+	feature b : K[n..((n as C) as Natural)];
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"5:17 cast argument is typed by C, unrelated to the target Integer",
+		"5:18 cast argument is typed by Integer, unrelated to the target C",
+		"6:20 cast argument is typed by C, unrelated to the target Natural",
+		"6:21 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	part a : K[((1 as C) as Integer)..(2 as Integer)];
+}`,
+		"4:14 cast argument is typed by C, unrelated to the target Integer",
+		"4:15 cast argument is typed by Integer, unrelated to the target C")
+}
+
+// A calculation or constraint usage named as a value is typed by its definition,
+// not by its result, so casting it to the result's type warns, as the pilot
+// warns; its invocation and its result parameter are typed by the result.
+func TestCastConformanceOfCalculationUsages(t *testing.T) {
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	calc def Name { return : String; }
+	calc def Count { return : Integer; }
+	calc def NameSub :> Name;
+	constraint def K;
+	part def PD {
+		calc n : Name; calc c : Count; calc ns : NameSub; constraint k : K;
+		attribute a1 = n as String;
+		attribute a2 = c as String;
+		attribute a3 = ns as String;
+		attribute a4 = n() as String;
+		attribute a5 = c() as String;
+		attribute a6 = Name() as Integer;
+		attribute a7 = k as Boolean;
+		attribute a8 = k() as Boolean;
+		attribute b1 = n.result as String;
+		attribute b2 = ns.result as String;
+		attribute b3 = ns() as String;
+		attribute b4 = NameSub() as String;
+	}
+	calc def Wrap1 { return : String; calc n : Name; n as String }
+	calc def Wrap2 { return : String; calc n : Name; n.result as String }
+	calc def Wrap3 { return : String; result as String }
+}`,
+		"9:18 cast argument is typed by Name, unrelated to the target String",
+		"10:18 cast argument is typed by Count, unrelated to the target String",
+		"11:18 cast argument is typed by NameSub, unrelated to the target String",
+		"13:18 cast argument is typed by Integer, unrelated to the target String",
+		"14:18 cast argument is typed by String, unrelated to the target Integer",
+		"15:18 cast argument is typed by K, unrelated to the target Boolean",
+		"22:51 cast argument is typed by Name, unrelated to the target String",
+	)
+}
