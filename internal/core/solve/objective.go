@@ -14,10 +14,10 @@ import (
 // The contract, which SysML v2 leaves to a tool since it defines no solving:
 // direction comes from the trade-study definition the objective is typed by
 // (TradeStudies::MinimizeObjective or MaximizeObjective), the value to improve
-// from the expression the objective states for the library's `best` feature
-// (`attribute :>> best = expression;`), and what is feasible from the conditions
-// the case requires or assumes together with the ones each objective states in
-// its own body.
+// from the expression the objective's redefinition of the library's `eval`
+// calculation returns (`in calc :>> eval { expression }`), and what is feasible
+// from the conditions the case requires or assumes together with the ones each
+// objective states in its own body.
 func Analysis(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope) (*Query, error) {
 	return AnalysisWith(ctx, sym, scope, nil)
 }
@@ -39,13 +39,17 @@ func AnalysisWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scop
 	subject := Subject{Kind: "analysis", Name: sym.Name, Symbol: sym}
 	// An objective's own conditions bound it as the case's do, so they are part
 	// of what is feasible; a case stating none is unbounded rather than refused.
-	conds := ctx.CaseConditionsOf(sym, scope)
-	for _, obj := range objectives {
-		conds = append(conds, obj.Conditions...)
-	}
 	t := newTranslator(ctx, subject)
-	if err := t.translate(conds); err != nil {
+	if err := t.translate(ctx.CaseConditionsOf(sym, scope)); err != nil {
 		return nil, err
+	}
+	for _, obj := range objectives {
+		t.within = obj.Symbol
+		err := t.translate(obj.Conditions)
+		t.within = nil
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := t.optimize(objectives); err != nil {
 		return nil, err
@@ -83,10 +87,21 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 	if err != nil {
 		return Objective{}, err
 	}
+	spelling := "`objective o : " + directionTypeName(direction) +
+		" { subject :>> selectedAlternative; in calc :>> eval { expression } }`"
+	if obj.ReboundBest != nil {
+		return Objective{}, t.refuseObjective(obj,
+			"gives the library's bound `best` a value of its own (`attribute :>> best = expression;`), "+
+				"which validation rejects",
+			"state the value to optimize as the objective's evaluation instead ("+spelling+")")
+	}
+	if obj.StepwiseEval {
+		return Objective{}, t.refuseObjective(obj, "computes its evaluation in steps rather than stating it as one expression",
+			"write the value to optimize as the body of `eval` ("+spelling+")")
+	}
 	if obj.Value == nil {
 		return Objective{}, t.refuseObjective(obj, "states no value to improve",
-			"state the value to optimize as the objective's best one (`objective o : "+
-				directionTypeName(direction)+" { attribute :>> best = expression; }`)")
+			"state the value to optimize as the objective's evaluation ("+spelling+")")
 	}
 	// The flag is query-wide, so it is judged of the objective's own term alone:
 	// a condition that is already nonlinear says nothing about the objective.
@@ -123,14 +138,13 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 	}, nil
 }
 
-// bindBest asserts that the `best` feature an objective restates holds the value
-// it improves, so a condition a definition states over `best` bounds that value
-// as the evaluator would read it. A `best` no condition reads needs no variable.
+// bindBest asserts that the objective's `best` holds the value it improves, so a
+// condition over `best` bounds that value. A `best` no condition reads needs no variable.
 func (t *translator) bindBest(obj runtime.Objective, term *Term) error {
-	if obj.Best == nil || obj.Best.Decl == nil {
+	if obj.Best == nil || obj.Best.Decl == nil || obj.Symbol == nil {
 		return nil
 	}
-	chain := []*symbols.Symbol{obj.Best}
+	chain := []*symbols.Symbol{obj.Symbol, obj.Best}
 	if _, read := t.vars[variableName(t, chain)]; !read {
 		return nil
 	}

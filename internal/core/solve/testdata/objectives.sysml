@@ -18,7 +18,8 @@ package test {
 			mass <= 90 [kg]
 		}
 		objective lightest : MinimizeObjective {
-			attribute :>> best = mass;
+			subject :>> selectedAlternative;
+			in calc :>> eval { mass }
 		}
 	}
 
@@ -30,7 +31,8 @@ package test {
 			crew <= 7
 		}
 		objective largestCrew : MaximizeObjective {
-			attribute :>> best = crew;
+			subject :>> selectedAlternative;
+			in calc :>> eval { crew }
 			require constraint {
 				crew >= 2
 			}
@@ -48,7 +50,8 @@ package test {
 			margin < 10.5
 		}
 		objective widest : MaximizeObjective {
-			attribute :>> best = margin;
+			subject :>> selectedAlternative;
+			in calc :>> eval { margin }
 		}
 	}
 
@@ -59,7 +62,8 @@ package test {
 			load >= 1.0
 		}
 		objective heaviest : MaximizeObjective {
-			attribute :>> best = load;
+			subject :>> selectedAlternative;
+			in calc :>> eval { load }
 		}
 	}
 
@@ -74,7 +78,8 @@ package test {
 			width <= 4
 		}
 		objective narrowest : MinimizeObjective {
-			attribute :>> best = width;
+			subject :>> selectedAlternative;
+			in calc :>> eval { width }
 		}
 	}
 
@@ -96,10 +101,12 @@ package test {
 			margin <= cost * 2
 		}
 		objective cheapest : MinimizeObjective {
-			attribute :>> best = cost;
+			subject :>> selectedAlternative;
+			in calc :>> eval { cost }
 		}
 		objective widestMargin : MaximizeObjective {
-			attribute :>> best = margin;
+			subject :>> selectedAlternative;
+			in calc :>> eval { margin }
 		}
 	}
 
@@ -122,7 +129,8 @@ package test {
 			wheel::rim == wheel::rim::steel or wheel::rim == wheel::rim::carbon
 		}
 		objective lightestRim : MinimizeObjective {
-			attribute :>> best = if wheel::rim == wheel::rim::carbon ? 4 else 9;
+			subject :>> selectedAlternative;
+			in calc :>> eval { if wheel::rim == wheel::rim::carbon ? 4 else 9 }
 		}
 	}
 
@@ -144,7 +152,8 @@ package test {
 			total <= 40
 		}
 		objective mostParts : MaximizeObjective {
-			attribute :>> best = parts;
+			subject :>> selectedAlternative;
+			in calc :>> eval { parts }
 		}
 	}
 
@@ -160,7 +169,8 @@ package test {
 			parts >= 1 and parts <= 4
 		}
 		objective bestGain : MaximizeObjective {
-			attribute :>> best = total * parts;
+			subject :>> selectedAlternative;
+			in calc :>> eval { total * parts }
 		}
 	}
 
@@ -176,7 +186,8 @@ package test {
 			b >= 1.0 and b <= 4.0
 		}
 		objective bestGain : MaximizeObjective {
-			attribute :>> best = a * b;
+			subject :>> selectedAlternative;
+			in calc :>> eval { a * b }
 		}
 	}
 
@@ -190,7 +201,8 @@ package test {
 			size >= 1
 		}
 		objective goal : FitsWell {
-			attribute :>> best = size;
+			subject :>> selectedAlternative;
+			in calc :>> eval { size }
 		}
 	}
 
@@ -201,6 +213,34 @@ package test {
 			size >= 1
 		}
 		objective goal : MinimizeObjective;
+	}
+
+	// An objective giving the library's bound `best` a value of its own, which
+	// validation rejects: the solver refuses rather than reading it as the value.
+	analysis def ReboundBest {
+		attribute size : Integer;
+		require constraint {
+			size >= 1
+		}
+		objective goal : MinimizeObjective {
+			attribute :>> best = size;
+		}
+	}
+
+	// An objective whose `eval` computes in steps rather than stating one
+	// expression, which the solver has no term for.
+	analysis def StepwiseGoal {
+		attribute size : Integer;
+		require constraint {
+			size >= 1
+		}
+		objective goal : MinimizeObjective {
+			subject :>> selectedAlternative;
+			in calc :>> eval {
+				attribute doubled : Integer = size * 2;
+				return :>> result = doubled;
+			}
+		}
 	}
 
 	// A case stating conditions but no objective, which is a satisfiability
@@ -227,7 +267,8 @@ package test {
 			mass <= 9
 		}
 		objective lightest : LeastMass {
-			attribute :>> best = mass;
+			subject :>> selectedAlternative;
+			in calc :>> eval { mass }
 		}
 	}
 }

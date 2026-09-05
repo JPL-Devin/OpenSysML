@@ -87,11 +87,12 @@ func TestObjectiveOwnConditions(t *testing.T) {
 
 // TestObjectiveConditionsFromItsDefinition: a condition a model states on its own
 // objective definition bounds the values its objectives improve, the objective's
-// `best` being bound to the value it improves.
+// inherited `best` being bound to the value its `eval` returns, as the library
+// derives it.
 func TestObjectiveConditionsFromItsDefinition(t *testing.T) {
 	q := analysisQuery(t, "BoundedByItsDefinition")
 	script := Script(q)
-	best := "|test::BoundedByItsDefinition::lightest::best|"
+	best := "|test::BoundedByItsDefinition::lightest.best|"
 	mass := "|test::BoundedByItsDefinition::mass|"
 	for _, want := range []string{
 		"(assert (= " + best + " " + mass + "))",
@@ -129,7 +130,8 @@ func TestObjectiveVariablesAreDeclared(t *testing.T) {
 				attribute spare : Natural;
 				require constraint { used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = spare;
+					subject :>> selectedAlternative;
+					in calc :>> eval { spare }
 				}
 			}
 		}`)
@@ -167,7 +169,8 @@ func TestObjectiveDecidesLogic(t *testing.T) {
 				attribute ratio : Real;
 				require constraint { count >= 2 }
 				objective finest : MinimizeObjective {
-					attribute :>> best = ratio;
+					subject :>> selectedAlternative;
+					in calc :>> eval { ratio }
 				}
 			}
 		}`)
@@ -286,7 +289,12 @@ func TestObjectiveRefusals(t *testing.T) {
 		{"GuardedNonlinearGain", ErrNotOptimizable, []string{"objective bestGain", "nonlinear"}},
 		{"UndirectedGoal", ErrNotOptimizable, []string{"objective goal", "no direction",
 			"TradeStudies::MinimizeObjective"}},
-		{"ValuelessGoal", ErrNotOptimizable, []string{"objective goal", "no value", "attribute :>> best"}},
+		{"ValuelessGoal", ErrNotOptimizable, []string{"objective goal", "no value", "in calc :>> eval { expression }"}},
+		// The old spelling is a validation error, so it is refused rather than
+		// read as the value; the refusal points at the spelling that is not.
+		{"ReboundBest", ErrNotOptimizable, []string{"objective goal", "bound `best`", "validation rejects",
+			"in calc :>> eval { expression }"}},
+		{"StepwiseGoal", ErrNotOptimizable, []string{"objective goal", "in steps", "in calc :>> eval { expression }"}},
 		{"NoGoal", ErrNoObjective, []string{"NoGoal", "no objective"}},
 	}
 	for _, tc := range cases {
@@ -367,7 +375,8 @@ func TestCaseStepsAreNotBodyStatements(t *testing.T) {
 				perform action tally : Tally;
 				require constraint { used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = spare;
+					subject :>> selectedAlternative;
+					in calc :>> eval { spare }
 				}
 			}
 			action def Tally;
@@ -375,7 +384,8 @@ func TestCaseStepsAreNotBodyStatements(t *testing.T) {
 				attribute used : Integer;
 				require constraint { action a; used <= 3 }
 				objective roomiest : MaximizeObjective {
-					attribute :>> best = used;
+					subject :>> selectedAlternative;
+					in calc :>> eval { used }
 				}
 			}
 		}`)
