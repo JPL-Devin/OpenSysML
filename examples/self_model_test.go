@@ -781,7 +781,7 @@ var syncFlagPattern = regexp.MustCompile(`\w+\.\w+Var\(&\w+, "(sync-[a-z-]+)"`)
 func analyseSelfModel(t *testing.T) (*symbols.Index, *runtime.Context) {
 	t.Helper()
 
-	idx := model.NewIndexWithStdlib()
+	idx, _ := model.NewIndexWithStdlib()
 	for _, name := range selfModelFiles(t) {
 		content, err := os.ReadFile(filepath.Join(selfModelDir, name))
 		if err != nil {

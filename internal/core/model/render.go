@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -138,20 +139,15 @@ func (w *Workspace) rendererLocked(doc string) *view.Renderer {
 	return view.NewRenderer(sem, resolver, text)
 }
 
-// sourceTextLocked reads notation from any of the workspace's documents, for
-// the labels a rendering takes verbatim across document boundaries.
+// sourceTextLocked reads notation from any of the workspace's documents, and
+// behind them from the library files its index holds, for the labels a
+// rendering takes verbatim across document boundaries.
 func (w *Workspace) sourceTextLocked() view.SourceText {
 	files := make(map[string]*source.SourceFile, len(w.docs))
 	for name, d := range w.docs {
 		files[name] = source.New(name, d.Content)
 	}
-	return func(name string, span source.Span) string {
-		sf, ok := files[name]
-		if !ok {
-			return ""
-		}
-		return sf.Text(span)
-	}
+	return source.TextOf(files, libs.Text(w.libSource))
 }
 
 // documentViewsLocked are the views the document declares, outermost first, in
