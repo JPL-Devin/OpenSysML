@@ -471,9 +471,12 @@ func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedNam
 // rather than of the enclosing scope (SysML 7.6.6), which is how a calc usage's
 // `out` feature — inherited from the calc it is typed by — is reached.
 func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) semantics.PrimType {
-	// A constructed head's arguments are checked where they are written.
-	if c, isConstructor := chainHead(e).(*ast.ConstructorExpr); isConstructor {
-		ec.inferConstructor(scope, c)
+	// A constructed or invoked head's arguments are checked where they are written.
+	switch head := chainHead(e).(type) {
+	case *ast.ConstructorExpr:
+		ec.inferConstructor(scope, head)
+	case *ast.InvocationExpr:
+		ec.inferInvocation(scope, head)
 	}
 	sym, ok := ec.resolver.ResolveTarget(scope, e)
 	if !ok || sym == nil {

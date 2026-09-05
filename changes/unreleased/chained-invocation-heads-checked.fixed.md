@@ -1,0 +1,1 @@
+- **An invocation heading a feature chain is checked.** `F(x = 1, x = 2).r` reports the duplicate binding under one or several chain segments, as a bare `F(x = 1, x = 2)` already did, and the call's positional arity is checked in the same place.
