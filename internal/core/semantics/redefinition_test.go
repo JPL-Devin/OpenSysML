@@ -189,6 +189,32 @@ func TestImplicitParameterRedefinitionOfEveryGeneralBehavior(t *testing.T) {
 	}
 }
 
+// TestInteractionParametersRedefineByPosition covers that an interaction is a
+// behavior: its directed features are parameters, and a step typed by it
+// redefines them by position while its ends are not parameters at all.
+func TestInteractionParametersRedefineByPosition(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class T; class U;
+		interaction I { end a : T; end b : T; in x : T; out y : U; }
+		interaction J specializes I { in p; out q; }
+		step s : J { in r; out w; }
+	}`)
+	p := sym(t, root, "P")
+	i := nested(t, p.Scope, "I")
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "J", "p")); len(supers) != 1 || supers[0] != nested(t, i.Scope, "x") {
+		t.Fatalf("DirectSupertypes(J::p) = %v, want [I::x]", supers)
+	}
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "s", "w")); len(supers) != 1 || supers[0] != nested(t, p.Scope, "J", "q") {
+		t.Fatalf("DirectSupertypes(s::w) = %v, want [J::q]", supers)
+	}
+	if !m.Conforms(nested(t, p.Scope, "s", "r"), nested(t, p.Scope, "T")) {
+		t.Fatalf("s::r does not take T through I::x")
+	}
+	if !m.Performable(PerformsBehavior, i) || !m.Performable(PerformsBehavior, nested(t, p.Scope, "s")) {
+		t.Fatalf("interaction and step typed by it are not performable")
+	}
+}
+
 // TestImplicitRedefinitionOfInheritedParameter covers the parameters a general
 // behavior inherits rather than owns: they still occupy their position, so a
 // parameter of a step typed by that behavior redefines the inherited one
