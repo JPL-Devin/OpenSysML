@@ -815,7 +815,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, args, argTypes, params, considered)
+	ec.checkArguments(scope, invocation{e, sym, args, argTypes, params}, considered)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
@@ -836,23 +836,26 @@ func listing(report reporter, considered []*symbols.Symbol) reporter {
 	}
 }
 
-// checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
+// invocation is a call under argument checking: the expression, the behavior it names,
+// its positional arguments and their types, and the `in` parameters.
+type invocation struct {
+	e        *ast.InvocationExpr
+	sym      *symbols.Symbol
+	args     []ast.Node
+	argTypes argumentTypes
+	params   []parameter
+}
+
+// checkArguments reports the arguments of the call that do not bind to its `in` parameters,
 // listing considered (the other declarations the call could name) on each report.
-func (ec *exprChecker) checkArguments(
-	scope *symbols.Scope,
-	e *ast.InvocationExpr,
-	sym *symbols.Symbol,
-	args []ast.Node,
-	argTypes argumentTypes,
-	params []parameter,
-	considered []*symbols.Symbol,
-) {
+func (ec *exprChecker) checkArguments(scope *symbols.Scope, call invocation, considered []*symbols.Symbol) {
+	e, sym, args, argTypes, params := call.e, call.sym, call.args, call.argTypes, call.params
 	report := listing(ec.errorf, considered)
 	advise := listing(func(span source.Span, format string, args ...any) {
 		ec.warnCode(CodeUnboundParameter, span, format, args...)
 	}, considered)
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report, advise)
+		ec.checkNamedArguments(scope, call, report, advise)
 		return
 	}
 	if len(args) > len(params) {
@@ -1034,15 +1037,8 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 // checkNamedArguments reports named arguments that name no `in` parameter of sym or do
 // not bind to it, a parameter bound twice (by whichever name or position), and advises
 // of default-less parameters no argument names.
-func (ec *exprChecker) checkNamedArguments(
-	scope *symbols.Scope,
-	e *ast.InvocationExpr,
-	sym *symbols.Symbol,
-	args []ast.Node,
-	argTypes argumentTypes,
-	params []parameter,
-	report, advise reporter,
-) {
+func (ec *exprChecker) checkNamedArguments(scope *symbols.Scope, call invocation, report, advise reporter) {
+	e, sym, args, argTypes, params := call.e, call.sym, call.args, call.argTypes, call.params
 	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
 	// reports the same call.
 	if e.Operand != nil {
