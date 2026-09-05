@@ -52,10 +52,9 @@ func (W8DConnectorFeaturingPass) Run(ctx *Context, name string, root *ast.RootNa
 		if semantics.DeclaresVariant(sym) {
 			return
 		}
+		// Ends name features of the connector's owner, so they resolve in the
+		// enclosing scope as the resolver does, never to the connector's own ends.
 		scope := sym.OwnerScope
-		if sym.Scope != nil {
-			scope = sym.Scope
-		}
 		contexts := cc.featuringContexts(sym)
 		for _, end := range w8dConnectorEndTargets(u) {
 			qn := w8dEndRootName(end)

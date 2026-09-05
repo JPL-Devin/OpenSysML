@@ -1177,7 +1177,7 @@ func isBehaviorDeclaration(decl ast.Node) bool {
 	case *ast.Usage:
 		switch d.Kind {
 		case ast.UsageBehavior, ast.UsageState, ast.UsagePredicate,
-			ast.UsageExpr, ast.UsageConstraint:
+			ast.UsageExpr, ast.UsageConstraint, ast.UsageInteraction:
 			return true
 		}
 	}

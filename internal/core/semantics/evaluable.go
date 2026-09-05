@@ -123,7 +123,7 @@ func (m *Model) calledFunction(scope *symbols.Scope, e *ast.InvocationExpr) (*sy
 	if m.arguments == nil {
 		return m.resolveExprTarget(scope, e.Type)
 	}
-	sel := m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e), PerformsBehavior)
+	sel := m.SelectCall(scope, e, PerformsBehavior)
 	return sel.Selected, sel.Selected != nil
 }
 

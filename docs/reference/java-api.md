@@ -3,7 +3,7 @@
 This page covers what `org.openmbee:opensysml-client` exposes, what it deliberately keeps
 out of its public surface, and where its v1 stops. To choose between the clients, see
 [client libraries](clients.md); for a task-oriented walkthrough, see
-[guide chapter 9](../guide/09-python.md#from-java). The client's own notes on its
+[guide chapter 9](../guide/09-clients.md#from-java). The client's own notes on its
 dependency footprint, service ownership and release verification are in
 [clients/java/README.md](../../clients/java/README.md).
 

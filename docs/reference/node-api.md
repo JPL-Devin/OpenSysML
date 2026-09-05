@@ -3,7 +3,7 @@
 This page covers what `@opensysml/client` exports, how its two entry points differ, and
 where its v1 surface stops. To choose between the clients, see
 [client libraries](clients.md); for a task-oriented walkthrough, see
-[guide chapter 9](../guide/09-python.md#from-node-or-a-browser). The client's own
+[guide chapter 9](../guide/09-clients.md#from-node-or-a-browser). The client's own
 notes on packaging and its conformance run are in
 [clients/node/README.md](../../clients/node/README.md).
 

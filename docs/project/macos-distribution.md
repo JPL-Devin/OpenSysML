@@ -208,8 +208,14 @@ public repository, $0; on CircleCI, ~200 credits/minute of macOS VM time per rel
 
 ## 6. Windows
 
-Out of scope for this change, and deliberately not fixed here: the Windows artifacts are
-unsigned too, so SmartScreen shows "Windows protected your PC" for downloaded
-`sysml-windows-amd64.exe`. The remedy (an Authenticode / EV code-signing certificate from a
-commercial CA, typically a few hundred USD per year) is a separate decision with a separate
-cost, and SmartScreen reputation also builds over download volume.
+Out of scope for this change: the Windows artifacts CircleCI publishes are unsigned too, so
+SmartScreen shows "Windows protected your PC" for a downloaded `sysml-windows-amd64.exe`.
+The remedy taken is not a commercial certificate but free Authenticode signing by
+[SignPath Foundation](https://signpath.org): once the project's application is approved,
+`.github/workflows/release-windows.yml` rebuilds the three Windows executables on GitHub
+Actions for each `v*` tag, has SignPath sign them after an Approver's manual approval, and
+publishes them as `*-signed*` assets beside the unsigned ones. The user-facing policy is the
+README's [Code signing policy](../../README.md#code-signing-policy); the maintainer procedure
+is in [releasing.md](releasing.md), "Windows Authenticode signing". SmartScreen reputation for
+the new certificate still builds over download volume, so early signed downloads may warn less
+rather than not at all.
