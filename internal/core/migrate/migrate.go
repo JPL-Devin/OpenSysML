@@ -35,7 +35,8 @@ func FromModel(name string, model *xmi.Model) *Result {
 		names:    map[*xmi.Element]string{},
 		extras:   map[*xmi.Element][]func(){},
 		flows:    map[*xmi.Element][]*xmi.Element{},
-		unplaced: map[*xmi.Element]string{},
+		unplaced: map[*xmi.Element]*placement{},
+		taken:    map[*xmi.Element]map[string]bool{},
 	}
 	m.prepare()
 	for _, root := range model.Roots {
@@ -79,8 +80,10 @@ type migration struct {
 	extras map[*xmi.Element][]func()
 	// flows lists the item flows each connector realizes.
 	flows map[*xmi.Element][]*xmi.Element
-	// unplaced records why a Satisfy or Verify could not be placed in a body.
-	unplaced map[*xmi.Element]string
+	// unplaced records where each Satisfy or Verify was placed, and why not.
+	unplaced map[*xmi.Element]*placement
+	// taken holds synthesized names reserved in a body, by owner.
+	taken map[*xmi.Element]map[string]bool
 	// scope is the element whose body is being written; nil at the top level.
 	scope *xmi.Element
 }
@@ -371,7 +374,7 @@ func (m *migration) requirementBody(e *xmi.Element) {
 	if text := requirementText(e); text != "" {
 		m.w.lines(prefixFirst("doc ", commentLines(commentText(text))))
 		for _, c := range m.ownComments(e) {
-			m.w.lines(prefixFirst("comment ", commentLines(commentText(c.Attrs["body"]))))
+			m.w.lines(prefixFirst("comment ", commentLines(commentBody(c))))
 			m.add(c, Mapped, "", "")
 		}
 	} else {
@@ -877,7 +880,7 @@ func (m *migration) connector(c *xmi.Element) {
 		m.add(c, verdictFor(note), target, note)
 	}
 	for _, f := range m.flows[c] {
-		m.itemFlow(f, paths)
+		m.itemFlow(f, ends, paths)
 	}
 }
 
@@ -910,8 +913,9 @@ func (m *migration) endPath(end *xmi.Element) (string, string) {
 }
 
 // itemFlow writes an item flow realized by a connector as a flow between the
-// flow properties its ends carry for the conveyed classifier.
-func (m *migration) itemFlow(f *xmi.Element, paths []string) {
+// flow properties its ends carry for each conveyed classifier, from the end
+// whose role is the flow's source to the end whose role is its target.
+func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string) {
 	conveyed := m.model.Refs(f, "conveyed")
 	if len(conveyed) == 0 {
 		m.unmapped(f, "the item flow conveys nothing")
@@ -923,20 +927,38 @@ func (m *migration) itemFlow(f *xmi.Element, paths []string) {
 		m.unmapped(f, "the item flow's source or target is not in the document")
 		return
 	}
+	from, to := paths[0], paths[1]
+	switch {
+	case m.model.Ref(ends[0], "role") == src && m.model.Ref(ends[1], "role") == dst:
+	case m.model.Ref(ends[1], "role") == src && m.model.Ref(ends[0], "role") == dst:
+		from, to = paths[1], paths[0]
+	default:
+		m.unmapped(f, "the item flow's source and target are not the roles of its realizing connector's ends")
+		return
+	}
+	var written, notes []string
 	for _, item := range conveyed {
 		sp := m.flowProperty(src, item)
 		dp := m.flowProperty(dst, item)
 		if sp == nil || dp == nil {
-			typ, tnote := m.typeRef(item, m.scope)
-			if typ == "" {
-				m.unmapped(f, joinNotes("the conveyed classifier is not written", tnote))
-				continue
+			if typ, tnote := m.typeRef(item, m.scope); typ == "" {
+				notes = append(notes, joinNotes("the conveyed classifier "+item.Name+" is not written", tnote))
+			} else {
+				notes = append(notes, "no flow property typed by "+item.Name+" on both ends of the realizing connector")
 			}
-			m.w.lines(commentLines("item flow of " + item.Name + " from " + paths[0] + " to " + paths[1] + " not migrated: no flow property of that type on both ends"))
-			m.add(f, Unmapped, "", "no flow property typed by "+item.Name+" on both ends of the realizing connector")
+			m.w.lines(commentLines("item flow of " + item.Name + " from " + from + " to " + to + " not migrated: " + notes[len(notes)-1]))
 			continue
 		}
-		m.w.line("flow " + paths[0] + "." + writeName(sp.Name) + " to " + paths[1] + "." + writeName(dp.Name) + ";")
+		m.w.line("flow " + from + "." + writeName(sp.Name) + " to " + to + "." + writeName(dp.Name) + ";")
+		written = append(written, item.Name)
+	}
+	note := strings.Join(notes, "; ")
+	switch {
+	case len(written) == 0:
+		m.add(f, Unmapped, "", note)
+	case note != "":
+		m.add(f, Approximated, "", "only the flow of "+strings.Join(written, ", ")+" is written; "+note)
+	default:
 		m.add(f, Mapped, "", "")
 	}
 }
@@ -984,99 +1006,180 @@ func (m *migration) rule(r *xmi.Element) {
 	m.add(r, verdictFor(note), m.v2Name(r), note)
 }
 
-// dependencyEnds resolves a dependency's client and supplier, or explains why
-// it cannot be written.
-func (m *migration) dependencyEnds(d *xmi.Element) (client, supplier *xmi.Element, note string) {
-	client = m.model.Ref(d, "client")
-	supplier = m.model.Ref(d, "supplier")
-	switch {
-	case client == nil || supplier == nil:
-		return nil, nil, "the dependency's client or supplier is not in the document"
-	case client.IsProxy() || supplier.IsProxy():
-		return nil, nil, "the dependency reaches outside the document"
+// pair is one client–supplier pair of a dependency; a dependency with several
+// clients or suppliers stands for every pair.
+type pair struct{ client, supplier *xmi.Element }
+
+// dependencyPairs expands a dependency into its client–supplier pairs, or
+// explains why it cannot be written.
+func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
+	clients := m.model.Refs(d, "client")
+	suppliers := m.model.Refs(d, "supplier")
+	if len(clients) == 0 || len(suppliers) == 0 {
+		return nil, "the dependency's client or supplier is not in the document"
 	}
-	return client, supplier, ""
+	var pairs []pair
+	for _, c := range clients {
+		for _, s := range suppliers {
+			if c.IsProxy() || s.IsProxy() {
+				return nil, "the dependency reaches outside the document"
+			}
+			pairs = append(pairs, pair{c, s})
+		}
+	}
+	return pairs, ""
+}
+
+// placement is the outcome of placing a Satisfy or Verify: where each pair was
+// written, and why the others could not be.
+type placement struct {
+	written, failed int
+	target          string
+	notes           []string
 }
 
 // placeDependency registers, ahead of writing, a Satisfy or Verify in the body
-// of the element it is written in, which may precede the dependency itself;
-// one that cannot be placed is written where it stands, with the reason.
+// of the element each pair is written in, which may precede the dependency
+// itself; the dependency's report entry is written where it stands.
 func (m *migration) placeDependency(d *xmi.Element) {
 	if !d.HasStereotype("Satisfy", "Verify") {
 		return
 	}
-	client, supplier, note := m.dependencyEnds(d)
-	if note == "" {
-		if d.HasStereotype("Satisfy") {
-			note = m.satisfy(d, client, supplier)
-		} else {
-			note = m.verify(d, client, supplier)
-		}
-	}
-	m.unplaced[d] = note
-}
-
-// dependency writes a dependency by the SysML stereotype it carries.
-func (m *migration) dependency(d *xmi.Element) {
-	if d.HasStereotype("Satisfy", "Verify") {
-		if note := m.unplaced[d]; note != "" {
-			m.unmapped(d, note)
-		}
+	pl := &placement{}
+	m.unplaced[d] = pl
+	pairs, note := m.dependencyPairs(d)
+	if note != "" {
+		pl.failed++
+		pl.notes = append(pl.notes, note)
 		return
 	}
-	client, supplier, note := m.dependencyEnds(d)
+	for _, p := range pairs {
+		var target, note string
+		if d.HasStereotype("Satisfy") {
+			target, note = m.satisfy(p.client, p.supplier)
+		} else {
+			target, note = m.verify(p.client, p.supplier)
+		}
+		if note != "" {
+			pl.failed++
+			pl.notes = append(pl.notes, note)
+		} else {
+			pl.written++
+			pl.target = target
+		}
+	}
+}
+
+// dependency writes a dependency by the SysML stereotype it carries, one
+// relationship per client–supplier pair.
+func (m *migration) dependency(d *xmi.Element) {
+	if d.HasStereotype("Satisfy", "Verify") {
+		m.relationship(d, m.unplaced[d])
+		return
+	}
+	pairs, note := m.dependencyPairs(d)
 	if note != "" {
 		m.unmapped(d, note)
 		return
 	}
-	if d.HasStereotype("DeriveReqt") {
-		m.derive(d, client, supplier)
-		return
-	}
-	for _, end := range []*xmi.Element{client, supplier} {
-		if !m.written(end) {
-			m.unmapped(d, "its end "+qualifiedName(end)+" is not migrated")
-			return
+	pl := &placement{}
+	for _, p := range pairs {
+		target, written, note := m.dependencyPair(d, p.client, p.supplier)
+		if written {
+			pl.written++
+			pl.target = target
+		} else {
+			pl.failed++
 		}
+		if note != "" {
+			pl.notes = append(pl.notes, note)
+		}
+	}
+	m.relationship(d, pl)
+}
+
+// relationship appends the one report entry of a relationship: mapped when every
+// pair was written, approximated when some were, unmapped when none.
+func (m *migration) relationship(d *xmi.Element, pl *placement) {
+	note := strings.Join(uniqueStrings(pl.notes), "; ")
+	target := ""
+	if pl.written == 1 {
+		target = pl.target
 	}
 	switch {
-	case d.HasStereotype("Refine"):
-		m.w.block("dependency "+m.ref(client, m.scope)+" to "+m.ref(supplier, m.scope), func() {
-			m.w.line("@ModelingMetadata::Refinement;")
-		})
-		m.add(d, Mapped, "", "")
-	case d.HasStereotype("Allocate"):
-		m.w.line("allocate " + m.ref(client, m.scope) + " to " + m.ref(supplier, m.scope) + ";")
-		m.add(d, Mapped, "", "")
-	case d.HasStereotype("Trace"):
-		m.w.line("dependency " + m.ref(client, m.scope) + " to " + m.ref(supplier, m.scope) + "; /* «Trace» */")
-		m.add(d, Approximated, "", "a trace is written as a plain dependency")
-	case d.HasStereotype("Copy"):
-		m.w.line("dependency " + m.ref(client, m.scope) + " to " + m.ref(supplier, m.scope) + "; /* «Copy» */")
-		m.add(d, Approximated, "", "a copy is written as a plain dependency; the text is not kept in step")
+	case pl.written == 0:
+		m.unmapped(d, note)
+	case pl.failed > 0:
+		m.add(d, Approximated, target, fmt.Sprintf("%d of %d relationships written; %s", pl.written, pl.written+pl.failed, note))
+	case pl.written > 1:
+		m.add(d, Approximated, "", fmt.Sprintf("written as %d relationships, one per client–supplier pair", pl.written))
 	default:
-		decl := "dependency "
-		if d.Name != "" {
-			decl += writeName(d.Name) + " from "
-		}
-		m.w.line(decl + m.ref(client, m.scope) + " to " + m.ref(supplier, m.scope) + ";")
-		note := ""
-		if len(d.Stereotypes) > 0 {
-			note = "«" + d.Stereotypes[0].Name + "» is written as a plain dependency"
-		}
-		m.add(d, verdictFor(note), "", note)
+		m.add(d, verdictFor(note), target, note)
 	}
 }
 
+func uniqueStrings(in []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range in {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+// dependencyPair writes one client–supplier pair of a dependency, returning
+// the v2 target written, if any, whether it was written, and a note.
+func (m *migration) dependencyPair(d, client, supplier *xmi.Element) (string, bool, string) {
+	if d.HasStereotype("DeriveReqt") {
+		target, note := m.derive(d, client, supplier)
+		return target, target != "", note
+	}
+	for _, end := range []*xmi.Element{client, supplier} {
+		if !m.written(end) {
+			return "", false, "its end " + qualifiedName(end) + " is not migrated"
+		}
+	}
+	from, to := m.ref(client, m.scope), m.ref(supplier, m.scope)
+	switch {
+	case d.HasStereotype("Refine"):
+		m.w.block("dependency "+from+" to "+to, func() {
+			m.w.line("@ModelingMetadata::Refinement;")
+		})
+		return "", true, ""
+	case d.HasStereotype("Allocate"):
+		m.w.line("allocate " + from + " to " + to + ";")
+		return "", true, ""
+	case d.HasStereotype("Trace"):
+		m.w.line("dependency " + from + " to " + to + "; /* «Trace» */")
+		return "", true, "a trace is written as a plain dependency"
+	case d.HasStereotype("Copy"):
+		m.w.line("dependency " + from + " to " + to + "; /* «Copy» */")
+		return "", true, "a copy is written as a plain dependency; the text is not kept in step"
+	}
+	decl := "dependency "
+	if d.Name != "" {
+		decl += writeName(d.Name) + " from "
+	}
+	m.w.line(decl + from + " to " + to + ";")
+	if len(d.Stereotypes) > 0 {
+		return "", true, "«" + d.Stereotypes[0].Name + "» is written as a plain dependency"
+	}
+	return "", true, ""
+}
+
 // satisfy places `satisfy requirement` in the body of the satisfying block, or
-// of the block owning the satisfying property.
-func (m *migration) satisfy(d, client, req *xmi.Element) string {
+// of the block owning the satisfying property, returning that body's v2 name.
+func (m *migration) satisfy(client, req *xmi.Element) (string, string) {
 	if rc, _ := m.classify(req); rc != catRequirementDef {
-		return "the supplier " + qualifiedName(req) + " is not a requirement"
+		return "", "the supplier " + qualifiedName(req) + " is not a requirement"
 	}
 	scope, by := m.usageContext(client)
 	if scope == nil {
-		return "a satisfy whose client is a " + kindOf(client) + " has no v2 form"
+		return "", "a satisfy whose client is a " + kindOf(client) + " has no v2 form"
 	}
 	m.extras[scope] = append(m.extras[scope], func() {
 		decl := "satisfy requirement : " + m.ref(req, scope)
@@ -1084,9 +1187,8 @@ func (m *migration) satisfy(d, client, req *xmi.Element) string {
 			decl += " by " + by
 		}
 		m.w.line(decl + ";")
-		m.add(d, Mapped, m.v2Name(scope), "")
 	})
-	return ""
+	return m.v2Name(scope), ""
 }
 
 // usageContext finds the body a client's satisfy is written in: the
@@ -1109,42 +1211,48 @@ func (m *migration) usageContext(client *xmi.Element) (*xmi.Element, string) {
 }
 
 // verify places `verify requirement` in the objective of the test case.
-func (m *migration) verify(d, client, req *xmi.Element) string {
+func (m *migration) verify(client, req *xmi.Element) (string, string) {
 	if rc, _ := m.classify(req); rc != catRequirementDef {
-		return "the supplier " + qualifiedName(req) + " is not a requirement"
+		return "", "the supplier " + qualifiedName(req) + " is not a requirement"
 	}
 	if cc, _ := m.classify(client); cc != catVerificationDef {
-		return "a verify whose client is not a test case has no v2 form"
+		return "", "a verify whose client is not a test case has no v2 form"
 	}
 	m.extras[client] = append(m.extras[client], func() {
 		m.w.line("verify requirement : " + m.ref(req, client) + ";")
-		m.add(d, Mapped, m.v2Name(client), "")
 	})
-	return ""
+	return m.v2Name(client), ""
 }
 
 // derive writes a requirement derivation as a connection def specializing the
 // library's Derivation, with the original and derived requirements as ends.
-func (m *migration) derive(d, derived, original *xmi.Element) {
+func (m *migration) derive(d, derived, original *xmi.Element) (string, string) {
 	dc, _ := m.classify(derived)
 	oc, _ := m.classify(original)
 	if dc != catRequirementDef || oc != catRequirementDef {
-		m.unmapped(d, "both ends of a derive must be requirements")
-		return
+		return "", "both ends of a derive must be requirements"
 	}
 	name := d.Name
 	if name == "" {
 		name = "Derive " + derived.Name
-		for i := 2; m.nameTaken(m.scope, name); i++ {
-			name = fmt.Sprintf("Derive %s %d", derived.Name, i)
-		}
+	}
+	base := name
+	for i := 2; m.nameTaken(m.scope, name); i++ {
+		name = fmt.Sprintf("%s %d", base, i)
+	}
+	m.take(m.scope, name)
+	if _, ok := m.names[d]; !ok && d.Name == "" {
 		m.names[d] = name
 	}
 	m.w.block("connection def "+writeName(name)+" :> RequirementDerivation::Derivation", func() {
 		m.w.line("end #RequirementDerivation::original original : " + m.ref(original, d) + ";")
 		m.w.line("end #RequirementDerivation::derive derived : " + m.ref(derived, d) + ";")
 	})
-	m.add(d, Mapped, m.v2Name(d), "")
+	segs := append(m.segments(m.scope), name)
+	if m.scope == nil {
+		segs = []string{name}
+	}
+	return m.qualified(segs), ""
 }
 
 // comments writes the comments documenting e: the first as doc, the rest as
@@ -1159,10 +1267,7 @@ func (m *migration) comments(e *xmi.Element) {
 				others = true
 			}
 		}
-		text := commentText(c.Attrs["body"])
-		if text == "" {
-			text = commentText(strings.TrimSpace(firstOwnedText(c, "body")))
-		}
+		text := commentBody(c)
 		if text == "" {
 			m.add(c, Skipped, "", "empty comment")
 			continue
@@ -1193,9 +1298,13 @@ func (m *migration) comments(e *xmi.Element) {
 	}
 }
 
-func firstOwnedText(e *xmi.Element, role string) string {
-	if o := firstOwned(e, role); o != nil {
-		return o.Text
+// commentBody reads a comment's text, from its body attribute or child element.
+func commentBody(c *xmi.Element) string {
+	if text := commentText(c.Attrs["body"]); text != "" {
+		return text
+	}
+	if o := firstOwned(c, "body"); o != nil {
+		return commentText(strings.TrimSpace(o.Text))
 	}
 	return ""
 }
@@ -1210,7 +1319,7 @@ func (m *migration) ownComments(e *xmi.Element) []*xmi.Element {
 				own = false
 			}
 		}
-		if own && commentText(c.Attrs["body"]) != "" {
+		if own && commentBody(c) != "" {
 			out = append(out, c)
 		}
 	}
@@ -1219,7 +1328,7 @@ func (m *migration) ownComments(e *xmi.Element) []*xmi.Element {
 
 // comment writes a comment found outside the ownedComment role.
 func (m *migration) comment(c *xmi.Element) {
-	text := commentText(c.Attrs["body"])
+	text := commentBody(c)
 	if text == "" {
 		m.add(c, Skipped, "", "empty comment")
 		return

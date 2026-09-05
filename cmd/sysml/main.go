@@ -13,6 +13,7 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
@@ -420,6 +421,13 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	for _, path := range args {
+		if f, err := export.FormatOfPath(path); err == nil && f == export.FormatXMI {
+			fmt.Fprintf(os.Stderr, "sysml: %s is a SysML v1 model; migrate it first with `sysml %s -convert sysml -output model.sysml`, then load model.sysml\n", path, path)
+			return 2
+		}
 	}
 
 	if queryText != "" {

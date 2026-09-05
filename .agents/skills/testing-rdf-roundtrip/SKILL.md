@@ -70,6 +70,14 @@ parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and 
 (a stale head, a dropped optional keyword such as `connector x from a to b` → `connector x a to b`)
 changes its sourceText legally while every structural triple must still match.
 
+Use RDFLib for independent graph checks, not necessarily for serializing the stripped
+input: its Turtle serializer can emit bare booleans/numbers (for example
+`sysx:hasBody false`) that the project's limited Turtle reader may reject as
+`unrecognized term`. Preserve the original lexical form with the filter above, then
+assert that parsing the filtered file with RDFLib gives exactly the original triple
+set minus the two source predicates. This separates a reader-syntax limitation from
+a failed structural mapping, without weakening the graph comparison.
+
 ### Heads that are *not* expected to survive without sourceText (as of this writing)
 
 - **Any end-binding head that says more than its ends.** `endForm` in

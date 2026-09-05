@@ -320,3 +320,18 @@ func TestConvertMigratesXMI(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadingXMIDirectlyPointsAtMigration(t *testing.T) {
+	binary := buildCLI(t)
+	xmi := filepath.Join("..", "..", "internal", "core", "migrate", "testdata", "cameo", "vehicle.xmi")
+	for _, args := range [][]string{
+		{xmi, "-validate"},
+		{xmi, "-eval", "1"},
+		{xmi, "-query", "Vehicle"},
+	} {
+		res := runCommand(t, exec.Command(binary, args...))
+		if res.status != 2 || !strings.Contains(res.stderr, "migrate it first") || strings.Contains(res.stderr, "expected a namespace member") {
+			t.Errorf("%v: status %d, stderr:\n%s", args, res.status, res.stderr)
+		}
+	}
+}

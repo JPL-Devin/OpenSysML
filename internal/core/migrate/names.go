@@ -51,6 +51,9 @@ func (m *migration) nameFor(e *xmi.Element) string {
 }
 
 func (m *migration) nameTaken(owner *xmi.Element, name string) bool {
+	if m.taken[owner][name] {
+		return true
+	}
 	if owner == nil {
 		return false
 	}
@@ -60,6 +63,14 @@ func (m *migration) nameTaken(owner *xmi.Element, name string) bool {
 		}
 	}
 	return false
+}
+
+// take reserves a synthesized member name in owner's body.
+func (m *migration) take(owner *xmi.Element, name string) {
+	if m.taken[owner] == nil {
+		m.taken[owner] = map[string]bool{}
+	}
+	m.taken[owner][name] = true
 }
 
 func lowerFirst(s string) string {
