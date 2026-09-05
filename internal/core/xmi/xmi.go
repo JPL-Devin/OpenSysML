@@ -119,13 +119,9 @@ func (m *Model) Lookup(id string) *Element {
 // Refs returns the elements a role of e refers to: the ids in the attribute of
 // that name (space-separated, as XMI writes multi-valued references) and the
 // child elements of that name carrying xmi:idref or href. Unresolvable ids are
-// dropped; an href yields a proxy element.
+// dropped (Unresolved lists them); an href yields a proxy element.
 func (m *Model) Refs(e *Element, role string) []*Element {
-	var ids []string
-	if v, ok := e.Attrs[role]; ok {
-		ids = append(ids, strings.Fields(v)...)
-	}
-	ids = append(ids, e.refs[role]...)
+	ids := e.refIDs(role)
 	out := make([]*Element, 0, len(ids))
 	for _, id := range ids {
 		if target := m.Lookup(id); target != nil {
@@ -133,6 +129,27 @@ func (m *Model) Refs(e *Element, role string) []*Element {
 		}
 	}
 	return out
+}
+
+// Unresolved returns the ids a role of e refers to that no read document
+// defines, so a caller can tell a complete reference list from a dangling one.
+func (m *Model) Unresolved(e *Element, role string) []string {
+	var out []string
+	for _, id := range e.refIDs(role) {
+		if m.Lookup(id) == nil {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// refIDs lists the raw ids a role of e refers to, attribute ids first.
+func (e *Element) refIDs(role string) []string {
+	var ids []string
+	if v, ok := e.Attrs[role]; ok {
+		ids = append(ids, strings.Fields(v)...)
+	}
+	return append(ids, e.refs[role]...)
 }
 
 // Ref returns the first element a role refers to, or nil.
@@ -328,7 +345,6 @@ var errNotXMI = errors.New("not an XMI document: expected an xmi:XMI or uml:Mode
 // parseDocument reads one document's elements and stereotype applications.
 func (m *Model) parseDocument(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	dec.Strict = false
 	p := &docParser{m: m, dec: dec}
 	return p.run()
 }

@@ -206,8 +206,15 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 		if e.HasStereotype("Unit", "QuantityKind") {
 			return catUnmapped, "units and quantity kinds are not migrated; use the SI and ISQ libraries"
 		}
-		if m.model.Ref(e, "classifier") == nil {
+		c := m.model.Ref(e, "classifier")
+		if c == nil {
 			return catUnmapped, "an instance specification without a classifier has no v2 form"
+		}
+		if c.IsProxy() || isLibrary(c) {
+			return catUnmapped, "the instance's classifier " + c.Name + " is outside the document or in a library, so it has no v2 definition to specialize"
+		}
+		if cc, _ := m.classify(c); cc.keyword() == "" {
+			return catUnmapped, "the instance's classifier " + qualifiedName(c) + " is not migrated"
 		}
 		return catIndividualDef, ""
 	case "Activity", "OpaqueBehavior", "Interaction", "StateMachine", "FunctionBehavior":

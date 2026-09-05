@@ -139,7 +139,7 @@ func TestNotationCoversTheFixture(t *testing.T) {
 	s := string(r.Notation)
 	for _, want := range []string{
 		"package 'Vehicle Design' {",
-		"attribute def Mass :> ScalarValues::Real;",
+		"attribute def Mass :> ScalarValues::Real {",
 		"enum def Color {",
 		"port def FuelInterface {",
 		"in item fuel : Fuel;",
@@ -188,7 +188,7 @@ func TestReportAccountsForEveryElement(t *testing.T) {
 		byID[e.ID] = e
 	}
 	want := map[string]migrate.Verdict{
-		"_blk_vehicle":      migrate.Mapped,
+		"_blk_vehicle":      migrate.Approximated,
 		"_prop_mass":        migrate.Mapped,
 		"_dep_satisfy":      migrate.Mapped,
 		"_dep_derive":       migrate.Mapped,

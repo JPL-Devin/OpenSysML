@@ -75,6 +75,8 @@ returned over the service yet.
 | «Trace», «Copy», other stereotyped dependencies | plain `dependency` with the stereotype as a comment | approximated |
 | Comment, Documentation | `doc` (first) / `comment`, HTML tags stripped | mapped |
 | Custom-profile stereotypes and tags | preserved as `/* applied stereotype «Name»: tag = value */` | mapped |
+| SysML stereotype tags without a v2 form (`Block.isEncapsulated`, `ValueType.unit`, …) | preserved as `/* «Name» tags with no v2 form: tag = value */` | approximated |
+| References to ids the document does not define | the resolvable ends are written; the missing ids are named in the report | approximated |
 | OpaqueExpression defaults and constraints | copied verbatim when it parses as a v2 expression; otherwise as a `comment` | mapped / approximated |
 | Activity, StateMachine, Interaction, OpaqueBehavior | comment placeholder | **unmapped** — behaviors come in a follow-up |
 | Operation, Reception | comment placeholder | **unmapped** — v2 has no operation |

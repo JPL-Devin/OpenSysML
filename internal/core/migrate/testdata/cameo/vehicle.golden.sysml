@@ -6,7 +6,9 @@ doc /* Author:jason.
 package 'Vehicle Design' {
     doc /* Structural model of the demo vehicle. */
     package 'Value Types' {
-        attribute def Mass :> ScalarValues::Real;
+        attribute def Mass :> ScalarValues::Real {
+            /* «ValueType» tags with no v2 form: quantityKind = Vehicle Design::Value Types::mass; unit = Vehicle Design::Value Types::kilogram */
+        }
         attribute def Speed :> Mass;
         /* not migrated: «Unit» InstanceSpecification 'kilogram' — units and quantity kinds are not migrated; use the SI and ISQ libraries */
         /* not migrated: «QuantityKind» InstanceSpecification 'mass' — units and quantity kinds are not migrated; use the SI and ISQ libraries */
@@ -56,6 +58,7 @@ package 'Vehicle Design' {
         }
         satisfy requirement : Requirements::'Mass Requirement';
         satisfy requirement : Requirements::'Engine Mass Requirement' by engine;
+        /* «Block» tags with no v2 form: isEncapsulated = true */
     }
     abstract part def System;
     part def Engine {

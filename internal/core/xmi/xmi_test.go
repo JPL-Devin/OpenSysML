@@ -244,3 +244,26 @@ func TestParseRejectsWrapperWithoutModel(t *testing.T) {
 		t.Errorf("archive: err = %v", err)
 	}
 }
+
+func TestParseRejectsMalformedXML(t *testing.T) {
+	for _, in := range []string{
+		`<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model xmi:id="_m" name="M"><packagedElement xmi:type="uml:Class" xmi:id="_c" name="C"></uml:Model></xmi:XMI>`,
+		`<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model xmi:id="_m" name="A &nbsp; B"/></xmi:XMI>`,
+	} {
+		if _, err := Parse([]byte(in)); err == nil {
+			t.Errorf("%q: accepted", in)
+		}
+	}
+}
+
+func TestUnresolvedReferences(t *testing.T) {
+	m := readFixture(t)
+	assoc := m.Lookup("_assoc_vehicle_engine")
+	if got := m.Unresolved(assoc, "memberEnd"); len(got) != 0 {
+		t.Errorf("Unresolved = %v", got)
+	}
+	e := &Element{Attrs: map[string]string{"client": "_prop_engine _nowhere"}}
+	if got := m.Unresolved(e, "client"); len(got) != 1 || got[0] != "_nowhere" {
+		t.Errorf("Unresolved = %v", got)
+	}
+}

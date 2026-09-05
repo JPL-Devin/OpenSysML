@@ -155,3 +155,51 @@ func TestRequirementTextKeepsCommentsAboutOthers(t *testing.T) {
 		}
 	}
 }
+
+func TestInstanceOfUnwritableClassifierIsUnmapped(t *testing.T) {
+	cases := map[string]string{
+		"proxy": `<packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_i" name="car">
+      <classifier href="other.xmi#_ext"/>
+    </packagedElement>`,
+		"library": `<packagedElement xmi:type="uml:Package" xmi:id="_lib" name="Lib">
+      <packagedElement xmi:type="uml:Class" xmi:id="_lc" name="LibThing"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_i" name="car" classifier="_lc"/>`,
+		"unmapped": `<packagedElement xmi:type="uml:Activity" xmi:id="_act" name="Drive"/>
+    <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_i" name="car" classifier="_act"/>`,
+	}
+	for name, members := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := migrateDocument(t, members, `<sysml:ModelLibrary xmi:id="_ml" base_Package="_lib"/>`)
+			wantNoLine(t, r.Notation, "individual def")
+			if es := entriesFor(r, "_i"); len(es) != 1 || es[0].Verdict != migrate.Unmapped {
+				t.Errorf("entries = %+v", es)
+			}
+			for _, d := range errors(t, name+".sysml", r.Notation) {
+				t.Errorf("%v", d)
+			}
+		})
+	}
+}
+
+func TestDanglingDependencyEndIsReported(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_d" client="_a _gone" supplier="_b"/>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/><sysml:Trace xmi:id="_s3" base_Abstraction="_d"/>`)
+	wantLine(t, r.Notation, "dependency A to B;")
+	es := entriesFor(r, "_d")
+	if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "_gone") {
+		t.Errorf("entries = %+v", es)
+	}
+}
+
+func TestBlockEncapsulationIsKeptAndReported(t *testing.T) {
+	r := migrateFixture(t)
+	wantLine(t, r.Notation, "/* «Block» tags with no v2 form: isEncapsulated = true */")
+	es := entriesFor(r, "_blk_vehicle")
+	if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "isEncapsulated") {
+		t.Errorf("entries = %+v", es)
+	}
+}

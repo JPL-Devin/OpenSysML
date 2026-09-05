@@ -265,6 +265,9 @@ func (m *migration) classifier(e *xmi.Element) {
 	if gens != "" {
 		header.WriteString(" :> " + gens)
 	}
+	if cat == catConnectionDef {
+		n = joinNotes(n, m.dangling(e, "memberEnd"))
+	}
 	if n != "" {
 		verdict = Approximated
 		note = joinNotes(note, n)
@@ -334,6 +337,33 @@ func (m *migration) generals(e *xmi.Element, cat category) (string, string) {
 		}
 	}
 	return strings.Join(refs, ", "), strings.Join(notes, "; ")
+}
+
+// dangling notes the references of e in the given roles that resolve to
+// nothing in the document; "" when every reference resolves.
+func (m *migration) dangling(e *xmi.Element, roles ...string) string {
+	var notes []string
+	for _, role := range roles {
+		if ids := m.model.Unresolved(e, role); len(ids) > 0 {
+			notes = append(notes, fmt.Sprintf("%d %s reference(s) resolve to nothing in the document (%s)", len(ids), role, strings.Join(ids, ", ")))
+		}
+	}
+	return strings.Join(notes, "; ")
+}
+
+// downgrade marks e's report entry approximated with a further note.
+func (m *migration) downgrade(e *xmi.Element, note string) {
+	for i := len(m.report.Entries) - 1; i >= 0; i-- {
+		en := &m.report.Entries[i]
+		if en.ID != e.ID {
+			continue
+		}
+		if en.Verdict == Mapped {
+			en.Verdict = Approximated
+		}
+		en.Note = joinNotes(en.Note, note)
+		return
+	}
 }
 
 func joinNotes(a, b string) string {
@@ -525,12 +555,13 @@ func (m *migration) association(e *xmi.Element) {
 	ends := m.model.Refs(e, "memberEnd")
 	name := e.Name
 	if name == "" {
+		missing := m.dangling(e, "memberEnd")
 		if e.Type == "Association" && !ownsEveryEnd(e, ends) {
-			m.add(e, Mapped, "", "the anonymous association is written as its member-end properties")
+			m.add(e, verdictFor(missing), "", joinNotes("the anonymous association is written as its member-end properties", missing))
 			return
 		}
 		name = m.nameFor(e)
-		m.add(e, Approximated, m.v2Name(e), "the anonymous "+e.Type+" owns every end, so it is written as connection def "+name)
+		m.add(e, Approximated, m.v2Name(e), joinNotes("the anonymous "+e.Type+" owns every end, so it is written as connection def "+name, missing))
 	}
 	header := "connection def " + writeName(name)
 	if gens, _ := m.generals(e, catConnectionDef); gens != "" {
@@ -700,6 +731,7 @@ func (m *migration) feature(p *xmi.Element) {
 	for _, r := range m.model.Refs(p, "subsettedProperty") {
 		b.WriteString(" :> " + m.featureRef(r))
 	}
+	note = joinNotes(note, m.dangling(p, "redefinedProperty", "subsettedProperty"))
 
 	var bodyLines []string
 	if dv := firstOwned(p, "defaultValue"); dv != nil {
@@ -927,8 +959,9 @@ func (m *migration) endPath(end *xmi.Element) (string, string) {
 // whose role is the flow's source to the end whose role is its target.
 func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string) {
 	conveyed := m.model.Refs(f, "conveyed")
+	missing := m.dangling(f, "conveyed")
 	if len(conveyed) == 0 {
-		m.unmapped(f, "the item flow conveys nothing")
+		m.unmapped(f, joinNotes("the item flow conveys nothing", missing))
 		return
 	}
 	src := m.model.Ref(f, "informationSource")
@@ -947,6 +980,9 @@ func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string
 		return
 	}
 	var written, notes []string
+	if missing != "" {
+		notes = append(notes, missing)
+	}
 	for _, item := range conveyed {
 		sp := m.flowProperty(src, item)
 		dp := m.flowProperty(dst, item)
@@ -1020,13 +1056,15 @@ func (m *migration) rule(r *xmi.Element) {
 // clients or suppliers stands for every pair.
 type pair struct{ client, supplier *xmi.Element }
 
-// dependencyPairs expands a dependency into its client–supplier pairs, or
-// explains why it cannot be written.
+// dependencyPairs expands a dependency into its client–supplier pairs; a note
+// with no pairs says why it cannot be written, a note beside pairs which
+// references were dangling.
 func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
 	clients := m.model.Refs(d, "client")
 	suppliers := m.model.Refs(d, "supplier")
+	missing := m.dangling(d, "client", "supplier")
 	if len(clients) == 0 || len(suppliers) == 0 {
-		return nil, "the dependency's client or supplier is not in the document"
+		return nil, joinNotes("the dependency's client or supplier is not in the document", missing)
 	}
 	var pairs []pair
 	for _, c := range clients {
@@ -1037,7 +1075,7 @@ func (m *migration) dependencyPairs(d *xmi.Element) ([]pair, string) {
 			pairs = append(pairs, pair{c, s})
 		}
 	}
-	return pairs, ""
+	return pairs, missing
 }
 
 // placement is the outcome of placing a Satisfy or Verify: where each pair was
@@ -1061,7 +1099,6 @@ func (m *migration) placeDependency(d *xmi.Element) {
 	if note != "" {
 		pl.failed++
 		pl.notes = append(pl.notes, note)
-		return
 	}
 	for _, p := range pairs {
 		var target, note string
@@ -1088,11 +1125,15 @@ func (m *migration) dependency(d *xmi.Element) {
 		return
 	}
 	pairs, note := m.dependencyPairs(d)
-	if note != "" {
+	if len(pairs) == 0 {
 		m.unmapped(d, note)
 		return
 	}
 	pl := &placement{}
+	if note != "" {
+		pl.failed++
+		pl.notes = append(pl.notes, note)
+	}
 	for _, p := range pairs {
 		target, written, note := m.dependencyPair(d, p.client, p.supplier)
 		if written {
@@ -1274,6 +1315,7 @@ func (m *migration) comments(e *xmi.Element) { m.writeComments(e, true) }
 func (m *migration) writeComments(e *xmi.Element, first bool) {
 	for _, c := range e.Owned("ownedComment") {
 		about := m.model.Refs(c, "annotatedElement")
+		missing := m.dangling(c, "annotatedElement")
 		others := false
 		for _, a := range about {
 			if a != e {
@@ -1298,7 +1340,7 @@ func (m *migration) writeComments(e *xmi.Element, first bool) {
 			} else {
 				m.w.lines(prefixFirst("comment about "+strings.Join(refs, ", ")+" ", commentLines(text)))
 			}
-			m.add(c, Mapped, "", "")
+			m.add(c, verdictFor(missing), "", missing)
 			continue
 		}
 		if first {
@@ -1307,7 +1349,7 @@ func (m *migration) writeComments(e *xmi.Element, first bool) {
 		} else {
 			m.w.lines(prefixFirst("comment ", commentLines(text)))
 		}
-		m.add(c, Mapped, "", "")
+		m.add(c, verdictFor(missing), "", missing)
 	}
 }
 
@@ -1352,28 +1394,63 @@ var classifyingStereotypes = map[string]bool{
 	"Stakeholder": true, "View": true, "Viewpoint": true,
 }
 
+// consumedTags are the tags of the classifying stereotypes the mapping reads;
+// any other tag of theirs has no v2 form.
+var requirementTags = map[string]bool{"Id": true, "id": true, "ID": true, "Text": true, "text": true}
+
+var consumedTags = map[string]map[string]bool{
+	"FlowProperty":       {"direction": true},
+	"FlowPort":           {"direction": true},
+	"NestedConnectorEnd": {"propertyPath": true},
+}
+
 // stereotypeComments keeps the stereotypes the mapping does not consume, and
-// the tags of those it does, as a comment in the element's body.
+// the tags it does not read of those it does, as a comment in the element's
+// body; an unread tag makes the element's migration an approximation.
 func (m *migration) stereotypeComments(e *xmi.Element) {
 	for _, s := range e.Stereotypes {
-		if classifyingStereotypes[s.Name] {
-			continue
-		}
+		classifying := classifyingStereotypes[s.Name]
+		consumed := consumedTags[s.Name]
 		if isRequirementStereotype(s.Name) {
-			m.w.line("/* «" + s.Name + "» */")
-			continue
+			if !classifying {
+				m.w.line("/* «" + s.Name + "» */")
+			}
+			classifying, consumed = true, requirementTags
 		}
 		var tags []string
 		for k, vs := range s.Tags {
-			tags = append(tags, k+" = "+strings.Join(vs, ", "))
+			if classifying && consumed[k] {
+				continue
+			}
+			tags = append(tags, k+" = "+strings.Join(m.tagValues(vs), ", "))
 		}
 		sort.Strings(tags)
+		if classifying {
+			if len(tags) == 0 {
+				continue
+			}
+			m.w.lines(commentLines("«" + s.Name + "» tags with no v2 form: " + strings.Join(tags, "; ")))
+			m.downgrade(e, "«"+s.Name+"» "+strings.Join(tags, "; ")+" has no v2 form")
+			continue
+		}
 		text := "applied stereotype «" + s.Name + "»"
 		if len(tags) > 0 {
 			text += ": " + strings.Join(tags, "; ")
 		}
 		m.w.lines(commentLines(text))
 	}
+}
+
+// tagValues writes tag values, an element reference by the element's name.
+func (m *migration) tagValues(vs []string) []string {
+	out := make([]string, len(vs))
+	for i, v := range vs {
+		if t := m.model.Lookup(v); t != nil && t.Name != "" {
+			v = qualifiedName(t)
+		}
+		out[i] = v
+	}
+	return out
 }
 
 func isRequirementStereotype(name string) bool {
