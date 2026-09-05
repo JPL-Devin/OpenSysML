@@ -172,13 +172,25 @@ archives' checksums match the release manifest and nothing more.
 
 ## R4 — code signing
 
-macOS binaries are not Developer ID signed or notarized and Windows binaries are not
-Authenticode signed, so a browser download trips Gatekeeper or SmartScreen. Root-caused in
-`docs/project/macos-distribution.md`: it is `com.apple.quarantine`, not a missing signature — Go's
-linker already ad-hoc signs darwin/arm64 — so ad-hoc `codesign` in CI would change nothing.
-Notarization needs an Apple Developer account, a Developer ID certificate, an App Store Connect
-API key in CI and a macOS runner. Windows needs an OV/EV certificate. Both are purchases, not
-tasks.
+macOS binaries are not Developer ID signed or notarized, so a browser download trips
+Gatekeeper. Root-caused in `docs/project/macos-distribution.md`: it is `com.apple.quarantine`,
+not a missing signature — Go's linker already ad-hoc signs darwin/arm64 — so ad-hoc `codesign`
+in CI would change nothing. Notarization needs an Apple Developer account, a Developer ID
+certificate, an App Store Connect API key in CI and a macOS runner: a purchase, not a task.
+
+Windows Authenticode signing is prepared, pending approval by
+[SignPath Foundation](https://signpath.org), which signs open-source Windows binaries for free
+from a build it can verify the origin of. The repository side is done: the README carries the
+[Code signing policy](../../README.md#code-signing-policy) the terms require, the three Windows
+executables embed the `VERSIONINFO` SignPath enforces (`ProductName` `OpenSysML`,
+`ProductVersion` from the tag), and `.github/workflows/release-windows.yml` rebuilds them on a
+`v*` tag under GitHub Actions — a trusted build system for SignPath, which CircleCI is not —
+submits them for signing, and publishes the signed files as `*-signed*` release assets beside
+the unsigned ones that the cosign-signed manifest keeps covering. What remains is a
+maintainer's application at <https://signpath.org/apply>, the SignPath project and policy
+setup, the `SIGNPATH_*` secret and variables in GitHub, and one manual approval per release;
+until then the workflow builds and stops. Procedure: `docs/project/releasing.md`, "Windows
+Authenticode signing".
 
 ## R5 — the VS Code extension is not released
 
