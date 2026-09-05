@@ -190,10 +190,6 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 		return
 	}
 	got := ec.infer(scope, n)
-	if _, isBody := n.(*ast.BodyExpr); isBody {
-		// A body's value is the expression itself, not the result inferred above.
-		got = semantics.PrimUnknown
-	}
 	if got == semantics.PrimBoolean {
 		return
 	}
@@ -413,18 +409,18 @@ func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) sema
 	return semantics.PrimUnknown
 }
 
-// inferBody types a body expression as the type of the result it states,
-// checking that result in the scope the body's parameters are declared in.
+// inferBody checks a body's members and result (in its parameters' scope); the
+// body's value is the expression itself, not that result, so it is no scalar.
 func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
 	inner := ec.bodyScope(scope, e)
 	ec.checkBodyMembers(scope, e)
 	for i := range e.Params {
 		ec.infer(scope, e.Params[i].Value)
 	}
-	if e.Result == nil {
-		return semantics.PrimUnknown
+	if e.Result != nil {
+		ec.infer(inner, e.Result)
 	}
-	return ec.infer(inner, e.Result)
+	return semantics.PrimUnknown
 }
 
 // bodyScope returns the scope a body expression's result is written in: its
@@ -540,8 +536,23 @@ func (ec *exprChecker) checkUnaryBoolean(scope *symbols.Scope, e *ast.OperatorEx
 	got := ec.infer(scope, e.Operands[0])
 	if got != semantics.PrimUnknown && got != semantics.PrimBoolean {
 		ec.errorf(e.Span(), "operator 'not' requires a Boolean operand, found %s", got)
+	} else if found, mismatch := ec.nonBooleanOperand(scope, e.Operands[0], got); mismatch {
+		ec.errorf(e.Span(), "operator 'not' requires a Boolean operand, found %s", found)
 	}
 	return semantics.PrimBoolean
+}
+
+// nonBooleanOperand judges an operand outside the scalar lattice by the
+// conformance query: a body, a collection, a feature typed by no Boolean.
+func (ec *exprChecker) nonBooleanOperand(scope *symbols.Scope, operand ast.Node, got semantics.PrimType) (string, bool) {
+	if got != semantics.PrimUnknown || ec.model == nil {
+		return "", false
+	}
+	c := ec.model.ExprConformsToLibrary(scope, operand, semantics.FQNBoolean)
+	if !c.Known || c.Holds || c.Untyped {
+		return "", false
+	}
+	return c.Found, true
 }
 
 func (ec *exprChecker) checkUnaryNumeric(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
@@ -571,6 +582,12 @@ func (ec *exprChecker) checkBinaryBoolean(scope *symbols.Scope, e *ast.OperatorE
 	for _, got := range []semantics.PrimType{lhs, rhs} {
 		if got != semantics.PrimUnknown && got != semantics.PrimBoolean {
 			ec.errorf(e.Span(), "operator '%s' requires Boolean operands, found %s and %s", e.Operator, lhs, rhs)
+			return semantics.PrimBoolean
+		}
+	}
+	for i, got := range []semantics.PrimType{lhs, rhs} {
+		if found, mismatch := ec.nonBooleanOperand(scope, e.Operands[i], got); mismatch {
+			ec.errorf(e.Span(), "operator '%s' requires Boolean operands, found %s", e.Operator, found)
 			break
 		}
 	}
