@@ -300,7 +300,7 @@ package OpenSysMLPipeline {
     // snapshot when that matches the files, and parsed from the files otherwise.
     #SemanticEngine part def StandardLibrary :> Stage {
         attribute :>> goPackage = "internal/core/libs";
-        attribute bundledFileCount : Integer = 97;
+        attribute bundledFileCount : Integer = 98;
         attribute cached : Boolean = true;
         attribute snapshotFile : String = "internal/core/libs/stdlib.snapshot";
         attribute snapshotEmbedded : Boolean = true;
