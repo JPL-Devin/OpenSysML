@@ -114,3 +114,16 @@ func TestBoundDimensionlessQuantity(t *testing.T) {
 	wantOneDimensionError(t, `attribute t : DurationValue = 10 [m] / 5 [m];`,
 		"cannot bind a dimensionless value to a feature typed by DurationValue (dimension T)")
 }
+
+// TestRecursiveRollupThroughACall: a feature whose value calls a function on a
+// chain back to itself — the mass rollup `mass + sum(subcomponents.totalMass)` —
+// types in finite time: the argument is left untyped where it leads back to the
+// call being typed, rather than typing the call again.
+func TestRecursiveRollupThroughACall(t *testing.T) {
+	wantNoDimensionDiags(t, `private import NumericalFunctions::*;
+	part def MassedComponent {
+		part subcomponents : MassedComponent [*] default null;
+		attribute mass :> ISQ::mass;
+		attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
+	}`)
+}

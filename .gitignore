@@ -43,3 +43,6 @@ coverage-node.lcov
 
 # Maven build output for the Java client
 /clients/java/**/target/
+
+# Windows VERSIONINFO resources, written by go-winres for GOOS=windows builds
+cmd/*/rsrc_windows_*.syso

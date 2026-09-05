@@ -14,10 +14,9 @@ pinned validators, not from our reading of the grammar. Our adjudication of *why
 (the "likely root cause" column) is self-assessed.
 
 **Labels:** the short labels in this record are internal cross-references, not specification or
-product terms. A "wave" (and a "slice" within one) is a numbered development round of this
-project; the numbering is chronological and carries no external meaning. `F<n>` names a row of the
-follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
-SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
+product terms. `g<n>`, `k<n>`, `p<n>`, `s<n>` and `x<n>` name the corpus cases below, `F<n>` names a
+row of the follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its
+KerML and SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
 
 The corpus is organised by the rule each case violates, not by the pilot's constraint names, so
 it does not say which of the pilot's named validation constraints have a case and which do not.
@@ -46,8 +45,8 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (87 cases; 20 in wave 8, 45 added by wave 9F along the
-   *unreached* axis described below, 13 by wave 10G's second pass, and 7 body-position cases
+1. **`grammar/` — grammar mutation** (87 cases: 20 original, 45 added along the *unreached* axis
+   described below, 13 from a second sweep, and 7 body-position cases
    `g61`–`g67` from the constraint census described under `semantic/`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
@@ -66,8 +65,8 @@ systematically from four sources, one subdirectory each:
    extensions and, since strict mode was added, gated behind an opt-in
    [strict conformance mode](../guide/03-command-line.md#strict-conformance) a conformance-minded
    user can turn on; the default mode keeps accepting them on purpose.
-3. **`xpect/` — the pilot's own negative expectations** (34 cases; 7 in wave 8, 27 added by wave
-   10G against the semantic rules wave 10 is implementing). The Xpect suites declare 513
+3. **`xpect/` — the pilot's own negative expectations** (34 cases: 7 original, 27 added against the
+   semantic rules the validation work implements). The Xpect suites declare 513
    `errors` expectations ([pilot-xpect.md](pilot-xpect.md)); where a suite declares an error we do
    not report anywhere in the file, that is a candidate rejection gap. Each case here re-derives
    one such declared error as a standalone model, citing the KerML clause and the originating
@@ -172,7 +171,7 @@ Under the default `-conformance auto`:
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
 the pinned pilot does not implement; they are not permissiveness gaps on our side and are
-adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119 in wave 10G, to
+adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119, to
 120 with `g60` (an `alias` named by a keyword), to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it, to
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
@@ -192,13 +191,13 @@ then closed four more (`k35`, `k36`, `k40`, `s23`: metaclass typing, annotated-e
 and body redefinition, in both notations), and the feature-variability rules two more (`k11`, an
 initial `:=` value on a non-variable feature; `s80`, `constant` on a non-variable usage). Before
 that source the default-mode gap count was 2
-of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
-(11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
-attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
-declaration and its abstractness on every load path, which is what the rule reads. Wave 10C closed the two `grammar/` gaps
-left from wave 9F — `g02` (bare `import` is an error by default) and `g31` (`allocate` requires
-its `ConnectorPart`) — and the approved keyword-recovery policy closed the final three, so
-`grammar/` is clean. Wave 10B's validation
+of 120: only the intended `extensions/` notation. Three `xpect/` gaps closed later: `p11` (the
+model-level evaluability predicate on metadata body values), `p15` (the attribute-usage typing
+rule) and `p24` (a library metaclass now carries its declaration and its abstractness on every load
+path, which is what the rule reads). The two `grammar/` gaps left by the grammar-mutation sweep —
+`g02` (bare `import` is an error by default) and `g31` (`allocate` requires
+its `ConnectorPart`) — closed with those adjudications, and the approved keyword-recovery policy
+closed the final three, so `grammar/` is clean. The KerML validation
 rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
 `p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`). No case in the corpus is
 accepted by both implementations.
@@ -211,9 +210,9 @@ implementations reject it by default. Judged in
 the default mode the same corpus gives 220 agreements and 6 gaps, which is what `-conformance
 default` prints. `-conformance strict` gives 223 and 3. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
-still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
-validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
-(wave 8B) — and only the three `extensions/` cases belong to strict mode.
+still preserves their trees for editors and later analysis. Of the 14 gaps this document carried
+when it was first written, six were closed by the validation work itself — `p01`, `p02`, `p03`,
+`p04`, `p05` and `p06` — and only the three `extensions/` cases belong to strict mode.
 
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
@@ -371,17 +370,17 @@ Every recorded gap below was a **real permissiveness finding**: the pinned gramm
 these models. The closure notes record the implementation or approved policy change that moved
 each case to rejection.
 
-- **`grammar/g02-import-without-visibility.sysml` — divergence in severity, fix out of slice.**
+- **`grammar/g02-import-without-visibility.sysml` — divergence in severity.**
   The pinned `ImportPrefix` (`SysML.xtext:241`, `KerML.xtext:169`) makes `visibility =
   VisibilityIndicator` **mandatory**, unlike the optional `MemberPrefix` visibility beside it
   (`SysML.xtext:218`), so `import Q::*;` is not a well-formed import and the reference reports
   `mismatched input 'import'`. We do report it — as a *warning*
   (`internal/core/passes/import_visibility.go`, code `import-visibility`), and warnings do not
   count as rejection here. Per the pinned grammar the severity should be an error in the default
-  mode; the diagnostic is a semantic pass, so this round does not change it (`internal/core/passes` is
-  another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
+  mode: either raise `SeverityWarning` to an error, or make it
   conformance-dependent as `nonstandard_notation.go` already does.
-  **Closed in wave 10C (D2):** the finding is an error in every mode, and the case now rejects.
+  **Closed** ([adjudications.md](adjudications.md)): the finding is an error in every mode, and the
+  case now rejects.
 - **`grammar/g15-keyword-as-name.sysml` — recoverable error by approved policy.** The
   pinned grammar's `Name` is the `ID` terminal, which excludes keywords, and `part def part;` is
   `no viable alternative at input 'part'`. We read a keyword in name position as the name the
@@ -416,11 +415,11 @@ each case to rejection.
   indistinguishable at the token level. Measured with the pinned validator: `part def D { allocate
   al; }` is rejected by the reference too, so the synonym itself is the divergence, not just this
   case. Removing it is a language change locked by golden and RDF export expectations, so it is a
-  wave-10 decision rather than a small local fix. **Adjudicated in
-  [wave10-decisions.md](wave10-decisions.md) (D1):** require the `ConnectorPart` after `allocate`
+  language decision rather than a small local fix. **Adjudicated in
+  [adjudications.md](adjudications.md):** require the `ConnectorPart` after `allocate`
   and drop the definition-side entry, which closes this case without dropping the legal
-  `allocate f to g;` form. `g02`'s severity is D2 in the same record.
-  **Closed in wave 10C (D1):** `allocate` demands its `ConnectorPart`, and the case now rejects.
+  `allocate f to g;` form. `g02`'s severity is decided in the same record.
+  **Closed:** `allocate` demands its `ConnectorPart`, and the case now rejects.
 
 ### Grammar mutation pass
 
@@ -456,7 +455,7 @@ no corpus case can move that number. All 13 grammar cases are agreements.
 
 **Semantic axis (27 cases).** Cases were derived from the pilot's own `validation/invalid/*` and
 `Variability_invalid` Xpect expectations, one declared rule each (`p08`–`p34`), covering the rules
-wave 10 is closing: `Must be model-level evaluable` (`p11`, `p22`), `Must have a Boolean result`
+the KerML validation work is closing: `Must be model-level evaluable` (`p11`, `p22`), `Must have a Boolean result`
 (`p12`, `p21`), the variation rules (`p08`–`p10`), and the typing, cardinality, redefinition,
 port/interface, verification and view families. 13 are agreements and 14 are new permissiveness
 gaps, listed above. Candidates the pinned validator accepted were discarded rather than kept as
@@ -520,7 +519,7 @@ both and what each of them cannot catch.
 ## The declared errata overlay
 
 The rejection census is reported twice, as published and with the [declared
-errata](wave14-errata.md) applied. Every case here is one we wrote ourselves, so no declared
+errata](errata-overlay.md) applied. Every case here is one we wrote ourselves, so no declared
 correction lies under `cmd/pilot-reject/testdata/negative` and the two figures coincide — stated as
 such rather than left to look like a measurement:
 
