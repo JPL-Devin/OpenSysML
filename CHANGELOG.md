@@ -8,6 +8,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## 0.5.1 — 2026-09-05
 
+### Changed
+
+- Fully-qualified names no longer carry empty segments for unnamed enclosing elements (`Mid::inner`, never `Mid::::inner`), so name resolution stops re-normalizing every name it looks up: loading a real 28-file model allocates about 37% fewer objects and 8% less memory.
+
+### Fixed
+
+- State machines with time-triggered transitions (`accept after d`, `accept at t`) ran about three times slower than before the trigger argument's type was checked at runtime: the check re-derived the argument's static type on every state entry. The verdict is now judged once per transition the first time its state is entered and reused thereafter, restoring the previous execution speed and allocation volume; a wrong-typed argument is still refused on state entry exactly as before.
+
+## 0.5.1 — 2026-09-05
+
 ### Added
 
 - **Association arity, binary-link end counts and multiplicity bound types are checked the way
