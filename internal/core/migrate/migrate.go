@@ -1322,8 +1322,8 @@ func (m *migration) derive(d *xmi.Element, name string, derived, original *xmi.E
 		m.names[d] = name
 	}
 	m.w.block("connection def "+writeName(name)+" :> RequirementDerivation::Derivation", func() {
-		m.w.line("end #RequirementDerivation::original original : " + m.ref(original, d) + ";")
-		m.w.line("end #RequirementDerivation::derive derived : " + m.ref(derived, d) + ";")
+		m.w.line("end #RequirementDerivation::original originalRequirement : " + m.ref(original, d) + ";")
+		m.w.line("end #RequirementDerivation::derive derivedRequirement : " + m.ref(derived, d) + ";")
 	})
 	segs := append(m.segments(m.scope), name)
 	if m.scope == nil {

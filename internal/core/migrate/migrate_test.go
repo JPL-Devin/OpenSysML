@@ -165,7 +165,7 @@ func TestNotationCoversTheFixture(t *testing.T) {
 		"doc /* The vehicle shall have a mass of less than 1500 kg. */",
 		"requirement def <'R1.1'> 'Chassis Mass' {",
 		":> RequirementDerivation::Derivation {",
-		"end #RequirementDerivation::derive derived : 'Engine Mass Requirement';",
+		"end #RequirementDerivation::derive derivedRequirement : 'Engine Mass Requirement';",
 		"verify requirement : 'Mass Requirement';",
 		"allocate 'Vehicle Design'::Motor to 'Vehicle Design'::Engine;",
 		"/* not migrated: StateMachine 'Vehicle States' — behaviors are not migrated yet */",

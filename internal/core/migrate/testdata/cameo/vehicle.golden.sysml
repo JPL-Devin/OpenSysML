@@ -113,8 +113,8 @@ package Requirements {
         doc /* The engine shall have a mass of less than 300 kg. */
     }
     connection def 'Derive Engine Mass Requirement' :> RequirementDerivation::Derivation {
-        end #RequirementDerivation::original original : 'Mass Requirement';
-        end #RequirementDerivation::derive derived : 'Engine Mass Requirement';
+        end #RequirementDerivation::original originalRequirement : 'Mass Requirement';
+        end #RequirementDerivation::derive derivedRequirement : 'Engine Mass Requirement';
     }
     /* not migrated: «Verify» Abstraction (_dep_verify_block) — a verify whose client is not a test case has no v2 form */
     /* not migrated: «Refine» Abstraction (_dep_refine) — its end Vehicle Design::Drive is not migrated */
