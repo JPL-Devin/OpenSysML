@@ -108,7 +108,7 @@ func TestW7GEndAndNonEndFeaturesAreNotCompared(t *testing.T) {
 			}
 		}
 	}`
-	if diags := constraintDiags(t, src); len(diags) != 0 {
+	if diags := multiplicityDiags(t, src, "subsetting-multiplicity"); len(diags) != 0 {
 		t.Fatalf("an end subsetting a non-end is exempt in the reference, got %v", diags)
 	}
 }
