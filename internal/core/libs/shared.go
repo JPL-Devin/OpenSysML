@@ -45,9 +45,7 @@ func SharedLibrary() (*symbols.Index, Source) {
 	if lib, ok := shared.base[key]; ok {
 		return lib.idx, lib.src
 	}
-	src := newSnapshotSource(DefaultSource())
-	idx := frozenLibrary(src)
-	src.seal()
+	idx, src := FrozenLibrary()
 	if shared.base == nil {
 		shared.base = map[string]sharedLibrary{}
 	}
@@ -55,16 +53,21 @@ func SharedLibrary() (*symbols.Index, Source) {
 	return idx, src
 }
 
-// FrozenLibrary returns a frozen index holding the standard library: the
-// embedded snapshot decoded when it matches the library files, else the files
-// loaded and frozen. A snapshot that fails to decode is logged, since only a
-// build defect makes one.
-func FrozenLibrary() *symbols.Index {
-	return frozenLibrary(DefaultSource())
+// FrozenLibrary loads a frozen index holding the standard library, together
+// with a source serving exactly the bytes it was built from and nothing else
+// (see SharedLibrary). Unlike SharedLibrary it loads on every call.
+func FrozenLibrary() (*symbols.Index, Source) {
+	src := newSnapshotSource(DefaultSource())
+	idx := frozenLibrary(src)
+	src.seal()
+	return idx, src
 }
 
-// frozenLibrary is FrozenLibrary over the given source. Both paths read every
-// file of the source: the snapshot check digests them, and a load parses them.
+// frozenLibrary builds a frozen index over src: the embedded snapshot decoded
+// when it matches the library files, else the files loaded and frozen. Both
+// paths read every file of the source: the snapshot check digests them, and a
+// load parses them. A snapshot that fails to decode is logged, since only a
+// build defect makes one.
 func frozenLibrary(src Source) *symbols.Index {
 	idx, err := snapshotIndexOf(src)
 	if err == nil {

@@ -126,6 +126,12 @@ A worked shape, for a document with one section, a grouped table, a list and a d
   <code>MassLimit</code> — total mass shall not exceed 1500 kg
 </li>
 </ul>
+<dl class="sysml-definitions" data-content="definitions" data-name="requirementText" data-query="Queries::OpenRequirements">
+<div class="sysml-entry" data-element="Reqs::MassLimit" data-element-kind="requirementUsage">
+  <dt class="sysml-term">HLR-R001</dt>
+  <dd class="sysml-description">The total mass shall not exceed 1500 kg.</dd>
+</div>
+</dl>
 <figure class="sysml-diagram" data-content="diagram" data-name="Assembly" data-view="Views::AssemblyView" data-diagram-kind="interconnection" data-direction="LR">
 <pre class="mermaid">flowchart LR
   …</pre>
@@ -157,6 +163,8 @@ One class per node kind, in a `sysml-` namespace, and `data-` attributes for the
 | Column header | `th[scope=col]` | `data-column` |
 | List | `ul.sysml-list` / `ol.sysml-list` | `data-content`, `data-query` |
 | List item | `li.sysml-item` | `data-element`, `data-element-kind` |
+| Definitions | `dl.sysml-definitions` | `data-content`, `data-name`, `data-query` |
+| Definitions entry (one query row) | `div.sysml-entry` wrapping `dt.sysml-term` and `dd.sysml-description` | `data-element`, `data-element-kind` |
 | Diagram | `figure.sysml-diagram`, caption as `<figcaption>` | `data-content`, `data-name`, `data-view`, `data-diagram-kind`, `data-direction` |
 | Emphasis, strong, code run | `em`, `strong`, `code` | |
 | Link run | `a.sysml-link` | `href` |

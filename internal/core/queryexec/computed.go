@@ -176,18 +176,19 @@ func (e *executor) reflectiveFeatureValues(
 	property string,
 	sym *symbols.Symbol,
 ) ([]Value, error) {
-	value, ok := e.context.Model.ReflectiveFeatureValue(sym, property)
+	values, ok := e.context.Model.ReflectiveFeatureValues(sym, property)
 	if !ok {
 		return nil, e.featureError(expression, property, sym)
 	}
-	if value.Kind == symbols.FilterValueEmpty {
-		return nil, nil
+	result := make([]Value, 0, len(values))
+	for _, value := range values {
+		converted, ok := filterValue(value, sym)
+		if !ok {
+			return nil, e.featureError(expression, property, sym)
+		}
+		result = append(result, converted)
 	}
-	converted, ok := filterValue(value, sym)
-	if !ok {
-		return nil, e.featureError(expression, property, sym)
-	}
-	return []Value{converted}, nil
+	return result, nil
 }
 
 // rowConformsTo reports whether the row conforms to a feature's declaring

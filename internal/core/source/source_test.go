@@ -81,3 +81,24 @@ func TestSourceFileLinesCachesIndex(t *testing.T) {
 		t.Fatal("Lines returned different indexes")
 	}
 }
+
+// TextOf reads a name it has a file for from that file, even when the fallback
+// knows the name too, and hands every other name to the fallback.
+func TestTextOfShadowsTheFallbackByName(t *testing.T) {
+	files := map[string]*SourceFile{"a.sysml": New("a.sysml", []byte("part def Local;"))}
+	fallback := func(doc string, span Span) string { return "from " + doc }
+	sp := Span{Offset: 9, Len: 5}
+
+	text := TextOf(files, fallback)
+	if got := text("a.sysml", sp); got != "Local" {
+		t.Errorf("text(a.sysml) = %q, want the file's text", got)
+	}
+	if got := text("Lib.kerml", sp); got != "from Lib.kerml" {
+		t.Errorf("text(Lib.kerml) = %q, want the fallback's answer", got)
+	}
+
+	alone := TextOf(files, nil)
+	if got := alone("Lib.kerml", sp); got != "" {
+		t.Errorf("text without a fallback = %q, want none", got)
+	}
+}
