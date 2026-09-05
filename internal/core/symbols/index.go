@@ -47,6 +47,7 @@ type Index struct {
 	directChildrenMu         sync.Mutex
 	directChildrenGeneration uint64
 	directChildrenCache      map[directChildrenKey][]*Symbol
+	directChildrenByName     map[directChildrenKey]map[string][]*Symbol
 
 	docRoots      *layer[string, *Scope]      // document name -> root scope
 	docOfRoot     *layer[*Scope, string]      // root scope -> document name
@@ -184,26 +185,27 @@ type WildcardImport struct {
 func NewIndex() *Index {
 	gen := &indexGeneration{}
 	return &Index{
-		generation:          gen,
-		directChildrenCache: make(map[directChildrenKey][]*Symbol),
-		docRoots:            newLayer[string, *Scope](gen),
-		docOfRoot:           newLayer[*Scope, string](gen),
-		docKinds:            newLayer[string, source.Kind](gen),
-		fqn:                 newLayer[string, []*Symbol](gen),
-		contributions:       newLayer[string, []fqnEntry](gen),
-		wildcardMeta:        newLayer[string, map[string][]WildcardImport](gen),
-		reexported:          newLayer[string, map[*Symbol]bool](gen),
-		hidden:              newLayer[string, map[*Symbol]bool](gen),
-		reexportDocs:        newLayer[reexportKey, map[string]*reexportClaim](gen),
-		docReexports:        newLayer[string, map[reexportKey]bool](gen),
-		declaredAt:          newLayer[*Symbol, string](gen),
-		children:            newLayer[string, []string](gen),
-		bySegment:           newLayer[string, map[string]bool](gen),
-		dirtyNS:             make(map[string]nsChange),
-		lastTargets:         newLayer[string, []resolvedImport](gen),
-		libraryDocs:         newLayer[string, LibraryDocument](gen),
-		librarySyms:         newLayer[*Symbol, LibraryTier](gen),
-		nsFilters:           newLayer[string, map[string][]ElementFilter](gen),
+		generation:           gen,
+		directChildrenCache:  make(map[directChildrenKey][]*Symbol),
+		directChildrenByName: make(map[directChildrenKey]map[string][]*Symbol),
+		docRoots:             newLayer[string, *Scope](gen),
+		docOfRoot:            newLayer[*Scope, string](gen),
+		docKinds:             newLayer[string, source.Kind](gen),
+		fqn:                  newLayer[string, []*Symbol](gen),
+		contributions:        newLayer[string, []fqnEntry](gen),
+		wildcardMeta:         newLayer[string, map[string][]WildcardImport](gen),
+		reexported:           newLayer[string, map[*Symbol]bool](gen),
+		hidden:               newLayer[string, map[*Symbol]bool](gen),
+		reexportDocs:         newLayer[reexportKey, map[string]*reexportClaim](gen),
+		docReexports:         newLayer[string, map[reexportKey]bool](gen),
+		declaredAt:           newLayer[*Symbol, string](gen),
+		children:             newLayer[string, []string](gen),
+		bySegment:            newLayer[string, map[string]bool](gen),
+		dirtyNS:              make(map[string]nsChange),
+		lastTargets:          newLayer[string, []resolvedImport](gen),
+		libraryDocs:          newLayer[string, LibraryDocument](gen),
+		librarySyms:          newLayer[*Symbol, LibraryTier](gen),
+		nsFilters:            newLayer[string, map[string][]ElementFilter](gen),
 	}
 }
 
@@ -296,27 +298,28 @@ func NewOverlay(base *Index) *Index {
 	}
 	gen := &indexGeneration{}
 	return &Index{
-		base:                base,
-		generation:          gen,
-		directChildrenCache: make(map[directChildrenKey][]*Symbol),
-		docRoots:            overLayer(base.docRoots, gen),
-		docOfRoot:           overLayer(base.docOfRoot, gen),
-		docKinds:            overLayer(base.docKinds, gen),
-		fqn:                 overLayer(base.fqn, gen),
-		contributions:       overLayer(base.contributions, gen),
-		wildcardMeta:        overLayer(base.wildcardMeta, gen),
-		reexported:          overLayer(base.reexported, gen),
-		hidden:              overLayer(base.hidden, gen),
-		reexportDocs:        overLayer(base.reexportDocs, gen),
-		docReexports:        overLayer(base.docReexports, gen),
-		declaredAt:          overLayer(base.declaredAt, gen),
-		children:            overLayer(base.children, gen),
-		bySegment:           overLayer(base.bySegment, gen),
-		dirtyNS:             make(map[string]nsChange),
-		lastTargets:         overLayer(base.lastTargets, gen),
-		libraryDocs:         overLayer(base.libraryDocs, gen),
-		librarySyms:         overLayer(base.librarySyms, gen),
-		nsFilters:           overLayer(base.nsFilters, gen),
+		base:                 base,
+		generation:           gen,
+		directChildrenCache:  make(map[directChildrenKey][]*Symbol),
+		directChildrenByName: make(map[directChildrenKey]map[string][]*Symbol),
+		docRoots:             overLayer(base.docRoots, gen),
+		docOfRoot:            overLayer(base.docOfRoot, gen),
+		docKinds:             overLayer(base.docKinds, gen),
+		fqn:                  overLayer(base.fqn, gen),
+		contributions:        overLayer(base.contributions, gen),
+		wildcardMeta:         overLayer(base.wildcardMeta, gen),
+		reexported:           overLayer(base.reexported, gen),
+		hidden:               overLayer(base.hidden, gen),
+		reexportDocs:         overLayer(base.reexportDocs, gen),
+		docReexports:         overLayer(base.docReexports, gen),
+		declaredAt:           overLayer(base.declaredAt, gen),
+		children:             overLayer(base.children, gen),
+		bySegment:            overLayer(base.bySegment, gen),
+		dirtyNS:              make(map[string]nsChange),
+		lastTargets:          overLayer(base.lastTargets, gen),
+		libraryDocs:          overLayer(base.libraryDocs, gen),
+		librarySyms:          overLayer(base.librarySyms, gen),
+		nsFilters:            overLayer(base.nsFilters, gen),
 	}
 }
 
@@ -1566,10 +1569,7 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 func (idx *Index) lookupDirectChildren(key directChildrenKey) []*Symbol {
 	generation := idx.generation.get()
 	idx.directChildrenMu.Lock()
-	if idx.directChildrenGeneration != generation {
-		idx.directChildrenCache = make(map[directChildrenKey][]*Symbol)
-		idx.directChildrenGeneration = generation
-	}
+	idx.resetDirectChildrenCachesLocked(generation)
 	if out, ok := idx.directChildrenCache[key]; ok {
 		idx.directChildrenMu.Unlock()
 		return out
@@ -1594,6 +1594,75 @@ func (idx *Index) lookupDirectChildren(key directChildrenKey) []*Symbol {
 	}
 	idx.directChildrenMu.Unlock()
 	return out
+}
+
+// resetDirectChildrenCachesLocked drops both direct-children caches when the
+// index has changed since they were filled. Callers hold directChildrenMu.
+func (idx *Index) resetDirectChildrenCachesLocked(generation uint64) {
+	if idx.directChildrenGeneration != generation {
+		idx.directChildrenCache = make(map[directChildrenKey][]*Symbol)
+		idx.directChildrenByName = make(map[directChildrenKey]map[string][]*Symbol)
+		idx.directChildrenGeneration = generation
+	}
+}
+
+// LookupDirectChildrenNamed returns the direct children of prefix whose leaf
+// name or short name is name, in LookupDirectChildren order, without a scan.
+func (idx *Index) LookupDirectChildrenNamed(prefix, name string) []*Symbol {
+	if prefix == "" || name == "" {
+		return nil
+	}
+	return idx.lookupDirectChildrenNamed(directChildrenKey{
+		prefix:        prefix,
+		allowsPrivate: true,
+	}, name)
+}
+
+// LookupDirectChildrenNamedFrom is LookupDirectChildrenNamed with the visibility
+// of LookupDirectChildrenFrom, as seen from fromFQN ("" meaning from outside).
+func (idx *Index) LookupDirectChildrenNamedFrom(prefix, fromFQN, name string) []*Symbol {
+	if prefix == "" || name == "" {
+		return nil
+	}
+	return idx.lookupDirectChildrenNamed(directChildrenKey{
+		prefix:        prefix,
+		allowsPrivate: withinNamespace(fromFQN, prefix),
+	}, name)
+}
+
+func (idx *Index) lookupDirectChildrenNamed(key directChildrenKey, name string) []*Symbol {
+	generation := idx.generation.get()
+	idx.directChildrenMu.Lock()
+	idx.resetDirectChildrenCachesLocked(generation)
+	byName, ok := idx.directChildrenByName[key]
+	idx.directChildrenMu.Unlock()
+	if ok {
+		return byName[name]
+	}
+
+	children := idx.lookupDirectChildren(key)
+	byName = make(map[string][]*Symbol, len(children))
+	for _, sym := range children {
+		leaf := lastSegment(sym.Name)
+		byName[leaf] = append(byName[leaf], sym)
+		if sym.ShortName != "" && sym.ShortName != leaf {
+			byName[sym.ShortName] = append(byName[sym.ShortName], sym)
+		}
+	}
+	idx.directChildrenMu.Lock()
+	if idx.generation.get() == generation && idx.directChildrenGeneration == generation {
+		idx.directChildrenByName[key] = byName
+	}
+	idx.directChildrenMu.Unlock()
+	return byName[name]
+}
+
+// lastSegment returns the last "::"-separated segment of a possibly qualified name.
+func lastSegment(name string) string {
+	if i := strings.LastIndex(name, "::"); i >= 0 {
+		return name[i+2:]
+	}
+	return name
 }
 
 // RootBinding is a name registered at the index root and the symbol it names.

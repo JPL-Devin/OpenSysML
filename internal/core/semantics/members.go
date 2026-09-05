@@ -179,15 +179,8 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 	}
 	// If no scope (cached stdlib symbol), query index for direct children
 	if sym.Scope == nil {
-		idx := m.resolver.Index()
-		children := idx.LookupDirectChildren(sym.Name)
-		for _, child := range children {
-			// Extract leaf name from child FQN
-			leafName := child.Name
-			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
-				leafName = child.Name[lastIdx+2:]
-			}
-			if leafName == name {
+		for _, child := range m.resolver.Index().LookupDirectChildrenNamed(sym.Name, name) {
+			if leafName(child.Name) == name {
 				return child, true
 			}
 		}
@@ -241,12 +234,8 @@ func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield fu
 			continue
 		}
 		// A cached source with no scope is read from the index.
-		for _, child := range m.resolver.Index().LookupDirectChildren(sup.Name) {
-			leafName := child.Name
-			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
-				leafName = child.Name[lastIdx+2:]
-			}
-			if leafName == name && !yield(child) {
+		for _, child := range m.resolver.Index().LookupDirectChildrenNamed(sup.Name, name) {
+			if leafName(child.Name) == name && !yield(child) {
 				return
 			}
 		}

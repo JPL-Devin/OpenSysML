@@ -48,7 +48,7 @@ func (m Model) referringSymbols(target *symbols.Symbol) []*symbols.Symbol {
 	if rootScope == nil {
 		return nil
 	}
-	r := m.resolver()
+	r, _ := m.resolver()
 	seen := map[string]bool{}
 	var out []*symbols.Symbol
 	for _, ref := range resolve.References(m.Root, rootScope) {

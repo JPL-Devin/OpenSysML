@@ -10,7 +10,7 @@ package Test {
 		entry; then start;
 		state start;
 		state running parallel {
-			entry { reentered = reentered + 1; }
+			entry { assign reentered := reentered + 1; }
 
 			state left {
 				entry; then lstart;
@@ -24,7 +24,7 @@ package Test {
 				entry; then rstart;
 				state rstart;
 				state ridle;
-				state rtarget { entry { crossed = crossed + 1; } }
+				state rtarget { entry { assign crossed := crossed + 1; } }
 
 				succession first rstart then ridle;
 			}

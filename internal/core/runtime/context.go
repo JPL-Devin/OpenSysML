@@ -3,7 +3,6 @@ package runtime
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -42,6 +41,29 @@ type Context struct {
 	maxElements int64
 
 	features map[*symbols.Symbol][]EffectiveFeature
+
+	// arrayFeatures memoizes the declarations of Collections::Array's features
+	// by name; see arrayFeatureSymbols.
+	arrayFeatures map[*symbols.Symbol]string
+
+	// denotedFeatures memoizes, per type, the name of its feature each declared
+	// feature symbol denotes on an object of that type: itself or a redefinition.
+	denotedFeatures map[*symbols.Symbol]map[*symbols.Symbol]string
+
+	// holders memoizes, per type, the features whose stated value lists each
+	// named feature of the type.
+	holders map[*symbols.Symbol]map[string][]string
+
+	// returnedParams memoizes, per calc shape, the parameters its result passes on;
+	// returnedStack is the shapes under analysis, returnedProvisional those awaiting
+	// the root of their call cycle.
+	returnedParams      map[*calcShape]*returnedAnalysis
+	returnedStack       []*returnedAnalysis
+	returnedProvisional []*returnedAnalysis
+
+	// redefined memoizes, per feature of a type, the features it redefines
+	// transitively; callers read the shared slice and never append to it.
+	redefined map[featureOfType][]*symbols.Symbol
 
 	// writeTargets memoizes the declaration an assignment's target names, per
 	// scope the statement was written in: what a value written must conform to.
@@ -194,6 +216,9 @@ type Context struct {
 	// collectingSubsets holds the feature values whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
 	collectingSubsets map[featureValueRef]bool
+	// readingSubsetted holds the optional features whose subsetted collections are
+	// being read ahead of them, so two subsetting each other do not recurse.
+	readingSubsetted map[featureValueRef]bool
 
 	// sources holds the text of the files the model was read from, by name, so an
 	// error about a declaration can say where it was written. A file no caller
@@ -205,6 +230,11 @@ type Context struct {
 type featureValueRef struct {
 	instance int64
 	feature  string
+}
+
+// featureOfType names a declared feature read as a feature of one type.
+type featureOfType struct {
+	feature, owner *symbols.Symbol
 }
 
 // variantSelection identifies a variation point of one object: two objects of a
@@ -244,6 +274,9 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:           make(map[int64]*Instance),
 		lives:               make(map[int64]life),
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		denotedFeatures:     make(map[*symbols.Symbol]map[*symbols.Symbol]string),
+		holders:             make(map[*symbols.Symbol]map[string][]string),
+		returnedParams:      make(map[*calcShape]*returnedAnalysis),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
@@ -276,6 +309,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		bindingOwners:           make(map[featureValueRef]*ast.Usage),
 		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
 		collectingSubsets:       make(map[featureValueRef]bool),
+		readingSubsetted:        make(map[featureValueRef]bool),
+		redefined:               make(map[featureOfType][]*symbols.Symbol),
 		sources:                 make(map[string]*source.SourceFile),
 	}
 }
@@ -414,13 +449,13 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 }
 
 // beginProbe brackets an evaluation previewing what a run would do, restoring the
-// budget, trace, bus, variant selections, every feature value written (see
-// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// budget, trace, bus, variant selections, objects made, behaviors attached, every
+// feature value written (see noteProbeWrite) and every other change noted (see
+// noteProbeUndo) after.
 // Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
-	selected := maps.Clone(ctx.selectedVariants)
-	endBoundary := func() {}
+	endBoundary := func() { /* no boundary to close */ }
 	if ctx.probes == 0 {
 		endBoundary = ctx.beginRunBoundary()
 	}
@@ -431,7 +466,6 @@ func (ctx *Context) beginProbe() func() {
 	return func() {
 		rollback()
 		endBoundary()
-		ctx.selectedVariants = selected
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
@@ -456,10 +490,12 @@ func (ctx *Context) beginRunBoundary() func() {
 
 // beginJournal brackets a change to be kept whole or not at all: the feature
 // values written (see noteProbeWrite), the other changes noted (see
-// noteProbeUndo) and the bus are journaled until commit keeps them or rollback
+// noteProbeUndo — variant selections among them), the bus, and the objects made
+// and behaviors attached are journaled until commit keeps them or rollback
 // restores them. A commit inside an enclosing journal leaves the entries to it.
 func (ctx *Context) beginJournal() (commit, rollback func()) {
 	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
+	created, attached := len(ctx.created), len(ctx.objectBehaviors)
 	messages := slices.Clone(ctx.messages)
 	ctx.journals++
 	commit = func() {
@@ -479,6 +515,7 @@ func (ctx *Context) beginJournal() (commit, rollback func()) {
 		}
 		ctx.journalUndos = ctx.journalUndos[:undoMark]
 		ctx.messages = messages
+		ctx.abandonCreationSince(created, attached)
 	}
 	return commit, rollback
 }

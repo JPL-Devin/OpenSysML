@@ -22,11 +22,17 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr        // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
-	ValQuantity    // a magnitude and the measurement unit it is expressed in
-	ValVariant     // the variant selected for a variation, and the object it materializes
-	ValEnumLiteral // one literal of an enumeration definition, identified by itself
-	ValComplex     // one complex number, its real and imaginary parts together
+	ValExpr           // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValQuantity       // a magnitude and the measurement unit it is expressed in
+	ValVariant        // the variant selected for a variation, and the object it materializes
+	ValEnumLiteral    // one literal of an enumeration definition, identified by itself
+	ValComplex        // one complex number, its real and imaginary parts together
+	ValArray          // a Collections::Array: its dimensions and its row-major elements
+	ValVector         // a NumericalVectorValue: the numbers of its one dimension
+	ValVectorQuantity // a VectorQuantityValue: a vector with a measurement unit per axis
+
+	// valueKindCount bounds the kinds; TestEveryValueKindIsDispatched walks them.
+	valueKindCount
 )
 
 // FormatReal renders a Real as the shortest decimal that reads back as the same
@@ -107,6 +113,14 @@ func FormatValue(v Value) string {
 		return q.TextWithMagnitude(FormatConst(q.Num))
 	case ValComplex:
 		return FormatComplex(v.Complex())
+	case ValArray:
+		return v.Array().Format(FormatValue)
+	case ValVector:
+		return v.Vector().format(FormatConst)
+	case ValVectorQuantity:
+		return v.VectorQuantity().format(FormatConst)
+	case ValExpr:
+		return "<expression>"
 	default:
 		return "<unknown>"
 	}
@@ -156,6 +170,12 @@ func (k ValueKind) String() string {
 		return "enumeration literal"
 	case ValComplex:
 		return "complex number"
+	case ValArray:
+		return "array"
+	case ValVector:
+		return "vector"
+	case ValVectorQuantity:
+		return "vector quantity"
 	default:
 		return "invalid"
 	}
@@ -170,8 +190,8 @@ type Value struct {
 	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
 	// ref holds the kind-specific payload of the remaining kinds: a string
 	// (ValString), *Sequence, *Set, *exprValue (ValExpr), *Quantity, a complex128
-	// (ValComplex), or the *symbols.Symbol of a variant (ValVariant) or
-	// enumeration literal (ValEnumLiteral).
+	// (ValComplex), *Array, *Vector, *VectorQuantity, or the *symbols.Symbol of
+	// a variant (ValVariant) or enumeration literal (ValEnumLiteral).
 	ref any
 }
 
@@ -288,6 +308,33 @@ func (v Value) Quantity() *Quantity {
 	}
 	q, _ := v.ref.(*Quantity)
 	return q
+}
+
+// Array is the payload of a ValArray; nil for every other kind.
+func (v Value) Array() *Array {
+	if v.Kind != ValArray {
+		return nil
+	}
+	a, _ := v.ref.(*Array)
+	return a
+}
+
+// Vector is the payload of a ValVector; nil for every other kind.
+func (v Value) Vector() *Vector {
+	if v.Kind != ValVector {
+		return nil
+	}
+	vec, _ := v.ref.(*Vector)
+	return vec
+}
+
+// VectorQuantity is the payload of a ValVectorQuantity; nil for every other kind.
+func (v Value) VectorQuantity() *VectorQuantity {
+	if v.Kind != ValVectorQuantity {
+		return nil
+	}
+	vq, _ := v.ref.(*VectorQuantity)
+	return vq
 }
 
 // Complex is the number a ValComplex is; 0 for every other kind.

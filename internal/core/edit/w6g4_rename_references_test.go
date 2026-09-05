@@ -139,6 +139,42 @@ func TestRenameCapturingANameAtAReferenceIsRefused(t *testing.T) {
 	}
 }
 
+// The same refusal for a feature chain's member, which is read in the operand's
+// type rather than where the chain is written: the subtype's own member captures it.
+func TestRenameCapturingAFeatureChainMemberIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Base { part x; }\n\tpart def Derived :> Base { part y; }\n" +
+		"\tpart d : Derived;\n\tpart e :> d.x;\n}\n"
+	e := refusedRename(t, "capture-chain.sysml", src, "P::Base::x", "y")
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "P::Derived::y") {
+		t.Fatalf("refusal does not name what the chain would read: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "P" {
+		t.Fatalf("refusal reports referring %v, want [P]", e.Referring)
+	}
+}
+
+// The same refusal where the new name is an alias for the element itself: the
+// references would be read through the alias, which the rename turns cyclic.
+func TestRenameCapturingByAnAliasForItselfIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Old;\n\tpart def Q {\n\t\talias New for Old;\n" +
+		"\t\tpart u : Old;\n\t}\n}\n"
+	e := refusedRename(t, "capture-alias.sysml", src, "P::Old", "New")
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "P::Q::New") {
+		t.Fatalf("refusal does not name the alias: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "P::Q" {
+		t.Fatalf("refusal reports referring %v, want [P::Q]", e.Referring)
+	}
+}
+
 // The same refusal for a qualified reference: the new name is already a member
 // of the namespace the reference qualifies through.
 func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {
@@ -151,6 +187,97 @@ func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(e.Message, "P::New") {
 		t.Fatalf("refusal does not name P::New: %s", e.Message)
+	}
+}
+
+// A qualifier respelled onto a visible element is captured by it even where that
+// element lacks the rest of the name, as a feature chain's outward-read member is.
+func TestRenameCapturingAQualifierWithoutTheSuffixIsRefused(t *testing.T) {
+	for _, tt := range []struct{ name, q, use string }{
+		{"redefined", "Q :> P::Old", "\t\tpart y :>> Old::x;\n"},
+		{"chain", "Q", "\t\tpart d : P::Old;\n\t\tpart e :> d.Old::x;\n"},
+	} {
+		src := "package P {\n\tpart def Old { part x; }\n\tpart def " + tt.q + " {\n\t\tpart def New;\n" + tt.use + "\t}\n}\n"
+		e := refusedRename(t, "capture-qualifier-"+tt.name+".sysml", src, "P::Old", "New")
+
+		if e.Failure != FailureInvalidName {
+			t.Fatalf("%s: failure is %s (%s), want invalid-name", tt.name, e.Failure, e.Message)
+		}
+		if !strings.Contains(e.Message, "P::Q::New") {
+			t.Fatalf("%s: refusal does not name P::Q::New: %s", tt.name, e.Message)
+		}
+		if len(e.Referring) != 1 || e.Referring[0] != "P::Q" {
+			t.Fatalf("%s: refusal reports referring %v, want [P::Q]", tt.name, e.Referring)
+		}
+	}
+}
+
+// A rewritten segment that would name several members leaves the reference
+// ambiguous, which is refused too. Only a namespace with duplicate names makes a
+// segment ambiguous, so the fixture is deliberately ill-formed there.
+func TestRenameLeavingAQualifiedSegmentAmbiguousIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::*;\n\tpart def New;\n" +
+		"\tattribute def New;\n}\npackage R {\n\tpart p : Q::Old;\n}\n"
+	m := loadContent(t, "ambiguous-segment.sysml", src)
+	res, err := Apply(m, []Operation{Rename("P::Old", "New")})
+	if res != nil {
+		t.Fatalf("refused rename returned content:\n%s", res.Content)
+	}
+	e := editError(t, err)
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "would name 2 elements at once") {
+		t.Fatalf("refusal does not report the ambiguity: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "R" {
+		t.Fatalf("refusal reports referring %v, want [R]", e.Referring)
+	}
+}
+
+// A renamed call selects by arguments among the overloads its new spelling denotes:
+// another overload chosen, a tie, or an alias is refused; the target still chosen applies.
+func TestRenameSelectsAmongOverloadsOfRenamedCall(t *testing.T) {
+	const lib = "package Lib {\n\tcalc def g { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n" +
+		"\tcalc def h { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n\talias gg for h;\n}\n"
+	const realF = "package P {\n\tcalc def f { in v : ScalarValues::Real; return r : ScalarValues::Real = v; }\n}\n"
+	const intF = "package P {\n\tcalc def f { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n}\n"
+	call := func(imports, arg string) string {
+		return "package R {\n" + imports + "\tattribute c : ScalarValues::Real = f(" + arg + ");\n}\n"
+	}
+	const both = "\tprivate import P::*;\n\tprivate import Lib::*;\n"
+
+	for _, tt := range []struct{ name, src, newName, want string }{
+		{"other", lib + realF + call(both, "1"), "g", "would read Lib::g instead"},
+		{"tie", lib + intF + call(both, "1"), "g", "would name 2 elements at once"},
+		{"alias", lib + realF + call(both, "1"), "gg", "would read Lib::gg instead"},
+		// The name alone still reads the target through its short name; the arguments do not.
+		{"short", lib + strings.Replace(realF, "def f", "def <g> f", 1) + call(both, "1"), "g", "would read Lib::g instead"},
+	} {
+		e := refusedRename(t, "overload-"+tt.name+".sysml", tt.src, "P::f", tt.newName)
+		if e.Failure != FailureInvalidName {
+			t.Fatalf("%s: failure is %s (%s), want invalid-name", tt.name, e.Failure, e.Message)
+		}
+		if !strings.Contains(e.Message, tt.want) {
+			t.Fatalf("%s: refusal does not say %q: %s", tt.name, tt.want, e.Message)
+		}
+		if len(e.Referring) != 1 || e.Referring[0] != "R" {
+			t.Fatalf("%s: refusal reports referring %v, want [R]", tt.name, e.Referring)
+		}
+	}
+
+	for _, imports := range []string{both, "\tprivate import Lib::*;\n\tprivate import P::*;\n"} {
+		m := loadContent(t, "overload-kept.sysml", lib+realF+call(imports, "1.5"))
+		requireClean(t, m)
+		res, err := Apply(m, []Operation{Rename("P::f", "g")})
+		if err != nil {
+			t.Fatalf("rename refused: %v", err)
+		}
+		want := lib + strings.Replace(realF, "def f", "def g", 1) + strings.Replace(call(imports, "1.5"), "= f(", "= g(", 1)
+		if string(res.Content) != want {
+			t.Fatalf("got:\n%s\nwant:\n%s", res.Content, want)
+		}
 	}
 }
 

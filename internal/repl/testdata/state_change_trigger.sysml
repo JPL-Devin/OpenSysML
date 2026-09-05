@@ -10,7 +10,7 @@ package Debug {
 		state init;
 		state waiting {
 			do {
-				ready = true;
+				assign ready := true;
 			}
 		}
 		state armed;

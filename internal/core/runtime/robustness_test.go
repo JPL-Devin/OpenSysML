@@ -107,7 +107,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_default_recursion", testCalcDefaultRecursion)
 	t.Run("calc_library_default_recursion", testCalcLibraryDefaultRecursion)
+	t.Run("calc_library_default_failure_names_one_frame", testCalcLibraryDefaultFailureNamesOneFrame)
 	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
 	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
@@ -276,6 +278,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
 	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
 	t.Run("base_index_with_several_indexes", testBaseIndexWithSeveralIndexes)
+	t.Run("structured_value_outside_the_declared_shape", testStructuredValueOutsideTheDeclaredShape)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -457,31 +460,319 @@ func testBindingMultipleScalarContributors(t *testing.T) {
 }
 
 func testBindingMultipleCollectionContributors(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
-		part def Sys {
-			attribute edges : Integer[*];
-			attribute leftEdge : Integer[0..1] = (1);
-			attribute rightEdge : Integer[0..1] = (2);
-			binding [1] bind [0..1] edges = [0..1] leftEdge;
-			binding [1] bind [0..1] edges = [0..1] rightEdge;
+	t.Run("partial", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute leftEdge : Integer[0..1] = (1);
+				attribute rightEdge : Integer[0..1] = (2);
+				binding [1] bind [0..1] edges = [0..1] leftEdge;
+				binding [1] bind [0..1] edges = [0..1] rightEdge;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
 		}
-	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-	if err != nil {
-		t.Fatalf("instantiate: %v", err)
-	}
-	_, err = inst.GetFeatureValue(ctx, "edges")
-	if !errors.Is(err, ErrBindingEnd) {
-		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
-	}
-	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
-		!strings.Contains(err.Error(), "edges") {
-		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
-	}
-	fv := inst.FeatureValues["edges"]
-	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
-		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
-	}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+		}
+		if got, want := err.Error(), "binding end cannot be resolved: Sys.edges is bound by `bind [0..1] edges = [0..1] leftEdge`, "+
+			"which links one unspecified value of each end; the model does not determine which value edges holds"; got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+		fv := inst.FeatureValues["edges"]
+		if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+			t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+		}
+	})
+
+	// An end admitting one value links a feature holding one value whole,
+	// however wide the feature is declared; one holding more stays partial.
+	t.Run("partial_by_values_held", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-partial-by-values-held>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pick : Integer[1];
+				binding [1] bind [0..1] edges = [0..1] pick;
+			}
+			part one : Sys { :>> edges = (7); }
+			part two : Sys { :>> edges = (7, 8); }
+		}`))
+		one, err := ctx.Instantiate(oneSymbol(t, idx, "P::one"))
+		if err != nil {
+			t.Fatalf("instantiate one: %v", err)
+		}
+		fv, err := one.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("one.pick: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 7 {
+			t.Errorf("one.pick = %d (%s), want 7, the one value edges holds", got, FormatValue(fv.HeldValue()))
+		}
+		two, err := ctx.Instantiate(oneSymbol(t, idx, "P::two"))
+		if err != nil {
+			t.Fatalf("instantiate two: %v", err)
+		}
+		if _, err := two.GetFeatureValue(ctx, "pick"); !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("two.pick = %v, want ErrBindingEnd", err)
+		}
+		// An end valued on its own — written, as one valued by a default — keeps that value.
+		if err := two.SetFeatureValue(ctx, "pick", integerValue(8)); err != nil {
+			t.Fatalf("write two.pick: %v", err)
+		}
+		fv, err = two.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("two.pick after the write: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 8 {
+			t.Errorf("two.pick = %s after writing 8, want 8", FormatValue(fv.HeldValue()))
+		}
+	})
+
+	// A binding of the whole feature determines it whatever partial bindings it has
+	// besides, and in whatever order they are declared.
+	t.Run("whole_beside_partial", func(t *testing.T) {
+		for name, bindings := range map[string]string{
+			"partial_first": "binding [1] bind [0..1] edges = [0..1] pick; bind edges = every;",
+			"whole_first":   "bind edges = every; binding [1] bind [0..1] edges = [0..1] pick;",
+		} {
+			t.Run(name, func(t *testing.T) {
+				idx, _, ctx := buildRuntime(t, "<binding-whole-beside-partial>", parseAndBuild(t, `package P {
+					part def Sys {
+						attribute edges : Integer[*];
+						attribute every : Integer[*] = (1, 2, 3);
+						attribute pick : Integer[0..1] = (2);
+						`+bindings+`
+					}
+				}`))
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				fv, err := inst.GetFeatureValue(ctx, "edges")
+				if err != nil {
+					t.Fatalf("edges: %v", err)
+				}
+				if got := FormatValue(fv.HeldValue()); got != "[1, 2, 3]" {
+					t.Errorf("edges = %s, want [1, 2, 3], what the whole binding determines", got)
+				}
+			})
+		}
+	})
+
+	// An end of multiplicity [0] links no value: each feature reads what it holds on its own.
+	t.Run("zero_width_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-zero-width-end>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*] = (7, 8);
+				attribute pick : Integer[0..1];
+				binding [1] bind [0] edges = [0..1] pick;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("edges: %v", err)
+		}
+		if got := len(elementsOf(fv.HeldValue())); got != 2 {
+			t.Errorf("edges holds %d values (%s), want the two it is valued with", got, FormatValue(fv.HeldValue()))
+		}
+		fv, err = inst.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("pick: %v", err)
+		}
+		if got := elementsOf(fv.HeldValue()); len(got) != 0 {
+			t.Errorf("pick = %s, want nothing: the binding links no value to it", FormatValue(fv.HeldValue()))
+		}
+	})
+
+	// An end stating how many values it links is not met by a feature holding fewer: the
+	// binding is a multiplicity violation, not a whole binding of what there is — whichever
+	// end is read, whether the features admit more than the end links or exactly as many.
+	t.Run("under_lower_bound", func(t *testing.T) {
+		for name, c := range map[string]struct{ ends, same string }{
+			"exact":  {"[2]", "[0..2]"},
+			"ranged": {"[2..3]", "[0..3]"},
+		} {
+			ends := c.ends
+			for shape, declared := range map[string]string{"wider": "[*]", "same": c.same} {
+				t.Run(name+"_"+shape, func(t *testing.T) {
+					idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound>", parseAndBuild(t, `package P {
+						part def Sys {
+							attribute edges : Integer`+declared+` = (7);
+							attribute pair : Integer`+declared+`;
+							binding [1] bind `+ends+` edges = `+ends+` pair;
+						}
+					}`))
+					want := "multiplicity violation: `bind " + ends + " edges = " + ends + " pair` links " +
+						ends + " of edges, which holds 1 value(s)"
+					for _, order := range [][]string{{"pair", "edges", "pair"}, {"edges", "pair", "edges"}} {
+						inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+						if err != nil {
+							t.Fatalf("instantiate: %v", err)
+						}
+						for _, feature := range order {
+							_, err := inst.GetFeatureValue(ctx, feature)
+							if !errors.Is(err, ErrMultiplicityViolation) {
+								t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+							}
+							if got := err.Error(); got != want {
+								t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+							}
+						}
+						fv := inst.FeatureValues["pair"]
+						if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+							t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+						}
+					}
+				})
+			}
+		}
+	})
+
+	// An end that makes the binding partial does not excuse the other end from its
+	// lower bound, whichever end is read.
+	t.Run("under_lower_bound_beyond_partial_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound-beyond-partial>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pair : Integer[0..3] = (5);
+				binding [1] bind [2] edges = [2] pair;
+			}
+		}`))
+		want := "multiplicity violation: `bind [2] edges = [2] pair` links [2] of pair, which holds 1 value(s)"
+		for _, order := range [][]string{{"edges", "pair"}, {"pair", "edges"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+			fv := inst.FeatureValues["edges"]
+			if fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+				t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+			}
+		}
+	})
+
+	// Ends requiring a value are not met by two optional features holding none: the
+	// binding links nothing, a multiplicity violation rather than an unknown value or a
+	// cycle. Once anything values the features — a default, another binding — it is whole.
+	t.Run("empty_required_ends", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-empty-required-ends>", parseAndBuild(t, `package P {
+			part def Empty {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Defaulted {
+				attribute a : Integer[0..1] = 5;
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Joined {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				attribute c : Integer[0..1] = 5;
+				binding [1] bind [1] a = [1] b;
+				binding [1] bind [1] a = [1] c;
+			}
+		}`))
+		want := "multiplicity violation: `bind [1] a = [1] b` links [1] of a, which holds 0 value(s)"
+		for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Empty"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("Empty %v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("Empty %v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+		}
+		for def, orders := range map[string][][]string{
+			"P::Defaulted": {{"a", "b"}, {"b", "a"}},
+			"P::Joined":    {{"a", "b", "c"}, {"b", "a", "c"}, {"c", "b", "a"}},
+		} {
+			for _, order := range orders {
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, def))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				for _, feature := range order {
+					fv, err := inst.GetFeatureValue(ctx, feature)
+					if err != nil {
+						t.Fatalf("%s %v: %s: %v", def, order, feature, err)
+					}
+					if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+						t.Errorf("%s %v: %s = %s, want 5", def, order, feature, FormatValue(got))
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("whole_unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (2, 1);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict at Sys.edges: left = [1, 2], right = [2, 1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("whole_equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (1, 2);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(edges): %v", err)
+		}
+		if got := FormatValue(fv.HeldValue()); got != "[1, 2]" {
+			t.Errorf("edges = %s, want [1, 2]", got)
+		}
+	})
 }
 
 func testBindingPropagationSpendsElementBudget(t *testing.T) {
@@ -1313,7 +1604,27 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
-		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		// Flat numbers are no collection of vectors; unequal dimensions have no
+		// sum or inner product; Booleans or a two-component three-vector are no vector.
+		{"VectorFunctions::sum(xs)", ErrTypeMismatch},
+		{"VectorFunctions::sum0(xs, VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum0((), VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum((VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys)))", ErrTypeMismatch},
+		{"VectorFunctions::inner(VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys))", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(xs) + VectorFunctions::VectorOf(ys)", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(flags)", ErrTypeMismatch},
+		{"VectorFunctions::CartesianThreeVectorOf(ys)", ErrMultiplicityViolation},
+		{"VectorFunctions::angle(VectorFunctions::VectorOf((0.0, 0.0)), VectorFunctions::VectorOf(ys))", semantics.ErrArithmeticDomain},
+		// A quantity's num is Number[1..*]: a vector of no components takes no unit,
+		// whether written `[m]`, scaled by a scalar quantity, or divided by one.
+		{"VectorFunctions::CartesianVectorOf(()) [SI::m]", ErrMultiplicityViolation},
+		{"VectorFunctions::norm(VectorFunctions::CartesianVectorOf(()) [SI::m])", ErrMultiplicityViolation},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], VectorFunctions::CartesianVectorOf(()))", ErrMultiplicityViolation},
+		{"VectorCalculations::vectorScalarQuantityMult(VectorFunctions::VectorOf(()), 2 [SI::m])", ErrMultiplicityViolation},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(()), 2 [SI::s])", ErrMultiplicityViolation},
+		{"VectorFunctions::VectorOf(xs) / 0", ErrDivisionByZero},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(xs) [SI::m], 0 [SI::s])", ErrDivisionByZero},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], flags)", ErrTypeMismatch},
 		{"ComplexFunctions::'/'(ComplexFunctions::rect(0.0, 1.0), ComplexFunctions::rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
@@ -1363,7 +1674,7 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::numer("0.5")`, ErrTypeMismatch},
 		{`RationalFunctions::numer(1.0e19)`, semantics.ErrArithmeticOverflow},
 		{`RationalFunctions::denom(0.0001)`, semantics.ErrArithmeticOverflow},
-		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
+		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrTypeMismatch},
 		{`OccurrenceFunctions::isDuring(xs)`, ErrMultiplicityViolation},
 		{`OccurrenceFunctions::isDuring(factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::'==='(xs, xs)`, ErrMultiplicityViolation},
@@ -1532,21 +1843,157 @@ func testDataEqualityOverAPart(t *testing.T) {
 	}
 }
 
-// testBaseIndexWithSeveralIndexes: BaseFunctions::'#' declares `Positive[1..*]`
-// indexes; several address an Array the runtime cannot represent, and none is a
-// multiplicity violation, so each is reported rather than indexed anyhow.
+// testBaseIndexWithSeveralIndexes: several indexes address an Array, so a flat
+// sequence, a rank mismatch, an out-of-range, ragged or oversized Array is each
+// reported.
 func testBaseIndexWithSeveralIndexes(t *testing.T) {
 	src := `
 		package test {
 			private import ScalarValues::*;
+			private import Collections::*;
+			attribute a : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute ragged : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3); }
+			attribute vast : Array { :>> dimensions = (4611686018427387904, 4); :>> elements = (); }
 			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
 			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
+			calc def OneIndex { return : Integer = a#(4); }
+			calc def ThreeIndexes { return : Integer = a#(1, 1, 1); }
+			calc def PastRow { return : Integer = a#(3, 1); }
+			calc def PastColumn { return : Integer = a#(1, 4); }
+			calc def ZeroIndex { return : Integer = a#(0, 1); }
+			calc def Ragged { return : Integer = ragged#(1, 1); }
+			calc def Vast { return : Integer = vast#(4611686018427387904, 4); }
 		}
 	`
-	for calc, want := range map[string]error{"Cell": ErrUnevaluableLibraryFunction, "NoIndex": ErrMultiplicityViolation} {
+	for calc, want := range map[string]error{
+		"Cell":         ErrTypeMismatch,
+		"NoIndex":      ErrMultiplicityViolation,
+		"OneIndex":     ErrMultiplicityViolation,
+		"ThreeIndexes": ErrMultiplicityViolation,
+		"PastRow":      ErrIndexOutOfRange,
+		"PastColumn":   ErrIndexOutOfRange,
+		"ZeroIndex":    ErrIndexOutOfRange,
+	} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, want) || !strings.Contains(err.Error(), "BaseFunctions::'#'") {
 			t.Errorf("%s = %v, want %v naming BaseFunctions::'#'", calc, err, want)
+		}
+	}
+	err := calcErrorWithLibraries(t, src, "Ragged", nil, 10000)
+	if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Ragged = %v, want %v naming flattenedSize", err, ErrMultiplicityViolation)
+	}
+	err = calcErrorWithLibraries(t, src, "Vast", nil, 10000)
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Vast = %v, want %v naming flattenedSize", err, semantics.ErrArithmeticOverflow)
+	}
+}
+
+// testStructuredValueOutsideTheDeclaredShape: a type specializing Array or a
+// vector type fixes a shape or element type, so a value of another shape or
+// element type is refused, while one that fits is held — including by a
+// NumericalVectorValue specialization beside the Cartesian ones.
+func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			private import VectorValues::*;
+			private import VectorFunctions::*;
+			private import Quantities::*;
+			private import ISQ::*;
+			private import SI::*;
+			attribute def Grid :> Array { :>> dimensions = (2, 2); }
+			attribute def Row4 :> Array { :>> rank = 1; :>> flattenedSize = 4; }
+			attribute def IntArray :> Array { :>> elements : Integer; }
+			attribute def Fixed3 :> CartesianThreeVectorValue;
+			attribute def OneDim :> NumericalVectorValue;
+			attribute def IntVec :> NumericalVectorValue { :>> elements : Integer; }
+			attribute def IntThree :> ThreeVectorValue { :>> elements : Integer; }
+			attribute def Fixed2 :> NumericalVectorValue { :>> dimension = 2; }
+			attribute def Four :> Array { :>> elements : Integer[4]; }
+			attribute def Vel3 :> VectorQuantityValue { :>> num : Real[3]; }
+			attribute def IntVQ :> VectorQuantityValue { :>> num : Integer; }
+			attribute square : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
+			attribute wide : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute row : Array { :>> dimensions = 4; :>> elements = (1, 2, 3, 4); }
+			attribute reals : Array { :>> dimensions = 2; :>> elements = (1.5, 2.5); }
+			calc def TwoAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0)); }
+			calc def TwoAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0, 3.0)); }
+			calc def ThreeAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def TwoAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2)); }
+			calc def ThreeAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2, 3)); }
+			calc def IntsAsIntVec { return : IntVec = VectorOf((1, 2)); }
+			calc def RealsAsIntVec { return : IntVec = VectorOf((1.5, 2.0)); }
+			calc def IntsAsIntThree { return : IntThree = VectorOf((1, 2, 3)); }
+			calc def TwoAsIntThree { return : IntThree = VectorOf((1, 2)); }
+			calc def RealsAsIntThree { return : IntThree = VectorOf((1.5, 2.0, 3.0)); }
+			calc def TwoAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def VectorAsGrid { return : Grid = VectorOf((1, 2, 3, 4)); }
+			calc def VectorAsString { return : String = VectorOf((1, 2)); }
+			calc def WideAsGrid { return : Grid = wide; }
+			calc def SquareAsGrid { return : Grid = square; }
+			calc def SquareAsRow4 { return : Row4 = square; }
+			calc def SquareAsOneDim { return : OneDim = square; }
+			calc def RowAsRow4 { return : Row4 = row; }
+			calc def RealsAsIntArray { return : IntArray = reals; }
+			calc def RowAsIntArray { return : IntArray = row; }
+			calc def RealsAsFour { return : Four = reals; }
+			calc def SquareAsFour { return : Four = square; }
+			calc def TwoAsVel3 { return : Vel3 = VectorOf((1.0, 2.0)) [m]; }
+			calc def ThreeAsVel3 { return : Vel3 = VectorOf((1.0, 2.0, 3.0)) [m]; }
+			calc def RealsAsIntVQ { return : IntVQ = VectorOf((1.5, 2.5)) [m]; }
+			calc def IntsAsIntVQ { return : IntVQ = VectorOf((1, 2)) [m]; }
+			calc def TwoAsScalar { return : ScalarQuantityValue = VectorOf((1.0, 2.0)) [m]; }
+			calc def TwoAsLength { return : LengthValue = VectorOf((1.0, 2.0)) [m]; }
+		}
+	`
+	for calc, fixes := range map[string]string{
+		"TwoAsThree":       "it declares dimension = 3",
+		"TwoAsFixed3":      "it declares dimension = 3",
+		"TwoAsThreeVector": "it declares dimension = 3",
+		"TwoAsIntThree":    "it declares dimension = 3",
+		"ThreeAsFixed2":    "it declares dimension = 2",
+		"RealsAsIntVec":    "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsIntThree":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"VectorAsGrid":     "cannot write ⟨1, 2, 3, 4⟩ (vector) to a feature typed by Grid",
+		"VectorAsString":   "cannot write ⟨1, 2⟩ (vector) to a feature typed by String",
+		"WideAsGrid":       "it declares dimensions = [2, 2]",
+		"SquareAsRow4":     "it declares rank = 1",
+		"SquareAsOneDim":   "it declares dimension : Positive[0..1], got 2 dimension(s)",
+		"RealsAsIntArray":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsFour":      "it declares elements : Integer[4], got 2 element(s)",
+		"TwoAsVel3":        "it declares num : Real[3], got 2 element(s)",
+		"RealsAsIntVQ":     "it declares num : Integer, got element 1.5 (a Real)",
+		"TwoAsScalar":      "to a feature typed by ScalarQuantityValue: it is a ScalarValue, which holds one scalar",
+		"TwoAsLength":      "to a feature typed by LengthValue: it is a ScalarValue, which holds one scalar",
+	} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), fixes) {
+			t.Errorf("%s = %v, want %v naming %q", calc, err, ErrTypeMismatch, fixes)
+		}
+	}
+	for calc, want := range map[string]string{
+		"ThreeAsThree":       "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsFixed3":      "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsThreeVector": "⟨1, 2, 3⟩",
+		"IntsAsIntVec":       "⟨1, 2⟩",
+		"IntsAsIntThree":     "⟨1, 2, 3⟩",
+		"TwoAsFixed2":        "⟨1.0, 2.0⟩",
+		"SquareAsGrid":       "Array(2, 2)[1, 2, 3, 4]",
+		"RowAsRow4":          "Array(4)[1, 2, 3, 4]",
+		"RowAsIntArray":      "Array(4)[1, 2, 3, 4]",
+		"SquareAsFour":       "Array(2, 2)[1, 2, 3, 4]",
+		"ThreeAsVel3":        "⟨1.0, 2.0, 3.0⟩ [m]",
+		"IntsAsIntVQ":        "⟨1, 2⟩ [m]",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)
+		got, err := ctx.InvokeCalc(sym, nil, scope)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s = (%s, %v), want %s", calc, FormatValue(got), err, want)
 		}
 	}
 }
@@ -4729,6 +5176,50 @@ func testCalcMutualRecursion(t *testing.T) {
 	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
+// testCalcDefaultRecursion: a default re-invoking its own calc nests through the
+// binding rather than the body, and is bounded and collapsed the same way.
+func testCalcDefaultRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc def f {
+				in x : Integer;
+				in y : Integer = f(x);
+				return : Integer = x;
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "f", ErrCalcRecursionLimit)
+}
+
+// testCalcLibraryDefaultFailureNamesOneFrame: a default failing once on a library
+// specialization is reported under one calc name, as a calc with a body reports it.
+func testCalcLibraryDefaultFailureNamesOneFrame(t *testing.T) {
+	src := `
+		package test {
+			import ScalarValues::*;
+			import RealFunctions::*;
+			calc def again :> max {
+				in x :>> x;
+				in y :>> y = missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "again", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc again not found")
+	}
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the unresolved default to fail the invocation")
+	}
+	if got, prefix := err.Error(), `calc test::again: default for parameter "y": `; !strings.HasPrefix(got, prefix) || strings.Count(got, "calc test::again") != 1 {
+		t.Errorf("err = %q; want one frame %q", got, prefix)
+	}
+}
+
 // testCalcLibraryDefaultRecursion: a library specialization whose default invokes
 // itself nests through its own binding, so the depth budget reports it like any calc.
 func testCalcLibraryDefaultRecursion(t *testing.T) {
@@ -4827,6 +5318,11 @@ func assertCalcInvocationBounded(t *testing.T, idx *symbols.Index, ctx *Context,
 		}
 		if !errors.Is(err, want) {
 			t.Errorf("expected %v, got: %v", want, err)
+		}
+		// One line per frame would make the message (and the memory building
+		// it) grow with the square of the depth.
+		if msg := err.Error(); len(msg) > 1024 {
+			t.Errorf("error for recursive calc %s is %d bytes; want frames collapsed: %.200s…", calcName, len(msg), msg)
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
@@ -6425,7 +6921,7 @@ func testCalcNonTerminatingLoop(t *testing.T) {
 				in n: Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				return : Integer = i;
 			}
@@ -6446,7 +6942,7 @@ func testCalcBodyNeverReturns(t *testing.T) {
 				in n: Integer;
 				attribute total : Integer = 0;
 				if n > 0 {
-					total = n;
+					assign total := n;
 				}
 				if n < 0 {
 					return : Integer = total;
@@ -6506,7 +7002,7 @@ func testCalcAssignmentOutsideTheCalc(t *testing.T) {
 			attribute shared : Integer = 0;
 			calc leaky {
 				in n: Integer;
-				shared = n;
+				assign shared := n;
 				return : Integer = n;
 			}
 		}
@@ -6665,7 +7161,7 @@ func testCalcUsageStepBudget(t *testing.T) {
 				in n : Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				out reached = i;
 			}
@@ -6707,7 +7203,7 @@ func testCalcOutputNeverAssignedByTheBody(t *testing.T) {
 				in n : Integer;
 				out a : Integer;
 				out b : Integer;
-				a = n + 1;
+				assign a := n + 1;
 			}
 			calc c : Two { in n = 5; }
 		}
@@ -6730,7 +7226,7 @@ func testCalcOutputAssignedInABranchNotTaken(t *testing.T) {
 				in n : Integer;
 				out a : Integer;
 				if n > 10 {
-					a = n;
+					assign a := n;
 				}
 			}
 			calc c : Branch { in n = 5; }
@@ -6750,7 +7246,7 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 			calc def Both {
 				in n : Integer;
 				out a : Integer = n;
-				a = n + 1;
+				assign a := n + 1;
 			}
 			calc c : Both { in n = 5; }
 		}
@@ -6795,8 +7291,8 @@ func testCalcOutputAssignedTwice(t *testing.T) {
 			calc def Twice {
 				in n : Integer;
 				out a : Integer;
-				a = n + 1;
-				a = a + 1;
+				assign a := n + 1;
+				assign a := a + 1;
 			}
 			calc c : Twice { in n = 5; }
 		}
@@ -6955,7 +7451,7 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 				in n : Integer;
 				attribute i : Integer = 0;
 				while i >= 0 {
-					i = i + 1;
+					assign i := i + 1;
 				}
 				out reached = i;
 			}
@@ -8343,7 +8839,7 @@ func testCalcOutputWriteOfAWrongTypedValue(t *testing.T) {
 		private import ScalarValues::*;
 		calc def Label {
 			out tag : String;
-			tag := 7;
+			assign tag := 7;
 		}
 	}`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
@@ -9331,7 +9827,7 @@ func testBlockNodePinBoundWhereNodesAreNotPerformed(t *testing.T) {
 				if x > 0 {
 					action p { out v : Integer; assign v := x * 2; }
 					bind p.v = x;
-					seen = 1;
+					assign seen := 1;
 				}
 				return : Integer = seen;
 			}

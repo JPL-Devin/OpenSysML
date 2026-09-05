@@ -182,6 +182,17 @@ name resolution rather than textual replacement. A rename rewrites only the name
 cursor — an element's long name or its `<short>` name — where it is declared and wherever a
 reference spells it, so `part a : O;` still resolves and is left as written when `part def <O> Old;`
 is renamed to `Fresh`, and renaming from `<O>` rewrites that reference and not the `Old` ones.
+A rename that would change what a name means is refused, and the editor shows the server's
+error naming the element the new name would mean: the new name — long or short — already means
+something where the element is declared (a sibling's long or short name, or an outer, imported or
+inherited name it would shadow), or a reference the rename rewrites, in any open document, would
+afterwards read another element (`part w : Tyre;` in a scope that declares its own `Tyre`,
+`A::x` renamed to `y` when `A::y` exists, `A` in `A::x` renamed to `B` when a `B` is visible
+there — even one with no `x`, which would leave the reference unresolved — `d.x` renamed to `y`
+when `d`'s type declares its own `y`, a name that would reach several members at once and so
+leave the reference ambiguous, or a name an alias — even an alias for the element itself —
+already means there). A name taken only in an unrelated scope is no conflict, nor is renaming a
+name to itself.
 
 To check the installation in an editor, open a file containing
 `part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.

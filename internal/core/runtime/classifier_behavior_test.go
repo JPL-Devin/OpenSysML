@@ -223,6 +223,86 @@ func TestBehaviorNamedFollowsRedefinition(t *testing.T) {
 	}
 }
 
+// An object classified by a type renaming a behavior it already runs, or by one it
+// renames a behavior of, keeps running that one behavior, and answers to both names
+// whichever of its types declared the name it is asked by.
+func TestBehaviorNamedFollowsRedefinitionByAClassifier(t *testing.T) {
+	cases := map[string]struct {
+		room  string
+		held  string
+		types []string
+	}{
+		"narrowed": {
+			room:  `part lamp : Lamp [1]; part fancy : FancyLamp [1] = lamp;`,
+			held:  "fancy",
+			types: []string{"FancyLamp"},
+		},
+		"widened": {
+			room:  `part lamp : FancyLamp [1]; part plain : Lamp [1] = lamp;`,
+			held:  "plain",
+			types: []string{"FancyLamp", "Lamp"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				state def Modes {
+					entry; then off;
+					state off;
+				}
+				part def Lamp {
+					exhibit state modes : Modes;
+					perform action tick { action step; }
+				}
+				part def FancyLamp :> Lamp {
+					exhibit state fancyModes :>> modes;
+					perform action fancyTick :>> tick { action step; }
+				}
+				part def Room { ` + tc.room + ` }
+				part room : Room;
+			`
+			model, resolver, root := parseAndBuildModel(t, src)
+			ctx := NewContext(model, resolver, 10000)
+
+			room, err := ctx.Instantiate(resolveSymbol(t, root, "room"))
+			if err != nil {
+				t.Fatalf("Instantiate: %v", err)
+			}
+			lamp := readInstance(t, ctx, room, "lamp")
+			if held := readInstance(t, ctx, room, tc.held); held != lamp {
+				t.Fatalf("%s holds object %d, want lamp (%d)", tc.held, held.ID, lamp.ID)
+			}
+			for _, typ := range tc.types {
+				if !ctx.instanceConforms(lamp, resolveSymbol(t, root, typ)) {
+					t.Fatalf("lamp is of %v (classified by %v), want a %s", lamp.Type, lamp.classifiers, typ)
+				}
+			}
+			if got := len(lamp.Behaviors()); got != 2 {
+				t.Fatalf("lamp runs %d behaviors %v, want its one machine and one action", got, lamp.Behaviors())
+			}
+			for _, names := range [][2]string{{"modes", "fancyModes"}, {"tick", "fancyTick"}} {
+				var found []*ObjectBehavior
+				for _, name := range names {
+					got, ok := ctx.BehaviorNamed(lamp, name)
+					if !ok {
+						t.Errorf("BehaviorNamed(%q) finds no behavior of the lamp", name)
+						continue
+					}
+					found = append(found, got)
+				}
+				if len(found) == 2 && found[0] != found[1] {
+					t.Errorf("BehaviorNamed(%q) and BehaviorNamed(%q) are two executions, want one", names[0], names[1])
+				}
+			}
+			for _, name := range []string{"nothing", ""} {
+				if got, ok := ctx.BehaviorNamed(lamp, name); ok {
+					t.Errorf("BehaviorNamed(%q) = %v; want none", name, got)
+				}
+			}
+		})
+	}
+}
+
 // An action-declared feature is written on the action performance occurrence,
 // while a like-named feature of the performer remains distinct. The results the
 // run reports mirror the occurrence, which is authoritative.

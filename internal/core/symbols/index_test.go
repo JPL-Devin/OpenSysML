@@ -566,6 +566,72 @@ func TestLookupDirectChildrenInvalidatesAfterWrite(t *testing.T) {
 	}
 }
 
+// A by-name lookup answers exactly what a scan of LookupDirectChildren for the
+// name would: the children bearing it as their leaf name or short name, in
+// enumeration order, with the private-import visibility of the plain lookup.
+func TestLookupDirectChildrenNamedMatchesScan(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { namespace Own; namespace Hidden; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { private import Base::*; namespace Own; namespace <short> Long; }")
+	idx.ExpandWildcardImports()
+
+	scan := func(all []*Symbol, name string) []*Symbol {
+		var out []*Symbol
+		for _, sym := range all {
+			if lastSegment(sym.Name) == name || sym.ShortName == name {
+				out = append(out, sym)
+			}
+		}
+		return out
+	}
+	same := func(a, b []*Symbol) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+	for _, name := range []string{"Own", "Hidden", "Long", "short", "Missing"} {
+		for _, from := range []string{"", "Mid::Inner"} {
+			got := idx.LookupDirectChildrenNamedFrom("Mid", from, name)
+			want := scan(idx.LookupDirectChildrenFrom("Mid", from), name)
+			if !same(got, want) {
+				t.Errorf("LookupDirectChildrenNamedFrom(Mid, %q, %q) = %d symbols, want %d", from, name, len(got), len(want))
+			}
+		}
+		got := idx.LookupDirectChildrenNamed("Mid", name)
+		want := scan(idx.LookupDirectChildren("Mid"), name)
+		if !same(got, want) {
+			t.Errorf("LookupDirectChildrenNamed(Mid, %q) = %d symbols, want %d", name, len(got), len(want))
+		}
+	}
+	if got := len(idx.LookupDirectChildrenNamedFrom("Mid", "", "Own")); got != 1 {
+		t.Errorf("Own from outside = %d symbols, want just Mid's own", got)
+	}
+	if got := len(idx.LookupDirectChildrenNamedFrom("Mid", "Mid::Inner", "Own")); got != 2 {
+		t.Errorf("Own from inside = %d symbols, want Mid's and the privately imported one", got)
+	}
+	if got := len(idx.LookupDirectChildrenNamed("Mid", "short")); got != 1 {
+		t.Errorf("short name lookup = %d symbols, want 1", got)
+	}
+}
+
+func TestLookupDirectChildrenNamedInvalidatesAfterWrite(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace A; }")
+	if got := len(idx.LookupDirectChildrenNamed("P", "B")); got != 0 {
+		t.Fatalf("B before write = %d symbols, want 0", got)
+	}
+	addDoc(t, idx, "b.sysml", "package P { namespace B; }")
+	if got := len(idx.LookupDirectChildrenNamed("P", "B")); got != 1 {
+		t.Fatalf("B after write = %d symbols, want 1", got)
+	}
+}
+
 func TestLookupDirectChildrenCachesIdenticalLookup(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P { namespace A; }")

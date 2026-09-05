@@ -1,9 +1,14 @@
 // A vector-valued library feature reads as a name too, and the vector it
-// answers is the sequence of its elements.
+// answers is one CartesianThreeVectorValue; its elements read out as Reals.
 package test {
 	private import ScalarValues::*;
+	private import VectorValues::*;
 
 	calc def displacement {
-		return : Real[3] = VectorFunctions::cartesian3DZeroVector;
+		return : CartesianThreeVectorValue = VectorFunctions::cartesian3DZeroVector;
+	}
+
+	calc def components {
+		return : Real[3] = VectorFunctions::cartesian3DZeroVector.elements;
 	}
 }

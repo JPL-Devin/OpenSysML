@@ -87,12 +87,15 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 	}
 	seen[obj.ID] = true
 	ctx.recordShape(obj.Type, shapes)
+	for _, c := range obj.classifiers {
+		ctx.recordShape(c, shapes)
+	}
 	for _, val := range obj.held() {
 		ctx.walkValue(val, func(v Value) {
 			if v.Kind == ValVariant {
 				ctx.recordShape(v.Variant(), shapes)
 			}
-			if id, ok := v.Object(); ok {
+			if id, ok := carriedObject(v); ok {
 				if held, found := ctx.instances[id]; found {
 					ctx.recordShapes(held, shapes, seen)
 				}
@@ -197,11 +200,21 @@ func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
 	}
 	object := false
 	ctx.walkValue(s.Values, func(v Value) {
-		if _, held := v.Object(); held {
+		if _, held := carriedObject(v); held {
 			object = true
 		}
 	})
 	return !object
+}
+
+// carriedObject is the object a value denotes or, for an array or vector, was read
+// from: what a carry-over takes along with the value.
+func carriedObject(v Value) (int64, bool) {
+	if id, ok := v.Object(); ok {
+		return id, true
+	}
+	id := backingObject(v)
+	return id, id != 0
 }
 
 // connectorFeatureValue reports whether the feature value holds the object of a connector, whose
@@ -225,6 +238,10 @@ func (ctx *Context) walkValue(val Value, visit func(Value)) {
 			for _, elem := range val.Set().Elements() {
 				ctx.walkValue(elem, visit)
 			}
+		}
+	case ValArray:
+		for _, elem := range val.Array().Elements {
+			ctx.walkValue(elem, visit)
 		}
 	}
 }
@@ -397,11 +414,13 @@ type adoption struct {
 }
 
 // adoptPlan is what one object becomes in the new context: the declaration it is
-// of, and the feature each of its feature values fills.
+// of, the features that classified it, and the feature each of its feature
+// values fills.
 type adoptPlan struct {
-	obj      *Instance
-	typeSym  *symbols.Symbol
-	features map[string]*EffectiveFeature
+	obj         *Instance
+	typeSym     *symbols.Symbol
+	classifiers []*symbols.Symbol
+	features    map[string]*EffectiveFeature
 }
 
 // featureFor returns the feature a feature value reached under name fills: the one its
@@ -432,26 +451,28 @@ func (a *adoption) plan(obj *Instance) error {
 		}
 		return &AdoptError{Type: a.ctx.fqnOf(obj.Type), Reason: fmt.Sprintf("its identity %d is taken", obj.ID)}
 	}
-	typeSym, err := a.rebind(obj.Type, "its type")
+	typeSym, err := a.rebindShaped(obj.Type, "its type")
 	if err != nil {
 		return err
 	}
 	fqn := a.ctx.fqnOf(typeSym)
-	want, recorded := a.shapes.digests[fqn]
-	if !recorded {
-		return &AdoptError{Type: fqn, Reason: "the shape it was materialized against was not recorded"}
+	declared := &declaredFeatures{byName: make(map[string]*EffectiveFeature), bySymbol: make(map[*symbols.Symbol]*EffectiveFeature)}
+	a.indexFeatures(typeSym, declared)
+	// A feature that classified the object declares features of it too, so the
+	// object is rebound to what that feature is declared as here.
+	classifiers := make([]*symbols.Symbol, 0, len(obj.classifiers))
+	for _, c := range obj.classifiers {
+		found, err := a.rebindShaped(c, "a feature that held it")
+		if err != nil {
+			return err
+		}
+		classifiers = append(classifiers, found)
+		a.indexFeatures(found, declared)
 	}
-	if a.ctx.ShapeDigest(typeSym) != want {
-		return &AdoptError{Type: fqn, Reason: "its declaration resolves to a different shape now"}
-	}
-	features := a.ctx.FeaturesOf(typeSym)
-	byName := make(map[string]*EffectiveFeature, len(features))
-	for i := range features {
-		byName[features[i].Name] = &features[i]
-	}
-	plan := &adoptPlan{obj: obj, typeSym: typeSym, features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
+	plan := &adoptPlan{obj: obj, typeSym: typeSym, classifiers: classifiers,
+		features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
 	for _, name := range obj.featureNames() {
-		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], byName)
+		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], declared)
 		if err != nil {
 			return err
 		}
@@ -466,11 +487,55 @@ func (a *adoption) plan(obj *Instance) error {
 	return nil
 }
 
-// planFeature is the feature a feature value fills in this context: the effective feature
-// of the rebound declaration, or — for a feature value a connector added, which no
+// rebindShaped rebinds a declaration an object was materialized against and
+// checks that it still resolves to the shape recorded for it.
+func (a *adoption) rebindShaped(sym *symbols.Symbol, what string) (*symbols.Symbol, error) {
+	found, err := a.rebind(sym, what)
+	if err != nil {
+		return nil, err
+	}
+	fqn := a.ctx.fqnOf(found)
+	want, recorded := a.shapes.digests[fqn]
+	if !recorded {
+		return nil, &AdoptError{Type: fqn, Reason: "the shape it was materialized against was not recorded"}
+	}
+	if a.ctx.ShapeDigest(found) != want {
+		return nil, &AdoptError{Type: fqn, Reason: "its declaration resolves to a different shape now"}
+	}
+	return found, nil
+}
+
+// declaredFeatures indexes what an object's types declare for it here: by the
+// declaration a feature reads, and by name for the first type to give the name.
+type declaredFeatures struct {
+	byName   map[string]*EffectiveFeature
+	bySymbol map[*symbols.Symbol]*EffectiveFeature
+}
+
+// indexFeatures adds the features sym declares to declared, keeping the names a
+// declaration indexed before it already gave.
+func (a *adoption) indexFeatures(sym *symbols.Symbol, declared *declaredFeatures) {
+	features := a.ctx.FeaturesOf(sym)
+	for i := range features {
+		feat := &features[i]
+		if _, taken := declared.byName[feat.Name]; !taken {
+			declared.byName[feat.Name] = feat
+		}
+		if _, taken := declared.bySymbol[feat.Symbol]; feat.Symbol != nil && !taken {
+			declared.bySymbol[feat.Symbol] = feat
+		}
+	}
+}
+
+// planFeature is the feature a feature value fills in this context: the declaration it
+// read, rebound (a classifier's refinement of a carried feature stays the one read), else
+// the one its name gives, or — for a feature value a connector added, which no
 // declaration of the type carries — the recorded one with its symbols rebound.
-func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, fv *FeatureValue, byName map[string]*EffectiveFeature) (*EffectiveFeature, error) {
-	if feat, ok := byName[name]; ok {
+func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, fv *FeatureValue, declared *declaredFeatures) (*EffectiveFeature, error) {
+	if feat := a.declarationRead(fv, declared); feat != nil {
+		return feat, nil
+	}
+	if feat, ok := declared.byName[name]; ok {
 		return feat, nil
 	}
 	if fv.Feature == nil || fv.Feature.DefaultValue != nil {
@@ -491,6 +556,19 @@ func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name strin
 	return &feat, nil
 }
 
+// declarationRead is the feature declared here by the rebound declaration fv reads,
+// when one of the object's types declares it.
+func (a *adoption) declarationRead(fv *FeatureValue, declared *declaredFeatures) *EffectiveFeature {
+	if fv.Feature == nil || fv.Feature.Symbol == nil {
+		return nil
+	}
+	read, err := a.rebind(fv.Feature.Symbol, fmt.Sprintf("the feature %q", fv.Feature.Name))
+	if err != nil {
+		return nil
+	}
+	return declared.bySymbol[read]
+}
+
 func (a *adoption) planValue(owner string, val Value) error {
 	var err error
 	a.prev.walkValue(val, func(v Value) {
@@ -509,7 +587,7 @@ func (a *adoption) planValue(owner string, val Value) error {
 				return
 			}
 		}
-		if id, ok := v.Object(); ok {
+		if id, ok := carriedObject(v); ok {
 			err = a.planHeld(owner, id)
 		}
 	})
@@ -577,8 +655,9 @@ func (a *adoption) commit() {
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
 		adopted[id] = true
-		prevType := plan.obj.Type
+		prevTypes := plan.obj.types()
 		plan.obj.Type = plan.typeSym
+		plan.obj.classifiers = plan.classifiers
 		// Names of one redefined feature share a feature value, which is rebound once, to
 		// the feature of the name the shared feature value was created under.
 		done := make(map[*FeatureValue]bool, len(plan.obj.FeatureValues))
@@ -618,7 +697,7 @@ func (a *adoption) commit() {
 		// The connectors the owner names no name are reached by no name here, so
 		// they are materialized again against the declarations as they are now —
 		// under the identities they had, which name the same connectors.
-		plan.obj.keepAnonymous(a.ctx, a.prev, prevType)
+		plan.obj.keepAnonymous(a.ctx, a.prev, prevTypes)
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}
@@ -772,6 +851,15 @@ func (a *adoption) rewrite(val Value) Value {
 			set.Add(a.rewrite(elem))
 		}
 		return NewSetValue(set)
+	case ValArray:
+		arr := val.Array()
+		elements := make([]Value, len(arr.Elements))
+		for i, elem := range arr.Elements {
+			elements[i] = a.rewrite(elem)
+		}
+		out := NewArrayValue(arr.Dimensions, elements)
+		out.Array().Object = arr.Object
+		return out
 	default:
 		return val
 	}

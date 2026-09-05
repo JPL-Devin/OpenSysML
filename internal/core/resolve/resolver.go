@@ -110,6 +110,9 @@ type Resolver struct {
 	// allVisible is nonzero while the target of an `import all` (or of an
 	// expose) is resolved, which reaches every membership, not the visible ones.
 	allVisible int
+	// trial is the name a ProbeReading is reading, whose segment records a
+	// failed probe keeps: the reader wants what each segment reached.
+	trial *ast.QualifiedName
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 	// payloads are the accept-node payloads a scope's body shares, collected
@@ -604,12 +607,12 @@ func (r *Resolver) outsideAllVisible(f func()) {
 // probe runs a trial reading of qn, reported by f as resolved or not. Its
 // diagnostics are suppressed, and the per-segment resolutions it records are
 // kept only where it resolved: a reading not adopted leaves nothing behind for a
-// caller to read back.
+// caller to read back — unless qn is itself the name a ProbeReading reads.
 func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	saved := r.saveSegments(qn)
 	resolved := false
 	r.aside(func() { resolved = f() })
-	if !resolved {
+	if !resolved && qn != r.trial {
 		r.restoreSegments(qn, saved)
 	}
 	return resolved

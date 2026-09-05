@@ -400,16 +400,14 @@ jobs:
   scan:
     docker:
       - image: cimg/go:1.25
-    # The Go sensor parses a directory at a time and holds the whole parser
-    # output in memory, so the largest directories (internal/core/runtime, 117
-    # files) decide the heap: the scanner's default, a quarter of a medium
-    # container's 4 GB, dies there with OutOfMemoryError. This class has 8 GB,
-    # leaving room for the 4 GB below plus the sensor's own Go child process.
+    # The Go sensor holds a whole directory's parse in memory; internal/core/runtime
+    # (168 files) overflows the default heap (a quarter of the container). 8 GB is
+    # the largest class in the project's plan (xlarge is rejected).
     resource_class: large
     environment:
-      # The pinned orb runs sonar-scanner-cli 8.0.1, whose launcher passes only
-      # $SONAR_SCANNER_OPTS to the JVM; SONAR_SCANNER_JAVA_OPTS is ignored there.
-      SONAR_SCANNER_OPTS: -Xmx4g
+      # sonar-scanner-cli 8 forks the analysis into a second JVM whose arguments
+      # come from this variable only; SONAR_SCANNER_OPTS sizes just the launcher.
+      SONAR_SCANNER_JAVA_OPTS: -Xmx6500m
     steps:
       # Forked PRs get no context, so the token is absent there: end green
       # rather than fail every outside contribution. With a token, a failing
@@ -501,8 +499,8 @@ jobs:
               exit 0
             fi
             echo "sonar.projectVersion=${version#v}"
-            # The scanner reads JVM system properties, and this is the variable
-            # its launcher passes to the JVM (see the heap note above).
+            # The launcher JVM turns its sonar.* system properties into scanner
+            # properties and hands them to the forked analysis JVM.
             echo "export SONAR_SCANNER_OPTS=\"${SONAR_SCANNER_OPTS} -Dsonar.projectVersion=${version#v}\"" >> "$BASH_ENV"
 
       - sonarcloud/scan
