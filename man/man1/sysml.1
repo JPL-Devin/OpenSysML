@@ -63,8 +63,8 @@ Evaluate expression and exit (shorthand)
 Evaluate expression and exit (can be specified multiple times)
 .TP
 .BI \-from " string"
-Input format for \-convert: sysml, kerml, ttl, turtle or rdf (default: from
-the input's extension)
+Input format for \-convert: sysml, kerml, ttl, turtle, rdf, or xmi/mdzip for a
+SysML v1 model to migrate (default: from the input's extension)
 .TP
 .B \-h
 Show this help (shorthand)
@@ -104,6 +104,10 @@ Write a heap profile of the run to this file, for go tool pprof
 .B \-memstats
 Report on stderr what the run cost: wall time, memory allocated, memory taken
 from the OS
+.TP
+.BI \-migration\-report " string"
+With \-convert from xmi: write the element\-by\-element migration report to
+this file (JSON when it ends in .json, text otherwise)
 .TP
 .BI \-o " string"
 Write conversion output to this file (shorthand)
