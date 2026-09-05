@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:379d4c54a21c3bc17f8f1b414a5bb870ec934f649c93b6ca3af5981aa7281902"
+        "digest": "sha256:8db7b83acb3cc51ef96f3188e36468f3cf97f8dbadd7d60b263e03225318025c"
       },
       {
         "name": "probes",
@@ -76,12 +76,12 @@
   "totals": {
     "files": 366,
     "filesFullyAgreeing": 338,
-    "agreement": 43,
+    "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
     "pilotOnly": 302,
-    "openSysMLDiagnostics": 65,
-    "pilotDiagnostics": 347
+    "openSysMLDiagnostics": 56,
+    "pilotDiagnostics": 338
   },
   "roots": [
     {
@@ -736,42 +736,17 @@
       "totals": {
         "files": 32,
         "filesFullyAgreeing": 25,
-        "agreement": 9,
+        "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
         "pilotOnly": 276,
-        "openSysMLDiagnostics": 11,
-        "pilotDiagnostics": 286
+        "openSysMLDiagnostics": 2,
+        "pilotDiagnostics": 277
       },
       "files": [
         {
           "path": "disposal-robot-demo/robot.sysml",
-          "agreement": [
-            {
-              "line": 514,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 532,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 561,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 566,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
+          "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
@@ -797,14 +772,7 @@
         },
         {
           "path": "disposal-team-demo/team.sysml",
-          "agreement": [
-            {
-              "line": 271,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
+          "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
@@ -2279,32 +2247,7 @@
         },
         {
           "path": "solver-demo.sysml",
-          "agreement": [
-            {
-              "line": 133,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 152,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 180,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 185,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
+          "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
@@ -2418,23 +2361,8 @@
   "unmapped": [
     {
       "side": "pilot",
-      "message": "Cannot override a binding feature value",
-      "count": 9
-    },
-    {
-      "side": "opensysml",
-      "message": "cannot override the binding value of TradeStudies::MaximizeObjective::best: a value written with `=` is fixed for every feature redefining it; write it as `default =` on TradeStudies::MaximizeObjective::best to allow overriding, or remove this value",
-      "count": 6
-    },
-    {
-      "side": "pilot",
       "message": "Duplicate of other owned member name",
       "count": 5
-    },
-    {
-      "side": "opensysml",
-      "message": "cannot override the binding value of TradeStudies::MinimizeObjective::best: a value written with `=` is fixed for every feature redefining it; write it as `default =` on TradeStudies::MinimizeObjective::best to allow overriding, or remove this value",
-      "count": 3
     },
     {
       "side": "opensysml",
@@ -2666,12 +2594,12 @@
     "totals": {
       "files": 366,
       "filesFullyAgreeing": 339,
-      "agreement": 43,
+      "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
       "pilotOnly": 302,
-      "openSysMLDiagnostics": 64,
-      "pilotDiagnostics": 347
+      "openSysMLDiagnostics": 55,
+      "pilotDiagnostics": 338
     },
     "findings": [
       {
