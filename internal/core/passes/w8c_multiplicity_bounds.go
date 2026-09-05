@@ -94,8 +94,12 @@ func (c *multiplicityBoundsChecker) boundConforms(scope *symbols.Scope, bound as
 	}
 	silent := &exprChecker{resolver: c.resolver, model: c.model}
 	if !w8cIsReference(bound) {
-		prim := silent.infer(scope, bound)
-		return prim == semantics.PrimUnknown || semantics.PrimConforms(prim, want)
+		if prim := silent.infer(scope, bound); prim != semantics.PrimUnknown {
+			return semantics.PrimConforms(prim, want)
+		}
+		// A call, constructor or quantity is judged by its declared result.
+		conf := c.model.ExprConformsTo(scope, bound, c.model.ScalarSymbol(want))
+		return !conf.Known || conf.Holds || conf.Untyped
 	}
 	sym, ok := c.resolver.ResolveTarget(scope, bound)
 	if !ok || sym == nil {

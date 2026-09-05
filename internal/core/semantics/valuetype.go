@@ -245,7 +245,8 @@ func (m *Model) nearestDeclaredType(sym *symbols.Symbol) *symbols.Symbol {
 // declaredTypes returns the definitions a feature is directly typed by, or those
 // of the features it redefines or subsets when it restates none itself. The
 // base its kind implies (`Base::dataValues`) types every feature of the kind
-// and so says nothing about this one.
+// and so says nothing about this one; nor does the parameter of its owner's
+// kind base that a parameter implicitly redefines (`Performance::result`).
 func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if seen[sym] {
 		return nil
@@ -253,12 +254,13 @@ func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool
 	seen[sym] = true
 	var defs, features []*symbols.Symbol
 	base := m.implicitBase(sym)
+	baseParam := m.implicitBaseParameter(sym)
 	for _, super := range m.DirectSupertypes(sym) {
 		if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
 			super = alias
 		}
 		switch {
-		case super == base:
+		case super == base, super == baseParam:
 		case super.Kind.IsDefinition():
 			defs = append(defs, super)
 		case super.IsFeature():
@@ -272,6 +274,30 @@ func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool
 		defs = append(defs, m.declaredTypes(f, seen)...)
 	}
 	return defs
+}
+
+// implicitBaseParameter returns the parameter sym implicitly redefines in the
+// kind base of its owning behavior or step, or nil when there is none.
+func (m *Model) implicitBaseParameter(sym *symbols.Symbol) *symbols.Symbol {
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return nil
+	}
+	base := m.implicitBase(sym.OwnerScope.Owner())
+	if base == nil {
+		return nil
+	}
+	params := m.parametersOf(base)
+	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if redefined == params.result.sym {
+			return redefined
+		}
+		for _, p := range params.positional {
+			if redefined == p.sym {
+				return redefined
+			}
+		}
+	}
+	return nil
 }
 
 // quantityConformance judges a magnitude paired with a measurement reference
