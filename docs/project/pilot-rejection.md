@@ -158,7 +158,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-234 case(s): 223 both reject, 3 only the pilot rejects, 8 only we reject, 0 both accept
+234 case(s): 226 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -166,7 +166,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 87 | 0 | 0 | 0 |
-| semantic | 105 | 94 | 3 | 8 | 0 |
+| semantic | 105 | 97 | 0 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -178,8 +178,9 @@ and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added
 three trigger-argument typing cases (`s48`–`s50`). The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
-argument checking of the send-action family closed another (`k34`), and the cross-subsetting
-rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 8 — and the
+argument checking of the send-action family closed another (`k34`), the cross-subsetting
+rules closed four more (`k16`, `k17`, `k19`, `k42`), and the association/connector
+arity and multiplicity-bound typing rules closed three more (`k25`, `k26`, `k37`), leaving 5 — and the
 SysML census opened nine more, six of them `grammar/`, since closed by the parser's body-kind
 rule for the members only one body kind offers (see
 [Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) landed
@@ -188,7 +189,7 @@ another) with `g68` (a definition nested in an enumeration body) and `s48`–`s5
 trigger-argument typing rules). The metadata rules
 then closed four more (`k35`, `k36`, `k40`, `s23`: metaclass typing, annotated-element conformance
 and body redefinition, in both notations), and the feature-variability rules two more (`k11`, an
-initial `:=` value on a non-variable feature; `s80`, `constant` on a non-variable usage). Before
+initial `:=` value on a non-variable feature; `s80`, `constant` on a non-variable usage), leaving no KerML gap. Before
 that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Three `xpect/` gaps closed later: `p11` (the
 model-level evaluability predicate on metadata body values), `p15` (the attribute-usage typing
@@ -206,8 +207,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 220 agreements and 6 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 223 and 3. Reserved keywords recovered as declared
+the default mode the same corpus gives 223 agreements and 3 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 226 and 0. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried
 when it was first written, six were closed by the validation work itself — `p01`, `p02`, `p03`,
@@ -228,36 +229,24 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 3 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source: 3 named KerML constraints (`k25`, `k26`, `k37`) the pinned validators enforce as errors and
-OpenSysML does not report. Every gap the
-corpus carried before is closed: the 6 SysML body-item spellings the constraint census opened
+All 0 gaps under `-conformance auto` are open — that is, none: every gap the `semantic/` source
+and the SysML constraint census opened is closed: the 6 SysML body-item spellings the census opened
 (`g61`–`g66`) are rejected by the parser, which admits `subject`, `actor`, `stakeholder`,
 `objective`, `entry`/`do`/`exit` and `render` only in the body kinds whose grammar offers them. The
 cross-subsetting family the `semantic/` source opened (`k16`, `k17`, `k19`, `k42`) was closed by
 extending the cross-feature pass with the crossing-feature, crossed-feature, redefined-end
 specialization and at-most-one rules; `k42` is rejected by OpenSysML with the message the pilot's
-source intends (`At most one cross subsetting is allowed`) where the pinned pilot only crashes.
+source intends (`At most one cross subsetting is allowed`) where the pinned pilot only crashes. The
+last KerML gaps (`k25`, `k26`, `k37`) were closed by the association arity, binary-link end count
+and multiplicity-bound typing rules.
 Three earlier gaps were severity-policy gaps — the pinned grammar excluded the spellings, while
 OpenSysML retained recoverable trees and reported only warnings by default — and the approved
 policy closed them by reporting errors without removing that recovery.
 
-Each open gap below has its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. None of them is a strict-mode question: our side is
-silent in either mode.
-
-| Case (`cmd/pilot-reject/testdata/negative/`) | We | Pilot says | Likely root cause |
-| --- | --- | --- | --- |
-| `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
-| `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
-| `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
-
-Each pilot message above is the first error the validator reports for the case; the full lists are
-in the baseline JSON's `pilot` arrays. The six `grammar/` gaps share one cause: the pilot's grammar
-scopes requirement, case, state and view body items to their own body productions, while our
-parser reads those member keywords in any body — `actor`, `subject`, `objective`, `stakeholder` and
-`render` as ordinary usage kinds from a body-independent table (`internal/core/parser/defusage.go`),
-`entry` as a dropped kind prefix — and only `expose` has a follow-up owning-namespace check.
+When a gap is open, this section lists each case with its reproducer (the corpus file is the
+minimal reproducer), both verdicts and the package the root cause is likely in, as a table of
+`Case | We | Pilot says | Likely root cause` rows; the first pilot error is the one quoted, and
+the full lists are in the baseline JSON's `pilot` arrays. The table is empty at this writing.
 
 ### Constraints the pilot declares but does not enforce
 
@@ -332,8 +321,8 @@ isolate it. The reason is recorded so a later round does not repeat the search.
   others.
 - Violable only together with another constraint: `validateBindingConnectorIsBinary` — a binding
   typed by a three-ended association also trips `validateConnectorRelatedFeatures`, so the pilot
-  reports two errors and the case would not violate exactly one rule (we accept it, which the
-  `k25`/`k26` rows above already record for the related-elements shape).
+  reports two errors and the case would not violate exactly one rule (the related-elements and
+  binary-ends shapes are `k25`/`k26`, which both implementations now reject).
 - `validateFeatureChainingFeatureConformance` — every spelling of a chain whose second feature is
   not featured by the first's type fails name resolution in both implementations before the
   conformance check runs, so the violation cannot be isolated from an unresolved reference.

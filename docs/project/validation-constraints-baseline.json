@@ -76,7 +76,7 @@
     {
       "name": "validateAssociationBinarySpecialization",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateAssociationEndTypes",
@@ -86,7 +86,7 @@
     {
       "name": "validateAssociationRelatedTypes",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAssociationStructureIntersection",
@@ -217,7 +217,7 @@
     {
       "name": "validateConnectorBinarySpecialization",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateConnectorRelatedFeatures",

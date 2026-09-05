@@ -58,15 +58,13 @@ func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
 	if c.index.Library(sym) {
 		return
 	}
-	fqn, ok := semantics.KindBaseFQN(sym, c.isKerML)
-	if !ok {
-		return
+	for _, fqn := range c.model.KindBaseFQNs(sym, c.isKerML) {
+		base := c.libraryType(fqn)
+		if base != nil && (base == sym || c.reaches(sym, base)) {
+			continue
+		}
+		c.report(sym.Decl.Span(), "Must directly or indirectly specialize "+fqn, "classifier-default-supertype")
 	}
-	base := c.libraryType(fqn)
-	if base != nil && (base == sym || c.reaches(sym, base)) {
-		return
-	}
-	c.report(sym.Decl.Span(), "Must directly or indirectly specialize "+fqn, "classifier-default-supertype")
 }
 
 // checkFeatureHasType reports a feature no type reaches, directly or through
