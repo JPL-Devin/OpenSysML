@@ -92,7 +92,7 @@ func (m *Model) resultConformance(scope *symbols.Scope, node ast.Node, want *sym
 	var operands []ast.Node
 	switch n := node.(type) {
 	case *ast.OperatorExpr:
-		operands = n.Operands
+		operands = valueOperands(n)
 	case *ast.SequenceExpr:
 		operands = n.Elements
 	case *ast.IndexExpr:
@@ -125,6 +125,18 @@ func (m *Model) resultConformance(scope *symbols.Scope, node ast.Node, want *sym
 		}
 	}
 	return found
+}
+
+// valueOperands is the operands passed to a function by value: the body of an
+// `expr` parameter (a conditional's branches, the fallback of `??`) is not one.
+func valueOperands(e *ast.OperatorExpr) []ast.Node {
+	switch e.Operator {
+	case ast.OpConditional:
+		return nil
+	case ast.OpNullCoalesce:
+		return e.Operands[:1]
+	}
+	return e.Operands
 }
 
 // operatorText spells the operator an expression applies.

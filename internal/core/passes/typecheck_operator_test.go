@@ -172,9 +172,14 @@ func TestCastConformanceInSysML(t *testing.T) {
 	attribute chainBad = p.a as String;
 	attribute castOk = q as ScalarQuantityValue;
 	attribute castBad = q as LengthValue;
+	attribute unitOk = 10 [q as MeasurementReferences::MeasurementUnit];
+	attribute unitBad = 10 [(q as Integer) as MeasurementReferences::MeasurementUnit];
 }`,
 		"10:23 cast argument is typed by A, unrelated to the target String",
 		"12:22 cast argument is typed by MassValue, unrelated to the target LengthValue",
+		"13:25 cast argument is typed by MassValue, unrelated to the target MeasurementUnit",
+		"14:26 cast argument is typed by Integer, unrelated to the target MeasurementUnit",
+		"14:27 cast argument is typed by MassValue, unrelated to the target Integer",
 	)
 }
 
@@ -187,7 +192,8 @@ func quantityDiags(t *testing.T, body string, want ...string) {
 
 // The unit of a quantity is a measurement reference: a unit, an aliased or
 // custom one, a feature typed by one, a frame, and arithmetic or selection
-// over them.
+// over them. An operator is judged by the operands it is passed by value, as
+// the pilot judges it: `(m, 3)` and `m ?? 3` pass, a conditional does not.
 func TestQuantityUnitMeasurementReferences(t *testing.T) {
 	quantityDiags(t, `attribute a = 10 [m];
 	attribute pair = 10 [m, s];
@@ -204,7 +210,8 @@ func TestQuantityUnitMeasurementReferences(t *testing.T) {
 	attribute prescaled = 10 [2 * m];
 	attribute negated = 10 [-m];
 	attribute derived = 10 [km / h];
-	attribute chosen = 10 [if true ? m else s];
+	attribute fallback = 10 [m ?? 3];
+	attribute mixed = 10 [(m, 3)];
 	attribute cast = 10 [(m * s) as LengthUnit];
 	attribute called = 10 [MeasurementRefCalculations::'*'(m, s)];
 	attribute def Custom :> MeasurementUnit;
@@ -220,7 +227,9 @@ func TestQuantityUnitMeasurementReferences(t *testing.T) {
 }
 
 // Anything else in the unit position warns at the unit: a number, a string, a
-// quantity, a dimensionless computation, an untyped feature.
+// quantity, a dimensionless computation, an untyped feature, a conditional (its
+// branches are expression bodies, so its result is Anything); a unit nested in
+// the unit is judged on its own.
 func TestQuantityUnitNotAMeasurementReference(t *testing.T) {
 	quantityDiags(t, `attribute n : Integer;
 	attribute q : MassValue;
@@ -239,7 +248,12 @@ func TestQuantityUnitNotAMeasurementReference(t *testing.T) {
 	attribute xs : Integer[0..*] ordered;
 	attribute k = xs[1];
 	attribute l = 10 [1] [2];
-	attribute o = 10 [xs#(1)];`,
+	attribute o = 10 [xs#(1)];
+	attribute p = 10 [if true ? m else s];
+	attribute r = 10 [3 ?? m];
+	attribute t = 10 [2 [m]];
+	attribute u = 10 [m * 3 ["s"]];
+	attribute v = 10 [2 [3]];`,
 		"10:20 found Natural",
 		"11:20 found String",
 		"12:20 found Integer",
@@ -255,6 +269,12 @@ func TestQuantityUnitNotAMeasurementReference(t *testing.T) {
 		"23:20 found Natural",
 		"23:24 found Natural",
 		"24:20 found the result of `#`, typed by Integer",
+		"25:20 found the result of `if`, typed by Anything",
+		"26:20 found the result of `??`, typed by Anything",
+		"27:20 found a quantity in metre",
+		"28:27 found String",
+		"29:20 found ScalarQuantityValue",
+		"29:23 found Natural",
 	)
 }
 

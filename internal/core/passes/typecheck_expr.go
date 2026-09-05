@@ -296,9 +296,12 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 // written with says which of the two it is.
 func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semantics.PrimType {
 	if e.Bracket {
-		// The unit is a measurement reference, not a scalar; the magnitude is an
-		// expression of its own and is checked.
+		// The unit is a measurement reference, not a scalar; the magnitude and the
+		// operators inside the unit are expressions of their own and are checked.
 		ec.infer(scope, e.Operand)
+		if e.Index != nil {
+			ec.infer(scope, e.Index)
+		}
 		ec.checkBracket(scope, e)
 		return semantics.PrimUnknown
 	}
