@@ -102,8 +102,8 @@ before re-recording anything.
 | gRPC conformance fixtures / robustness cases | 15 / 10 |
 | Golden AST fixtures | 183 (`TestGolden`) |
 | Negative parser subtests | 225 first-level subtests of `TestNegative` (346 across every `*Negative*` parser test) |
-| Rejection oracle | 236 self-authored invalid models: 228 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
-| Validation census | 148 of 217 named constraints reported (137 faithful, 11 approximate), 6 not implemented, 63 unknown — with #900 |
+| Rejection oracle | 243 self-authored invalid models: 235 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
+| Validation census | 155 of 217 named constraints reported (143 faithful, 12 approximate), 6 not implemented, 1 deliberate, 55 unknown — with the KerML unknown-row adjudication |
 | RDF corpus round trip | 305 of 345 models stable, 40 refused, no other verdict |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
@@ -1201,10 +1201,13 @@ reports it on the same surfaces beside the satisfaction verdicts. Small once A1 
 The denominator is the pilot's 217 named `validate*` constraints, read from the pinned jar by the
 census [validation-constraints.md](validation-constraints.md) (#822) and re-audited row by row
 against the code and the corpus (#900, whose gate now also checks that the function each row cites
-exists and that each cited case belongs to its row). With #900 the census reads **148 of 217
+exists and that each cited case belongs to its row). With #900 the census read **148 of 217
 reported — 137 faithful, 11 approximate — 6 not implemented, 0 deliberate, 0 known failure and 63
-unknown**, against 143 / 133 / 10 / 68 at the tag. The oracle at the other end agrees: of 236
-self-authored invalid models, the pinned pilot and we both reject 228, the pilot alone rejects 0,
+unknown**, against 143 / 133 / 10 / 68 at the tag; the adjudication of the first sixteen unknown
+KerML rows then moved it to **155 reported — 143 faithful, 12 approximate — 6 not implemented,
+1 deliberate and 55 unknown**, each remaining unknown row now citing why the pilot never reports it.
+The oracle at the other end agrees: of 243
+self-authored invalid models, the pinned pilot and we both reject 235, the pilot alone rejects 0,
 and the 8 only we reject are control-node succession rules the pinned pilot leaves unimplemented
 ([pilot-rejection.md](pilot-rejection.md)). Everything the previous baseline listed as open here has
 landed:

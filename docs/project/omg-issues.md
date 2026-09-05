@@ -749,6 +749,86 @@ not been implemented yet?
 
 ---
 
+### A classifier's multiplicity is found through an alias (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML derives a type's multiplicity from its owned members
+only, so an alias of a feature's multiplicity does not become the classifier's
+own, and no diagnostic is drawn; the census row
+(`validateClassifierMultiplicityDomain` in [validation-constraints.md](validation-constraints.md))
+records the disagreement.
+
+````markdown
+### `Type.multiplicity` is derived through alias memberships, so `validateClassifierMultiplicityDomain` fires on a valid alias
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    class T;
+    class K { feature f : T { multiplicity m [1..2]; } }
+    class C { alias m for K::f::m; }
+}
+```
+
+reports `Multiplicity must not have a featuring type` at line 4 (`class C`). `C` owns no
+multiplicity: its only owned membership is an alias whose `memberElement` is `K::f::m`, a
+multiplicity featured by `f`. KerML 1.1 8.3.3.1 derives `Type::multiplicity` as
+`ownedMember->selectByKind(Multiplicity)->any(true)`, and `ownedMember` is derived from
+`ownedMembership.ownedMemberElement`, which an alias membership does not have, so the
+specification leaves `C.multiplicity` empty and `validateClassifierMultiplicityDomain`
+satisfied. `Type_multiplicity_SettingDelegate.getMultiplicityOf` instead maps
+`ownedMembership` through `Membership::getMemberElement`, which follows the alias to `f`'s
+multiplicity, and `KerMLValidator.checkClassifier` then finds its featuring type. The same
+alias inside a subclass (`class F :> K { alias mf for f::m; }`) and inside a `struct` are
+reported alike. Should the delegate read `ownedMemberElement` (owned memberships only), as
+the derivation says?
+````
+
+---
+
+### A conjugated classifier is judged against its generic default only (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML checks a conjugated classifier against every default
+base its kind and end count imply (`internal/core/passes/w11e_implicit_base.go`);
+the census row (`validateClassifierDefaultSupertype` in
+[validation-constraints.md](validation-constraints.md)) records the difference as
+⚠️ approximate.
+
+````markdown
+### `checkClassifier` validates a conjugated association against `Links::Link` but not `Links::BinaryLink`
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    class T;
+    assoc struct AS ~ Objects::LinkObject { end feature a : T[1]; end feature b : T[1]; }
+    assoc A ~ Links::Link { end feature a : T[1]; end feature b : T[1]; }
+    interaction I ~ Links::Link { end feature a : T[1]; end feature b : T[1]; }
+}
+```
+
+validates clean. A conjugated type owns no specialization
+(`validateSpecializationSpecificNotConjugated`) and `TypeAdapter.computeImplicitGeneralTypes`
+adds none for it, so the only supertypes these three have are the ones reached through the
+conjugated type. `checkClassifier` tests
+`ImplicitGeneralizationMap.getDefaultSupertypeFor(c.getClass())`, the `base` entry alone —
+`Objects::LinkObject`, `Links::Link`, and for `InteractionImpl` (a Java subclass of
+`AssociationImpl`) again `Links::Link` — all satisfied here. KerML 1.1 8.3.4.7
+`checkAssociationBinarySpecialization` and `checkAssociationStructureBinarySpecialization`
+require a two-end association to specialize `Links::BinaryLink` / `Objects::BinaryLinkObject`,
+and an interaction is a performance as well as a link (7.4.10.2), so it must reach
+`Performances::Performance` too; none of these declarations do. Is the direct check
+meant to cover only the generic default, leaving the `binary` and behavioral bases to the
+implicit-specialization machinery that conjugation switches off?
+````
+
+---
+
 ## The errata overlay entries for these models
 
 The second section's rows are also entries of the declared errata overlay
