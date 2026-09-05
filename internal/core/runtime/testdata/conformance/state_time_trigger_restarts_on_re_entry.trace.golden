@@ -1,18 +1,22 @@
 exit: wstart
 enter: waiting
-eval literal 10 -> 10
+  eval literal 10 -> 10
+eval index -> 10 [s]
 transition: wstart -> waiting
 exit: cstart
 enter: c0
-eval literal 12 -> 12
+  eval literal 12 -> 12
+eval index -> 12 [s]
 transition: cstart -> c0
 exit: waiting
 enter: away
-eval literal 4 -> 4
+  eval literal 4 -> 4
+eval index -> 4 [s]
 transition: waiting -> away (event: accept pause)
 exit: away
 enter: waiting
-eval literal 10 -> 10
+  eval literal 10 -> 10
+eval index -> 10 [s]
 transition: away -> waiting (event: time)
 exit: c0
 enter: c1 (entry action)

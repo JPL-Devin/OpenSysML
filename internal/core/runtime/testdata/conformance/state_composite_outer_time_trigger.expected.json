@@ -1,5 +1,6 @@
 {
     "type": "state",
+    "libraries": true,
     "finalState": "Done",
     "stateVisits": ["start", "Working", "Step1", "Done"],
     "outputs": {

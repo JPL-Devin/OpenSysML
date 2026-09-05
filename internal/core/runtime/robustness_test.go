@@ -94,6 +94,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
 	t.Run("state_usage_typed_by_itself", testStateUsageTypedByItself)
 	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
+	t.Run("state_def_specializing_the_library_state_action", testStateDefSpecializingTheLibraryStateAction)
+	t.Run("state_def_specializing_a_library_state_keeps_its_content", testStateDefSpecializingALibraryStateKeepsItsContent)
 	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
@@ -210,6 +212,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 	t.Run("time_trigger_of_a_non_time_dimension", testTimeTriggerOfANonTimeDimension)
+	t.Run("time_trigger_of_the_type_validation_refuses", testTimeTriggerOfTheTypeValidationRefuses)
 	t.Run("change_condition_that_never_holds", testChangeConditionThatNeverHolds)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
@@ -4059,7 +4062,8 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 }
 
 // testNonNumericTimeTrigger: a timed trigger whose duration is not a number
-// cannot be scheduled and must be reported rather than silently dropped.
+// cannot be scheduled and must be reported rather than silently dropped, even
+// with no library loaded for the static judgement to name a type from.
 func testNonNumericTimeTrigger(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
@@ -4080,16 +4084,18 @@ func testNonNumericTimeTrigger(t *testing.T) {
 }
 
 // testTimeTriggerOfANonTimeDimension: a duration whose unit measures something
-// other than time cannot be scheduled, and fails as the typed error it is.
+// other than time, held by a feature whose type does not resolve so only its
+// value can tell, cannot be scheduled and fails as the typed error it is.
 func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {
 			private import SI::*;
 			state Machine {
+				attribute load : Nowhere::Mass = 5 [kg];
 				entry; then init;
 				state init;
 				state waiting {
-					accept after 5 [kg] then done;
+					accept after load then done;
 				}
 				state done;
 				succession first init then waiting;
@@ -4104,6 +4110,50 @@ func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 	_, err := ctx.ExecuteState(sym)
 	if !errors.Is(err, ErrIncommensurableUnits) {
 		t.Fatalf("err = %v; want ErrIncommensurableUnits", err)
+	}
+	if !strings.Contains(err.Error(), "5 [kg] is not a time") {
+		t.Errorf("err = %v; want it to name the quantity", err)
+	}
+}
+
+// testTimeTriggerOfTheTypeValidationRefuses: an argument validation refuses is
+// refused as one typed error before it is evaluated or converted, whatever
+// evaluating it would have said.
+func testTimeTriggerOfTheTypeValidationRefuses(t *testing.T) {
+	for _, tc := range []struct{ name, trigger string }{
+		{"unitless after", "after 5"},
+		{"duration at", "at 2 [min]"},
+		{"mass after", "after 5 [kg]"},
+		{"string at", `at "noon"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+				package test {
+					private import SI::*;
+					state Machine {
+						entry; then init;
+						state init;
+						state waiting {
+							accept `+tc.trigger+` then done;
+						}
+						state done;
+						succession first init then waiting;
+					}
+				}
+			`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+			if sym == nil {
+				t.Fatal("state Machine not found")
+			}
+
+			_, err := ctx.ExecuteState(sym)
+			if !errors.Is(err, ErrTimeTriggerType) {
+				t.Fatalf("err = %v; want ErrTimeTriggerType", err)
+			}
+			if !strings.Contains(err.Error(), "`"+tc.trigger+"`") {
+				t.Errorf("err = %v; want it to quote the trigger as written", err)
+			}
+		})
 	}
 }
 
@@ -4779,6 +4829,98 @@ func testStateUsageMutuallyRecursiveTyping(t *testing.T) {
 	}
 	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
 		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateDefSpecializingTheLibraryStateAction: a state definition written
+// `:> StateAction` inherits no content from the library (whose `ref state self`
+// is typed by StateAction itself), the same as the implicit specialization.
+func testStateDefSpecializingTheLibraryStateAction(t *testing.T) {
+	src := `
+		package test {
+			private import States::*;
+			state def Phase :> StateAction;
+			state def Prep :> Phase;
+			state def Machine {
+				entry; then prep;
+				state prep : Prep;
+				state launch : Phase;
+				transition first prep then launch;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Machine not found")
+	}
+	exec, err := ctx.CreateStateExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateStateExecutor: %v", err)
+	}
+	if err := exec.RunToQuiescence(); err != nil {
+		t.Fatalf("RunToQuiescence: %v", err)
+	}
+	if got := activeStateNames(exec); got != "launch" {
+		t.Fatalf("active states = %q, want launch", got)
+	}
+}
+
+// testStateDefSpecializingALibraryStateKeepsItsContent: only StateAction is
+// withheld; a library's own state definition still contributes its substates,
+// transitions, behaviors and attributes to what specializes it.
+func testStateDefSpecializingALibraryStateKeepsItsContent(t *testing.T) {
+	lib := `
+		package Cycles {
+			private import ScalarValues::*;
+			state def Cycle {
+				attribute seen : Integer = 0;
+				entry; then warm;
+				state warm;
+				state hot {
+					entry action mark { assign seen := seen + 1; }
+				}
+				transition first warm then hot;
+			}
+		}
+	`
+	src := `
+		package test {
+			private import Cycles::*;
+			state def Burn :> Cycle;
+			state def Machine {
+				entry; then burn;
+				state burn : Burn;
+			}
+		}
+	`
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<lib>", parser.New(source.New("<lib>", []byte(lib))).ParseFile())
+	idx.MarkLibrary("<lib>")
+	idx.AddDocument("<test>", parseAndBuild(t, src))
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Machine not found")
+	}
+	exec, err := ctx.CreateStateExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateStateExecutor: %v", err)
+	}
+	if err := exec.RunToQuiescence(); err != nil {
+		t.Fatalf("RunToQuiescence: %v", err)
+	}
+	if got := finalStateName(t, exec); got != "hot" {
+		t.Fatalf("final state = %q, want hot", got)
+	}
+	seen, ok := exec.StateData()["burn.seen"]
+	if !ok {
+		t.Fatalf("burn.seen missing from %v", exec.StateData())
+	}
+	if got := FormatValue(seen); got != "1" {
+		t.Fatalf("burn.seen = %s, want 1", got)
 	}
 }
 

@@ -392,7 +392,7 @@ the *documented* claims by running them:
   `ClearField("experimental")`. That is the only way to simulate an older service without touching
   the Go side.
 - **Guide transcripts go stale silently.** `docs/guide/07-saving-and-rdf.md` and
-  `docs/guide/09-python.md` embed real byte counts and refusal messages. Re-run each fenced command:
+  `docs/guide/09-clients.md` embed real byte counts and refusal messages. Re-run each fenced command:
   the `%save` pair (guide 2's `MyModel` file → `181 bytes of sysml` / `1872 bytes of ttl`) and
   `examples/rdf-interop-demo.sysml` (`7937` ttl / `877` sysml bytes) still hold at 493693a3, but the
   page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the

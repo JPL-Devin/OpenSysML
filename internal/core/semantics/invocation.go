@@ -55,6 +55,14 @@ func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs
 	if m == nil || e == nil {
 		return &InvocationSelection{}
 	}
+	if m.typingArgs[e] {
+		// Typing an argument of e led back to e: select on arity alone, unmemoized,
+		// so the typed selection is not answered from this provisional one.
+		if e.Type == nil {
+			return &InvocationSelection{}
+		}
+		return m.selectAmong(scope, m.resolver.InvocationCandidates(scope, e.Type), untypedArguments(e), performs)
+	}
 	return m.SelectInvocation(scope, e, m.callArguments(scope, e), performs)
 }
 
@@ -70,10 +78,12 @@ func (m *Model) SelectCallAmong(scope *symbols.Scope, e *ast.InvocationExpr, nam
 // callArguments types e's arguments as the checker does when its typing is
 // installed, else lists them untyped.
 func (m *Model) callArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument {
-	if m.arguments != nil {
-		return m.arguments.InvocationArguments(scope, e)
+	if m.arguments == nil || m.typingArgs[e] {
+		return untypedArguments(e)
 	}
-	return untypedArguments(e)
+	m.typingArgs[e] = true
+	defer delete(m.typingArgs, e)
+	return m.arguments.InvocationArguments(scope, e)
 }
 
 // untypedArguments lists e's arguments, the receiver first, with nothing known of their types.
@@ -445,7 +455,7 @@ func (m *Model) ParameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbo
 		chain = append(chain, sym)
 		redefined := m.RedefinedFeatures(sym)
 		if len(redefined) == 0 {
-			redefined = m.implicitParameterRedefinitions(sym)
+			redefined = m.ImplicitParameterRedefinitions(sym)
 		}
 		if len(redefined) != 1 {
 			break
@@ -463,7 +473,7 @@ func (m *Model) declaresType(sym *symbols.Symbol) bool {
 			return true
 		}
 	}
-	return len(m.implicitParameterRedefinitions(sym)) > 0
+	return len(m.ImplicitParameterRedefinitions(sym)) > 0
 }
 
 // applicable reports whether args bind to sig by count, name and type, and

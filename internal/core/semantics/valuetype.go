@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -16,12 +17,14 @@ const (
 
 	fqnString                     = "ScalarValues::String"
 	fqnNatural                    = "ScalarValues::Natural"
+	fqnInteger                    = "ScalarValues::Integer"
 	fqnRational                   = "ScalarValues::Rational"
 	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
 	fqnEvaluation                 = "Performances::Evaluation"
 	fqnCollection                 = "Collections::Collection"
+	fqnMetaobject                 = "Metaobjects::Metaobject"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
 
@@ -47,6 +50,24 @@ func (m *Model) ExprConformsToLibrary(scope *symbols.Scope, node ast.Node, fqn s
 		return conformanceUnknown()
 	}
 	return m.ExprConformsTo(scope, node, m.libSymbol(fqn))
+}
+
+// TimeEventType names the library type a time trigger's argument must be a value
+// of: a DurationValue after `after`, a TimeInstantValue after `at`.
+func TimeEventType(t *ast.TimeEvent) string {
+	if t.Absolute {
+		return FQNTimeInstantValue
+	}
+	return FQNDurationValue
+}
+
+// TimeEventConforms judges a time trigger's argument against TimeEventType, the
+// one judgement validation and execution share.
+func (m *Model) TimeEventConforms(scope *symbols.Scope, t *ast.TimeEvent) Conformance {
+	if t == nil || t.Duration == nil {
+		return conformanceUnknown()
+	}
+	return m.ExprConformsToLibrary(scope, t.Duration, TimeEventType(t))
 }
 
 // ExprConformsTo reports whether an expression's value conforms to want, as far
@@ -146,6 +167,130 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		return m.typeConformance(def, want)
 	}
 	return conformanceUnknown()
+}
+
+// ExprResultType is the type of an expression's result: that of the feature it
+// names, else what its syntax declares (literal, operator, constructor); nil if unknown.
+func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
+	if m == nil {
+		return nil
+	}
+	switch n := node.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
+		if m.resolver == nil {
+			return nil
+		}
+		sym, ok := m.resolver.ResolveTarget(scope, n)
+		if !ok || sym == nil {
+			return nil
+		}
+		return m.featureResultType(sym)
+	case *ast.LiteralBool:
+		return m.libSymbol(FQNBoolean)
+	case *ast.LiteralString:
+		return m.libSymbol(fqnString)
+	case *ast.LiteralInteger:
+		return m.libSymbol(fqnInteger)
+	case *ast.LiteralReal:
+		return m.libSymbol(fqnReal)
+	case *ast.OperatorExpr:
+		return m.libSymbol(operatorResultFQN(n.Operator))
+	case *ast.IndexExpr:
+		if n.Bracket {
+			return m.libSymbol(fqnAnything)
+		}
+		return m.indexResultType(scope, n)
+	case *ast.SelectExpr:
+		// `xs.?{…}` keeps elements of xs (KerML checkSelectExpressionResultSpecialization).
+		return m.ExprResultType(scope, n.Operand)
+	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
+		return m.libSymbol(fqnAnything)
+	case *ast.ConstructorExpr:
+		if n.Type == nil || m.resolver == nil {
+			return nil
+		}
+		def, ok := m.resolver.ResolveQualified(scope, n.Type)
+		if !ok || def == nil {
+			return nil
+		}
+		if alias, ok := m.resolver.ResolveAliasTarget(def); ok {
+			def = alias
+		}
+		return def
+	}
+	return nil
+}
+
+// operatorResultFQN names the result type of the Kernel Function Library
+// function an operator resolves to (BaseFunctions, DataFunctions, ControlFunctions).
+func operatorResultFQN(op ast.OperatorKind) string {
+	switch op {
+	case ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq, ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe,
+		ast.OpIsType, ast.OpHasType, ast.OpAt, ast.OpMetaAt,
+		ast.OpConditionalAnd, ast.OpConditionalOr, ast.OpImplies:
+		return FQNBoolean
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow, ast.OpMod, ast.OpNeg, ast.OpPos,
+		ast.OpNot, ast.OpAnd, ast.OpOr, ast.OpXor, ast.OpBitNot, ast.OpRange:
+		return dataValueFQN
+	case ast.OpMeta:
+		return fqnMetaobject
+	}
+	return fqnAnything
+}
+
+// indexResultType is the type of one element `seq#(i)` selects: seq's own type,
+// or Anything when seq is a Collection (KerML checkIndexExpressionResultSpecialization).
+func (m *Model) indexResultType(scope *symbols.Scope, n *ast.IndexExpr) *symbols.Symbol {
+	seq := m.ExprResultType(scope, n.Operand)
+	if collection := m.libSymbol(fqnCollection); seq == nil || collection == nil || m.Conforms(seq, collection) {
+		return m.libSymbol(fqnAnything)
+	}
+	return seq
+}
+
+// featureResultType is a feature's declared type, else that of the value typing
+// it (KerML checkFeatureValuationSpecialization), else what it redefines or subsets has.
+func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
+	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = alias
+	}
+	if !sym.IsFeature() {
+		return nil
+	}
+	return m.inheritedResultType(sym, map[*symbols.Symbol]bool{})
+}
+
+func (m *Model) inheritedResultType(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) *symbols.Symbol {
+	if seen[sym] {
+		return nil
+	}
+	seen[sym] = true
+	var features []*symbols.Symbol
+	bases := m.implicitBases(sym)
+	for _, super := range m.DirectSupertypes(sym) {
+		if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
+			super = alias
+		}
+		switch {
+		case containsElement(bases, super):
+		case super.Kind.IsDefinition():
+			return super
+		case super.IsFeature():
+			features = append(features, super)
+		}
+	}
+	// A self-referential value types nothing.
+	if value := m.typingValue(sym); value != nil && !m.valuing[sym] {
+		m.valuing[sym] = true
+		defer delete(m.valuing, sym)
+		return m.ExprResultType(sym.OwnerScope, value)
+	}
+	for _, f := range features {
+		if typ := m.inheritedResultType(f, seen); typ != nil {
+			return typ
+		}
+	}
+	return nil
 }
 
 // indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as
@@ -264,20 +409,22 @@ func (m *Model) nearestDeclaredType(sym *symbols.Symbol) *symbols.Symbol {
 // declaredTypes returns the definitions a feature is directly typed by, or those
 // of the features it redefines or subsets when it restates none itself. The
 // base its kind implies (`Base::dataValues`) types every feature of the kind
-// and so says nothing about this one.
+// and so says nothing about this one; nor does the parameter of its owner's
+// kind base that a parameter implicitly redefines (`Performance::result`).
 func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if seen[sym] {
 		return nil
 	}
 	seen[sym] = true
 	var defs, features []*symbols.Symbol
-	base := m.implicitBase(sym)
+	bases := m.implicitBases(sym)
+	baseParam := m.implicitBaseParameter(sym)
 	for _, super := range m.DirectSupertypes(sym) {
 		if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
 			super = alias
 		}
 		switch {
-		case super == base:
+		case super == baseParam, slices.Contains(bases, super):
 		case super.Kind.IsDefinition():
 			defs = append(defs, super)
 		case super.IsFeature():
@@ -291,6 +438,28 @@ func (m *Model) declaredTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool
 		defs = append(defs, m.declaredTypes(f, seen)...)
 	}
 	return defs
+}
+
+// implicitBaseParameter returns the parameter sym implicitly redefines in the
+// kind base of its owning behavior or step, or nil when there is none.
+func (m *Model) implicitBaseParameter(sym *symbols.Symbol) *symbols.Symbol {
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return nil
+	}
+	for _, base := range m.implicitBases(sym.OwnerScope.Owner()) {
+		params := m.parametersOf(base)
+		for _, redefined := range m.ImplicitParameterRedefinitions(sym) {
+			if redefined == params.result.sym {
+				return redefined
+			}
+			for _, p := range params.positional {
+				if redefined == p.sym {
+					return redefined
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // quantityConformance judges a magnitude paired with a measurement reference

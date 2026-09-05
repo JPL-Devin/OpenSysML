@@ -3,6 +3,7 @@ package semantics
 import (
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -21,6 +22,15 @@ func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
 
 func buildModelNamedWithKind(t *testing.T, name string, kind source.Kind, src string) (*Model, *symbols.Scope) {
 	t.Helper()
+	m, root, r, doc := buildUnresolvedModel(t, name, kind, src)
+	r.ResolveDocument(name, doc)
+	return m, root
+}
+
+// buildUnresolvedModel indexes src without resolving it, so a test controls
+// which semantic query resolves each name first.
+func buildUnresolvedModel(t *testing.T, name string, kind source.Kind, src string) (*Model, *symbols.Scope, *resolve.Resolver, *ast.RootNamespace) {
+	t.Helper()
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
@@ -33,8 +43,7 @@ func buildModelNamedWithKind(t *testing.T, name string, kind source.Kind, src st
 	// The workspace attaches the model before resolving so that feature chains
 	// see inherited and contributed members; mirror that here.
 	r.SetModel(m)
-	r.ResolveDocument(name, root)
-	return m, idx.DocumentRoot(name)
+	return m, idx.DocumentRoot(name), r, root
 }
 
 // sym looks up the first symbol named key at the document root scope.
@@ -271,6 +280,142 @@ func TestDirectSupertypesNotMemoizedWhileOwnTypingResolves(t *testing.T) {
 	if got := m.DirectSupertypes(result); len(got) != 1 || got[0] != sym(t, q.Scope, "Len") {
 		t.Fatalf("DirectSupertypes(return) = %v, want [Q::Len]", got)
 	}
+}
+
+// A chain target (`subsets x.f`) whose lookup the cycle guard cuts short is
+// provisional like a qualified name's: memoized, it would drop `f` for good.
+func TestDirectSupertypesNotMemoizedWhileChainTargetResolves(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		owner     string
+	}{
+		{"leading name on the stack", `package T {
+			feature x { feature f; }
+			feature a subsets a::b {
+				feature b subsets x.f;
+			}
+		}`, "x"},
+		{"member owner typing on the stack", `package T {
+			classifier X { feature f; }
+			feature a subsets a::b {
+				feature y : X;
+				feature b subsets y.f;
+			}
+		}`, "X"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamed(t, "t.kerml", tc.src)
+			pkg := sym(t, root, "T")
+			f := sym(t, sym(t, pkg.Scope, tc.owner).Scope, "f")
+			a := sym(t, pkg.Scope, "a")
+			b := sym(t, a.Scope, "b")
+			for i := 0; i < 2; i++ {
+				if got := m.DirectSupertypes(b); len(got) != 1 || got[0] != f {
+					t.Fatalf("query %d: DirectSupertypes(b) = %v, want [f]", i+1, got)
+				}
+			}
+			if got := m.DirectSupertypes(a); len(got) != 1 || got[0] != b {
+				t.Fatalf("DirectSupertypes(a) = %v, want [b]", got)
+			}
+		})
+	}
+}
+
+// A general resolved while its owner's supertypes are still being computed
+// cannot see what the owner inherits, so it falls back to an outer name of the
+// same spelling. That answer holds for the query that made it only: memoized,
+// by the resolver or the model, the inherited general would be lost for good.
+func TestDirectSupertypesNotMemoizedOnOuterFallback(t *testing.T) {
+	const src = `package Base { classifier Anything; }
+	package P {
+		classifier X;
+		classifier Lib { classifier X; }
+		classifier A specializes Lib, D::Q {
+			classifier C specializes X { classifier Q; }
+		}
+		classifier D specializes A::C {}
+	}`
+	for _, tc := range []struct {
+		name  string
+		build func(t *testing.T) (*Model, *symbols.Scope)
+	}{
+		{"owner queried first", func(t *testing.T) (*Model, *symbols.Scope) {
+			m, root, _, _ := buildUnresolvedModel(t, "t.kerml", source.KindKerML, src)
+			pkg := sym(t, root, "P")
+			a := sym(t, pkg.Scope, "A")
+			lib := sym(t, pkg.Scope, "Lib")
+			q := sym(t, sym(t, a.Scope, "C").Scope, "Q")
+			if got := m.DirectSupertypes(a); len(got) != 2 || got[0] != lib || got[1] != q {
+				t.Fatalf("DirectSupertypes(A) = %v, want [Lib, A::C::Q]", got)
+			}
+			return m, root
+		}},
+		{"document resolved first", func(t *testing.T) (*Model, *symbols.Scope) {
+			return buildModelNamed(t, "t.kerml", src)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := tc.build(t)
+			pkg := sym(t, root, "P")
+			c := sym(t, sym(t, pkg.Scope, "A").Scope, "C")
+			inherited := sym(t, sym(t, pkg.Scope, "Lib").Scope, "X")
+			for i := 0; i < 2; i++ {
+				if got := m.DirectSupertypes(c); len(got) != 1 || got[0] != inherited {
+					t.Fatalf("query %d: DirectSupertypes(C) = %v, want [Lib::X]", i+1, got)
+				}
+			}
+			if _, cached := m.directSupers[c]; !cached {
+				t.Fatalf("a settled answer should be memoized")
+			}
+		})
+	}
+}
+
+// A member specializing its own owner is a cycle even though its general is
+// resolved while the owner's is (Xpect CircleInheritance, CircleProblem5).
+func TestDirectSupertypesKeptAcrossOwnerCycleGuard(t *testing.T) {
+	t.Run("member specializes its owner", func(t *testing.T) {
+		m, root := buildModelNamed(t, "t.kerml", `package Base { classifier Anything; }
+		package Test1 {
+			classifier <'A_Id'> A specializes A::B {
+				classifier <'B_Id'> B specializes A, Base::Anything {}
+			}
+		}`)
+		pkg := sym(t, root, "Test1")
+		a := sym(t, pkg.Scope, "A")
+		b := sym(t, a.Scope, "B")
+		anything := sym(t, sym(t, root, "Base").Scope, "Anything")
+		if got := m.DirectSupertypes(b); len(got) != 2 || got[0] != a || got[1] != anything {
+			t.Fatalf("DirectSupertypes(B) = %v, want [A, Base::Anything]", got)
+		}
+		if got := m.DirectSupertypes(a); len(got) != 1 || got[0] != b {
+			t.Fatalf("DirectSupertypes(A) = %v, want [B]", got)
+		}
+	})
+	t.Run("member specializes its owner through a sibling", func(t *testing.T) {
+		m, root := buildModelNamed(t, "t.kerml", `package Base { classifier Anything; }
+		package Test1 {
+			classifier A specializes D, Base::Anything {
+				classifier B specializes C {}
+			}
+			classifier C specializes A {}
+			classifier D specializes A::B {}
+		}`)
+		pkg := sym(t, root, "Test1")
+		a := sym(t, pkg.Scope, "A")
+		b := sym(t, a.Scope, "B")
+		c := sym(t, pkg.Scope, "C")
+		d := sym(t, pkg.Scope, "D")
+		if got := m.DirectSupertypes(d); len(got) != 1 || got[0] != b {
+			t.Fatalf("DirectSupertypes(D) = %v, want [A::B]", got)
+		}
+		if got := m.DirectSupertypes(b); len(got) != 1 || got[0] != c {
+			t.Fatalf("DirectSupertypes(B) = %v, want [C]", got)
+		}
+		if got := m.DirectSupertypes(c); len(got) != 1 || got[0] != a {
+			t.Fatalf("DirectSupertypes(C) = %v, want [A]", got)
+		}
+	})
 }
 
 // A closure built while a metadata annotation type is unresolved must not be

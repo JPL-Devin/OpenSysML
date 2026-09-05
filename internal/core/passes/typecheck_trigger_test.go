@@ -356,6 +356,8 @@ func TestTriggerWhenRejectsNonBoolean(t *testing.T) {
 		{"when d * d", "a value of dimension T^2"},
 		{"when Twice(d)", "DurationValue"},
 		{"when flag ?? ready", "the result of `??`, typed Anything"},
+		{"when (if flag ? true else false)", "the result of `if`, typed Anything"},
+		{"when (if flag ? ready else x > 3)", "the result of `if`, typed Anything"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-when-boolean",
@@ -386,6 +388,9 @@ func TestTriggerWhenAcceptsBooleans(t *testing.T) {
 func TestConditionalResultIsLeftToEvaluationOutsideTriggers(t *testing.T) {
 	wantTriggerSilent(t, "assert constraint { flag ?? ready }")
 	wantTriggerSilent(t, "entry action { if flag ?? ready { assign x := 1; } }")
+	wantTriggerSilent(t, "assert constraint { if flag ? true else ready }")
+	wantTriggerSilent(t, "entry action { if (if flag ? true else ready) { assign x := 1; } }")
+	wantTriggerSilent(t, "transition first a if (if flag ? true else ready) then b;")
 }
 
 // `null` is the empty value, typed Anything: no trigger argument may be it (the

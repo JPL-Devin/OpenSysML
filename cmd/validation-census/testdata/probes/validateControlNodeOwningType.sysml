@@ -1,12 +1,3 @@
 // Census: validateControlNodeOwningType
-// Expect: error: which is not an action
-package CN05ControlNodeOutsideAction {
-    constraint def C {
-        fork f;
-    }
-    part def Q {
-        constraint c {
-            decide d;
-        }
-    }
-}
+// Expect: error: fork f is declared in constraint def C, which is not an action
+package P { constraint def C { fork f; } }

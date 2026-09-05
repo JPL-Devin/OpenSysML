@@ -337,7 +337,7 @@ func (w *notationWalker) kermlRelationships(rels []*ast.Relationship) {
 // kermlDeclarationKeywords are the definition and usage keywords the pinned
 // KerML grammar spells; a kind keyword outside the set is SysML-only.
 var kermlDeclarationKeywords = map[string]bool{
-	"assoc": true, "behavior": true, "binding": true, "bool": true,
+	"assoc": true, "assoc struct": true, "behavior": true, "binding": true, "bool": true,
 	"class": true, "classifier": true, "connector": true, "datatype": true,
 	"dependency": true, "expr": true, "feature": true, "flow": true,
 	"function": true, "interaction": true, "inv": true, "metaclass": true,

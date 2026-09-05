@@ -1,5 +1,6 @@
 {
 	"type": "state",
+	"libraries": true,
 	"finalState": "ldone+active",
 	"stateVisits": ["waiting", "active", "ldone"]
 }

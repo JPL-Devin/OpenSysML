@@ -49,7 +49,8 @@ func (c *w9cBindingChecker) check(sym *symbols.Symbol) {
 		return
 	}
 	left, right := c.endTypes(ends[0]), c.endTypes(ends[1])
-	if len(left) == 0 || len(right) == 0 || w9cTypesConform(c.model, left, right) {
+	if len(left) == 0 || len(right) == 0 || w9cTypesConform(c.model, left, right) ||
+		c.endConforms(ends[0], right) || c.endConforms(ends[1], left) {
 		return
 	}
 	c.diags = append(c.diags, Diagnostic{
@@ -98,6 +99,17 @@ func (c *w9cBindingChecker) endTypes(end *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 	return w8cMostSpecific(c.model, out)
+}
+
+// endConforms reports whether the end itself conforms to one of the other side's
+// types through an implicit typing: a variant is typed by its variation.
+func (c *w9cBindingChecker) endConforms(end *symbols.Symbol, types []*symbols.Symbol) bool {
+	for _, t := range types {
+		if c.model.Conforms(end, t) {
+			return true
+		}
+	}
+	return false
 }
 
 // w9cTypesConform reports whether some type on one side conforms to one on the

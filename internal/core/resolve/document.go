@@ -907,7 +907,7 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName) {
 		return false
 	}
-	r.recordRedefined(qn, sym)
+	r.recordRedefined(qn, sym, true)
 	return true
 }
 
@@ -940,11 +940,12 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		decl:             decl,
 		skipBorrowedName: true,
 	}
+	r.Enter()
 
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
 		if sym, ok := r.lookupConstraintRefFeature(featureName, decl); ok {
-			r.recordRedefined(qn, sym)
+			r.recordRedefined(qn, sym, r.Leave())
 			return
 		}
 	}
@@ -961,16 +962,19 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		// features (KerML 7.4.7), so the target is looked up there first.
 		if len(qn.Parts) == 1 {
 			if sym, ok := r.featureOf(r.scopeOwner(scope), qn.Parts[0].Text, map[*symbols.Symbol]bool{}); ok {
-				r.recordRedefined(qn, sym)
+				r.recordRedefined(qn, sym, r.Leave())
 				return
 			}
 		}
+		r.Leave()
 		r.resolveQualified(scope, qn, hide)
 		return
 	case *ast.Package:
+		r.Leave()
 		r.resolveQualified(scope, qn, hide)
 		return
 	default:
+		r.Leave()
 		r.resolveQualified(scope, qn, hide)
 		return
 	}
@@ -996,7 +1000,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		seen := make(map[*symbols.Symbol]bool)
 		for _, parentSym := range parents {
 			if sym, ok := r.featureOf(parentSym, featureName, seen); ok {
-				r.recordRedefined(qn, sym)
+				r.recordRedefined(qn, sym, r.Leave())
 				return
 			}
 		}
@@ -1008,7 +1012,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		if sym, ok := r.lookupContributedMember(owner, featureName); ok &&
 			visibleAsInheritedMember(owner, sym) &&
 			!r.inheritanceMaskedDeclaring(owner, sym, declaredNameIn(owner, decl)) {
-			r.recordRedefined(qn, sym)
+			r.recordRedefined(qn, sym, r.Leave())
 			return
 		}
 	} else {
@@ -1024,13 +1028,16 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 				result = r.walkQualifiedTail(scope, qn, p, 1)
 				return result.ok
 			}) {
-				r.memoize(qn, result)
+				if r.Leave() {
+					r.memoize(qn, result)
+				}
 				return
 			}
 		}
 	}
 
 	// Fall back to standard resolution if not found in parents
+	r.Leave()
 	r.resolveQualified(scope, qn, hide)
 }
 
@@ -1050,11 +1057,13 @@ func declaresConnector(scope *symbols.Scope) bool {
 }
 
 // recordRedefined records sym as what the redefinition target qn names, and
-// memoizes it, so a later unfiltered query — the semantic model reading the
-// same relationship — does not find the borrowed name instead.
-func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol) {
+// memoizes it when settled, so a later unfiltered query — the semantic model
+// reading the same relationship — does not find the borrowed name instead.
+func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol, settled bool) {
 	r.recordPart(qn, 0, sym)
-	r.memoize(qn, resolution{sym: sym, ok: true})
+	if settled {
+		r.memoize(qn, resolution{sym: sym, ok: true})
+	}
 }
 
 // findSpecializationTargets returns symbols for all specialization targets in the relationship list.
@@ -1229,7 +1238,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			case len(na.Name.Parts) > 1:
 				r.ResolveQualified(scope, na.Name)
 			case typ != nil:
-				r.resolveMemberChain(typ, na.Name)
+				r.resolveMemberChain(typ, na.Name, nil)
 			}
 			r.resolveExpr(scope, na.Value)
 		}
@@ -1276,12 +1285,18 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if res, done := r.featureChains[key]; done {
 		return res.sym
 	}
+	r.Enter()
+	res := r.walkFeatureChain(scope, fc)
+	r.memoizeFeatureChain(scope, fc, res, r.Leave())
+	return res.sym
+}
 
+// walkFeatureChain reads fc in scope as resolveFeatureChain does, unmemoized.
+func (r *Resolver) walkFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) resolution {
 	// Get the operand symbol without following its type for inline members.
 	operandSym := r.getOperandSymbol(scope, fc.Operand)
 	if operandSym == nil || fc.Member == nil {
-		r.memoizeFeatureChain(scope, fc, resolution{})
-		return nil
+		return resolution{}
 	}
 	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
 		operandSym = featuring
@@ -1300,7 +1315,7 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// The outward reading is probed, so that a chain the walk below reads instead
 	// keeps its own diagnostics and per-segment symbols (see probe).
 	if len(fc.Member.Parts) > 1 {
-		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
+		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text, fc); !ok {
 			var outwardSym *symbols.Symbol
 			outward := r.probe(fc.Member, func() bool {
 				var ok bool
@@ -1309,45 +1324,63 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 			})
 			if outward {
 				outwardSym = r.followChainMemberType(outwardSym)
-				r.memoizeFeatureChain(scope, fc, resolution{sym: outwardSym, ok: outwardSym != nil})
-				return outwardSym
+				return resolution{sym: outwardSym, ok: outwardSym != nil}
 			}
 		}
 	}
 
-	memberSym := r.resolveMemberChain(operandSym, fc.Member)
+	memberSym := r.resolveMemberChain(operandSym, fc.Member, fc)
 	memberSym = r.followChainMemberType(memberSym)
-	r.memoizeFeatureChain(scope, fc, resolution{sym: memberSym, ok: memberSym != nil})
-	return memberSym
+	return resolution{sym: memberSym, ok: memberSym != nil}
 }
 
 // chainMember looks a chain segment up as the member walk does: as a member of
 // sym when a model is attached, else in sym's own scope.
-func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
-	if found, ok := r.lookupMember(sym, name); ok && r.namedThroughNamespace(found) {
+func (r *Resolver) chainMember(sym *symbols.Symbol, name string, chain ast.Node) (*symbols.Symbol, bool) {
+	found, ok := r.lookupMember(sym, name)
+	if ok && namedByChain(found, chain) {
+		found, ok = r.lookupContributedMember(sym, name)
+	}
+	if ok && r.namedThroughNamespace(found) {
 		return found, true
 	}
 	if sym == nil || sym.Scope == nil {
 		return nil, false
 	}
-	found, ok := sym.Scope.LookupLocal(name)
-	if !ok || !r.namedThroughNamespace(found) {
+	found, ok = sym.Scope.LookupLocal(name)
+	if !ok || namedByChain(found, chain) || !r.namedThroughNamespace(found) {
 		return nil, false
 	}
 	return found, true
 }
 
+// namedByChain reports whether sym borrowed its name from chain, the feature
+// chain now being resolved: `assert h.q;` inside h names H's q, not itself.
+func namedByChain(sym *symbols.Symbol, chain ast.Node) bool {
+	return chain != nil && sym != nil && sym.NamingTarget == chain
+}
+
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
 // assigning each part's symbol explicitly (for feature chain member access).
-func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) *symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
 	}
+	r.Enter()
+	cur, ok := r.walkMemberChain(parentSym, qn, chain)
+	if r.Leave() && ok {
+		r.memoize(qn, resolution{cur, true})
+	}
+	return cur
+}
 
+// walkMemberChain reads the members qn names, one per part, from parentSym,
+// reporting the first part that names none.
+func (r *Resolver) walkMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) (*symbols.Symbol, bool) {
 	// Resolve first part using model.LookupMember if available, else
 	// scope.LookupLocal. A chained feature names a member of what precedes it,
 	// so it reaches only the visible ones (KerML 8.2.3.5).
-	cur, ok := r.chainMember(parentSym, qn.Parts[0].Text)
+	cur, ok := r.chainMember(parentSym, qn.Parts[0].Text, chain)
 
 	if !ok {
 		msg := "unresolved member: " + qn.Parts[0].Text
@@ -1355,19 +1388,19 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			msg = "no scope for member lookup in " + parentSym.Name
 		}
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{Span: qn.Parts[0].Span, Message: msg})
-		return nil
+		return nil, false
 	}
 	r.recordPart(qn, 0, cur)
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		next, found := r.chainMember(cur, qn.Parts[i].Text)
+		next, found := r.chainMember(cur, qn.Parts[i].Text, chain)
 		if !found && cur.Scope == nil {
 			r.Diagnostics = append(r.Diagnostics, Diagnostic{
 				Span:    qn.Parts[i].Span,
 				Message: "no members in " + cur.Name,
 			})
-			return nil
+			return nil, false
 		}
 
 		if !found {
@@ -1375,16 +1408,13 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				Span:    qn.Parts[i].Span,
 				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,
 			})
-			return nil
+			return nil, false
 		}
 
 		r.recordPart(qn, i, next)
 		cur = next
 	}
-
-	// Store final resolution in memo
-	r.memoize(qn, resolution{cur, true})
-	return cur
+	return cur, true
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following

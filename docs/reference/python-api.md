@@ -1,7 +1,7 @@
 # The Python client API
 
 This page covers what `opensysml` costs, the typed classes it can generate for a model, and the
-modules behind them. For a task-oriented walkthrough, see [guide chapter 9](../guide/09-python.md).
+modules behind them. For a task-oriented walkthrough, see [guide chapter 9](../guide/09-clients.md).
 
 ## Latency
 

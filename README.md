@@ -235,8 +235,8 @@ The project is under active development, with the core infrastructure operationa
 - **Corpus agreement:** 338 of 366 files agree diagnostic-by-diagnostic; 20 diagnostics are ours alone and 302 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](docs/project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 511 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 244 we report word-for-word; 248 wording-only and 7 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 2 elsewhere in the file ([Xpect oracle](docs/project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
-- **Permissiveness gaps:** of 234 invalid models we wrote ourselves, the reference rejects 6 that we accept by default, and 220 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
-- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 339 of 366 files agreeing, 19 diagnostics ours alone and 302 the reference's alone, 0 declared rows we are silent on, and 3 of 234 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
+- **Permissiveness gaps:** of 235 invalid models we wrote ourselves, the reference rejects 3 that we accept by default, and 224 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
+- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 339 of 366 files agreeing, 19 diagnostics ours alone and 302 the reference's alone, 0 declared rows we are silent on, and 0 of 235 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
 - **Self-assessed surface:** the action, state-machine and classifier-behavior rows have no external referee at all — the four refereed figures above cannot see them, because the pinned artifact evaluates expressions but executes neither actions nor state machines. [Spec compliance](docs/project/spec-compliance.md) counts them.
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
@@ -249,7 +249,7 @@ What these numbers cannot show: the OMG corpora are demonstrations rather than a
 **Parser coverage:** 97/97 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`, `OpenSysML Libraries/DocumentQueries.sysml` and `OpenSysML Libraries/IdentityMetadata.sysml` extensions. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (380/380 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
 **Reference differential:** 366 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-07`), 338 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
-**Rejection oracle:** the reverse direction — do we reject what the reference rejects? 234 hand-written invalid models validated by both implementations, 223 rejected by both, 3 the pinned pilot rejects and we accept; the other 8 are control-node succession rules the pinned pilot leaves unimplemented, so only we reject them, and every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. We wrote every case, so the count measures our coverage of the rejection surface, not our conformance — a sample, not a proof.
+**Rejection oracle:** the reverse direction — do we reject what the reference rejects? 235 hand-written invalid models validated by both implementations, 227 rejected by both, 0 the pinned pilot rejects and we accept; the other 8 are control-node succession rules the pinned pilot leaves unimplemented, so only we reject them, and every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. We wrote every case, so the count measures our coverage of the rejection surface, not our conformance — a sample, not a proof.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** a complete implementation of runtime operators, feature chains and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for a full demonstration.
 
@@ -350,9 +350,56 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
-binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
-Windows binaries are not Authenticode signed; see
-[docs/project/macos-distribution.md](docs/project/macos-distribution.md).
+binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized; see
+[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries are
+Authenticode signed through [SignPath Foundation](https://signpath.org) once the project's
+application is approved; the signed files are published as separate `*-signed*` assets beside
+the unsigned ones that `SHA256SUMS.txt` covers. See the [Code signing policy](#code-signing-policy).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+The Windows binaries (`sysml.exe`, `sysml-lsp.exe`, `sysml-grpc.exe`) of a tagged release are
+built by the GitHub Actions workflow
+[`.github/workflows/release-windows.yml`](.github/workflows/release-windows.yml) from the
+tagged commit of this repository and submitted to SignPath for signing from that workflow, so
+every signed file traces back to a public commit and a public build log. The signed files are
+published on the GitHub release as `sysml-windows-amd64-signed.zip`,
+`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe` and
+`opensysml-windows-amd64-signed.zip`, with their digests in `SHA256SUMS-windows-signed.txt`.
+Every signed executable carries `ProductName` `OpenSysML` and the release tag as
+`ProductVersion`/`FileVersion`. Signing is not in effect until the project's SignPath
+application is approved; releases made before that carry only unsigned Windows assets.
+
+**Team roles**
+
+- **Authors** may commit to this repository without additional review:
+  [`@Open-MBEE/opensysml-authors`](https://github.com/orgs/Open-MBEE/teams/opensysml-authors).
+- **Reviewers** review all pull requests from non-committers before they are merged:
+  [`@Open-MBEE/opensysml-reviewers`](https://github.com/orgs/Open-MBEE/teams/opensysml-reviewers).
+- **Approvers** approve each signing request in SignPath before a certificate is applied; a
+  release ships no signed Windows binaries without that manual approval:
+  [`@Open-MBEE/opensysml-approvers`](https://github.com/orgs/Open-MBEE/teams/opensysml-approvers)
+  and the [owners of the Open-MBEE organization](https://github.com/orgs/Open-MBEE/people?query=role%3Aowner).
+
+All Authors, Reviewers and Approvers must have multi-factor authentication enabled on their
+GitHub accounts and on their SignPath accounts.
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it.
+
+In particular, none of `sysml`, `sysml-lsp` and `sysml-grpc` checks for updates, collects
+telemetry or downloads anything on its own. The only network activity any of them performs is
+what the operator asks for by name: `sysml-lsp` speaks only over its standard input and output,
+`sysml-grpc` serves the address it is started with and answers only the clients that connect to
+it, and `sysml -sync-diff` / `sysml -sync-apply` contact a SysML v2 API / Flexo MMS repository
+only when the operator names that endpoint's `http://` or `https://` URL on the command line.
+The OMG pilot corpora and reference tools used by the test suite are fetched by developer
+scripts under `scripts/`, which are not part of the shipped binaries.
 
 ## Building
 
@@ -400,7 +447,7 @@ The suites themselves are described in [conformance/README.md](conformance/READM
 
 Five surfaces reach the same engine: the Go API, used in the calling process, and four clients of
 the `sysml-grpc` service. [Client libraries](docs/reference/clients.md) states what each covers and
-how to choose; [guide chapter 9](docs/guide/09-python.md) works through each one.
+how to choose; [guide chapter 9](docs/guide/09-clients.md) works through each one.
 
 | Surface | Reaches the engine by | Published | API reference |
 |---|---|---|---|
@@ -489,7 +536,7 @@ runtime in its default dependency tree ([Rust API](docs/reference/rust-api.md),
 
 ## Documentation
 
-- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, and [driving it from your own program](docs/guide/09-python.md)
+- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, and [driving it from your own program](docs/guide/09-clients.md)
 - **[Client libraries](docs/reference/clients.md)** — the Go, Python, Node, Java and Rust surfaces, and how to choose between them
 - **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, each client's API, service transports, RDF mapping
 - **[Internals](docs/internals/architecture.md)** — the pipeline, the tiers, testing and performance

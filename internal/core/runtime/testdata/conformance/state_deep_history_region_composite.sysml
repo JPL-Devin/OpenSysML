@@ -3,6 +3,8 @@
 // started inside that composite state's own region, so the restore re-enters the
 // recorded configuration instead of the region's initial state.
 package Test {
+	private import SI::*;
+
 	state def DeepHistoryRegionComposite {
 		attribute deepEntries : Integer = 0;
 		attribute startEntries : Integer = 0;
@@ -36,7 +38,7 @@ package Test {
 						succession first istart then deepState;
 						transition out_deep
 							first deepState
-							accept after 3
+							accept after 3 [s]
 							do { assign trips := trips + 1; }
 							then away;
 					}
@@ -50,6 +52,6 @@ package Test {
 		}
 
 		succession first start then running;
-		transition back first away accept after 3 if trips == 1 then resume;
+		transition back first away accept after 3 [s] if trips == 1 then resume;
 	}
 }

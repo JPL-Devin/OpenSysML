@@ -1,7 +1,8 @@
 exit: start
 enter: Working
 enter: Step1
-eval literal 5 -> 5
+  eval literal 5 -> 5
+eval index -> 5 [s]
 transition: start -> Step1
 exit: Step1 (exit action)
 stmt assign log

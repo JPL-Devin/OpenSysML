@@ -100,6 +100,7 @@ var kermlMetaclasses = map[string]string{
 	"datatype":     "DataType",
 	"assoc":        "Association",
 	"association":  "Association",
+	"assoc struct": "AssociationStructure",
 	"behavior":     "Behavior",
 	"function":     "Function",
 	"predicate":    "Predicate",

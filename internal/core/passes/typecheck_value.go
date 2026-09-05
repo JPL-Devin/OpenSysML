@@ -24,10 +24,15 @@ func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scop
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, value := range valueElements(value) {
-		if got := ec.valueTypeSymbol(valueScope, value); got != nil {
+		if feature := ec.valueFeature(valueScope, value); feature != nil {
+			got := ec.featureValueType(feature)
+			if got == nil {
+				continue
+			}
 			// A binding equates the two features, so conformance in either
-			// direction suffices; only unrelated types are rejected.
-			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
+			// direction suffices; only unrelated types are rejected. The feature
+			// is judged as a whole: a variant is typed by its variation too.
+			if !ec.model.Conforms(feature, want) && !ec.model.Conforms(want, got) {
 				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
 			}
 			continue
@@ -188,6 +193,15 @@ func (ec *exprChecker) declaredTypeSymbol(scope *symbols.Scope, rels []*ast.Rela
 // is not a feature the checker can type (a literal, an expression, an unresolved
 // name). A feature chain is typed by its last feature (KerML 8.3.3.3).
 func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	if feature := ec.valueFeature(scope, value); feature != nil {
+		return ec.featureValueType(feature)
+	}
+	return nil
+}
+
+// valueFeature returns the usage a bound value names outright, aliases followed;
+// nil for a computed value, an unresolved name or a definition.
+func (ec *exprChecker) valueFeature(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
 	if !namesFeature(value) {
 		return nil
 	}
@@ -200,12 +214,18 @@ func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *sy
 			sym = target
 		}
 	}
-	u, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage {
+	if _, isUsage := sym.Decl.(*ast.Usage); !isUsage {
 		// A definition used as a value is a type name, not an instance of one;
 		// the checker has no rule for that.
 		return nil
 	}
+	return sym
+}
+
+// featureValueType returns the declared type of a usage, or the enumeration
+// owning an enumeration literal; nil when it declares none.
+func (ec *exprChecker) featureValueType(sym *symbols.Symbol) *symbols.Symbol {
+	u := sym.Decl.(*ast.Usage)
 	// The type name resolves from the scope the usage was declared in, as
 	// generalization targets do elsewhere (semantics.DirectSupertypes, the
 	// subsetting conformance checks). Resolving from the scope the usage owns

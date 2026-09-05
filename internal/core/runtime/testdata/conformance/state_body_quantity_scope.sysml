@@ -9,7 +9,7 @@ package test {
 	private import SI::*;
 	private import ISQ::*;
 
-	attribute pkgDelay : Real = 1.0;
+	attribute pkgDelay : ISQBase::DurationValue = 1.0 [s];
 	attribute pkgLimit : ISQSpaceTime::SpeedValue = 4.0 [km/h];
 
 	state descent {

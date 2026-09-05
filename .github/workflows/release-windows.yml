@@ -1,0 +1,248 @@
+name: Release Windows (SignPath)
+
+# Authenticode-signs the Windows release binaries through SignPath Foundation.
+# SignPath's OSS program only accepts artifacts that originate from a trusted
+# build system, and CircleCI is not one, so the Windows binaries are rebuilt
+# here with the same Makefile targets and version variables the CircleCI
+# `release` job uses (.circleci/config.yml), submitted for signing, and the
+# signed results published as additional `*-signed*` release assets. CircleCI
+# stays authoritative for the unsigned assets, SHA256SUMS.txt and its cosign
+# bundle; see "Code signing policy" in README.md and docs/project/releasing.md.
+#
+# Until SignPath approves the project and a maintainer configures the
+# SIGNPATH_API_TOKEN secret plus the SIGNPATH_* variables, only the build job
+# runs: it produces an artifact and nothing reaches the release.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp into the binaries (VERSION)
+        required: true
+        default: v0.0.0-dry-run
+      submit:
+        description: Submit the build to SignPath (every request needs an Approver; nothing is published)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UNSIGNED_ARTIFACT: windows-amd64-unsigned
+
+jobs:
+  build:
+    name: Build Windows binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      sign: ${{ steps.gate.outputs.sign }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Derive the release version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Tag builds mirror CircleCI's VERSION=${CIRCLE_TAG}; dry runs take the input.
+          if [ "$REF_TYPE" = "tag" ]; then
+            VERSION="$REF_NAME"
+          else
+            VERSION="$INPUT_VERSION"
+          fi
+          case "$VERSION" in
+            v[0-9]*) ;;
+            *) echo "Error: VERSION '$VERSION' must look like v<major>.<minor>.<patch>[-suffix]"; exit 1 ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build sysml, sysml-lsp and sysml-grpc for windows/amd64
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          # Same derivation as the CircleCI release job, so both builds stamp
+          # identical -ldflags and VERSIONINFO values for a tag.
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          GO_VERSION=$(go version | awk '{print $3}')
+          mkdir -p dist/unsigned
+
+          GOOS=windows GOARCH=amd64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+          mv bin/sysml dist/unsigned/sysml-windows-amd64.exe
+
+          GOOS=windows GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+          mv bin/sysml-lsp dist/unsigned/sysml-lsp-windows-amd64.exe
+
+          GOOS=windows GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+          mv bin/sysml-grpc dist/unsigned/sysml-grpc-windows-amd64.exe
+
+      - name: Check the embedded VERSIONINFO matches VERSION
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for exe in dist/unsigned/*.exe; do
+            make windows-versioninfo-check EXE="$exe" VERSION="$VERSION"
+          done
+
+      - name: Upload unsigned binaries
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.UNSIGNED_ARTIFACT }}
+          path: dist/unsigned/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Decide whether SignPath is configured
+        id: gate
+        env:
+          # Secrets cannot be tested in a job-level `if`, so the decision is
+          # made here and the sign job keys off the output.
+          HAS_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+          ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          EVENT_NAME: ${{ github.event_name }}
+          SUBMIT_INPUT: ${{ inputs.submit }}
+        run: |
+          sign=true
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "SIGNPATH_API_TOKEN secret is not set: skipping signing."; sign=false
+          fi
+          for v in ORGANIZATION_ID PROJECT_SLUG POLICY_SLUG; do
+            if [ -z "${!v}" ]; then
+              echo "SIGNPATH_${v/POLICY_SLUG/SIGNING_POLICY_SLUG} variable is not set: skipping signing."; sign=false
+            fi
+          done
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SUBMIT_INPUT" != "true" ]; then
+            echo "Dry run without 'submit': skipping signing."; sign=false
+          fi
+          echo "sign=$sign" >> "$GITHUB_OUTPUT"
+
+  sign:
+    name: Sign with SignPath and publish
+    needs: build
+    if: needs.build.outputs.sign == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Wait for CircleCI to publish the gated release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          # CircleCI publishes SHA256SUMS.txt.bundle last, and only after the
+          # test suite and build-release passed on the tag, so its presence is
+          # the release gate. Nothing is signed for a tag CircleCI rejected.
+          deadline=$((SECONDS + 5400))
+          until gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx 'SHA256SUMS.txt.bundle'; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Error: CircleCI has not published SHA256SUMS.txt.bundle on release $TAG; not signing."
+              exit 1
+            fi
+            echo "Waiting for CircleCI to publish release $TAG..."
+            sleep 60
+          done
+          resolved=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
+          if [ "$resolved" != "$COMMIT" ]; then
+            echo "Error: tag $TAG resolves to $resolved, this workflow built $COMMIT; not signing."
+            exit 1
+          fi
+
+      - name: Submit the signing request to SignPath
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          # Release signing policies require a manual approval, so allow time
+          # for an Approver to act before the job is failed and needs a re-run.
+          wait-for-completion-timeout-in-seconds: "14000"
+          output-artifact-directory: dist/signed
+
+      - name: Check the signed binaries still carry VERSION
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          ls -la dist/signed
+          for name in sysml sysml-lsp sysml-grpc; do
+            test -f "dist/signed/${name}-windows-amd64.exe" || { echo "Error: signed ${name}-windows-amd64.exe missing"; exit 1; }
+          done
+          for exe in dist/signed/*.exe; do
+            make windows-versioninfo-check EXE="$exe" VERSION="$VERSION"
+          done
+
+      - name: Package the signed assets
+        run: |
+          # Same layouts as the CircleCI assets of the same base name, under a
+          # `-signed` suffix so the CircleCI-published SHA256SUMS.txt and its
+          # cosign bundle never describe a file they did not hash.
+          mkdir -p dist/release
+          cd dist/signed
+          zip -q ../release/sysml-windows-amd64-signed.zip sysml-windows-amd64.exe
+          zip -q ../release/sysml-lsp-windows-amd64-signed.zip sysml-lsp-windows-amd64.exe
+          cp sysml-grpc-windows-amd64.exe ../release/sysml-grpc-windows-amd64-signed.exe
+          mkdir -p stage
+          cp sysml-windows-amd64.exe stage/sysml.exe
+          cp sysml-lsp-windows-amd64.exe stage/sysml-lsp.exe
+          (cd stage && zip -q ../../release/opensysml-windows-amd64-signed.zip sysml.exe sysml-lsp.exe)
+          rm -rf stage
+          cd ../release
+          sha256sum sysml-grpc-windows-amd64-signed.exe > sysml-grpc-windows-amd64-signed.exe.sha256
+          sha256sum ./*.zip sysml-grpc-windows-amd64-signed.exe | sed 's|\./||' > SHA256SUMS-windows-signed.txt
+          cat SHA256SUMS-windows-signed.txt
+
+      - name: Upload signed assets as a workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-amd64-signed
+          path: dist/release/
+          if-no-files-found: error
+
+      - name: Upload signed assets to the GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
+        with:
+          tag_name: ${{ needs.build.outputs.version }}
+          files: dist/release/*
+          fail_on_unmatched_files: true
+          # Only the `-signed` assets are touched; the release itself, its notes
+          # and every CircleCI-published asset are left as they are.
+          overwrite_files: true

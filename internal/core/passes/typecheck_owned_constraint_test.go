@@ -122,3 +122,32 @@ func TestOwnedConstraintReferenceFormIsNotADeclaration(t *testing.T) {
 		t.Errorf("reference form reported as a declaration: %v", diags)
 	}
 }
+
+// A requirement, concern or viewpoint definition is a constraint definition
+// (SysML v2 §8.3.19), so it types a constraint usage as the pilot accepts.
+func TestConstraintTypedByARequirementDefinition(t *testing.T) {
+	src := `package P {
+	attribute def Real;
+	requirement def R { subject s : Real; in x : Real; require constraint { x > 0 } }
+	concern def Cn { subject s : Real; }
+	viewpoint def Vp { subject s : Real; }
+	constraint c1 : R;
+	constraint c2 : Cn;
+	constraint c3 : Vp;
+	requirement def Q {
+		subject s : Real;
+		require constraint c4 : R { in x = 1; }
+		assert constraint c5 : R { in x = 1; }
+	}
+	part def PD;
+	constraint c6 : PD;
+}
+`
+	diags := only(typeDiags(t, src), "one-type")
+	if len(diags) != 1 {
+		t.Fatalf("want one one-type diagnostic, for c6 alone, got %v", diags)
+	}
+	if got := strings.TrimSpace(spanText(src, diags[0])); got != "constraint c6 : PD;" {
+		t.Errorf("span text = %q, want the constraint typed by a part definition", got)
+	}
+}
