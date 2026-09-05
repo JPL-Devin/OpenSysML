@@ -1,5 +1,6 @@
 {
     "type": "state",
+    "libraries": true,
     "finalState": "Recovered+Watching",
     "stateVisits": ["start", "Working", "lstart", "rstart", "Grouping", "Step1", "Watching", "Recovered"],
     "outputs": {

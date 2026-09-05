@@ -467,6 +467,9 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 			if err != nil {
 				return err
 			}
+			if err := e.checkTimeTriggerType(trans.Scope, timeEvent, durationVal); err != nil {
+				return err
+			}
 			timestamp := e.currentTime + duration
 			if timeEvent.Absolute {
 				timestamp = math.Max(duration, e.currentTime)

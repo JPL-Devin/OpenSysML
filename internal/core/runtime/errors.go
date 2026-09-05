@@ -142,6 +142,10 @@ var (
 	// reported rather than passed through as if the instant had arrived.
 	ErrNoClock = errors.New("no clock to wait on")
 
+	// ErrTimeTriggerType is returned when a time trigger's argument is declared as
+	// no value of the type the trigger takes — the judgement validation makes of it.
+	ErrTimeTriggerType = errors.New("time trigger argument of the wrong type")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// the run's calc depth budget, which an unbounded recursion would otherwise
 	// do until the process ran out of stack.

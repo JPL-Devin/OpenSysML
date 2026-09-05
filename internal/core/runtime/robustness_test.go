@@ -210,6 +210,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 	t.Run("time_trigger_of_a_non_time_dimension", testTimeTriggerOfANonTimeDimension)
+	t.Run("time_trigger_of_the_type_validation_refuses", testTimeTriggerOfTheTypeValidationRefuses)
 	t.Run("change_condition_that_never_holds", testChangeConditionThatNeverHolds)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
@@ -4104,6 +4105,41 @@ func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 	_, err := ctx.ExecuteState(sym)
 	if !errors.Is(err, ErrIncommensurableUnits) {
 		t.Fatalf("err = %v; want ErrIncommensurableUnits", err)
+	}
+}
+
+// testTimeTriggerOfTheTypeValidationRefuses: a bare number after `after` and a
+// duration after `at` are refused as a typed error, not scheduled as seconds.
+func testTimeTriggerOfTheTypeValidationRefuses(t *testing.T) {
+	for _, tc := range []struct{ name, trigger string }{
+		{"unitless after", "after 5"},
+		{"duration at", "at 2 [min]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+				package test {
+					private import SI::*;
+					state Machine {
+						entry; then init;
+						state init;
+						state waiting {
+							accept `+tc.trigger+` then done;
+						}
+						state done;
+						succession first init then waiting;
+					}
+				}
+			`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+			if sym == nil {
+				t.Fatal("state Machine not found")
+			}
+
+			_, err := ctx.ExecuteState(sym)
+			if !errors.Is(err, ErrTimeTriggerType) {
+				t.Fatalf("err = %v; want ErrTimeTriggerType", err)
+			}
+		})
 	}
 }
 

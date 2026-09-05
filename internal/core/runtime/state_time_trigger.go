@@ -3,7 +3,9 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // secondFQN names the unit the machine's virtual clock counts in, so a duration
@@ -28,6 +30,21 @@ func (e *StateExecutor) timeMagnitude(val Value, what string) (float64, error) {
 	default:
 		return 0, fmt.Errorf("%s must be constant, got %v", what, val.Kind)
 	}
+}
+
+// checkTimeTriggerType refuses the trigger argument validation refuses; one the
+// declarations leave open is left to the evaluated value, as in validation.
+func (e *StateExecutor) checkTimeTriggerType(scope *symbols.Scope, t *ast.TimeEvent, val Value) error {
+	c := e.ctx.model.TimeEventConforms(scope, t)
+	if !c.Known || c.Holds {
+		return nil
+	}
+	keyword := "after"
+	if t.Absolute {
+		keyword = "at"
+	}
+	return fmt.Errorf("%w: `%s %s` must be a %s, found %s",
+		ErrTimeTriggerType, keyword, FormatValue(val), semantics.TimeEventType(t), c.Found)
 }
 
 // durationInClockUnits expresses a quantity in the clock's unit, reporting a

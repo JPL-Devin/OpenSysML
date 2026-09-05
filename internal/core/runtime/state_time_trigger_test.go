@@ -38,7 +38,6 @@ func TestTimeTriggerUnitIsConverted(t *testing.T) {
 		{"seconds", "5 [s]", 5},
 		{"real seconds", "2.5 [s]", 2.5},
 		{"minutes", "1 [min]", 60},
-		{"unitless", "5", 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			exec := libStateExecutor(t, "Machine", `package test {
@@ -94,16 +93,18 @@ func TestTimeTriggerSubSecondUnit(t *testing.T) {
 	}
 }
 
-// An instant carrying a unit names a time on the same clock a duration measures
-// on, and one already past fires at once rather than moving the clock back.
+// An instant names a time on the same clock a duration measures on, and one
+// already past fires at once rather than moving the clock back.
 func TestTimeTriggerAbsoluteInstantWithUnit(t *testing.T) {
 	exec := libStateExecutor(t, "Machine", `package test {
 		private import SI::*;
+		private import Time::*;
 		state Machine {
+			attribute due : TimeInstantValue = 2 [min];
 			entry; then start;
 			state start;
 			state waiting {
-				accept at 2 [min] then done;
+				accept at due then done;
 			}
 			state done;
 			succession first start then waiting;
@@ -115,6 +116,70 @@ func TestTimeTriggerAbsoluteInstantWithUnit(t *testing.T) {
 	assertCurrentState(t, exec, "done")
 	if exec.currentTime != 120 {
 		t.Errorf("clock = %v, want 120 seconds", exec.currentTime)
+	}
+}
+
+// An argument the library types as no duration or no instant is refused before
+// it is scheduled, by the judgement validation makes of the same text.
+func TestTimeTriggerRefusesTheTypeValidationRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name, trigger, want string
+	}{
+		{"bare number after", "after 5", "`after 5` must be a ISQBase::DurationValue, found Natural"},
+		{"real after", "after 2.5", "`after 2.5` must be a ISQBase::DurationValue, found Rational"},
+		{"duration at", "at 2 [min]", "`at 2 [min]` must be a Time::TimeInstantValue, found a quantity in minute"},
+		{"bare number at", "at 5", "`at 5` must be a Time::TimeInstantValue, found Natural"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			exec := libStateExecutor(t, "Machine", `package test {
+				private import SI::*;
+				state Machine {
+					entry; then start;
+					state start;
+					state waiting {
+						accept `+tc.trigger+` then done;
+					}
+					state done;
+					succession first start then waiting;
+				}
+			}`)
+			err := exec.RunToCompletion()
+			if err == nil {
+				t.Fatalf("accept %s scheduled", tc.trigger)
+			}
+			if !errors.Is(err, ErrTimeTriggerType) {
+				t.Errorf("err = %v, want it to wrap ErrTimeTriggerType", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// A feature typed by the trigger's type is admitted whatever value it holds,
+// as validation admits it, and its value is what gets scheduled.
+func TestTimeTriggerAdmitsATypedFeature(t *testing.T) {
+	exec := libStateExecutor(t, "Machine", `package test {
+		private import SI::*;
+		private import ISQBase::*;
+		state Machine {
+			attribute delay : DurationValue = 3 [s];
+			entry; then start;
+			state start;
+			state waiting {
+				accept after delay then done;
+			}
+			state done;
+			succession first start then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "done")
+	if exec.currentTime != 3 {
+		t.Errorf("clock = %v, want 3 seconds", exec.currentTime)
 	}
 }
 
