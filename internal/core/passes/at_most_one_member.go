@@ -68,6 +68,21 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 			inheritedPerOwner[member.OwnerScope]++
 		}
 	}
+	// MembersOf enumerates by name, so an inherited `objective : R;` is only
+	// reachable through the scope of the type declaring it.
+	for _, src := range cc.model.MemberSources(sym) {
+		if src == nil || src.Scope == nil || src.Scope == sym.Scope {
+			continue
+		}
+		for _, member := range src.Scope.AnonymousMembers() {
+			if member == nil || cc.libraryDeclared(member) {
+				continue
+			}
+			if isObjectiveDecl(member.Decl) {
+				inheritedPerOwner[src.Scope]++
+			}
+		}
+	}
 	if len(local) > 0 {
 		cc.reportExtraMembers(local, msgOnlyOneObjective, codeOnlyOneObjective)
 		return

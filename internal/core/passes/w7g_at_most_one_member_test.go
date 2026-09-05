@@ -137,6 +137,43 @@ func TestW7GAnalysisCaseAdmitsSeveralObjectives(t *testing.T) {
 	}
 }
 
+// An `objective : R;` is a member under no name, so it competes where a named
+// one does — owned, inherited, and mixed with a named one.
+func TestW7GAnonymousObjectivesCompete(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want int
+	}{
+		{`package P {
+			requirement def R1;
+			case def Anon {
+				objective : R1;
+				objective : R1;
+			}
+			case anonUse : Anon;
+		}`, 2},
+		{`package P {
+			requirement def R1;
+			case def Mixed {
+				objective named : R1;
+				objective : R1;
+			}
+			case mixedUse : Mixed;
+		}`, 2},
+		{`package P {
+			requirement def R1;
+			case def OneAnon {
+				objective : R1;
+			}
+			case anonOk : OneAnon;
+		}`, 0},
+	} {
+		if diags := only(constraintDiags(t, tc.src), "only-one-objective"); len(diags) != tc.want {
+			t.Fatalf("expected %d objective diagnostic(s) for %q, got %v", tc.want, tc.src, diags)
+		}
+	}
+}
+
 // The first owned objective redefines the inherited one, so only the second is
 // reported — the pinned reference is silent on the first.
 func TestW7GOwnedObjectiveRedefinesTheInheritedOne(t *testing.T) {
