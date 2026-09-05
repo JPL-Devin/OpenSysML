@@ -158,7 +158,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-234 case(s): 226 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+235 case(s): 227 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,15 +167,16 @@ Under the default `-conformance auto`:
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 87 | 0 | 0 | 0 |
 | semantic | 105 | 97 | 0 | 8 | 0 |
-| xpect | 34 | 34 | 0 | 0 | 0 |
+| xpect | 35 | 35 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
 the pinned pilot does not implement; they are not permissiveness gaps on our side and are
 adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119, to
 120 with `g60` (an `alias` named by a keyword), to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it, to
-228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, and to 234 with the
-three trigger-argument typing cases (`s48`–`s50`). The KerML constraints in that
+228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
+three trigger-argument typing cases (`s48`–`s50`), and to 235 with the enumerated value typed by
+its literal (`p18-enum-value-typed-outside-enumeration`). The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
 argument checking of the send-action family closed another (`k34`), the cross-subsetting

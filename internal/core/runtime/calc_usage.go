@@ -730,17 +730,15 @@ func (ec *EvalContext) evalCalcUsageMembers(sym *symbols.Symbol, parts []ast.Nam
 
 // calcUsageOperand reports whether the operand of a feature chain names a calc
 // usage, whose members are computed rather than declared values. A local binding
-// of the same name is the value the expression names, so a frame masks the
-// declaration.
+// or valued feature of the same name is the value the expression names, so it
+// masks the declaration.
 func (ec *EvalContext) calcUsageOperand(operand ast.Node) (*symbols.Symbol, bool) {
 	ref, ok := operand.(*ast.FeatureReference)
 	if !ok || ref.Name == nil || len(ref.Name.Parts) == 0 || ec.ctx.resolver == nil {
 		return nil, false
 	}
-	if len(ref.Name.Parts) == 1 {
-		if _, bound := ec.Lookup(ref.Name.Parts[0].Text); bound {
-			return nil, false
-		}
+	if len(ref.Name.Parts) == 1 && ec.namesValue(ref.Name.Parts[0].Text) {
+		return nil, false
 	}
 	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, ref.Name)
 	if !ok || !isCalcUsageSymbol(sym) {
@@ -749,9 +747,19 @@ func (ec *EvalContext) calcUsageOperand(operand ast.Node) (*symbols.Symbol, bool
 	return sym, true
 }
 
+// namesValue reports whether name is a local binding or a valued feature of the
+// element being evaluated, which the expression names rather than a declaration.
+func (ec *EvalContext) namesValue(name string) bool {
+	if _, bound := ec.Lookup(name); bound {
+		return true
+	}
+	_, valued := ec.valuedFeature(name)
+	return valued
+}
+
 // occurrenceOperand reports whether the operand of a feature chain names one
-// occurrence — a part or item — that no local binding, and no feature value of the object
-// being evaluated, already answers with.
+// occurrence — a part or item — that no local binding or valued feature, and no
+// feature value of the object being evaluated, already answers with.
 func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, bool) {
 	ref, ok := operand.(*ast.FeatureReference)
 	if !ok || ref.Name == nil || len(ref.Name.Parts) == 0 || ec.ctx.resolver == nil {
@@ -759,7 +767,7 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 	}
 	if len(ref.Name.Parts) == 1 {
 		name := ref.Name.Parts[0].Text
-		if _, bound := ec.Lookup(name); bound {
+		if ec.namesValue(name) {
 			return nil, false
 		}
 		if ec.self != nil {

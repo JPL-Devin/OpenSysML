@@ -364,9 +364,17 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			return
 		}
 	}
-	msg := compatMessage(decl, relKind, targetSym.Kind)
+	if relKind == ast.RelTyping && decl.useKind == ast.UsageEnumeration &&
+		tc.owningEnumerationConformsTo(scope, targetSym) {
+		return
+	}
+	kind := targetSym.Kind
+	if relKind == ast.RelReferences || relKind == ast.RelSubsets {
+		kind = referentKind(targetSym)
+	}
+	msg := compatMessage(decl, relKind, kind)
 	if (relKind == ast.RelReferences || relKind == ast.RelSubsets) &&
-		targetSym.Kind == symbols.SymbolUnknown && targetSym.IsFeature() {
+		kind == symbols.SymbolUnknown && targetSym.IsFeature() {
 		msg = unclassifiedReferenceKindMessage(decl, relKind, targetSym)
 	}
 	if msg == "" {
@@ -428,7 +436,7 @@ func (tc *typeChecker) checkChainReferenceKind(scope *symbols.Scope, target ast.
 	if !ok || sym == nil {
 		return // unresolved: name-resolution tier owns this
 	}
-	msg := referenceKindMessage(decl, relKind, sym.Kind)
+	msg := referenceKindMessage(decl, relKind, referentKind(sym))
 	if sym.Kind == symbols.SymbolUnknown && sym.IsFeature() {
 		msg = unclassifiedReferenceKindMessage(decl, relKind, sym)
 	}
@@ -735,6 +743,15 @@ func referenceKindMessage(decl declKind, rel ast.RelationshipKind, target symbol
 		return ""
 	}
 	return referentKindMessage(decl, rel, target, target.String())
+}
+
+// referentKind is the kind the referent-kind rule judges sym by. An objective is
+// a requirement usage (SysML v2 §8.3.22.4) though the builder files it as a part.
+func referentKind(sym *symbols.Symbol) symbols.SymbolKind {
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageObjective {
+		return symbols.SymbolRequirementUsage
+	}
+	return sym.Kind
 }
 
 // unclassifiedReferenceKindMessage judges a referent the builder leaves without a
@@ -1183,6 +1200,12 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 	// validateCaseUsageType); analysis and verification keep their exact kinds.
 	if useKind == ast.UsageCase {
 		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
+	}
+
+	// A constraint is typed by a Predicate (SysML v2 §8.3.19.3): a requirement,
+	// concern or viewpoint definition is a constraint definition, so it qualifies.
+	if useKind == ast.UsageConstraint {
+		return defKindSpecializes(defKind, symbols.SymbolConstraintDef)
 	}
 
 	// Successions and bindings type through a plain UsageDeclaration

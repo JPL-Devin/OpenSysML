@@ -417,6 +417,29 @@ func TestW9CBoundFeatureTypes(t *testing.T) {
 	w9cWantLines(t, src, "bound-feature-types", 9)
 }
 
+// A variant is implicitly typed by its variation (SysML v2 §7.20), so binding
+// a feature typed by the variation to one of its variants conforms; an
+// unrelated declared type is still reported. The pinned pilot agrees.
+func TestW9CBoundVariantConformsToItsVariation(t *testing.T) {
+	src := `package Test {
+	part def Base;
+	part def Other;
+	variation part def V {
+		variant part v1 : Base;
+		variant part v2 : Base;
+	}
+	part P {
+		part vp : V;
+		part w : V;
+		part o : Other;
+		bind w = vp.v1;
+		bind vp.v2 = w;
+		bind o = vp.v1;
+	}
+}`
+	w9cWantLines(t, src, "bound-feature-types", 14)
+}
+
 // Redefining an untyped library feature replaces its implicit value typing, so
 // no diamond is drawn through it (examples/pilot-corpora TradeStudyTest.sysml:18).
 func TestW9CRedefinedUntypedFeatureStaysSilent(t *testing.T) {

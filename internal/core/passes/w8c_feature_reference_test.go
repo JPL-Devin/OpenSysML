@@ -126,6 +126,10 @@ func TestW8CFeatureReferenceBodyInaccessible(t *testing.T) {
 	part def Q { attribute n = 1; }
 	requirement def R { assume constraint { P::Q::n > 0 } }
 }`,
+		"require constraint with a parameter": `package P {
+	part def Q { attribute n = 1; }
+	requirement def R { require constraint c { in y = 1; P::Q::n > y } }
+}`,
 		"implicit calc result": `package P {
 	part def Q { attribute n = 1; }
 	calc def C { P::Q::n }
@@ -167,6 +171,20 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 		"dotted part path": `package P {
 	part def Q { attribute n = 1; }
 	part def R { part q : Q; constraint c { q.n > 0 } }
+}`,
+		"nested constraint parameter": `package P {
+	part def W;
+	requirement def R {
+		subject s : W;
+		in x = 1;
+		require constraint q { in y = 2; y > 0 and x > 0 }
+		assume constraint { in z = 3; z > x }
+	}
+}`,
+		"typed nested constraint parameter": `package P {
+	part def W;
+	constraint def Q { in v = 1; }
+	requirement def R { subject s : W; require constraint w : Q { in v = 2; v > 0 } }
 }`,
 		"implicit calc result": `package P {
 	calc def C { attribute m = 1; m }

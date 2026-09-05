@@ -102,9 +102,10 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 // declaration with exactly two ends specializes (KerML 1.1 §8.3.3.5): the binary
 // link rather than the n-ary one of its kind.
 var implicitKerMLBinaryBases = map[string]string{
-	"assoc":       binaryConnectorBaseFQN,
-	"association": binaryConnectorBaseFQN,
-	"interaction": binaryConnectorBaseFQN,
+	"assoc":        binaryConnectorBaseFQN,
+	"association":  binaryConnectorBaseFQN,
+	"assoc struct": "Objects::BinaryLinkObject",
+	"interaction":  binaryConnectorBaseFQN,
 }
 
 // implicitKerMLBinaryFeatureBases maps a KerML connector keyword to the base
@@ -120,45 +121,48 @@ var implicitKerMLBehaviorBases = map[string]string{
 }
 
 var implicitKerMLBases = map[string]string{
-	"classifier":  anythingFQN,
-	"class":       occurrenceFQN,
-	"struct":      "Objects::Object",
-	"assoc":       "Links::Link",
-	"association": "Links::Link",
-	"behavior":    "Performances::Performance",
-	"function":    "Performances::Evaluation",
-	"predicate":   "Performances::BooleanEvaluation",
-	"interaction": "Links::Link",
-	"metaclass":   "Metaobjects::Metaobject",
-	"datatype":    dataValueFQN,
-	"type":        anythingFQN,
+	"classifier":   anythingFQN,
+	"class":        occurrenceFQN,
+	"struct":       "Objects::Object",
+	"assoc":        "Links::Link",
+	"association":  "Links::Link",
+	"assoc struct": "Objects::LinkObject",
+	"behavior":     "Performances::Performance",
+	"function":     "Performances::Evaluation",
+	"predicate":    "Performances::BooleanEvaluation",
+	"interaction":  "Links::Link",
+	"metaclass":    "Metaobjects::Metaobject",
+	"datatype":     dataValueFQN,
+	"type":         anythingFQN,
 }
 
 // implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
 // every feature of that kind subsets (KerML 1.1 §8.4.2).
 var implicitKerMLFeatureBases = map[string]string{
-	"type":        baseUsageFQN,
-	"classifier":  baseUsageFQN,
-	"feature":     baseUsageFQN,
-	"class":       "Occurrences::occurrences",
-	"struct":      "Objects::objects",
-	"datatype":    "Base::dataValues",
-	"assoc":       linksFQN,
-	"association": linksFQN,
-	"connector":   linksFQN,
-	"binding":     "Links::selfLinks",
-	"bind":        "Links::selfLinks",
-	"succession":  "Occurrences::happensBeforeLinks",
-	"behavior":    "Performances::performances",
-	"step":        "Performances::performances",
-	"function":    "Performances::evaluations",
-	"expr":        "Performances::evaluations",
-	"predicate":   "Performances::booleanEvaluations",
-	"bool":        "Performances::booleanEvaluations",
-	"inv":         "Performances::trueEvaluations",
-	"interaction": "Transfers::transfers",
-	"flow":        "Transfers::flowTransfers",
-	"metaclass":   "Metaobjects::metaobjects",
+	"":             baseUsageFQN, // a member declared with no kind keyword (`end a;`) is a feature
+	"type":         baseUsageFQN,
+	"classifier":   baseUsageFQN,
+	"feature":      baseUsageFQN,
+	"class":        "Occurrences::occurrences",
+	"struct":       "Objects::objects",
+	"datatype":     "Base::dataValues",
+	"assoc":        linksFQN,
+	"association":  linksFQN,
+	"assoc struct": "Objects::linkObjects",
+	"connector":    linksFQN,
+	"binding":      "Links::selfLinks",
+	"bind":         "Links::selfLinks",
+	"succession":   "Occurrences::happensBeforeLinks",
+	"behavior":     "Performances::performances",
+	"step":         "Performances::performances",
+	"function":     "Performances::evaluations",
+	"expr":         "Performances::evaluations",
+	"predicate":    "Performances::booleanEvaluations",
+	"bool":         "Performances::booleanEvaluations",
+	"inv":          "Performances::trueEvaluations",
+	"interaction":  "Transfers::transfers",
+	"flow":         "Transfers::flowTransfers",
+	"metaclass":    "Metaobjects::metaobjects",
 }
 
 // KindBaseFQNs returns the standard-library bases every declaration of sym's
@@ -293,6 +297,15 @@ func (m *Model) kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// RequirementConstraintUsage), so it takes a constraint's base.
 		fqn, ok := implicitUsageBases[ast.UsageConstraint]
 		return fqn, ok
+	// A control node is the action usage of its ControlAction (SysML v2 §8.3.17).
+	case *ast.ForkNode:
+		return "Actions::ForkAction", true
+	case *ast.JoinNode:
+		return "Actions::JoinAction", true
+	case *ast.MergeNode:
+		return "Actions::MergeAction", true
+	case *ast.DecisionNode:
+		return "Actions::DecisionAction", true
 	}
 	return "", false
 }

@@ -84,6 +84,32 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 	}
 }
 
+// A namespace member takes the prefix as a body member does: KerML.xtext's
+// FeatureMember appears in both positions.
+func TestParseVarPrefixStartsANamespaceMember(t *testing.T) {
+	for _, src := range []string{
+		"package P { class C; var feature v : C; }",
+		"class C; var feature v : C;",
+		"package P { class C; derived var feature v : C; }",
+		"package P { class C; var #M feature v : C; metaclass M; }",
+	} {
+		p := New(source.New("test.kerml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Errorf("%s\nerrors = %v, want none", src, p.Diagnostics)
+			continue
+		}
+		members := root.Members
+		if pkg, ok := members[0].(*ast.Membership).Member.(*ast.Package); ok {
+			members = pkg.Members
+		}
+		u, ok := members[1].(*ast.Membership).Member.(*ast.Usage)
+		if !ok || u.Ident.Name != "v" || !u.IsVariable || u.PrefixKeyword != "var" {
+			t.Errorf("%s\nmember = %+v, want a variable feature v", src, members[1])
+		}
+	}
+}
+
 // `chain` is the feature chain modifier only when a name follows it; before
 // `=`, `:`, `;`, `[` or a word the grammar reserves — one that continues the
 // declaration (`default`, `ordered`, `subsets`, `specializes`) or ends it

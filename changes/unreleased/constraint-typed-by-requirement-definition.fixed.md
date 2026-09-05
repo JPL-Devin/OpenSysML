@@ -1,0 +1,1 @@
+- **A constraint usage may be typed by a requirement, concern or viewpoint definition.** `constraint c : SomeRequirementDef;` (and `require constraint c : SomeRequirementDef { … }`) was rejected with `A constraint must be typed by one constraint definition.`; a requirement definition is a constraint definition (SysML v2 §8.3.19), and the pilot accepts the typing.
