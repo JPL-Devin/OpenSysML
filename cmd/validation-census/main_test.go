@@ -314,12 +314,14 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		negativeCorpusDir + "/kerml/b.kerml":     "// Invalid: b (KerML 7.2; pilot validateB).\npackage P;\n",
 		negativeCorpusDir + "/kerml/other.kerml": "// Invalid: a (KerML 7.1; pilot validateA).\npackage P;\n",
 		negativeCorpusDir + "/kerml/prose.kerml": "// Invalid: a, which validateB also requires (KerML 7.1; pilot validateA).\npackage P;\n",
+		negativeCorpusDir + "/kerml/spec.kerml":  "// Invalid: a (KerML 7.1 validateA; pilot Fixture_invalid.kerml.xt).\npackage P;\n",
 		negativeCorpusDir + "/xpect/x.kerml":     "// Invalid: from the pilot's Xpect suite.\npackage P;\n",
 		rejectionBaselinePath: `{"cases": [
 			{"path": "kerml/a.kerml", "bucket": "both-reject"},
 			{"path": "kerml/b.kerml", "bucket": "pilot-only-rejects"},
 			{"path": "kerml/other.kerml", "bucket": "both-reject"},
 			{"path": "kerml/prose.kerml", "bucket": "both-reject"},
+			{"path": "kerml/spec.kerml", "bucket": "both-reject"},
 			{"path": "xpect/x.kerml", "bucket": "ours-only-rejects"}]}`,
 		"internal/core/passes/a.go": "package passes\n\ntype APass struct{}\n\nfunc (APass) Run() {}\n\nfunc helper() {}\n\ntype Arena[T any] struct{}\n\nfunc (a *Arena[T]) Take() {}\n",
 	})
@@ -333,7 +335,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
-		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take). | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `xpect/x.kerml` | ✅ faithful |",
+		"| `validateA` | KerML | a | internal/core/passes/a.go:APass.Run (and internal/core/passes/a.go:helper, internal/core/passes/a.go:Arena.Take). | same | `kerml/a.kerml`, `kerml/other.kerml`, `kerml/prose.kerml`, `kerml/spec.kerml`, `xpect/x.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | `kerml/b.kerml` | ❌ not implemented |",
 		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
 		"",
@@ -458,6 +460,18 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			mutate: func(s string) string { return strings.Replace(s, "a.go:APass.Run ", "a.go:APass.Run.extra ", 1) },
 			want:   "internal/core/passes/a.go:APass.Run.extra is not a <function> or <Type>.<method> location",
 		},
+		"implementation continues past the function with a dash": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper-extra,", 1) },
+			want:   "internal/core/passes/a.go:helper-extra is not a <function> or <Type>.<method> location",
+		},
+		"implementation continues past the function with a slash": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper/extra,", 1) },
+			want:   "internal/core/passes/a.go:helper/extra is not a <function> or <Type>.<method> location",
+		},
+		"implementation continues past the function with a colon": {
+			mutate: func(s string) string { return strings.Replace(s, "a.go:helper,", "a.go:helper:extra,", 1) },
+			want:   "internal/core/passes/a.go:helper:extra is not a <function> or <Type>.<method> location",
+		},
 		"generic method is missing": {
 			mutate: func(s string) string { return strings.Replace(s, "a.go:Arena.Take", "a.go:Arena.Put", 1) },
 			want:   "internal/core/passes/a.go declares no Arena.Put",
@@ -475,6 +489,13 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/prose.kerml` | ❌", 1)
 			},
 			want: "validateB negative case kerml/prose.kerml is attributed to validateA, not to this constraint",
+		},
+		"negative case cites the constraint in its specification citation only and another row lists it": {
+			mutate: func(s string) string {
+				s = strings.Replace(s, ", `kerml/spec.kerml`", "", 1)
+				return strings.Replace(s, "| — | — | `kerml/b.kerml` | ❌", "| — | — | `kerml/b.kerml`, `kerml/spec.kerml` | ❌", 1)
+			},
+			want: "validateB negative case kerml/spec.kerml is attributed to validateA, not to this constraint",
 		},
 		"faithful row lists a pilot-only case": {
 			mutate: func(s string) string {

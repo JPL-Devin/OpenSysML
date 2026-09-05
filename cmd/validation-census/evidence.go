@@ -120,6 +120,15 @@ func constraintNamed(base *Baseline, token string) (Constraint, bool) {
 	return Constraint{}, false
 }
 
+// attribution is the constraint a case's header attributes it to: the pilot
+// token when present, else the specification citation; empty when neither.
+func (c corpusCase) attribution() string {
+	if c.Pilot != "" {
+		return c.Pilot
+	}
+	return c.Spec
+}
+
 // attributedTo reports whether a case's header attributes it to the named
 // constraint: either the pilot token or the specification citation resolves to it.
 func attributedTo(base *Baseline, c corpusCase, name string) bool {
@@ -138,16 +147,16 @@ func attributedTo(base *Baseline, c corpusCase, name string) bool {
 }
 
 // checkCaseEvidence verifies one listed negative case against the corpus: a
-// case attributed to a pilot constraint is attributed to the row's constraint
-// by its pilot token or its specification citation, and the bucket the referee
+// case whose header names a constraint, by its pilot token or its
+// specification citation, is attributed to the row's constraint, and the bucket the referee
 // recorded agrees with the row's status — a faithful row's case is one we
 // reject, a not-implemented row's case is one only the pilot rejects, an
 // approximate row may list either (a pilot-only case is the gap it records),
 // and an unknown row has no case.
 func checkCaseEvidence(base *Baseline, r row, name, status string, c corpusCase) []string {
 	var problems []string
-	if c.Pilot != "" && !attributedTo(base, c, name) {
-		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is attributed to %s, not to this constraint", r.Line, name, c.Path, c.Pilot))
+	if attributed := c.attribution(); attributed != "" && !attributedTo(base, c, name) {
+		problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is attributed to %s, not to this constraint", r.Line, name, c.Path, attributed))
 	}
 	switch {
 	case c.Bucket == "":
@@ -185,8 +194,9 @@ func checkAttributions(base *Baseline, cases map[string]corpusCase, listed map[s
 }
 
 // implementationRef is a `<file>.go:<func>` or `<file>.go:<Type>.<method>` citation;
-// group 3 captures a dotted continuation past the symbol, which is malformed.
-var implementationRef = regexp.MustCompile(`\b(internal/[\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)((?:\.\w+)+)?`)
+// group 3 captures any continuation past the symbol other than the punctuation
+// that ends a cell, list item or sentence, which is malformed.
+var implementationRef = regexp.MustCompile(`\b(internal/[\w/.-]+\.go):([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)((?:\.\w+)+|[^\s,;.)\]` + "`" + `]+)?`)
 
 // declarations caches the function and method names each cited Go file declares.
 type declarations struct {
