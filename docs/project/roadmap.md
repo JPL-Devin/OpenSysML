@@ -1,10 +1,10 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `70fc6e16`, verified locally on 2026-09-05 with Go 1.25.0, read with
-[#900](https://github.com/JPL-Devin/OpenSysML/pull/900) and
-[#908](https://github.com/JPL-Devin/OpenSysML/pull/908) treated as landed (both open and mergeable
-at the time of writing; each is a record correction or a runtime error-path fix and moves no
-roadmap line except the census figures under Track V, which are quoted from #900's branch).
+Baseline: `main` @ `70fc6e16`, verified locally on 2026-09-05 with Go 1.25.0. Two pull requests
+that were still open when this was written are counted as if merged:
+[#900](https://github.com/JPL-Devin/OpenSysML/pull/900) (the validation census re-audit) and
+[#908](https://github.com/JPL-Devin/OpenSysML/pull/908) (a runtime error-path fix). Neither changes
+any roadmap item except the census figures under Track V, which are quoted from #900's branch.
 Read `AGENTS.md` first; it governs everything below.
 
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
@@ -63,7 +63,8 @@ retires or narrows a roadmap line.
   the third D1 bullet); metadata bodies and prefix metadata convert structurally (#824); a
   reference written back re-resolves to the element the graph named (#827) and one reached through
   an import or alias links (#855); a positional `then` sequences past every non-feature member
-  (#866, #879). The ratchet reads 305 of 345 stable and 40 refused, none for an expression.
+  (#866, #879). The round-trip gate now reads 305 of 345 models stable and 40 refused, none of them
+refused because of an expression.
 - *Performance.* The release comparison against `v0.4.3` found and fixed the regressions it
   measured (#885, [performance-release-0.5-vs-0.4.3.md](performance-release-0.5-vs-0.4.3.md));
   wildcard-import member lookups are answered by name (#893). Nothing moved in Track N: the compiled
@@ -1419,7 +1420,10 @@ ontology modules, in conflict) — and they land or are closed before either ord
 - **Release follow-through.** **R1** is done. **R2**–**R5** as the accounts and hardware appear:
   publisher tokens for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer
   and an OV/EV certificate to sign with, and a marketplace publisher for the extension. None gates
-  the others or anything below.
+  the others or anything below. One engineering item sits beside them: recount the hand-written
+  test figures in `README.md` and `spec-compliance.md` to match the gate table above, or fold them
+  into `cmd/doc-counts` so they are generated and cannot drift again. Small, and independent of
+  every track.
 - **Track L.** L3–L6 landed (#830, #821, #818, #825/#861). Only L7 is left, and it is step 2
   above.
 - **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
