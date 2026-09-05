@@ -63,11 +63,11 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 	if rd, done := r.readings[key]; done {
 		return rd
 	}
-	if r.resolving[qn] {
-		r.interruptions++
+	if depth := r.resolving[qn]; depth != 0 {
+		r.CutShort(depth)
 		return Reading{}
 	}
-	r.resolving[qn] = true
+	r.resolving[qn] = r.Enter()
 	// The walk records its segments where the written name keeps its own, so
 	// those are set aside, read off once it is done, and put back.
 	saved := r.saveSegments(qn)
@@ -77,7 +77,7 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 	rd := r.segmentReading(qn, res.sym, res.ok)
 	r.restoreSegments(qn, saved)
 	delete(r.resolving, qn)
-	if r.inCondition == 0 && r.allVisible == 0 {
+	if r.Leave() && r.inCondition == 0 && r.allVisible == 0 {
 		journalNew(r, r.readings, key, qn)
 		r.readings[key] = rd
 	}

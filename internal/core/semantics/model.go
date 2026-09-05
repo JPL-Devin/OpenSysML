@@ -27,9 +27,9 @@ type Model struct {
 	// provisionalSupers holds the symbols whose last DirectSupertypes answer was
 	// incomplete, so neither it nor a closure over it may be memoized.
 	provisionalSupers map[*symbols.Symbol]bool
-	// computingSupers holds the symbols whose DirectSupertypes call is still on
-	// the stack, so the re-entrancy guard answers nil for them.
-	computingSupers map[*symbols.Symbol]bool
+	// computingSupers holds the resolver depth of each DirectSupertypes call on
+	// the stack, so the re-entrancy guard answers nil for its symbol.
+	computingSupers map[*symbols.Symbol]int
 	// valuing holds the features whose typing value is being judged, so a value
 	// that leads back to its own feature is not followed again.
 	valuing       map[*symbols.Symbol]bool
@@ -104,7 +104,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		provisionalSupers: make(map[*symbols.Symbol]bool),
-		computingSupers:   make(map[*symbols.Symbol]bool),
+		computingSupers:   make(map[*symbols.Symbol]int),
 		valuing:           make(map[*symbols.Symbol]bool),
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
@@ -232,23 +232,25 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		return nil
 	}
 	if cached, ok := m.directSupers[sym]; ok {
+		// The seed answers a re-entrant query with nothing, cutting that query short.
+		if depth := m.computingSupers[sym]; depth != 0 {
+			m.resolver.CutShort(depth)
+		}
 		return cached
 	}
 	// Guard against re-entrancy on cyclic graphs: seed with an empty slice.
 	m.directSupers[sym] = nil
-	m.computingSupers[sym] = true
+	m.computingSupers[sym] = m.resolver.Enter()
 	defer delete(m.computingSupers, sym)
 	if sym.Facts != nil && sym.Facts.Supers != nil {
 		out := m.recordedSupertypes(sym)
 		m.directSupers[sym] = out
+		m.resolver.Leave()
 		return out
 	}
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
-	// A target that failed while the cycle guard cut a lookup short failed on
-	// the guard, not on its name, so the answer is provisional.
-	complete := true
 	for _, rel := range RelationshipsOf(sym) {
 		if rel == nil || rel.Target == nil || !GeneralizationKind(rel.Kind) {
 			continue
@@ -262,19 +264,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !isQN {
 			// A chain target (`subsets b.f`) generalizes to the chain's final feature.
 			if fc, isChain := targetNode.(*ast.FeatureChainExpr); isChain {
-				target, ok, interrupted := m.resolveGeneral(sym.OwnerScope, fc)
-				if !ok {
-					complete = complete && !interrupted
-				} else if target != sym && !seen[target] {
+				target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc)
+				if ok && target != nil && target != sym && !seen[target] {
 					seen[target] = true
 					out = append(out, target)
 				}
 			}
 			continue
 		}
-		target, ok, interrupted := m.resolveGeneral(sym.OwnerScope, qn)
-		if !ok {
-			complete = complete && !interrupted
+		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, qn)
+		if !ok || target == nil {
 			continue
 		}
 		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
@@ -428,10 +427,9 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, base)
 	}
 
-	// A target that did not resolve yet — a name still being resolved when this
-	// query ran — leaves the answer provisional, so it is recomputed on the next
-	// query instead of being memoized.
-	if !complete || !metadataComplete {
+	// An answer derived while a guard cut a query short saw fewer members than
+	// the finished model has, so it is recomputed on the next query, not memoized.
+	if !m.resolver.Leave() || !metadataComplete {
 		delete(m.directSupers, sym)
 		m.provisionalSupers[sym] = true
 		return out
@@ -440,18 +438,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	delete(m.provisionalSupers, sym)
 	m.directSupers[sym] = out
 	return out
-}
-
-// resolveGeneral resolves a generalization target written in scope. A failure
-// met while the resolver's cycle guard cut a lookup short is interrupted: the
-// target may still resolve once the lookup on the stack completes.
-func (m *Model) resolveGeneral(scope *symbols.Scope, target ast.Node) (sym *symbols.Symbol, ok, interrupted bool) {
-	before := m.resolver.Interruptions()
-	sym, ok = m.resolver.ResolveTarget(scope, target)
-	if !ok || sym == nil {
-		return nil, false, before != m.resolver.Interruptions()
-	}
-	return sym, true, false
 }
 
 // recordedSupertypes resolves the supertype edges installed for a library
@@ -489,7 +475,7 @@ func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 // provisional, or its own computation is on the stack and the re-entrancy guard
 // is answering nil for it.
 func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
-	return m.provisionalSupers[sym] || m.computingSupers[sym]
+	return m.provisionalSupers[sym] || m.computingSupers[sym] != 0
 }
 
 // subsetsSibling reports whether sym's subsetting resolved to another member of
