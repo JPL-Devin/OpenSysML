@@ -425,7 +425,8 @@ func TestAnalysisWithPins(t *testing.T) {
 }
 
 // TestAnalysisRefusesConflictingResultExpressions: an analysis stating a result
-// expression over an inherited one, or inheriting two, is refused where validation rejects it.
+// expression over an inherited one, or inheriting two, is refused where validation
+// rejects it, whether or not it states an objective.
 func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 	ctx, idx := fixtureDocuments(t,
 		document{"base.sysml", `
@@ -441,6 +442,7 @@ func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 					size >= 1
 				}
 				analysis def Other { attribute size : Integer; size <= 9 }
+				analysis def Goalless { attribute size : Integer; size >= 1 }
 			}
 		`},
 		document{"sub.sysml", `
@@ -449,6 +451,7 @@ func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 				analysis def Stated :> Base { size <= 4 }
 				analysis def Inherited :> Base, Other;
 				analysis def Kept :> Base;
+				analysis def GoallessStated :> Goalless { size <= 4 }
 			}
 		`})
 	sym := symbolNamed(t, idx, "sub::Kept")
@@ -458,6 +461,7 @@ func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
 	for _, tc := range []struct{ name, location string }{
 		{"sub::Stated", "sub.sysml:4:35"},
 		{"sub::Inherited", "sub.sysml:5:5"},
+		{"sub::GoallessStated", "sub.sysml:7:47"},
 	} {
 		sym := symbolNamed(t, idx, tc.name)
 		q, err := Analysis(ctx, sym, sym.OwnerScope)

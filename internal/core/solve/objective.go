@@ -32,17 +32,19 @@ func AnalysisWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scop
 	if err := runtime.RequireAnalysis(sym); err != nil {
 		return nil, err
 	}
-	objectives := ctx.ObjectivesOf(sym, scope)
-	if len(objectives) == 0 {
-		return nil, &NoObjectiveError{Element: sym.Name}
-	}
 	subject := Subject{Kind: "analysis", Name: sym.Name, Symbol: sym}
-	// An objective's own conditions bound it as the case's do, so they are part
-	// of what is feasible; a case stating none is unbounded rather than refused.
+	// The case's conditions are refused before its objectives are counted, so a
+	// shape validation rejects is reported as such rather than as lacking a goal.
 	t := newTranslator(ctx, subject)
 	if err := t.translate(ctx.CaseConditionsOf(sym, scope)); err != nil {
 		return nil, err
 	}
+	objectives := ctx.ObjectivesOf(sym, scope)
+	if len(objectives) == 0 {
+		return nil, &NoObjectiveError{Element: sym.Name}
+	}
+	// An objective's own conditions bound it as the case's do, so they are part
+	// of what is feasible; a case stating none is unbounded rather than refused.
 	for _, obj := range objectives {
 		t.within = obj.Symbol
 		err := t.translate(obj.Conditions)
