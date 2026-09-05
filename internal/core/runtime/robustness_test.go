@@ -94,6 +94,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
 	t.Run("state_usage_typed_by_itself", testStateUsageTypedByItself)
 	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
+	t.Run("state_def_specializing_the_library_state_action", testStateDefSpecializingTheLibraryStateAction)
 	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
@@ -4779,6 +4780,40 @@ func testStateUsageMutuallyRecursiveTyping(t *testing.T) {
 	}
 	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
 		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateDefSpecializingTheLibraryStateAction: a state definition written
+// `:> StateAction` inherits no content from the library (whose `ref state self`
+// is typed by StateAction itself), the same as the implicit specialization.
+func testStateDefSpecializingTheLibraryStateAction(t *testing.T) {
+	src := `
+		package test {
+			private import States::*;
+			state def Phase :> StateAction;
+			state def Prep :> Phase;
+			state def Machine {
+				entry; then prep;
+				state prep : Prep;
+				state launch : Phase;
+				transition first prep then launch;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Machine not found")
+	}
+	exec, err := ctx.CreateStateExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateStateExecutor: %v", err)
+	}
+	if err := exec.RunToQuiescence(); err != nil {
+		t.Fatalf("RunToQuiescence: %v", err)
+	}
+	if got := activeStateNames(exec); got != "launch" {
+		t.Fatalf("active states = %q, want launch", got)
 	}
 }
 
