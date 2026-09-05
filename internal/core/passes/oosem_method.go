@@ -320,13 +320,13 @@ func (a *oosemAudit) bodyEnds(sym *symbols.Symbol) []*symbols.Symbol {
 
 // gatherSatisfaction records the requirement a `satisfy` names, or the
 // satisfy itself when it declares its requirement. A negated satisfy and a
-// view's satisfaction of a viewpoint state no requirement satisfied.
+// satisfy naming a viewpoint state no requirement satisfied.
 func (a *oosemAudit) gatherSatisfaction(sym *symbols.Symbol, usage *ast.Usage) {
-	if usage.IsNegated || semantics.IsViewpointSatisfy(sym) {
+	if usage.IsNegated {
 		return
 	}
-	a.statesSatisfaction = true
 	if usage.DeclaresRequirement {
+		a.statesSatisfaction = true
 		a.satisfied[symbols.KeyOf(sym)] = true
 		return
 	}
@@ -334,10 +334,23 @@ func (a *oosemAudit) gatherSatisfaction(sym *symbols.Symbol, usage *ast.Usage) {
 		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
 			continue
 		}
-		if target, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, rel.Target); ok && target != nil {
-			a.satisfied[symbols.KeyOf(target)] = true
+		target, ok := a.ctx.Resolver().ResolveTarget(sym.OwnerScope, rel.Target)
+		if !ok || target == nil || isViewpoint(target) {
+			continue
 		}
+		a.statesSatisfaction = true
+		a.satisfied[symbols.KeyOf(target)] = true
 	}
+}
+
+func isViewpoint(sym *symbols.Symbol) bool {
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefViewpoint
+	case *ast.Usage:
+		return d.Kind == ast.UsageViewpoint
+	}
+	return false
 }
 
 // referents resolves the features an end refers to or subsets.

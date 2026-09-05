@@ -86,9 +86,11 @@ func TestOOSEMSatisfactionIgnoresViewpointsAndNegations(t *testing.T) {
 	negated := oosemModel(`
 		#systemRequirement requirement sysA;
 		#systemRequirement requirement sysB;
+		#systemRequirement requirement sysC;
 		part p;
 		satisfy sysA by p;
-		assert not satisfy sysB by p;`)
+		assert not satisfy sysB by p;
+		part q { satisfy sysC; }`)
 	w8dWantLines(t, negated, CodeOOSEMRequirementNotSatisfied, 4)
 }
 
