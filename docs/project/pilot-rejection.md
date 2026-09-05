@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-246 case(s): 237 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+253 case(s): 244 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 89 | 89 | 0 | 0 | 0 |
-| semantic | 114 | 105 | 0 | 9 | 0 |
+| semantic | 121 | 112 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -187,7 +187,10 @@ inherited result expression), to 243 with the two reference-subsetting ones (`s8
 function body listing a second bare expression: the pinned `CalculationBodyPart`/`FunctionBodyPart` admit one
 `ResultExpressionMember`, so the pilot stops at the second expression, `missing '}' at 'x'`, while we read it as a
 second result expression under the same one-result rule), and to 246 with `s85` (a viewpoint definition, a
-requirement and so a constraint, inheriting result expressions from two generals).
+requirement and so a constraint, inheriting result expressions from two generals), and to 253 with the seven KerML census cases (`k45`–`k49`, `s86`, `s87`:
+an annotating element annotating itself, a three-ended binding, a conjugated feature or structure
+without its type or default supertype, a chain through an alias to another type's feature, and
+an `end` with a direction or a derived/abstract modifier), all landing both-reject.
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
