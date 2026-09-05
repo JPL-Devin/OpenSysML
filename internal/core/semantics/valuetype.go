@@ -199,8 +199,6 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 			return m.namedType(scope, n.TypeRef)
 		}
 		return m.libSymbol(operatorResultFQN(n.Operator))
-	case *ast.BodyExpr:
-		return m.libSymbol(fqnEvaluation)
 	case *ast.IndexExpr:
 		if n.Bracket {
 			return m.libSymbol(fqnAnything)
