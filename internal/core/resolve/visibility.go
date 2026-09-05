@@ -211,7 +211,7 @@ func (r *Resolver) declaresMember(fqn string, sym *symbols.Symbol) bool {
 	if r.idx == nil || fqn == "" {
 		return false
 	}
-	declared := withoutEmptySegments(r.idx.GetFQN(sym))
+	declared := r.idx.GetFQN(sym)
 	i := strings.LastIndex(declared, "::")
 	return i > 0 && declared[:i] == fqn
 }
