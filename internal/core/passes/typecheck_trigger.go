@@ -2,7 +2,6 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -123,11 +122,11 @@ func (ec *exprChecker) checkTimeEvent(scope *symbols.Scope, t *ast.TimeEvent) {
 		return
 	}
 	ec.infer(scope, t.Duration)
-	fqn, code, format := semantics.FQNDurationValue, codeTriggerAfterDuration, msgTriggerAfterDuration
+	code, format := codeTriggerAfterDuration, msgTriggerAfterDuration
 	if t.Absolute {
-		fqn, code, format = semantics.FQNTimeInstantValue, codeTriggerAtTimeInstant, msgTriggerAtTimeInstant
+		code, format = codeTriggerAtTimeInstant, msgTriggerAtTimeInstant
 	}
-	c := ec.model.ExprConformsToLibrary(scope, t.Duration, fqn)
+	c := ec.model.TimeEventConforms(scope, t)
 	if !c.Known || c.Holds {
 		return
 	}

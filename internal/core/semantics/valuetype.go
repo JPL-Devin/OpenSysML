@@ -52,6 +52,24 @@ func (m *Model) ExprConformsToLibrary(scope *symbols.Scope, node ast.Node, fqn s
 	return m.ExprConformsTo(scope, node, m.libSymbol(fqn))
 }
 
+// TimeEventType names the library type a time trigger's argument must be a value
+// of: a DurationValue after `after`, a TimeInstantValue after `at`.
+func TimeEventType(t *ast.TimeEvent) string {
+	if t.Absolute {
+		return FQNTimeInstantValue
+	}
+	return FQNDurationValue
+}
+
+// TimeEventConforms judges a time trigger's argument against TimeEventType, the
+// one judgement validation and execution share.
+func (m *Model) TimeEventConforms(scope *symbols.Scope, t *ast.TimeEvent) Conformance {
+	if t == nil || t.Duration == nil {
+		return conformanceUnknown()
+	}
+	return m.ExprConformsToLibrary(scope, t.Duration, TimeEventType(t))
+}
+
 // ExprConformsTo reports whether an expression's value conforms to want, as far
 // as the declarations the expression names determine it statically: a literal by
 // its scalar type, a feature by its declared type, a quantity literal by the unit
@@ -187,6 +205,9 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 		return m.ExprResultType(scope, n.Operand)
 	case *ast.NullExpr, *ast.SequenceExpr, *ast.CollectExpr:
 		return m.libSymbol(fqnAnything)
+	case *ast.BodyExpr:
+		// `{ … }` written as a value is the expression itself, an Evaluation.
+		return m.libSymbol(fqnEvaluation)
 	case *ast.ConstructorExpr:
 		if n.Type == nil || m.resolver == nil {
 			return nil

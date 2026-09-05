@@ -56,6 +56,29 @@ func TestConstraintTransitiveSpecializationCycle(t *testing.T) {
 	}
 }
 
+// A classifier specializing a nested member that specializes it back, directly
+// or through siblings, is a cycle (Xpect CircleInheritance, CircleProblem5).
+func TestConstraintNestedMemberSpecializationCycle(t *testing.T) {
+	for _, src := range []string{
+		`package Test1 {
+			classifier <'A_Id'> A specializes A::B {
+				classifier <'B_Id'> B specializes A {}
+			}
+		}`,
+		`package Test1 {
+			classifier A specializes D {
+				classifier B specializes C {}
+			}
+			classifier C specializes A {}
+			classifier D specializes A::B {}
+		}`,
+	} {
+		if !hasCode(constraintDiagsKerML(t, src), "specialization-cycle") {
+			t.Fatalf("expected a specialization cycle for %q", src)
+		}
+	}
+}
+
 func TestConstraintNoCycleAcyclicOK(t *testing.T) {
 	diags := constraintDiags(t, "part def Vehicle; part def Car specializes Vehicle;")
 	if hasCode(diags, "specialization-cycle") {

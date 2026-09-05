@@ -191,6 +191,12 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 	}
 	got := ec.infer(scope, n)
 	if got == semantics.PrimBoolean {
+		if mustType {
+			// A conditional with two Boolean branches is still typed Anything.
+			if c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean); c.Known && !c.Holds {
+				ec.errorCode(code, n.Span(), format, c.Found)
+			}
+		}
 		return
 	}
 	if got == semantics.PrimUnknown {

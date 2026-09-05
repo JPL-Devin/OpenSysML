@@ -6,7 +6,8 @@ transition: start -> Working
 exit: lstart
 enter: Grouping
 enter: Step1
-eval literal 5 -> 5
+  eval literal 5 -> 5
+eval index -> 5 [s]
 transition: lstart -> Step1
 exit: rstart
 enter: Watching

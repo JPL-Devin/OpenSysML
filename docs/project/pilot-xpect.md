@@ -371,6 +371,17 @@ by our first diagnostic:
 | **Specialization cycle** — `x participates in a specialization cycle` | 3 | **Adjudicated divergence, not a defect of ours.** All three fixtures declare a real cycle: `part p1 :> p2; part p2 :> p3; part p3 :> p1;` and `part p4 :> p4;` (`simpletests/PartTest.sysml.xt`:67-71), `part def A :> C` with `part def C :> A, B` (`Redefinition_OwningType_Cyclic_Gen.sysml.xt`:28-34), and `classifier a specializes b` / `classifier b specializes a` (`SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt`:29,37). The pilot has no such check at all — the finding F4/K5 settled in [pilot-differential.md](pilot-differential.md#specialization-cycles-f4) — so closing them would mean deleting a correct rule. |
 | **Conformance** — `try (typed by a1) redefines b (typed by A): types do not conform` | 2 | **Adjudicated divergence**, decided in [adjudications.md](adjudications.md) (E4): a redefinition is a subsetting (KerML 7.4.9, 8.3.4.2), so a non-conforming type describes an unsatisfiable model; the pilot validates subsetting conformance nowhere, so its silence records an absent check. Both rows are `SimpleImportTestsFromOtherFile_Import3{,_FT}`. |
 
+Two more **specialization cycle** rows joined this family when `DirectSupertypes` stopped memoizing
+an answer computed while the resolver's cycle guard had cut a lookup short (the trigger-argument
+typing change). Both fixtures declare a real cycle through a nested member:
+`ShadowingTests_CircleInheritance.kerml.xt`:17 has `classifier A specializes A::B` with
+`classifier B specializes A, Base::Anything` nested in `A`, and `ShadowingTests_CircleProblem5.kerml.xt`:29
+closes `A → D → A::B → C → A`. We were silent before only because resolving `B`'s general re-entered
+`A`'s resolution, the guard answered "nothing", and that answer was memoized — `B` lost `A` as a
+supertype for good. The pinned validator has no cycle check, as above. Locked by
+`TestDirectSupertypesKeptAcrossOwnerCycleGuard` and `TestConstraintNestedMemberSpecializationCycle`;
+the committed baseline is not re-recorded here, as a separate `scope` movement is still being adjudicated.
+
 The two former unresolved-reference rows were checked independently before Step 2 and were already
 closed at its merge base. `AllocationTest.sysml.xt:31` was the n-ary connector-end parser defect;
 `KernelLibraryTest.sysml.xt:72` was recursive import re-export traversal. Neither depends on prefix

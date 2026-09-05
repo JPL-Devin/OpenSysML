@@ -11,6 +11,7 @@ import (
 
 const lampSource = `
 	private import ScalarValues::*;
+	private import SI::*;
 	attribute def go;
 	attribute def Dim { attribute level : Integer; }
 	attribute def Batch { attribute levels : Integer[2..*]; }
@@ -22,7 +23,7 @@ const lampSource = `
 		state on;
 		transition on_dim first on accept d : Dim if d.level > 0 do assign brightness := d.level then dimmed;
 		state dimmed;
-		transition dim_out first dimmed accept after 5 then off;
+		transition dim_out first dimmed accept after 5 [s] then off;
 	}
 	part def Bulb { exhibit state lamp : Lamp; }
 	part def Plain;
@@ -476,22 +477,24 @@ func TestTimerUnderFalseGuardIsNotReportedFired(t *testing.T) {
 	cases := map[string]string{
 		"simple": `
 			private import ScalarValues::*;
+			private import SI::*;
 			state Timed {
 				attribute armed : Boolean = false;
 				entry; then waiting;
 				state waiting;
-				transition first waiting accept after 5 if armed then finished;
+				transition first waiting accept after 5 [s] if armed then finished;
 				state finished;
 			}
 		`,
 		"region": `
 			private import ScalarValues::*;
+			private import SI::*;
 			state Timed parallel {
 				attribute armed : Boolean = false;
 				state left {
 					entry; then waiting;
 					state waiting;
-					transition first waiting accept after 5 if armed then finished;
+					transition first waiting accept after 5 [s] if armed then finished;
 					state finished;
 				}
 				state right {
@@ -617,6 +620,7 @@ func TestDecideLeavesNoBehaviorAGuardMaterializes(t *testing.T) {
 // timer moves it to ready the held Ping is recalled and taken via inPort.
 func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	src := `
+		private import SI::*;
 		item def Ping;
 		port def PingPort { in item ping : Ping; }
 		state Radio {
@@ -628,7 +632,7 @@ func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 				defer Ping;
 				entry send Ping() via outPort;
 			}
-			transition first busy accept after 5 then ready;
+			transition first busy accept after 5 [s] then ready;
 			state ready;
 			transition first ready accept Ping via inPort then finished;
 			state finished;

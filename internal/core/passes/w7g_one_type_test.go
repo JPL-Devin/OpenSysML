@@ -144,7 +144,8 @@ func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
 // TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult: an operator
 // expression types the value as the result of the library function it names —
 // Boolean for comparisons and logic, DataValue for arithmetic — a constructor as
-// its definition, `#` as an element of its sequence (pilot 2026-07 agrees).
+// its definition, `#` as an element of its sequence, an expression body as an
+// Evaluation (pilot 2026-07 agrees).
 func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 	const src = `package T {
 		private import ScalarValues::*;
@@ -160,6 +161,8 @@ func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 			e = xs#(1);
 			f = 1 < 2;
 			g = 1 istype Integer;
+			h = { 1 + 2 };
+			i = { true };
 		}
 		enum def Right {
 			ok1 = 1 + 2;
@@ -184,7 +187,7 @@ func TestW7GAComputedEnumeratedValueIsTypedByItsFunctionResult(t *testing.T) {
 		}
 		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
 	}
-	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	want := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("computed enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}

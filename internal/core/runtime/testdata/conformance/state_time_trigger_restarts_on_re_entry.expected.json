@@ -1,5 +1,6 @@
 {
   "type": "state",
+  "libraries": true,
   "events": [
     {"signal": "pause", "args": null}
   ],
