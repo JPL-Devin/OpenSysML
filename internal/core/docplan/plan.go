@@ -13,11 +13,12 @@ import (
 type ContentKind string
 
 const (
-	ContentSection   ContentKind = "section"
-	ContentParagraph ContentKind = "paragraph"
-	ContentTable     ContentKind = "table"
-	ContentList      ContentKind = "list"
-	ContentDiagram   ContentKind = "diagram"
+	ContentSection     ContentKind = "section"
+	ContentParagraph   ContentKind = "paragraph"
+	ContentTable       ContentKind = "table"
+	ContentList        ContentKind = "list"
+	ContentDefinitions ContentKind = "definitions"
+	ContentDiagram     ContentKind = "diagram"
 )
 
 // ListStyle is the declared rendering style of a planned list.
@@ -254,22 +255,24 @@ func (d *DiagramRef) Direction() view.Direction { return d.direction }
 // Origin returns the source declaration behind the reference.
 func (d *DiagramRef) Origin() provenance.Origin { return d.origin }
 
-// Content is one planned content node: a section, paragraph, table, list, or
-// diagram.
+// Content is one planned content node: a section, paragraph, table, list,
+// definitions, or diagram.
 type Content struct {
-	kind       ContentKind
-	name       string
-	title      string
-	text       string
-	caption    string
-	style      ListStyle
-	groupBy    string
-	runs       []Run
-	columnRuns []ColumnRun
-	query      *QueryRef
-	diagram    *DiagramRef
-	children   []Content
-	origin     provenance.Origin
+	kind        ContentKind
+	name        string
+	title       string
+	text        string
+	caption     string
+	style       ListStyle
+	groupBy     string
+	term        string
+	description string
+	runs        []Run
+	columnRuns  []ColumnRun
+	query       *QueryRef
+	diagram     *DiagramRef
+	children    []Content
+	origin      provenance.Origin
 }
 
 // Kind returns the classification of the node.
@@ -294,6 +297,13 @@ func (c Content) Style() ListStyle { return c.style }
 // when ungrouped.
 func (c Content) GroupBy() string { return c.groupBy }
 
+// Term returns the projected column naming each entry of a definitions node.
+func (c Content) Term() string { return c.term }
+
+// Description returns the projected column describing each entry of a
+// definitions node.
+func (c Content) Description() string { return c.description }
+
 // Runs returns the planned inline runs of a paragraph in declaration order.
 func (c Content) Runs() []Run { return cloneRuns(c.runs) }
 
@@ -317,19 +327,21 @@ func cloneContent(content []Content) []Content {
 	out := make([]Content, len(content))
 	for i, child := range content {
 		out[i] = Content{
-			kind:       child.kind,
-			name:       child.name,
-			title:      child.title,
-			text:       child.text,
-			caption:    child.caption,
-			style:      child.style,
-			groupBy:    child.groupBy,
-			runs:       cloneRuns(child.runs),
-			columnRuns: append([]ColumnRun(nil), child.columnRuns...),
-			query:      child.query,
-			diagram:    child.diagram,
-			children:   cloneContent(child.children),
-			origin:     child.origin,
+			kind:        child.kind,
+			name:        child.name,
+			title:       child.title,
+			text:        child.text,
+			caption:     child.caption,
+			style:       child.style,
+			groupBy:     child.groupBy,
+			term:        child.term,
+			description: child.description,
+			runs:        cloneRuns(child.runs),
+			columnRuns:  append([]ColumnRun(nil), child.columnRuns...),
+			query:       child.query,
+			diagram:     child.diagram,
+			children:    cloneContent(child.children),
+			origin:      child.origin,
 		}
 	}
 	return out

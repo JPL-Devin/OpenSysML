@@ -426,7 +426,7 @@ func (s *Service) parseModel(inputs []sourceInput, mode conformance.Mode) (strin
 	// an overlay over the one library index the service holds. The model's own
 	// documents go into the overlay alone, so what they resolve against does not
 	// depend on prewarming or on any other model.
-	idx := s.libIndexes.get()
+	idx, library := s.libIndexes.get()
 
 	documents := make([]*CachedDocument, 0, len(inputs))
 	parsedClean := true
@@ -456,7 +456,7 @@ func (s *Service) parseModel(inputs []sourceInput, mode conformance.Mode) (strin
 		}
 	}
 
-	model := &CachedModel{Documents: documents, Index: idx}
+	model := &CachedModel{Documents: documents, Index: idx, Library: library}
 	s.cache.Put(modelHash, model)
 	return modelHash, model
 }

@@ -166,6 +166,15 @@ library package DocumentQueries {
 		attribute style : String[0..1];
 	}
 
+	/* Definitions renders each row of its query as one term with its
+	 * description(s): prose from the model rather than a table of it. */
+	part def Definitions :> ContentBlock {
+		/* term: the projected column whose value names each entry. */
+		attribute term : String[1];
+		/* description: the projected column whose values describe it. */
+		attribute description : String[1];
+	}
+
 	part def Diagram :> ContentBlock {
 		attribute caption : String[0..1];
 		/* kind: a supported rendering kind ("tree", "interconnection",

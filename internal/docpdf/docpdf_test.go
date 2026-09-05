@@ -401,4 +401,15 @@ func TestParseTelescopeGolden(t *testing.T) {
 	if !strings.Contains(page, "diagram-2.svg") {
 		t.Fatal("second diagram missing from HTML")
 	}
+	// The golden's definitions entries are paragraphs whose term is a strong
+	// run, so they must reach the PDF as markup rather than literal asterisks.
+	for _, want := range []string{
+		"<p><strong>M1</strong> — The primary mirror assembly. Collects light | not *heat* from the target.</p>",
+		"<p><strong>M3|*</strong></p>",
+		"<p>Actuators that phase the mirror segments.</p>",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("definitions entry missing from HTML: %q\n%s", want, page)
+		}
+	}
 }

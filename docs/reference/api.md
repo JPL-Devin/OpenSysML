@@ -689,6 +689,9 @@ answer.
 | `@type` | The element's metamodel type (table below) | |
 | `name` | The element's own name, the last segment of its qualified name | |
 | `declaredName` | `name`, absent when the name is an effective name borrowed from a referenced feature | |
+| `shortName` | The element's effective short name (`<'HLR-R001'>` declares `HLR-R001`); absent when it has none | |
+| `declaredShortName` | `shortName`, absent when the short name is borrowed from a redefined or subsetted feature | |
+| `documentation` | The body text of the element's `doc` comment, delimiters and indentation removed; absent when undocumented. This single-valued record reports the first body of an element declaring several — a document query's `Project` carries every body | |
 | `owner` | Qualified name of the owning element; absent for a top-level element, whose owner is the document root | |
 | `isAbstract` | `true`/`false` for a definition or usage; absent for anything else, and for a standard-library element restored from cache, which carries no declaration | |
 | `type` | Qualified name of the resolved type of a typed feature; absent when untyped or unresolved | |

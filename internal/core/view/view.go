@@ -119,7 +119,7 @@ func (e *UnsupportedKindError) Unwrap() error { return ErrUnsupportedKind }
 // label a rendering takes verbatim — a transition guard, a trigger expression —
 // reads as it was written. It may be nil, and returns "" for a document it does
 // not hold, in which case such a label is described structurally instead.
-type SourceText func(doc string, span source.Span) string
+type SourceText = source.Lookup
 
 // Renderer renders views over one semantic model.
 type Renderer struct {

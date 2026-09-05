@@ -40,15 +40,22 @@ func fixtureDocument(t *testing.T, path, name string) *docir.Document {
 		t.Fatalf("read fixture: %v", err)
 	}
 	index := libs.NewModelIndex()
-	p := parser.New(source.New(filepath.Base(path), []byte(content)))
+	sf := source.New(filepath.Base(path), []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
 	}
-	index.AddDocument(filepath.Base(path), root)
+	index.AddDocument(sf.Name(), root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
 	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != sf.Name() {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	matches := symbols.PreferDeclared(index.LookupQualified(name))
 	if len(matches) != 1 {
 		t.Fatalf("lookup %s: got %d symbols", name, len(matches))

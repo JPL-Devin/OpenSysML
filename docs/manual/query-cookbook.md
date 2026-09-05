@@ -336,6 +336,12 @@ Two details worth noting: `value` is always written as a string and parsed by
 the operator's type, and `primaryMirror` matches through its *definition* —
 `MirrorAssembly` fixes `mass = 10.0`, and the usage inherits it.
 
+The built-in properties of the [projection table](#projection) are features
+too, so `feature = "shortName"` with `startsWith` selects the requirements
+whose identifier shares a prefix, and `feature = "documentation"` with
+`contains` selects the elements whose `doc` text mentions a word — any one of
+an element's several bodies matching is enough.
+
 ### Quantities
 
 An attribute declared with a unit — `attribute :>> mass = 2290000 [kg];` — is
@@ -423,6 +429,9 @@ are always projectable:
 |---|---|
 | `name` | The effective name |
 | `declaredName` | The declared name, absent when the name is derived |
+| `shortName` | The effective short name (`<'HLR-R001'>`), absent when the element has none |
+| `declaredShortName` | The declared short name, absent when the short name is derived |
+| `documentation` | The body of each `doc` comment in declaration order, delimiters and indentation removed; absent when undocumented |
 | `qualifiedName`, `@id` | The fully-qualified name |
 | `owner` | The owner's qualified name |
 | `@type` | The metamodel type (`PartUsage`, ...) |
@@ -564,6 +573,14 @@ fail with a typed error naming the query, column and row — unless a `??`
 default covers it, which is why `MassBudget`'s `massLbs` defaults to `0.0`
 for the two connections in its results. Computed names join the projection:
 `OrderBy` can sort by them and a table's `groupBy` can group by them.
+
+Every built-in property is reachable the same way — `Element::shortName`,
+`Element::declaredShortName` and `Element::documentation` included — so
+`(Element::shortName ?? "—") + ": " + Element::name` labels a row by its
+identifier. A column is one value per row: an element carrying two `doc`
+bodies fails a column over `Element::documentation` with a typed
+`column-cardinality` error, where the plain `"documentation"` projection
+above carries both.
 
 Quantities take part in column arithmetic with the runtime's rules, so a
 column keeps its unit: `Stage::mass * 2` is `4580000 [kg]`, `Stage::mass /

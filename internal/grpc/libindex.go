@@ -21,24 +21,14 @@ const IndexPrewarmEnvVar = "OPENSYSML_GRPC_INDEX_POOL"
 // positive value prewarms, since one library index now serves every model.
 const DefaultIndexPrewarm = 4
 
-// libraryBuilder builds one frozen index holding the standard library and
-// nothing else. It is a field of libraryBase so a test can count the builds a
-// service does, and stand in a library of its own.
-type libraryBuilder func() *symbols.Index
+// libraryBuilder builds one frozen index holding only the standard library, with
+// the source of the bytes it was built from. A field so tests can count and stub.
+type libraryBuilder func() (*symbols.Index, libs.Source)
 
 // buildLibraryIndex decodes the embedded library snapshot when it matches the
-// library files; otherwise it loads every file into an index and freezes it,
-// caching the records of whatever had to be parsed.
-func buildLibraryIndex() *symbols.Index {
-	if idx, err := libs.SnapshotIndex(); err == nil {
-		return idx
-	}
-	idx := symbols.NewIndex()
-	src := libs.DefaultSource()
-	cache, _ := libs.NewCache()                 // a cache failure only costs speed
-	_ = libs.NewLoader(src, cache).LoadAll(idx) // an unreadable library file only costs its names
-	idx.Freeze()
-	return idx
+// library files; otherwise it loads every file into an index and freezes it.
+func buildLibraryIndex() (*symbols.Index, libs.Source) {
+	return libs.FrozenLibrary()
 }
 
 // libraryBase holds the one standard library index the service's models share.
@@ -54,6 +44,7 @@ type libraryBase struct {
 
 	mu       sync.Mutex
 	base     *symbols.Index
+	src      libs.Source // the files base was built from
 	stats    baseStats
 	building chan struct{} // closed when the prewarm build in flight finishes
 }
@@ -117,8 +108,8 @@ func (b *libraryBase) ready() bool {
 
 // get returns an index carrying the standard library for one model to add its
 // document to: an overlay over the shared base, which is built here if nothing
-// built it yet.
-func (b *libraryBase) get() *symbols.Index {
+// built it yet, with the source the base was built from.
+func (b *libraryBase) get() (*symbols.Index, libs.Source) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.base == nil {
@@ -127,7 +118,7 @@ func (b *libraryBase) get() *symbols.Index {
 	} else {
 		b.stats.Shared++
 	}
-	return symbols.NewOverlay(b.base)
+	return symbols.NewOverlay(b.base), b.src
 }
 
 // ensure builds the library index if it is not built yet.
@@ -143,7 +134,7 @@ func (b *libraryBase) ensure() {
 // second caller waits for the build rather than starting one of its own, since
 // two builds of one library would parse what the other was about to cache.
 func (b *libraryBase) buildLocked() {
-	b.base = b.build()
+	b.base, b.src = b.build()
 	b.stats.Built++
 }
 
@@ -167,6 +158,6 @@ func (b *libraryBase) close() {
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.base = nil
+	b.base, b.src = nil, nil
 	b.building = nil
 }
