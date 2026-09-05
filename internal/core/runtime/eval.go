@@ -98,6 +98,28 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	}
 }
 
+// valuedFeature is the value the element being evaluated binds to name, unless
+// that value is the one being evaluated (`in mass = mass` reads the outer mass).
+func (ec *EvalContext) valuedFeature(name string) (scopedExpr, bool) {
+	bound, declared := ec.features[name]
+	return bound, declared && bound.expr != nil && !ec.resolving[name]
+}
+
+// inEnv returns a context reading env instead of this one's features and
+// bindings. An enclosing environment holds other features than the ones being
+// resolved, so a same name there is a fresh read rather than a cycle.
+func (ec *EvalContext) inEnv(env *conditionEnv) *EvalContext {
+	if env == nil {
+		return ec
+	}
+	out := ec.over(ec.scope, []frame{mapFrame(env.bindings)})
+	out.features = env.features
+	if env.enclosing {
+		out.resolving = nil
+	}
+	return out
+}
+
 // nestedEnv returns a context resolving names in scope over this one's
 // environment, for a declaration nested in the body being evaluated: its
 // bindings stay in force under whatever frame the nested declaration pushes.
@@ -455,13 +477,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// declaration it redefines.
 		// A feature whose own value is already being evaluated is skipped, so
 		// `in mass = mass` reads the outer mass rather than itself.
-		bound, declared := ec.features[name]
-		if declared && bound.expr != nil && !ec.resolving[name] {
+		if bound, ok := ec.valuedFeature(name); ok {
 			if ec.resolving == nil {
 				ec.resolving = map[string]bool{}
 			}
 			ec.resolving[name] = true
-			val, err := ec.evalIn(bound.scope).Eval(bound.expr)
+			val, err := ec.evalIn(bound.scope).inEnv(bound.env).Eval(bound.expr)
 			delete(ec.resolving, name)
 			return val, err
 		}
@@ -545,7 +566,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		}
 		// A feature the element declares but nothing gives a value to is
 		// uninitialized rather than unresolved.
-		if declared {
+		if _, declared := ec.features[name]; declared {
 			return Value{}, &NoValueError{Feature: name, Ref: qn}
 		}
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, name)

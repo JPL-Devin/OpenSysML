@@ -212,14 +212,16 @@ func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, path map[*
 }
 
 // redefinedDefault returns the value a feature takes from the feature it
-// redefines, and the declaration that wrote it: a redefining feature is the
-// redefined feature declared again (KerML 1.0 §7.3.4.5).
+// redefines, by clause or by parameter position, and the declaration that wrote
+// it: a redefining feature is the redefined feature declared again (KerML 1.0 §7.3.4.5).
 func (ctx *Context) redefinedDefault(sym, owner *symbols.Symbol) (ast.Node, *symbols.Symbol) {
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
 		queue = queue[1:]
-		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
+		targets := ctx.relatedFeatures(cur, owner, ast.RelRedefines)
+		targets = append(targets, ctx.model.ImplicitParameterRedefinitions(cur)...)
+		for _, redefined := range targets {
 			if seen[redefined] {
 				continue
 			}

@@ -79,7 +79,7 @@ func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	explicit := m.RedefinedFeatures(sym)
 	out := make([]*symbols.Symbol, 0, len(explicit))
 	out = append(out, explicit...)
-	out = append(out, m.implicitParameterRedefinitions(sym)...)
+	out = append(out, m.ImplicitParameterRedefinitions(sym)...)
 	out = append(out, m.implicitEndRedefinitions(sym)...)
 	return append(out, m.ImplicitRoleRedefinitions(sym)...)
 }
@@ -111,7 +111,7 @@ func (m *Model) effectiveNameOf(sym *symbols.Symbol, seen map[*symbols.Symbol]bo
 	}
 	if m != nil {
 		add(m.RedefinedFeatures(sym))
-		add(m.implicitParameterRedefinitions(sym))
+		add(m.ImplicitParameterRedefinitions(sym))
 		add(m.implicitEndRedefinitions(sym))
 		add(m.ImplicitRoleRedefinitions(sym))
 	}

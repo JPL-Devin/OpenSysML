@@ -455,7 +455,7 @@ func (m *Model) ParameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbo
 		chain = append(chain, sym)
 		redefined := m.RedefinedFeatures(sym)
 		if len(redefined) == 0 {
-			redefined = m.implicitParameterRedefinitions(sym)
+			redefined = m.ImplicitParameterRedefinitions(sym)
 		}
 		if len(redefined) != 1 {
 			break
@@ -473,7 +473,7 @@ func (m *Model) declaresType(sym *symbols.Symbol) bool {
 			return true
 		}
 	}
-	return len(m.implicitParameterRedefinitions(sym)) > 0
+	return len(m.ImplicitParameterRedefinitions(sym)) > 0
 }
 
 // applicable reports whether args bind to sig by count, name and type, and

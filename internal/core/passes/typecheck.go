@@ -364,6 +364,10 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			return
 		}
 	}
+	if relKind == ast.RelTyping && decl.useKind == ast.UsageEnumeration &&
+		tc.owningEnumerationConformsTo(scope, targetSym) {
+		return
+	}
 	kind := targetSym.Kind
 	if relKind == ast.RelReferences || relKind == ast.RelSubsets {
 		kind = referentKind(targetSym)
@@ -1196,6 +1200,12 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 	// validateCaseUsageType); analysis and verification keep their exact kinds.
 	if useKind == ast.UsageCase {
 		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
+	}
+
+	// A constraint is typed by a Predicate (SysML v2 §8.3.19.3): a requirement,
+	// concern or viewpoint definition is a constraint definition, so it qualifies.
+	if useKind == ast.UsageConstraint {
+		return defKindSpecializes(defKind, symbols.SymbolConstraintDef)
 	}
 
 	// Successions and bindings type through a plain UsageDeclaration

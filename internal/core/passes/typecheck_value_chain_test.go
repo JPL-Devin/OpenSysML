@@ -184,3 +184,49 @@ func TestChainedNonScalarConditionIsReported(t *testing.T) {
 		}
 	}`, "must be Boolean, found B")
 }
+
+// A variant is implicitly typed by its variation (SysML v2 §7.20), so selecting
+// one as the value of a feature typed by the variation conforms whether the
+// variant is named outright or reached through a chain. The pinned pilot
+// accepts every shape below.
+func TestValueVariantConformsToItsVariation(t *testing.T) {
+	wantNoDiags(t, `package P {
+		part def Base;
+		variation part def V {
+			variant part v1 : Base;
+			variant part v2 : Base;
+		}
+		part def Sel {
+			part vp : V default = V::v1;
+			part vq : V = vq.v2;
+			part vr : V;
+			part w : V = vr.v1;
+		}
+		part def Sel2 :> Sel {
+			part :>> vp = V::v2;
+		}
+		variation attribute def A {
+			variant attribute a1;
+			variant attribute a2;
+		}
+		part def Sel3 {
+			attribute ap : A = A::a1;
+		}
+	}`)
+}
+
+// A variant's declared type still has to relate to the target when the target
+// is not the variation itself.
+func TestValueVariantOfUnrelatedTypeIsJudged(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def Base;
+		part def Other;
+		variation part def V {
+			variant part v1 : Base;
+		}
+		part def Sel {
+			part vp : V;
+			part o : Other = vp.v1;
+		}
+	}`, "cannot bind a value of type Base to a feature typed by Other")
+}
