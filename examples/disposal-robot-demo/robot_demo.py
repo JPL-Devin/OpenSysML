@@ -2,7 +2,7 @@
 """Drive the robot model from Python: what it is, what it does, what holds.
 
 Run it from the repository root, with the `opensysml` client installed and a
-`sysml-grpc` service available (see docs/guide/09-python.md):
+`sysml-grpc` service available (see docs/guide/09-clients.md):
 
     python examples/disposal-robot-demo/robot_demo.py
 """

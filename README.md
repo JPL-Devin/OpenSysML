@@ -400,7 +400,7 @@ The suites themselves are described in [conformance/README.md](conformance/READM
 
 Five surfaces reach the same engine: the Go API, used in the calling process, and four clients of
 the `sysml-grpc` service. [Client libraries](docs/reference/clients.md) states what each covers and
-how to choose; [guide chapter 9](docs/guide/09-python.md) works through each one.
+how to choose; [guide chapter 9](docs/guide/09-clients.md) works through each one.
 
 | Surface | Reaches the engine by | Published | API reference |
 |---|---|---|---|
@@ -489,7 +489,7 @@ runtime in its default dependency tree ([Rust API](docs/reference/rust-api.md),
 
 ## Documentation
 
-- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, and [driving it from your own program](docs/guide/09-python.md)
+- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, and [driving it from your own program](docs/guide/09-clients.md)
 - **[Client libraries](docs/reference/clients.md)** — the Go, Python, Node, Java and Rust surfaces, and how to choose between them
 - **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, each client's API, service transports, RDF mapping
 - **[Internals](docs/internals/architecture.md)** — the pipeline, the tiers, testing and performance
