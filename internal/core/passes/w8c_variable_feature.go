@@ -85,13 +85,7 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 // w8cVariabilityDownstream reports a lower-tier failure in what u's variability
 // rests on: its own head before the value, or its owner's typing head in this document.
 func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) bool {
-	head := w8cHeadBefore(u, u.Members)
-	if u.Value != nil {
-		if at := u.Value.Span().Offset; at > head.Offset && at < head.End() {
-			head.Len = at - head.Offset
-		}
-	}
-	if ctx.downstreamSpan(head) {
+	if ctx.downstreamSpan(w8cUsageHead(u)) {
 		return true
 	}
 	if sym.OwnerScope == nil {
@@ -117,7 +111,7 @@ func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) b
 func w8cOwnerHead(node ast.Node) (head source.Span, typed bool) {
 	switch d := node.(type) {
 	case *ast.Usage:
-		return w8cHeadBefore(d, d.Members), true
+		return w8cUsageHead(d), true
 	case *ast.Definition:
 		return w8cHeadBefore(d, d.Members), true
 	case *ast.SubjectMember:
@@ -132,6 +126,17 @@ func w8cOwnerHead(node ast.Node) (head source.Span, typed bool) {
 		}
 	}
 	return source.Span{}, false
+}
+
+// w8cUsageHead is a usage's head before its value and its first body member.
+func w8cUsageHead(u *ast.Usage) source.Span {
+	head := w8cHeadBefore(u, u.Members)
+	if u.Value != nil {
+		if at := u.Value.Span().Offset; at > head.Offset && at < head.End() {
+			head.Len = at - head.Offset
+		}
+	}
+	return head
 }
 
 // w8cHeadBefore is a declaration's span before the first of its body members.
