@@ -25,14 +25,8 @@ type Range struct {
 	Upper Bound
 }
 
-// boundOf evaluates a multiplicity bound expression. `*` (LiteralInfinity)
-// becomes an infinite bound; an evaluable integer becomes a known bound;
-// anything else is unknown.
-func (m *Model) boundOf(n ast.Node) Bound {
-	return m.boundIn(nil, n)
-}
-
-// boundIn is boundOf reading through features the bound names, in scope.
+// boundIn evaluates a multiplicity bound expression, reading through features it
+// names when scope is non-nil: `*` is infinite, an integer known, else unknown.
 func (m *Model) boundIn(scope *symbols.Scope, n ast.Node) Bound {
 	if n == nil {
 		return Bound{}

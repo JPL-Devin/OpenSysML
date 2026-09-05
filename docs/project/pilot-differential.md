@@ -2286,6 +2286,51 @@ specification:
   [omg-issues.md](omg-issues.md#a-connector-inheriting-a-third-end-is-given-the-binary-base-pilot-2026-07)
   drafts the question.
 
+### End-feature multiplicity round
+
+`validateFeatureEndFeatureMultiplicity` (KerML 1.1 8.3.3.3), `validateReturnParameterMembershipOwningType`
+(KerML 1.1 8.3.4.7) and `validateTypeAtMostOneConjugator` (KerML 1.1 8.3.3.1) are constraint-tier rules of
+ours (`passes/end_multiplicity.go`, `passes/return_parameter.go`, `passes/conjugator.go`, with
+`semantics/end_multiplicity.go` answering the multiplicity question). Refereed against the pinned
+`c7fc737` validators, three points are adjudicated:
+
+- **The pilot's warning is on `Type::multiplicities`, not the end's own declaration.** The pilot
+  warns `End feature must have multiplicity 1` when no multiplicity among the end's own and its
+  generals' (`FeatureUtil.getMultiplicityRangeOf` over `Type.getMultiplicities`) has bounds `1..1`,
+  so `end feature b : B [0..*]` warns while `end feature b :> one;` with `feature one [1]` is
+  silent, as is an implicitly redefined end taking `[1]` from the association it specializes. We
+  walk the same generals (specializations, references, crossings, chains, positional ends), each
+  symbol once so a specialization cycle terminates. The spelling `[n..1]` with an unevaluable `n`
+  is silent on both sides: `MultiplicityRange::hasBounds` treats a null lower value as equal to
+  the upper (`lowerValue = null and lower = upper`), which is the spec's own OCL, so no
+  divergence is recorded.
+- **A SysML end usage defaults to `1..1`.** The pilot's `UsageAdapter` gives every end usage
+  with no declared multiplicity the default `[1]` ("Multiplicity of 1..1 is always the default
+  for an end usage"), and the SysML v2 Usage semantics say the same, so on the SysML side only a *declared own*
+  non-`1..1` multiplicity warns; `end [0..*] item p : A;` is silent because that `[0..*]` is the
+  cross feature's, not the end's. Our parser now keeps that anonymous crossing multiplicity on an
+  unnamed cross-feature member (grammar `OwnedCrossingFeature`) rather than copying it onto the
+  usage, which is what makes the two provenances distinguishable; the RDF export and every
+  multiplicity consumer read own-else-crossing through `semantics.StatedMultiplicityOf`, so
+  their output is unchanged. The ripple this exposes — `end [1] feature x : A crosses ...` now
+  reports `Must be the cross feature`, as the pilot does at the same position — is corpus case
+  `k43`.
+- **Grammar versus semantics on the other two rules.** The pilot's textual grammar cannot spell a
+  `return` parameter outside a function/expression body, nor a second `~` conjugator, so on a
+  textual model it rejects `k44` and `k45` with `no viable alternative at input 'return'` and
+  `no viable alternative at input '~'` (plus `Features must have at least one type`), never
+  reaching the two named validations; the constraints exist for API-built models. Our parser
+  accepts both spellings and the constraint tier reports them with the rule's message, so both
+  cases sit in both-reject with the pilot rejecting for a grammatical reason. This is a layering
+  difference, not a semantic disagreement, so no defect is drafted.
+
+Measured on the merged tree against a clean `origin/main` (`c754d72a3`): `pilot-diff` is
+unchanged at 366 files, 338 fully agreeing, 43 agreed, 20 only ours, 302 only the pilot's;
+`pilot-xpect` is unchanged at 1266 agree / 59 disagree with the same 59 rows on both sides, so
+the Xpect baseline is left alone; a sweep of `examples/`, `testdata/` and the bundled library
+with both binaries produces identical diagnostics. The 8 only-ours rejection cases are the
+control-node successions the pilot leaves as `TODO`s; the three new cases are both-reject.
+
 ## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
