@@ -278,6 +278,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
 	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
 	t.Run("base_index_with_several_indexes", testBaseIndexWithSeveralIndexes)
+	t.Run("structured_value_outside_the_declared_shape", testStructuredValueOutsideTheDeclaredShape)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -1603,7 +1604,27 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
-		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		// Flat numbers are no collection of vectors; unequal dimensions have no
+		// sum or inner product; Booleans or a two-component three-vector are no vector.
+		{"VectorFunctions::sum(xs)", ErrTypeMismatch},
+		{"VectorFunctions::sum0(xs, VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum0((), VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum((VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys)))", ErrTypeMismatch},
+		{"VectorFunctions::inner(VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys))", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(xs) + VectorFunctions::VectorOf(ys)", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(flags)", ErrTypeMismatch},
+		{"VectorFunctions::CartesianThreeVectorOf(ys)", ErrMultiplicityViolation},
+		{"VectorFunctions::angle(VectorFunctions::VectorOf((0.0, 0.0)), VectorFunctions::VectorOf(ys))", semantics.ErrArithmeticDomain},
+		// A quantity's num is Number[1..*]: a vector of no components takes no unit,
+		// whether written `[m]`, scaled by a scalar quantity, or divided by one.
+		{"VectorFunctions::CartesianVectorOf(()) [SI::m]", ErrMultiplicityViolation},
+		{"VectorFunctions::norm(VectorFunctions::CartesianVectorOf(()) [SI::m])", ErrMultiplicityViolation},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], VectorFunctions::CartesianVectorOf(()))", ErrMultiplicityViolation},
+		{"VectorCalculations::vectorScalarQuantityMult(VectorFunctions::VectorOf(()), 2 [SI::m])", ErrMultiplicityViolation},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(()), 2 [SI::s])", ErrMultiplicityViolation},
+		{"VectorFunctions::VectorOf(xs) / 0", ErrDivisionByZero},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(xs) [SI::m], 0 [SI::s])", ErrDivisionByZero},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], flags)", ErrTypeMismatch},
 		{"ComplexFunctions::'/'(ComplexFunctions::rect(0.0, 1.0), ComplexFunctions::rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
@@ -1653,7 +1674,7 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::numer("0.5")`, ErrTypeMismatch},
 		{`RationalFunctions::numer(1.0e19)`, semantics.ErrArithmeticOverflow},
 		{`RationalFunctions::denom(0.0001)`, semantics.ErrArithmeticOverflow},
-		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
+		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrTypeMismatch},
 		{`OccurrenceFunctions::isDuring(xs)`, ErrMultiplicityViolation},
 		{`OccurrenceFunctions::isDuring(factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::'==='(xs, xs)`, ErrMultiplicityViolation},
@@ -1822,21 +1843,157 @@ func testDataEqualityOverAPart(t *testing.T) {
 	}
 }
 
-// testBaseIndexWithSeveralIndexes: BaseFunctions::'#' declares `Positive[1..*]`
-// indexes; several address an Array the runtime cannot represent, and none is a
-// multiplicity violation, so each is reported rather than indexed anyhow.
+// testBaseIndexWithSeveralIndexes: several indexes address an Array, so a flat
+// sequence, a rank mismatch, an out-of-range, ragged or oversized Array is each
+// reported.
 func testBaseIndexWithSeveralIndexes(t *testing.T) {
 	src := `
 		package test {
 			private import ScalarValues::*;
+			private import Collections::*;
+			attribute a : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute ragged : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3); }
+			attribute vast : Array { :>> dimensions = (4611686018427387904, 4); :>> elements = (); }
 			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
 			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
+			calc def OneIndex { return : Integer = a#(4); }
+			calc def ThreeIndexes { return : Integer = a#(1, 1, 1); }
+			calc def PastRow { return : Integer = a#(3, 1); }
+			calc def PastColumn { return : Integer = a#(1, 4); }
+			calc def ZeroIndex { return : Integer = a#(0, 1); }
+			calc def Ragged { return : Integer = ragged#(1, 1); }
+			calc def Vast { return : Integer = vast#(4611686018427387904, 4); }
 		}
 	`
-	for calc, want := range map[string]error{"Cell": ErrUnevaluableLibraryFunction, "NoIndex": ErrMultiplicityViolation} {
+	for calc, want := range map[string]error{
+		"Cell":         ErrTypeMismatch,
+		"NoIndex":      ErrMultiplicityViolation,
+		"OneIndex":     ErrMultiplicityViolation,
+		"ThreeIndexes": ErrMultiplicityViolation,
+		"PastRow":      ErrIndexOutOfRange,
+		"PastColumn":   ErrIndexOutOfRange,
+		"ZeroIndex":    ErrIndexOutOfRange,
+	} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, want) || !strings.Contains(err.Error(), "BaseFunctions::'#'") {
 			t.Errorf("%s = %v, want %v naming BaseFunctions::'#'", calc, err, want)
+		}
+	}
+	err := calcErrorWithLibraries(t, src, "Ragged", nil, 10000)
+	if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Ragged = %v, want %v naming flattenedSize", err, ErrMultiplicityViolation)
+	}
+	err = calcErrorWithLibraries(t, src, "Vast", nil, 10000)
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Vast = %v, want %v naming flattenedSize", err, semantics.ErrArithmeticOverflow)
+	}
+}
+
+// testStructuredValueOutsideTheDeclaredShape: a type specializing Array or a
+// vector type fixes a shape or element type, so a value of another shape or
+// element type is refused, while one that fits is held — including by a
+// NumericalVectorValue specialization beside the Cartesian ones.
+func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			private import VectorValues::*;
+			private import VectorFunctions::*;
+			private import Quantities::*;
+			private import ISQ::*;
+			private import SI::*;
+			attribute def Grid :> Array { :>> dimensions = (2, 2); }
+			attribute def Row4 :> Array { :>> rank = 1; :>> flattenedSize = 4; }
+			attribute def IntArray :> Array { :>> elements : Integer; }
+			attribute def Fixed3 :> CartesianThreeVectorValue;
+			attribute def OneDim :> NumericalVectorValue;
+			attribute def IntVec :> NumericalVectorValue { :>> elements : Integer; }
+			attribute def IntThree :> ThreeVectorValue { :>> elements : Integer; }
+			attribute def Fixed2 :> NumericalVectorValue { :>> dimension = 2; }
+			attribute def Four :> Array { :>> elements : Integer[4]; }
+			attribute def Vel3 :> VectorQuantityValue { :>> num : Real[3]; }
+			attribute def IntVQ :> VectorQuantityValue { :>> num : Integer; }
+			attribute square : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
+			attribute wide : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute row : Array { :>> dimensions = 4; :>> elements = (1, 2, 3, 4); }
+			attribute reals : Array { :>> dimensions = 2; :>> elements = (1.5, 2.5); }
+			calc def TwoAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0)); }
+			calc def TwoAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0, 3.0)); }
+			calc def ThreeAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def TwoAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2)); }
+			calc def ThreeAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2, 3)); }
+			calc def IntsAsIntVec { return : IntVec = VectorOf((1, 2)); }
+			calc def RealsAsIntVec { return : IntVec = VectorOf((1.5, 2.0)); }
+			calc def IntsAsIntThree { return : IntThree = VectorOf((1, 2, 3)); }
+			calc def TwoAsIntThree { return : IntThree = VectorOf((1, 2)); }
+			calc def RealsAsIntThree { return : IntThree = VectorOf((1.5, 2.0, 3.0)); }
+			calc def TwoAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def VectorAsGrid { return : Grid = VectorOf((1, 2, 3, 4)); }
+			calc def VectorAsString { return : String = VectorOf((1, 2)); }
+			calc def WideAsGrid { return : Grid = wide; }
+			calc def SquareAsGrid { return : Grid = square; }
+			calc def SquareAsRow4 { return : Row4 = square; }
+			calc def SquareAsOneDim { return : OneDim = square; }
+			calc def RowAsRow4 { return : Row4 = row; }
+			calc def RealsAsIntArray { return : IntArray = reals; }
+			calc def RowAsIntArray { return : IntArray = row; }
+			calc def RealsAsFour { return : Four = reals; }
+			calc def SquareAsFour { return : Four = square; }
+			calc def TwoAsVel3 { return : Vel3 = VectorOf((1.0, 2.0)) [m]; }
+			calc def ThreeAsVel3 { return : Vel3 = VectorOf((1.0, 2.0, 3.0)) [m]; }
+			calc def RealsAsIntVQ { return : IntVQ = VectorOf((1.5, 2.5)) [m]; }
+			calc def IntsAsIntVQ { return : IntVQ = VectorOf((1, 2)) [m]; }
+			calc def TwoAsScalar { return : ScalarQuantityValue = VectorOf((1.0, 2.0)) [m]; }
+			calc def TwoAsLength { return : LengthValue = VectorOf((1.0, 2.0)) [m]; }
+		}
+	`
+	for calc, fixes := range map[string]string{
+		"TwoAsThree":       "it declares dimension = 3",
+		"TwoAsFixed3":      "it declares dimension = 3",
+		"TwoAsThreeVector": "it declares dimension = 3",
+		"TwoAsIntThree":    "it declares dimension = 3",
+		"ThreeAsFixed2":    "it declares dimension = 2",
+		"RealsAsIntVec":    "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsIntThree":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"VectorAsGrid":     "cannot write ⟨1, 2, 3, 4⟩ (vector) to a feature typed by Grid",
+		"VectorAsString":   "cannot write ⟨1, 2⟩ (vector) to a feature typed by String",
+		"WideAsGrid":       "it declares dimensions = [2, 2]",
+		"SquareAsRow4":     "it declares rank = 1",
+		"SquareAsOneDim":   "it declares dimension : Positive[0..1], got 2 dimension(s)",
+		"RealsAsIntArray":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsFour":      "it declares elements : Integer[4], got 2 element(s)",
+		"TwoAsVel3":        "it declares num : Real[3], got 2 element(s)",
+		"RealsAsIntVQ":     "it declares num : Integer, got element 1.5 (a Real)",
+		"TwoAsScalar":      "to a feature typed by ScalarQuantityValue: it is a ScalarValue, which holds one scalar",
+		"TwoAsLength":      "to a feature typed by LengthValue: it is a ScalarValue, which holds one scalar",
+	} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), fixes) {
+			t.Errorf("%s = %v, want %v naming %q", calc, err, ErrTypeMismatch, fixes)
+		}
+	}
+	for calc, want := range map[string]string{
+		"ThreeAsThree":       "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsFixed3":      "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsThreeVector": "⟨1, 2, 3⟩",
+		"IntsAsIntVec":       "⟨1, 2⟩",
+		"IntsAsIntThree":     "⟨1, 2, 3⟩",
+		"TwoAsFixed2":        "⟨1.0, 2.0⟩",
+		"SquareAsGrid":       "Array(2, 2)[1, 2, 3, 4]",
+		"RowAsRow4":          "Array(4)[1, 2, 3, 4]",
+		"RowAsIntArray":      "Array(4)[1, 2, 3, 4]",
+		"SquareAsFour":       "Array(2, 2)[1, 2, 3, 4]",
+		"ThreeAsVel3":        "⟨1.0, 2.0, 3.0⟩ [m]",
+		"IntsAsIntVQ":        "⟨1, 2⟩ [m]",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)
+		got, err := ctx.InvokeCalc(sym, nil, scope)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s = (%s, %v), want %s", calc, FormatValue(got), err, want)
 		}
 	}
 }

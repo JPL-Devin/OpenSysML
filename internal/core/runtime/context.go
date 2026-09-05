@@ -42,6 +42,10 @@ type Context struct {
 
 	features map[*symbols.Symbol][]EffectiveFeature
 
+	// arrayFeatures memoizes the declarations of Collections::Array's features
+	// by name; see arrayFeatureSymbols.
+	arrayFeatures map[*symbols.Symbol]string
+
 	// denotedFeatures memoizes, per type, the name of its feature each declared
 	// feature symbol denotes on an object of that type: itself or a redefinition.
 	denotedFeatures map[*symbols.Symbol]map[*symbols.Symbol]string

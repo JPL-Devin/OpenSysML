@@ -996,6 +996,78 @@ func crateIn(t *testing.T, ctx *Context) *Instance {
 	return obj
 }
 
+const adoptStructuredSrc = `package Demo {
+	private import ScalarValues::*;
+	private import Collections::*;
+	private import VectorValues::*;
+	attribute def LabeledGrid :> Array { attribute label : String; }
+	attribute def Tagged :> NumericalVectorValue { attribute tag : String default "v"; }
+	attribute grid : LabeledGrid { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); :>> label = "grid"; }
+	attribute vec : Tagged { :>> dimension = 2; :>> elements = (1, 2); }
+	part def Holder { attribute cells : LabeledGrid; attribute axis : Tagged; }
+	part holder : Holder;
+}`
+
+// libraryContextOver indexes src over the standard library and gives the context its text.
+func libraryContextOver(t *testing.T, src string) *Context {
+	t.Helper()
+	ctx, _ := libraryModelContext(t, src)
+	ctx.RegisterSource(source.New("<test>", []byte(src)))
+	return ctx
+}
+
+// An array or vector a run wrote is carried with the object it was read from, so
+// the members its specialization adds are still answered after the carry-over.
+func TestAdoptCarriesTheObjectsBehindWrittenArraysAndVectors(t *testing.T) {
+	prev := libraryContextOver(t, adoptStructuredSrc)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	holder, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::holder"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	backing := make(map[string]int64)
+	for feature, src := range map[string]string{"cells": "grid", "axis": "vec"} {
+		val, err := evalIn(t, prev, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if backing[feature] = backingObject(val); backing[feature] == 0 {
+			t.Fatalf("%s = %s is backed by no object", src, FormatValue(val))
+		}
+		if err := holder.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(holder)
+
+	ctx := libraryContextOver(t, adoptStructuredSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, holder); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	for feature, id := range backing {
+		obj, found := ctx.Instance(id)
+		if !found {
+			t.Errorf("the object %d behind %s was not carried", id, feature)
+			continue
+		}
+		if fqn := ctx.fqnOf(obj.Type); fqn == "" || obj.Type != lookupOne(t, ctx.resolver.Index(), fqn) {
+			t.Errorf("the object behind %s is still of the declaration it was built against", feature)
+		}
+	}
+	for expr, want := range map[string]string{
+		"holder.cells":       "Array(2, 2)[1, 2, 3, 4]",
+		"holder.cells.label": `"grid"`,
+		"holder.cells.rank":  "2",
+		"holder.axis":        "⟨1, 2⟩",
+		"holder.axis.tag":    `"v"`,
+	} {
+		got, err := evalIn(t, ctx, lookupOne(t, ctx.resolver.Index(), "Demo").Scope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+}
+
 // A shape digest names a library type instead of expanding it, so it must say
 // which library: two indexes loaded on their own may declare a type of the same
 // name with different features, and an object of one is refused by the other.

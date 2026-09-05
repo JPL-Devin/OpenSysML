@@ -1,5 +1,5 @@
-// A numerical vector is the sequence of its elements, so chaining into the
-// `elements` feature of a VectorOf result reads that same sequence.
+// A vector's `elements` feature is the sequence of its components, so chaining
+// into it from a vector result reads that sequence.
 package test {
 	private import ScalarValues::*;
 	private import VectorFunctions::*;

@@ -1,7 +1,8 @@
 {
   "libraries": true,
   "type": "calc",
-  "result": {"type": "Sequence", "elements": [
+  "evaluate": "test::displacement",
+  "result": {"type": "Vector", "elements": [
     {"type": "Real", "value": 0.0},
     {"type": "Real", "value": 0.0},
     {"type": "Real", "value": 0.0}

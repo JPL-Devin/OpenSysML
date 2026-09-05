@@ -758,12 +758,16 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 				fmt.Sprintf("  = %s", formatValue(ctx, val)),
 			}, nil
 		}
-		if !declaresValue(sym) {
+		// A valueless usage may still name a value its own features shape.
+		if _, isUsage := sym.Decl.(*ast.Usage); !isUsage && !declaresValue(sym) {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
 		}
 		// Read as the declaration is read: in its own scope, against its declared type.
 		val, err := ctx.EvalDeclaredValue(sym)
 		if err != nil {
+			if !declaresValue(sym) && errors.Is(err, runtime.ErrNoValue) {
+				return nil, fmt.Errorf("%q has no value to evaluate", expr)
+			}
 			return nil, fmt.Errorf("evaluation failed: %w", err)
 		}
 		return []string{
@@ -1592,6 +1596,8 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 			parts[i] = formatValue(ctx, element)
 		}
 		return "Set{" + strings.Join(parts, ", ") + "}"
+	case runtime.ValArray:
+		return val.Array().Format(func(element runtime.Value) string { return formatValue(ctx, element) })
 	}
 	return runtime.FormatValue(val)
 }

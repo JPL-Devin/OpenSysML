@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -167,6 +168,8 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return true, "", nil
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
+	case ValArray, ValVector, ValVectorQuantity:
+		return ctx.structuredConforms(scope, *value, declared, how)
 	}
 	if id, ok := value.Object(); ok {
 		// An object, a selected variant's included, is what its usage is; declared as a
@@ -202,6 +205,207 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 // isScalarConstant reports a value written as one scalar constant.
 func isScalarConstant(value *Value) bool {
 	return value.Kind == ValConst || value.Kind == ValComplex || value.Kind == ValString
+}
+
+// isStructuredValue reports an array, vector or vector quantity value.
+func isStructuredValue(value *Value) bool {
+	return value.Kind == ValArray || value.Kind == ValVector || value.Kind == ValVectorQuantity
+}
+
+// structuredConforms judges a written array, vector or vector quantity: its type's
+// supertypes, or a non-scalar specialization of its base type whose shape it fits.
+func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol, how admission) (bool, string, error) {
+	direct, err := ctx.structuredValueType(value)
+	if err != nil {
+		return false, "", err
+	}
+	if !ctx.model.Conforms(direct, declared) {
+		base, err := ctx.structuredBaseType(value)
+		if err != nil {
+			return false, "", err
+		}
+		if !ctx.model.Conforms(declared, base) {
+			return false, "", nil
+		}
+		if scalar := ctx.librarySymbol(scalarValueTypeFQN); scalar != nil && ctx.model.Conforms(declared, scalar) {
+			return false, fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it is a %s, which holds one scalar",
+				FormatValue(value), describeValue(value), symbolText(declared), symbolText(scalar)), nil
+		}
+		if refusal := ctx.shapeRefusal(value, declared); refusal != "" {
+			return false, refusal, nil
+		}
+		if ok, refusal, err := ctx.elementsConform(scope, value, declared, how); !ok || err != nil {
+			return ok, refusal, err
+		}
+	}
+	if value.Kind != ValVectorQuantity {
+		return true, "", nil
+	}
+	vq := value.VectorQuantity()
+	for i := 0; i < vq.Dimension(); i++ {
+		if ok, refusal, err := ctx.quantityConforms(NewQuantityValue(vq.component(i)), declared); !ok || err != nil {
+			return ok, refusal, err
+		}
+	}
+	return true, "", nil
+}
+
+// shapeRefusal says why a value's dimensions violate the shape a type fixes: a
+// constant on an Array shape feature or its redefinition, or `dimensions`' multiplicity.
+func (ctx *Context) shapeRefusal(value Value, declared *symbols.Symbol) string {
+	dims := structuredDimensions(value)
+	size, _ := flattenedSize(dims)
+	refuse := func(declares string) string {
+		return fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it declares %s",
+			FormatValue(value), describeValue(value), symbolText(declared), declares)
+	}
+	for _, member := range ctx.model.MembersOfIncludingRedefined(declared) {
+		if !semantics.IsShapeFeature(member) {
+			continue
+		}
+		feature, ok := ctx.arrayFeatureOf(member)
+		if !ok || feature == arrayElementsFeature {
+			continue
+		}
+		if feature == arrayDimensionsFeature {
+			if mult, stated := ctx.model.MultiplicityOf(member); stated && mult.CountViolation(int64(len(dims))) != "" {
+				return refuse(fmt.Sprintf("%s : Positive%s, got %d dimension(s)", member.Name, mult.Text(), len(dims)))
+			}
+		}
+		want, ok := ctx.constantIntegers(member, declared)
+		if !ok {
+			continue
+		}
+		stated := FormatValue(intSequence(want))
+		if len(want) == 1 {
+			stated = fmt.Sprint(want[0])
+		}
+		declares := fmt.Sprintf("%s = %s", member.Name, stated)
+		switch feature {
+		case arrayDimensionsFeature:
+			if !equalInt64s(want, dims) {
+				return refuse(declares)
+			}
+		case arrayRankFeature:
+			if len(want) != 1 || want[0] != int64(len(dims)) {
+				return refuse(declares)
+			}
+		case arrayFlattenedSizeFeature:
+			if len(want) != 1 || want[0] != size {
+				return refuse(declares)
+			}
+		}
+	}
+	return ""
+}
+
+// constantIntegers reads the Integers a feature of owner states as a constant
+// value: its own, or the one it takes from what it redefines. Reports false for
+// a feature stating none, or one only evaluation settles.
+func (ctx *Context) constantIntegers(member, owner *symbols.Symbol) ([]int64, bool) {
+	value := ctx.extractDefaultValue(member)
+	if value == nil {
+		value, _ = ctx.redefinedDefault(member, owner)
+	}
+	if value == nil {
+		return nil, false
+	}
+	var elements []ast.Node
+	switch n := value.(type) {
+	case *ast.NullExpr:
+	case *ast.SequenceExpr:
+		elements = n.Elements
+	default:
+		elements = []ast.Node{value}
+	}
+	out := make([]int64, 0, len(elements))
+	for _, e := range elements {
+		c, ok := ctx.model.Eval(e)
+		if !ok {
+			return nil, false
+		}
+		n, ok := c.WholeNumber()
+		if !ok {
+			return nil, false
+		}
+		out = append(out, n)
+	}
+	return out, true
+}
+
+// elementsConform judges the elements (a vector quantity's magnitudes) against each
+// effective feature that is or redefines Array's `elements`: count and element type.
+func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared *symbols.Symbol, how admission) (bool, string, error) {
+	elements := structuredElements(value)
+	refuse := func(feat EffectiveFeature, mult, got string) string {
+		declares := feat.Name
+		if feat.Type != nil {
+			declares += " : " + symbolText(feat.Type)
+		}
+		return fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it declares %s%s, got %s",
+			FormatValue(value), describeValue(value), symbolText(declared), declares, mult, got)
+	}
+	for _, feat := range ctx.FeaturesOf(declared) {
+		if base, ok := ctx.arrayFeatureOf(feat.Symbol); !ok || base != arrayElementsFeature {
+			continue
+		}
+		if feat.Multiplicity.CountViolation(int64(len(elements))) != "" {
+			return false, refuse(feat, feat.Multiplicity.Text(), fmt.Sprintf("%d element(s)", len(elements))), nil
+		}
+		if feat.Type == nil {
+			continue
+		}
+		for _, elem := range elements {
+			ok, refusal, err := ctx.valueConforms(scope, &elem, feat.Type, how)
+			if err != nil || !ok {
+				if refusal == "" {
+					refusal = refuse(feat, "", fmt.Sprintf("element %s (%s)", FormatValue(elem), describeValue(elem)))
+				}
+				return false, refusal, err
+			}
+		}
+	}
+	return true, "", nil
+}
+
+// structuredDimensions is the dimensions of an array, or the one of a vector.
+func structuredDimensions(value Value) []int64 {
+	switch value.Kind {
+	case ValArray:
+		return value.Array().Dimensions
+	case ValVector:
+		return []int64{int64(value.Vector().Dimension())}
+	case ValVectorQuantity:
+		return []int64{int64(value.VectorQuantity().Dimension())}
+	}
+	return nil
+}
+
+// structuredElements is the row-major elements of an array or vector, or the
+// magnitudes of a vector quantity's axes.
+func structuredElements(value Value) []Value {
+	switch value.Kind {
+	case ValArray:
+		return value.Array().Elements
+	case ValVector:
+		return constValues(value.Vector().Elements)
+	case ValVectorQuantity:
+		return constValues(value.VectorQuantity().Num)
+	}
+	return nil
+}
+
+// equalInt64s reports whether two lists hold the same numbers in order.
+func equalInt64s(a, b []int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // quantityConforms judges a written quantity: a scalar target by the lattice, a

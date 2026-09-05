@@ -299,10 +299,15 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 }
 
 // EvalDeclaredValue evaluates the value a usage declaration binds, as a read of
-// the declaration does: in its own scope, and answering to its declared type.
+// the declaration does: in its own scope, and answering to its declared type. A
+// usage binding none but shaped as an Array by its own features is that Array.
 func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
 	value := ctx.extractDefaultValue(sym)
 	if value == nil {
+		defer ctx.beginRun()()
+		if val, ok, err := ctx.declaredArrayValue(sym); ok {
+			return val, err
+		}
 		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
 	}
 	defer ctx.beginRun()()
@@ -731,7 +736,8 @@ func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, er
 	if err != nil {
 		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
 	}
-	return Value{Kind: ValInstance, Instance: inst.ID}, true, nil
+	val, err := ec.ctx.objectValue(inst)
+	return val, true, err
 }
 
 // emptyDeclaredFeature reads a valueless feature declaration whose lower bound is
@@ -911,17 +917,29 @@ func chainBase(n *ast.FeatureChainExpr) (ast.Node, []ast.NameSegment) {
 // through each of its objects, concatenated in order and flattened one level.
 func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, from string) (Value, error) {
 	if len(parts) == 0 {
+		if inst, ok := ec.ctx.instances[value.Instance]; ok && value.Kind == ValInstance {
+			return ec.ctx.objectValue(inst)
+		}
 		return value, nil
 	}
 
 	switch value.Kind {
 	case ValSequence, ValSet:
-		// KerML holds a numerical vector in its `elements` feature, which the
-		// runtime represents as the collection itself.
-		if parts[0].Text == vectorElementsFeature && isNumericVector(value) {
-			return ec.chainMemberValue(value, parts[1:], from)
-		}
 		return ec.chainOverElements(value, parts, from)
+	case ValArray, ValVector, ValVectorQuantity:
+		// An array or vector read from an object keeps that object's members; any
+		// other's own features are answered from the value.
+		if inst, ok := ec.ctx.structuredObject(value); ok {
+			return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
+		}
+		member, ok, err := ec.ctx.structuredFeature(value, parts[0].Text)
+		if err != nil {
+			return Value{}, err
+		}
+		if !ok {
+			return Value{}, fmt.Errorf("%w: %s has no feature %s", ErrTypeMismatch, describeValue(value), parts[0].Text)
+		}
+		return ec.chainMemberValue(member, parts[1:], from)
 	case ValInstance, ValVariant:
 		// handled below
 	case ValEnumLiteral:
@@ -946,6 +964,20 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
+	// A shaped Array object answers Array's features and their redefinitions from
+	// the value; its other members stay the object's, whatever their names.
+	if arr, isArray, err := ec.ctx.arrayOfObject(inst); isArray {
+		if err != nil {
+			return Value{}, err
+		}
+		if base, member, ok := ec.ctx.arrayFeatureNamed(inst.Type, name); ok {
+			answer, err := ec.ctx.structuredMember(arr, base, member, inst.Type)
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.chainMemberValue(answer, parts[1:], name)
+		}
+	}
 	fvDecl, ok := inst.FeatureValues[name]
 	if !ok {
 		// A calc usage is an evaluation rather than a feature value, so its outputs are
@@ -1285,6 +1317,8 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		if re, ok := value.realPart(); ok {
 			return ctx.directValueType(scope, realConst(re))
 		}
+	case ValArray, ValVector, ValVectorQuantity:
+		return ctx.structuredValueType(value)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1493,6 +1527,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
+	}
+	// Operator notation over a vector is the VectorFunctions operator of the same
+	// symbol, which specializes DataFunctions'.
+	if val, ok, err := ec.ctx.vectorArithmetic(n.Operator, left, right); ok {
+		return val, err
 	}
 	return arithmeticValues(n.Operator, left, right, n.Span())
 }
@@ -1860,6 +1899,14 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
+	if isVectorKind(operand) {
+		switch n.Operator {
+		case ast.OpPos:
+			return operand, nil
+		case ast.OpNeg:
+			return vectorSubtract("VectorFunctions::'-'", ec.ctx, []Value{operand, nullValue()})
+		}
+	}
 	return unaryValue(n.Operator, operand)
 }
 
@@ -2215,9 +2262,68 @@ func valueEqual(a, b Value) bool {
 		// or fail (a set member, a sequence element) has no error to report.
 		converted, err := b.Quantity().convertTo(a.Quantity().Unit)
 		return err == nil && toReal(a.Quantity().Num) == converted
+	case ValArray:
+		return arrayEqual(a.Array(), b.Array())
+	case ValVector:
+		return vectorEqual(a.Vector(), b.Vector())
+	case ValVectorQuantity:
+		return vectorQuantityEqual(a.VectorQuantity(), b.VectorQuantity())
 	default:
 		return false
 	}
+}
+
+// arrayEqual holds for arrays of the same dimensions with equal elements.
+func arrayEqual(a, b *Array) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if len(a.Dimensions) != len(b.Dimensions) || len(a.Elements) != len(b.Elements) {
+		return false
+	}
+	for i := range a.Dimensions {
+		if a.Dimensions[i] != b.Dimensions[i] {
+			return false
+		}
+	}
+	for i := range a.Elements {
+		if !valueEqual(a.Elements[i], b.Elements[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// vectorEqual holds for vectors of one dimension whose numbers are equal.
+func vectorEqual(a, b *Vector) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if len(a.Elements) != len(b.Elements) {
+		return false
+	}
+	for i := range a.Elements {
+		if !valueEqual(constValue(a.Elements[i]), constValue(b.Elements[i])) {
+			return false
+		}
+	}
+	return true
+}
+
+// vectorQuantityEqual holds for vector quantities whose axes are equal quantities.
+func vectorQuantityEqual(a, b *VectorQuantity) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Dimension() != b.Dimension() {
+		return false
+	}
+	for i := 0; i < a.Dimension(); i++ {
+		if !valueEqual(NewQuantityValue(a.component(i)), NewQuantityValue(b.component(i))) {
+			return false
+		}
+	}
+	return true
 }
 
 // sequenceEqual checks structural equality of sequences (element-wise).

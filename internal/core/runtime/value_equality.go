@@ -69,6 +69,8 @@ func valueKeyFunc(v Value) valueKey {
 			key.realVal = v.Quantity().baseMagnitude()
 			key.strVal = v.Quantity().Unit.Term.DimensionKey()
 		}
+	case ValArray, ValVector, ValVectorQuantity:
+		key.colHash = structuredKey(v)
 	}
 	return key
 }
