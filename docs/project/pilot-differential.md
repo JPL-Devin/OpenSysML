@@ -577,7 +577,7 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 4 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
 `examples` 10 syntax, 15 `unmapped`, 70 `kind-mismatch`, 181 `unresolved-reference` — of which
@@ -647,13 +647,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **338 / 20 / 65** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **337 / 21 / 66** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
-| `kerml-examples`: only ours | **3** | **3** |
+| `kerml-examples`: only ours | **3** | **4** |
 | `examples`: only pilot | **40** | **276** |
 | `examples`: fully agreeing | **15** | **25** |
-| `unmapped`, our side | **20** | **28** |
+| `unmapped`, our side | **20** | **29** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
