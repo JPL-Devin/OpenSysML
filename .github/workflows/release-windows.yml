@@ -143,7 +143,7 @@ jobs:
     needs: build
     if: needs.build.outputs.sign == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 330
     permissions:
       contents: write
     steps:
@@ -155,6 +155,33 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Wait for CircleCI to publish the gated release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          # CircleCI publishes SHA256SUMS.txt.bundle last, and only after the
+          # test suite and build-release passed on the tag, so its presence is
+          # the release gate. Nothing is signed for a tag CircleCI rejected.
+          deadline=$((SECONDS + 5400))
+          until gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx 'SHA256SUMS.txt.bundle'; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Error: CircleCI has not published SHA256SUMS.txt.bundle on release $TAG; not signing."
+              exit 1
+            fi
+            echo "Waiting for CircleCI to publish release $TAG..."
+            sleep 60
+          done
+          published=$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)
+          resolved=$(gh api "repos/$GH_REPO/commits/$published" --jq .sha)
+          if [ "$resolved" != "$COMMIT" ]; then
+            echo "Error: release $TAG points at $resolved, this workflow built $COMMIT; not signing."
+            exit 1
+          fi
 
       - name: Submit the signing request to SignPath
         id: signpath

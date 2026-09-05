@@ -309,8 +309,12 @@ first real tag with **Run workflow** (`workflow_dispatch`), which stamps the
 exercise the SignPath round trip, which creates a real signing request an
 Approver has to approve or deny.
 
-**Every release needs an approval.** On a `v*` tag the workflow submits the
-artifact and then waits (up to about four hours) for the request to complete.
+**Every release needs an approval.** On a `v*` tag the workflow first waits
+(up to 90 minutes) for `publish-github-release` to put `SHA256SUMS.txt.bundle`
+on the release and checks that the release points at the commit it built —
+CircleCI publishes only after the suite and `build-release` passed on the tag,
+so a tag CircleCI rejected is never signed. It then submits the artifact and
+waits (up to about four hours) for the request to complete.
 An Approver — a member of the Approvers team listed in the README, with MFA on
 their SignPath account — opens the request in SignPath, checks that it points at
 the expected commit and workflow run, and approves it. The job then downloads
