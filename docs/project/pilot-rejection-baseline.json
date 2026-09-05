@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 239,
-        "digest": "sha256:695abb31598f31207d070f9dbc0670f312f2db8fac09e756bb55232213821e10"
+        "files": 241,
+        "digest": "sha256:8a0c1df306f0be51d958354c99492d0436450e4565bbd0886760485c4fd179d7"
       }
     ],
     "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 239,
-    "bothReject": 231,
+    "cases": 241,
+    "bothReject": 233,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 109,
-      "bothReject": 101,
+      "cases": 111,
+      "bothReject": 103,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1441,6 +1441,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/k44-expr-referencing-expr-states-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "an expression reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -1918,6 +1927,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s54-referencing-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint usage reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2301,8 +2319,8 @@
       }
     ],
     "totals": {
-      "cases": 239,
-      "bothReject": 231,
+      "cases": 241,
+      "bothReject": 233,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 8,
       "bothAccept": 0

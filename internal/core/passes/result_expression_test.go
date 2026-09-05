@@ -63,6 +63,21 @@ func TestResultExpressionUsageBody(t *testing.T) {
 	resultExpressionDiags(t, src, "x > 1.0", "x > 2.0", "y + 2.0", "x > 3.0", "x > 4.0")
 }
 
+// Reference subsetting is a specialization too: a usage referencing a constraint
+// or calculation inherits its result expression and may not state a body.
+func TestResultExpressionReferenceSubsettingBody(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		attribute x : Real;
+		constraint c { x > 0.0 }
+		constraint d ::> c { x > 1.0 }
+		constraint kept ::> c;
+		calc k { in y : Real; y + 1.0 }
+		calc m ::> k { 2.0 }
+	}`
+	resultExpressionDiags(t, src, "x > 1.0", "2.0")
+}
+
 // A type inheriting result expressions from two generals is invalid on its own,
 // and is reported at its declaration.
 func TestResultExpressionTwoInherited(t *testing.T) {
@@ -131,9 +146,12 @@ func TestResultExpressionKerMLForms(t *testing.T) {
 		predicate Kept specializes Base;
 		function F { in y : Real; y + 1.0 }
 		function G specializes F { return r : Real = y + 2.0; }
+		expr e { x }
+		expr f ::> e { x }
+		expr g ::> e;
 	}`
 	diags := only(constraintDiagsKerML(t, src), resultExpressionCode)
-	want := []string{"x > 1.0", "x > 2.0", "x > 3.0"}
+	want := []string{"x > 1.0", "x > 2.0", "x > 3.0", "x"}
 	if len(diags) != len(want) {
 		t.Fatalf("got %d diagnostics, want %d: %v", len(diags), len(want), diags)
 	}

@@ -76,17 +76,17 @@ func OwnedResultExpressions(sym *symbols.Symbol) []ResultExpression {
 }
 
 // ResultExpressionsOf lists the result expressions sym owns or inherits, its
-// own first and then its supertypes' in specialization order (KerML 8.3.4.6
-// Expression::result, 8.3.4.8 Function::result). Each supertype contributes
-// once, however many paths reach it; a body listing several conditions
-// contributes each of them.
+// own first and then those of every type contributing members to it —
+// specialized or reference-subsetted — in breadth-first order (KerML 8.3.4.6
+// Expression::result, 8.3.4.8 Function::result). Each source contributes once,
+// however many paths reach it; a body listing several conditions contributes each.
 func (m *Model) ResultExpressionsOf(sym *symbols.Symbol) []ResultExpression {
 	if m == nil || !FunctionLike(sym) {
 		return nil
 	}
 	out := OwnedResultExpressions(sym)
-	for _, super := range m.AllSupertypes(sym) {
-		out = append(out, OwnedResultExpressions(super)...)
+	for _, source := range m.MemberSources(sym) {
+		out = append(out, OwnedResultExpressions(source)...)
 	}
 	return out
 }

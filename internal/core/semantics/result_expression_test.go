@@ -48,6 +48,17 @@ func TestResultExpressionOwnersTwoGenerals(t *testing.T) {
 	}
 }
 
+func TestResultExpressionOwnersThroughReferenceSubsetting(t *testing.T) {
+	m, root := buildModel(t,
+		"constraint c { x > 0 } constraint d ::> c { x > 1 } constraint kept ::> c;")
+	if got := ownerNames(m, sym(t, root, "d")); strings.Join(got, ",") != "d,c" {
+		t.Fatalf("a referenced constraint's result is inherited, got %v", got)
+	}
+	if got := ownerNames(m, sym(t, root, "kept")); strings.Join(got, ",") != "c" {
+		t.Fatalf("a bodiless referencing constraint inherits the result alone, got %v", got)
+	}
+}
+
 func TestResultExpressionManyConditionsOneOwner(t *testing.T) {
 	m, root := buildModel(t,
 		"constraint def Base { in x; x > 0 x < 10 }")

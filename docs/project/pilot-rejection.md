@@ -158,7 +158,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-239 case(s): 231 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+241 case(s): 233 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -166,7 +166,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 87 | 0 | 0 | 0 |
-| semantic | 109 | 101 | 0 | 8 | 0 |
+| semantic | 111 | 103 | 0 | 8 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -177,9 +177,10 @@ and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
 three trigger-argument typing cases (`s48`–`s50`), to 235 with the enumerated value typed by
 its literal (`p18-enum-value-typed-outside-enumeration`), to 236 with the one typed by an
-expression body (`s51`), and to 239 with the three result-expression ownership cases (`s52`, `s53`,
+expression body (`s51`), to 239 with the three result-expression ownership cases (`s52`, `s53`,
 `k43`: a specialization, a redefining usage and a typed expression each stating a body over an
-inherited result expression). The KerML constraints in that
+inherited result expression), and to 241 with the two reference-subsetting ones (`s54`, `k44`).
+The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
 argument checking of the send-action family closed another (`k34`), the cross-subsetting

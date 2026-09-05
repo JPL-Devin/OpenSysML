@@ -20,6 +20,10 @@ const replacedResultFixture = `package Power {
     }
     calc def Plus { in x : Real; x + 1.0 }
     calc def Twice :> Plus { x + 2.0 }
+    constraint low { 300.0 >= 450.0 }
+    constraint high ::> low { 600.0 >= 450.0 }
+    calc one { 1.0 }
+    calc two ::> one { 2.0 }
 }
 `
 
@@ -37,8 +41,8 @@ func TestCheckReplacedResultExpressionIsRejected(t *testing.T) {
 			hits++
 		}
 	}
-	if hits != 3 {
-		t.Fatalf("got %d diagnostics saying %q, want 3: %v", hits, want, res.Diagnostics)
+	if hits != 5 {
+		t.Fatalf("got %d diagnostics saying %q, want 5: %v", hits, want, res.Diagnostics)
 	}
 
 	const refused = "more than one result expression, owned or inherited"
@@ -50,5 +54,11 @@ func TestCheckReplacedResultExpressionIsRejected(t *testing.T) {
 
 	if lines, err := s.EvalExpr("Power::Twice(1.0)"); err == nil || !strings.Contains(err.Error(), refused) {
 		t.Errorf("calc with two result expressions evaluated to %v, %v; want it refused with %q", lines, err, refused)
+	}
+
+	wantVerdict(t, s.CheckConstraint("Power::high"), VerdictUnresolved, refused,
+		"`600.0 >= 450.0` is stated over an inherited result expression")
+	if lines, err := s.EvalExpr("Power::two()"); err == nil || !strings.Contains(err.Error(), refused) {
+		t.Errorf("calc referencing one with a result evaluated to %v, %v; want it refused with %q", lines, err, refused)
 	}
 }
