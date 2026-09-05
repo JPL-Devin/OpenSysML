@@ -1,0 +1,1 @@
+- **The SonarCloud findings raised by the 0.5.1 changes are cleared.** Two repeated standard-library names in the implicit-base tables are named constants, argument checking passes the call as one struct instead of eight parameters, and the Windows VERSIONINFO check script uses `[[` tests and a local for its positional parameter. No behavior changes.
