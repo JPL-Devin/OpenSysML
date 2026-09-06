@@ -53,13 +53,18 @@ func TestEvalQuantityCalculationsOverReferences(t *testing.T) {
 }
 
 // What the runtime does not hold about a unit is a typed failure naming the
-// declaration, never a made-up value: the declaration's own members, and the
-// coordinate frames a vector reference would need.
+// declaration, never a made-up value: the declaration's own members, a
+// measurement scale, and the coordinate frames a vector reference would need.
 func TestEvalMeasurementReferenceLimitsAreTyped(t *testing.T) {
 	s := measurementRefSession(t)
 	wants(t, run(t, s, "%eval m.unitConversion"),
 		"error:", "library function is not evaluable",
 		"MeasurementReferences::ScalarMeasurementReference::unitConversion")
+	wants(t, run(t, s, "%eval Time::UTC"),
+		"error:", "library function is not evaluable",
+		"Time::UTC: a measurement scale typed TimeScale is not held as a value")
+	wants(t, run(t, s, "%eval QuantityCalculations::ConvertQuantity(300 [K], SI::'°C_abs')"),
+		"error:", "SI::'°C_abs': a measurement scale typed IntervalScale is not held as a value")
 	wants(t, run(t, s, "%eval m + m"), "error:", "operator '+' is not defined for a measurement reference")
 	wants(t, run(t, s, "%eval m * 3"), "error:", "operator '*' is not defined for a measurement reference and an Integer")
 }

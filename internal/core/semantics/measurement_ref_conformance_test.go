@@ -21,7 +21,9 @@ func measurementRefModel(t *testing.T) (*semantics.Model, *symbols.Index) {
 	idx.AddDocument("<t>", parser.New(source.New("<t>", []byte(`package T {
 		private import ISQ::*;
 		private import SI::*;
+		private import Time::*;
 		attribute area = m * m;
+		attribute duration = s * s / s;
 		attribute speed = m / s;
 		attribute cubed = m ** 3;
 		attribute ratio = km / m;
@@ -53,7 +55,7 @@ func boundOperatorExpr(t *testing.T, idx *symbols.Index, fqn string) (*symbols.S
 // TestMeasurementRefConforms: a unit conforms to the unit definition typing it and
 // to every measurement-reference supertype; a composed unit, typed DerivedUnit,
 // conforms to a unit definition of its dimension and to no other; a quantity value
-// type is never the type of a reference, whatever the dimension.
+// type, or a measurement scale, is never the type of a unit, whatever the dimension.
 func TestMeasurementRefConforms(t *testing.T) {
 	m, idx := measurementRefModel(t)
 	metre, err := m.UnitTermOf(dimensionSymbol(t, idx, "SI::m"))
@@ -86,6 +88,11 @@ func TestMeasurementRefConforms(t *testing.T) {
 		{"m : LengthValue", lengthUnit, metre, "ISQBase::LengthValue", false, "a measurement reference typed LengthUnit"},
 		{"m*m : AreaValue", derivedUnit, metre.Times(metre), "ISQSpaceTime::AreaValue", false, "a measurement reference typed DerivedUnit"},
 		{"m : Real", lengthUnit, metre, "ScalarValues::Real", false, "a measurement reference typed LengthUnit"},
+		{"s : TimeScale", dimensionSymbol(t, idx, "ISQBase::DurationUnit"), second, "Time::TimeScale", false, "a measurement reference typed DurationUnit"},
+		{"s*s/s : TimeScale", derivedUnit, second.Times(second).DividedBy(second), "Time::TimeScale", false, "a measurement reference typed DerivedUnit"},
+		{"s*s/s : IntervalScale", derivedUnit, second.Times(second).DividedBy(second), "MeasurementReferences::IntervalScale", false, "a measurement reference typed DerivedUnit"},
+		{"s*s/s : MeasurementScale", derivedUnit, second.Times(second).DividedBy(second), "MeasurementReferences::MeasurementScale", false, "a measurement reference typed DerivedUnit"},
+		{"s*s/s : DurationUnit", derivedUnit, second.Times(second).DividedBy(second), "ISQBase::DurationUnit", true, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,6 +131,9 @@ func TestMeasurementRefExpr(t *testing.T) {
 		{"T::cubed", "ISQSpaceTime::VolumeUnit", true},
 		{"T::ratio", "MeasurementReferences::DerivedUnit", true},
 		{"T::ratio", "ISQBase::LengthUnit", false},
+		{"T::duration", "ISQBase::DurationUnit", true},
+		{"T::duration", "Time::TimeScale", false},
+		{"T::duration", "MeasurementReferences::IntervalScale", false},
 	} {
 		t.Run(tc.feature+" : "+tc.want, func(t *testing.T) {
 			scope, e := boundOperatorExpr(t, idx, tc.feature)

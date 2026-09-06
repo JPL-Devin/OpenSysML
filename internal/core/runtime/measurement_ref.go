@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -92,10 +93,14 @@ func (r *MeasurementRef) namesDimensionOne() bool {
 // MeasurementUnitValue is the reference a measurement-unit declaration names
 // (true for one). A library unit is the declaration whatever defines it (`'m/s'
 // = m/s`); a model feature typed by a unit and given a value holds that value
-// instead (false).
+// instead (false). A measurement scale (`UTC`, `'°C_abs'`) is a reference the
+// runtime holds no value for, a typed error naming it.
 func (ctx *Context) MeasurementUnitValue(sym *symbols.Symbol) (Value, bool, error) {
-	if sym == nil || ctx.model == nil || !ctx.model.IsMeasurementUnit(sym) {
+	if sym == nil || ctx.model == nil {
 		return Value{}, false, nil
+	}
+	if !ctx.model.IsMeasurementUnit(sym) {
+		return ctx.measurementScaleValue(sym)
 	}
 	if !ctx.libraryDeclared(sym) && ctx.extractDefaultValue(sym) != nil {
 		return Value{}, false, nil
@@ -107,6 +112,40 @@ func (ctx *Context) MeasurementUnitValue(sym *symbols.Symbol) (Value, bool, erro
 	name := unitSymbolName(sym)
 	product := semantics.NamedUnitProduct(sym, name, term.Dimensionless())
 	return NewMeasurementRefValue(Unit{Text: name, Product: product, Term: term}), true, nil
+}
+
+// measurementScaleValue is the typed refusal a measurement scale declaration
+// evaluates to: no value holds a scale's origin, points or mapping.
+func (ctx *Context) measurementScaleValue(sym *symbols.Symbol) (Value, bool, error) {
+	if !ctx.model.IsMeasurementScale(sym) {
+		return Value{}, false, nil
+	}
+	if !ctx.libraryDeclared(sym) && ctx.extractDefaultValue(sym) != nil {
+		return Value{}, false, nil
+	}
+	return Value{}, true, fmt.Errorf(
+		"%w: %s: a measurement scale typed %s is not held as a value; the runtime holds a measurement unit and its reduction, not a scale's origin, points or mapping",
+		ErrUnevaluableLibraryFunction, ctx.qualifiedUnitName(sym), scaleTypeNames(ctx.model.DeclaredFeatureTypes(sym)),
+	)
+}
+
+// qualifiedUnitName names a reference declaration as it is written (`SI::'°C_abs'`,
+// `Time::UTC`): its owner's qualified name and the symbol it is spelled by.
+func (ctx *Context) qualifiedUnitName(sym *symbols.Symbol) string {
+	name := unitSymbolName(sym)
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return name
+	}
+	return ctx.qualifiedSymbolName(sym.OwnerScope.Owner()) + "::" + name
+}
+
+// scaleTypeNames lists a scale's declared types as its declaration does (`IntervalScale`).
+func scaleTypeNames(types []*symbols.Symbol) string {
+	names := make([]string, 0, len(types))
+	for _, t := range types {
+		names = append(names, lexer.NameText(t.Name))
+	}
+	return strings.Join(names, ", ")
 }
 
 // unitSymbolName is the symbol a unit is written by (`km`), its name otherwise.

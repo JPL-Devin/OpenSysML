@@ -292,6 +292,16 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 	return m.Conforms(sym, unitDef)
 }
 
+// IsMeasurementScale reports whether sym is a feature typed by a measurement
+// scale (`Time::UTC`, `SI::'°C_abs'`): a scalar reference that is not a unit.
+func (m *Model) IsMeasurementScale(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	scale := m.libSymbol(fqnMeasurementScale)
+	return scale != nil && m.Conforms(sym, scale)
+}
+
 // MeasurementUnitOf is the measurement unit sym names: sym itself, or the unit
 // an alias such as SI::'m/s²' stands for; false for anything else.
 func (m *Model) MeasurementUnitOf(sym *symbols.Symbol) (*symbols.Symbol, bool) {

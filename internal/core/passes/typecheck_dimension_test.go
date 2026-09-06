@@ -169,6 +169,26 @@ func TestBoundComposedMeasurementUnit(t *testing.T) {
 	wantNoDimensionDiags(t, `attribute n : ScalarValues::Natural = 1 * 1;`)
 }
 
+// TestBoundMeasurementScale: a measurement scale measures in a unit's dimension
+// but no unit is a scale, so a unit of that dimension, however composed, is
+// refused by a scale-typed feature, while a scale binds to its own types.
+func TestBoundMeasurementScale(t *testing.T) {
+	wantOneDimensionError(t, `attribute t : Time::TimeScale = s;`,
+		"cannot bind a value of type DurationUnit to a feature typed by TimeScale")
+	wantOneDimensionError(t, `attribute t : Time::TimeScale = s * s / s;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by TimeScale")
+	wantOneDimensionError(t, `attribute t : MeasurementReferences::IntervalScale = h * s / min;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by IntervalScale")
+	wantOneDimensionError(t, `attribute t : MeasurementReferences::MeasurementScale = K * K / K;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by MeasurementScale")
+	wantNoDimensionDiags(t, `attribute t : DurationUnit = s * s / s;`)
+	wantNoDimensionDiags(t, `attribute t : Time::TimeScale = Time::UTC;`)
+	wantNoDimensionDiags(t, `attribute t : MeasurementReferences::IntervalScale = SI::'°C_abs';`)
+	wantNoDimensionDiags(t, `attribute t : MeasurementReferences::ScalarMeasurementReference = SI::'°C_abs';`)
+	wantOneDimensionError(t, `attribute t : ThermodynamicTemperatureUnit = SI::'°C_abs';`,
+		"cannot bind a value of type IntervalScale to a feature typed by ThermodynamicTemperatureUnit")
+}
+
 // TestComposedMeasurementUnitAsAnArgument: an operator expression over units is
 // a measurement reference where an overload is chosen by argument type, so
 // ToString(m / s) selects MeasurementRefCalculations::ToString and a quantity

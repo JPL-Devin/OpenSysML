@@ -31,6 +31,11 @@ func measurementRefContext(t *testing.T) (*Context, *symbols.Scope) {
 			attribute wrongDimension : AreaUnit = m * s;
 			attribute notAUnit : LengthValue = m;
 			attribute notAnArea : AreaValue = m * m;
+			attribute notAScale : Time::TimeScale = h * s / min;
+			attribute notAnInterval : IntervalScale = h * s / min;
+			attribute aDuration : DurationUnit = h * s / min;
+			attribute epoch : Time::TimeScale = Time::UTC;
+			attribute celsius : IntervalScale = SI::'°C_abs';
 			attribute vq : Quantities::VectorQuantityValue = VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m];
 			attribute scaled = VectorFunctions::VectorOf((1.0, 2.0)) [m] * (2 [s]);
 			package Imperial {
@@ -69,6 +74,7 @@ func TestMeasurementRefValues(t *testing.T) {
 		{"m / m", "1"},
 		{"area", "m**2"},
 		{"speed", "km/h"},
+		{"aDuration", "h*s/min"},
 		{"MeasurementRefCalculations::'*'(m, s)", "m*s"},
 		{"MeasurementRefCalculations::'/'(m, s)", "m/s"},
 		{"MeasurementRefCalculations::'**'(m, 2)", "m**2"},
@@ -241,6 +247,16 @@ func TestMeasurementRefReport(t *testing.T) {
 		{"wrongDimension", ErrTypeMismatch, "cannot write the measurement reference m*s, a measurement reference of dimension L·T, to a feature typed by AreaUnit"},
 		{"notAUnit", ErrTypeMismatch, "cannot write the measurement reference m, a measurement reference typed LengthUnit, to a feature typed by LengthValue"},
 		{"notAnArea", ErrTypeMismatch, "cannot write the measurement reference m**2, a measurement reference typed DerivedUnit, to a feature typed by AreaValue"},
+		{"notAScale", ErrTypeMismatch, "cannot write the measurement reference h*s/min, a measurement reference typed DerivedUnit, to a feature typed by TimeScale"},
+		{"notAnInterval", ErrTypeMismatch, "cannot write the measurement reference h*s/min, a measurement reference typed DerivedUnit, to a feature typed by IntervalScale"},
+		{"Time::UTC", ErrUnevaluableLibraryFunction, "Time::UTC: a measurement scale typed TimeScale is not held as a value; the runtime holds a measurement unit and its reduction, not a scale's origin, points or mapping"},
+		{"SI::'°C_abs'", ErrUnevaluableLibraryFunction, "SI::'°C_abs': a measurement scale typed IntervalScale is not held as a value"},
+		{"epoch", ErrUnevaluableLibraryFunction, "Time::UTC: a measurement scale typed TimeScale is not held as a value"},
+		{"celsius", ErrUnevaluableLibraryFunction, "SI::'°C_abs': a measurement scale typed IntervalScale is not held as a value"},
+		{"ConvertQuantity(300 [K], SI::'°C_abs')", ErrUnevaluableLibraryFunction, "SI::'°C_abs': a measurement scale typed IntervalScale is not held as a value"},
+		{"'['(3, Time::UTC)", ErrUnevaluableLibraryFunction, "Time::UTC: a measurement scale typed TimeScale is not held as a value"},
+		{"MeasurementRefCalculations::ToString(Time::UTC)", ErrUnevaluableLibraryFunction, "Time::UTC: a measurement scale typed TimeScale is not held as a value"},
+		{"3 [Time::UTC]", ErrNotAQuantity, "not a measurement unit"},
 		{"m + m", ErrTypeMismatch, "operator '+' is not defined for a measurement reference and a measurement reference"},
 		{"m - s", ErrTypeMismatch, "operator '-' is not defined for a measurement reference and a measurement reference"},
 		{"m * 3", ErrTypeMismatch, "operator '*' is not defined for a measurement reference and an Integer"},

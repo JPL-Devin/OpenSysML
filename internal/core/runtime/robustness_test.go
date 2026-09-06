@@ -1283,7 +1283,8 @@ func testQuantityWriteOfAnotherDimension(t *testing.T) {
 // cannot honestly compute with is a typed error at the write or the call, never a
 // value: a unit of another dimension does not conform, a conversion between
 // dimensions is incommensurable, a number is not a reference, a reference is not
-// a number, and the frames and tensors the library declares have no value.
+// a number, a unit is not a scale, and the scales, frames and tensors the library
+// declares have no value.
 func testMeasurementReferenceFailureModes(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -1297,6 +1298,11 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 		{"composed unit of the same dimension", "ISQ::AreaUnit", "SI::m * SI::m", nil},
 		{"composed unit as a derived unit", "MeasurementReferences::DerivedUnit", "SI::km / SI::L", nil},
 		{"another scale of the same dimension", "ISQ::LengthUnit", "SI::km", nil},
+		{"composed unit into a time scale", "Time::TimeScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
+		{"composed unit into an interval scale", "MeasurementReferences::IntervalScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
+		{"time scale as a value", "Time::TimeScale", "Time::UTC", ErrUnevaluableLibraryFunction},
+		{"interval scale as a value", "MeasurementReferences::IntervalScale", "SI::'°C_abs'", ErrUnevaluableLibraryFunction},
+		{"conversion to a scale", "ISQ::ThermodynamicTemperatureValue", "QuantityCalculations::ConvertQuantity(300.0 [SI::K], SI::'°C_abs')", ErrUnevaluableLibraryFunction},
 		{"incommensurable conversion", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], SI::s)", ErrIncommensurableUnits},
 		{"conversion to a number", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], 3)", ErrTypeMismatch},
 		{"reference scaled by a number", "ISQ::LengthUnit", "SI::m * 3", ErrTypeMismatch},

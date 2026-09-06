@@ -718,6 +718,7 @@ func (m *Model) QuantityConforms(unit UnitTerm, want *symbols.Symbol) Conformanc
 // MeasurementRefConforms judges a measurement reference against a declared type:
 // by the type it is declared with (typ, DerivedUnit for a composed unit), or
 // else by dimension when want is a unit definition fixing one, as `m*m` is an AreaUnit.
+// A scale (TimeScale) fixes a dimension too, but no unit is a scale.
 func (m *Model) MeasurementRefConforms(typ *symbols.Symbol, unit UnitTerm, want *symbols.Symbol) Conformance {
 	if m == nil || typ == nil || want == nil {
 		return conformanceUnknown()
@@ -727,6 +728,9 @@ func (m *Model) MeasurementRefConforms(typ *symbols.Symbol, unit UnitTerm, want 
 		return c
 	}
 	c.Found = "a measurement reference typed " + c.Found
+	if !m.IsMeasurementUnit(want) {
+		return c
+	}
 	wantDim, ok := m.dimensionOf(want)
 	if !ok {
 		return c

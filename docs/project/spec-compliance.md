@@ -809,10 +809,23 @@ the flat sequence of its elements:
   the same by the checker — `judgedAsMeasurementRef`,
   `MeasurementRefExprConformance` — and the runtime's write conformance). A
   reference of another dimension (`m / s` to `LengthUnit`) or a number written to
-  a unit-typed feature, and a reference written to a quantity-typed one (`m` to
+  a unit-typed feature, a reference written to a quantity-typed one (`m` to
   `LengthValue`, `m * m` to `AreaValue` — the checker judges a composed unit as
   the `DerivedUnit` it is before it compares dimensions, which alone would pass
-  it), are refused by both. A quantity written to a unit-typed feature
+  it), and a unit written to a feature typed by a measurement *scale* (`s`, or
+  `h * s / min`, to `Time::TimeScale` or `IntervalScale`: the dimensional
+  fallback is for unit-definition targets only, `Model.IsMeasurementUnit`, a
+  scale of the same dimension being another kind of reference) are refused by
+  both. A measurement scale itself — `Time::UTC`, `SI::'°C_abs'`, a
+  `ScalarMeasurementReference` that is not a `MeasurementUnit`
+  (`Model.IsMeasurementScale`) — evaluates to no value: the runtime holds a
+  unit and its reduction, not a scale's origin, definitional points or mapping,
+  so `Time::UTC`, `3 [Time::UTC]` and `ConvertQuantity(300 [K], SI::'°C_abs')`
+  are `ErrUnevaluableLibraryFunction` naming the declaration and its scale type
+  (`measurementScaleValue`; `TestMeasurementRefReport`, `TestBoundMeasurementScale`),
+  while the checker binds one to its declared type (`t : Time::TimeScale = Time::UTC`)
+  and refuses it elsewhere (`SI::'°C_abs'` to `ThermodynamicTemperatureUnit`).
+  A quantity written to a unit-typed feature
   (`hp : PowerUnit = 745.7 [W]` in the OMG individuals example) is not judged,
   as the pilot implementation accepts it; the feature then holds the quantity,
   and `200 [hp]` is `ErrNotAQuantity`, `hp` naming no unit. A quantity's `num` and `mRef`
