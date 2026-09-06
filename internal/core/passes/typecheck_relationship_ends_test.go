@@ -152,6 +152,10 @@ func TestRelationshipMemberNamedMultiplicityIsAType(t *testing.T) {
 			"subtype M :> B; disjoint M from B; conjugate M ~ B; typing f : M; featuring f by M;", nil},
 		{"keyword-first feature ends", "multiplicity M [1..2]; feature f; subset M :> f; inverse f of M;", nil},
 		{"declaration typing", "multiplicity M [1..2]; feature g : M;", nil},
+		{"chain through a multiplicity", "multiplicity M [1..2] { feature x; } feature f; " +
+			"subset M.x :> f; feature g :> M.x; feature h : M.x;", nil},
+		{"chain through a class", "class C { feature x; } feature f; subset C.x :> f;",
+			[]string{"feature chain segment must be a feature, found kermlType"}},
 		{"not a classifier", "multiplicity M [1..2]; class B; subclassifier M :> B;",
 			[]string{"subclassifier source must be a classifier, found multiplicity"}},
 	})

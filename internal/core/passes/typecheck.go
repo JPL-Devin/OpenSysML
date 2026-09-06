@@ -444,7 +444,8 @@ func (tc *typeChecker) checkChainSegments(scope *symbols.Scope, target ast.Node)
 			sym = resolved
 		}
 	}
-	if sym.Kind == symbols.SymbolUnknown || isUsageKind(sym.Kind) {
+	// An alias that resolves to nothing is the name-resolution tier's finding.
+	if sym.Kind == symbols.SymbolAlias || endFeature.admits(sym.Kind) {
 		return
 	}
 	tc.appendUnique(Diagnostic{
