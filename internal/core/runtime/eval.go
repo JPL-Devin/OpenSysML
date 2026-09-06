@@ -1818,7 +1818,7 @@ func (ctx *Context) equalityValues(op ast.OperatorKind, left, right Value) (Valu
 
 	// Quantities compare in a common unit; incommensurable ones are an error,
 	// not an inequality.
-	if lq, rq, ok := quantityOperands(left, right); ok {
+	if lq, rq, ok := comparedOperands(left, right); ok {
 		return equalQuantities(op, lq, rq)
 	}
 
@@ -1852,7 +1852,7 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 func comparisonValues(op ast.OperatorKind, left, right Value, span source.Span) (Value, error) {
 	// Quantities are ordered in a common unit, so a magnitude is never compared
 	// across units without conversion.
-	if lq, rq, ok := quantityOperands(left, right); ok {
+	if lq, rq, ok := comparedOperands(left, right); ok {
 		return compareQuantities(op, lq, rq)
 	}
 

@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -17,9 +18,9 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 	if ec.model == nil || !commensurabilityRequired(e.Operator) || len(e.Operands) != 2 {
 		return
 	}
-	// A comparison reads an operand stating no measurement (`length > 0`) in the
-	// other's unit, as a binding does; a sum's result must carry one dimension.
-	if comparesOperands(e.Operator) && (statesNoMeasurement(e.Operands[0]) || statesNoMeasurement(e.Operands[1])) {
+	// A bare zero is the null quantity of every dimension, so a comparison reads
+	// it in the other operand's unit (`length > 0`), as evaluation does.
+	if comparesOperands(e.Operator) && (isBareZero(e.Operands[0]) || isBareZero(e.Operands[1])) {
 		return
 	}
 	lhs, ok := ec.model.DimensionOfExpr(scope, e.Operands[0])
@@ -108,6 +109,21 @@ func statesNoMeasurement(element ast.Node) bool {
 			}
 		}
 		return len(n.Operands) > 0
+	}
+	return false
+}
+
+// isBareZero reports a literal zero, possibly signed, naming no unit.
+func isBareZero(element ast.Node) bool {
+	switch n := element.(type) {
+	case *ast.LiteralInteger:
+		v, err := strconv.ParseFloat(n.Value, 64)
+		return err == nil && v == 0
+	case *ast.LiteralReal:
+		v, err := strconv.ParseFloat(n.Value, 64)
+		return err == nil && v == 0
+	case *ast.OperatorExpr:
+		return len(n.Operands) == 1 && (n.Operator == ast.OpNeg || n.Operator == ast.OpPos) && isBareZero(n.Operands[0])
 	}
 	return false
 }

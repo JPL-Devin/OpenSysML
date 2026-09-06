@@ -224,10 +224,11 @@ func TestDimensionUnknownSilent(t *testing.T) {
 	}
 }
 
-// TestDimensionBareNumberComparisonSilent covers a quantity compared with a plain
-// number, the stdlib's own idiom (`xoffset > 0` in ShapeItems): the number states
-// no measurement and is read in the quantity's unit, as a bound value is. A sum
-// still warns, since its result must carry one dimension.
+// TestDimensionBareNumberComparisonSilent covers a quantity compared with a bare
+// zero, the stdlib's own idiom (`xoffset > 0` in ShapeItems): zero is the null
+// quantity of every dimension, so it is read in the quantity's unit. Any other
+// bare number is dimensionless and warns, as a sum does, since evaluation
+// rejects both as incommensurable.
 func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 	const decls = `
 		private import ISQ::*;
@@ -241,8 +242,8 @@ func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 		"equal and unequal": `package Test { ` + decls + `
 			constraint ok { len == 0 and mass != 0 }
 		}`,
-		"number on the left": `package Test { ` + decls + `
-			constraint ok { 0 < len and 2 * 5 <= mass }
+		"zero on the left": `package Test { ` + decls + `
+			constraint ok { 0 < len and 0.0 <= mass and -0 <= mass }
 		}`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -251,17 +252,25 @@ func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 				t.Fatalf("unexpected errors: %v", errs)
 			}
 			if len(warnings) != 0 {
-				t.Fatalf("a comparison with a plain number must not warn, got: %v", warnings)
+				t.Fatalf("a comparison with a bare zero must not warn, got: %v", warnings)
 			}
 		})
 	}
-	warnings, errs := dimensionDiagnostics(t, `package Test { `+decls+`
-		constraint bad { len + 5 > 0 }
-	}`)
-	if len(errs) != 0 {
-		t.Fatalf("unexpected errors: %v", errs)
-	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "operator '+'") {
-		t.Fatalf("want 1 warning on the sum, got: %v", warnings)
+	for name, tc := range map[string]struct{ body, op string }{
+		"sum with a number":        {"len + 5 > 0", "'+'"},
+		"comparison with a number": {"len > 5", "'>'"},
+		"number on the left":       {"2 * 5 <= mass", "'<='"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			warnings, errs := dimensionDiagnostics(t, `package Test { `+decls+`
+				constraint bad { `+tc.body+` }
+			}`)
+			if len(errs) != 0 {
+				t.Fatalf("unexpected errors: %v", errs)
+			}
+			if len(warnings) != 1 || !strings.Contains(warnings[0], "operator "+tc.op) {
+				t.Fatalf("want 1 warning on %s, got: %v", tc.op, warnings)
+			}
+		})
 	}
 }

@@ -269,7 +269,7 @@ func quantityPower(name string, _ *Context, args []Value) (Value, error) {
 // quantityComparison is one of the four orderings, in the left operand's unit.
 func quantityComparison(op ast.OperatorKind) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
-		x, y, err := quantityArgs(name, args)
+		x, y, err := comparedArgs(name, args)
 		if err != nil {
 			return Value{}, err
 		}
@@ -280,7 +280,7 @@ func quantityComparison(op ast.OperatorKind) libraryApply {
 
 // quantityEquality is '==', in the left operand's unit.
 func quantityEquality(name string, _ *Context, args []Value) (Value, error) {
-	x, y, err := quantityArgs(name, args)
+	x, y, err := comparedArgs(name, args)
 	if err != nil {
 		return Value{}, err
 	}
@@ -398,6 +398,17 @@ func quantityArgs(name string, args []Value) (*Quantity, *Quantity, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	return x, y, nil
+}
+
+// comparedArgs is quantityArgs for a comparison, where a bare zero takes the
+// other argument's unit as comparedOperands reads it.
+func comparedArgs(name string, args []Value) (*Quantity, *Quantity, error) {
+	x, y, err := quantityArgs(name, args)
+	if err != nil {
+		return nil, nil, err
+	}
+	x, y = adoptZeroUnit(args[0], args[1], x, y)
 	return x, y, nil
 }
 
