@@ -234,7 +234,8 @@ func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 		private import ISQ::*;
 		private import SI::*;
 		attribute len : ISQ::LengthValue = 3.0 [m];
-		attribute mass : ISQ::MassValue = 1200.0 [kg];`
+		attribute mass : ISQ::MassValue = 1200.0 [kg];
+`
 	for name, src := range map[string]string{
 		"greater than zero": `package Test { ` + decls + `
 			constraint ok { len > 0 or mass > 0 }
@@ -244,6 +245,9 @@ func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 		}`,
 		"zero on the left": `package Test { ` + decls + `
 			constraint ok { 0 < len and 0.0 <= mass and -0 <= mass }
+		}`,
+		"zero computed": `package Test { ` + decls + `
+			constraint ok { len > (1 - 1) and 2 * 0 < mass and -(0.5 - 0.5) <= mass }
 		}`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -260,6 +264,7 @@ func TestDimensionBareNumberComparisonSilent(t *testing.T) {
 		"sum with a number":        {"len + 5 > 0", "'+'"},
 		"comparison with a number": {"len > 5", "'>'"},
 		"number on the left":       {"2 * 5 <= mass", "'<='"},
+		"non-zero computed":        {"len > (2 - 1)", "'>'"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			warnings, errs := dimensionDiagnostics(t, `package Test { `+decls+`

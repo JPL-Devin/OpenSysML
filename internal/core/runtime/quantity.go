@@ -146,33 +146,6 @@ func quantityOperands(left, right Value) (*Quantity, *Quantity, bool) {
 	return lq, rq, true
 }
 
-// comparedOperands is quantityOperands for a comparison: a bare zero is the null
-// quantity of every dimension, so `length > 0` reads it in the other's unit.
-func comparedOperands(left, right Value) (*Quantity, *Quantity, bool) {
-	lq, rq, ok := quantityOperands(left, right)
-	if !ok {
-		return nil, nil, false
-	}
-	lq, rq = adoptZeroUnit(left, right, lq, rq)
-	return lq, rq, true
-}
-
-// adoptZeroUnit reads a bare-zero operand in the other operand's unit.
-func adoptZeroUnit(left, right Value, lq, rq *Quantity) (*Quantity, *Quantity) {
-	switch {
-	case bareZero(left):
-		lq = &Quantity{Num: lq.Num, Unit: rq.Unit}
-	case bareZero(right):
-		rq = &Quantity{Num: rq.Num, Unit: lq.Unit}
-	}
-	return lq, rq
-}
-
-// bareZero reports a number, not a quantity, whose value is zero.
-func bareZero(val Value) bool {
-	return val.Kind == ValConst && val.Const.IsNumeric() && toReal(val.Const) == 0
-}
-
 // addQuantities evaluates a sum or difference of quantities, in the unit of the
 // left operand (a bare number where that is one).
 func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {

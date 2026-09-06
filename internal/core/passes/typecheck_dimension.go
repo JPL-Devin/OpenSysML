@@ -2,7 +2,6 @@ package passes
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -20,7 +19,7 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 	}
 	// A bare zero is the null quantity of every dimension, so a comparison reads
 	// it in the other operand's unit (`length > 0`), as evaluation does.
-	if comparesOperands(e.Operator) && (isBareZero(e.Operands[0]) || isBareZero(e.Operands[1])) {
+	if comparesOperands(e.Operator) && (ec.isBareZero(scope, e.Operands[0]) || ec.isBareZero(scope, e.Operands[1])) {
 		return
 	}
 	lhs, ok := ec.model.DimensionOfExpr(scope, e.Operands[0])
@@ -113,19 +112,11 @@ func statesNoMeasurement(element ast.Node) bool {
 	return false
 }
 
-// isBareZero reports a literal zero, possibly signed, naming no unit.
-func isBareZero(element ast.Node) bool {
-	switch n := element.(type) {
-	case *ast.LiteralInteger:
-		v, err := strconv.ParseFloat(n.Value, 64)
-		return err == nil && v == 0
-	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(n.Value, 64)
-		return err == nil && v == 0
-	case *ast.OperatorExpr:
-		return len(n.Operands) == 1 && (n.Operator == ast.OpNeg || n.Operator == ast.OpPos) && isBareZero(n.Operands[0])
-	}
-	return false
+// isBareZero reports an operand folding to zero and naming no unit: a literal
+// or constant arithmetic such as `1 - 1`.
+func (ec *exprChecker) isBareZero(scope *symbols.Scope, element ast.Node) bool {
+	q, ok := ec.model.EvalQuantity(scope, element)
+	return ok && q.Unit.None() && q.Num.IsNumeric() && q.Num.AsReal() == 0
 }
 
 // commensurabilityRequired reports whether an operator only relates operands of
