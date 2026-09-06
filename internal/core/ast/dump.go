@@ -438,6 +438,22 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *CrossFeatureMember:
 		fmt.Fprintf(b, `(CrossFeatureMember name=%q`, identName(v.Ident))
+		if v.Direction != DirNone {
+			fmt.Fprintf(b, ` direction=%q`, v.Direction.String())
+		}
+		for _, flag := range []struct {
+			name string
+			set  bool
+		}{
+			{"derived", v.IsDerived}, {"abstract", v.IsAbstract}, {"variation", v.IsVariation},
+			{"composite", v.IsComposite}, {"portion", v.IsPortion}, {"variable", v.IsVariable},
+			{"constant", v.IsConstant}, {"ref", v.IsReference},
+			{"ordered", v.IsOrdered}, {"nonunique", v.IsNonunique},
+		} {
+			if flag.set {
+				fmt.Fprintf(b, ` %s=true`, flag.name)
+			}
+		}
 		var kids []Node
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
