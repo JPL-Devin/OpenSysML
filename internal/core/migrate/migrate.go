@@ -653,7 +653,7 @@ func (m *migration) association(e *xmi.Element) {
 				decl += " : " + typ
 			}
 			mult, mnote := m.multiplicity(end)
-			decl += mult + ";"
+			decl += mult + collection(end) + ";"
 			tnote = joinNotes(tnote, mnote)
 			m.w.line(decl)
 			if end.Parent == e {
@@ -794,7 +794,7 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString(" : " + typ)
 	}
 	mult, mnote := m.multiplicity(p)
-	b.WriteString(mult)
+	b.WriteString(mult + collection(p))
 	note = joinNotes(note, mnote)
 	for _, role := range []string{"redefinedProperty", "subsettedProperty"} {
 		op := " :>> "
@@ -970,6 +970,19 @@ func (m *migration) multiplicity(p *xmi.Element) (string, string) {
 		return "[" + lower + "]", ""
 	}
 	return "[" + lower + ".." + upper + "]", ""
+}
+
+// collection writes the ordered and nonunique modifiers of a property; UML and
+// v2 share the defaults (unordered, unique), so only a departure is written.
+func collection(p *xmi.Element) string {
+	s := ""
+	if p.Attrs["isOrdered"] == "true" {
+		s += " ordered"
+	}
+	if p.Attrs["isUnique"] == "false" {
+		s += " nonunique"
+	}
+	return s
 }
 
 // isNatural reports whether s spells a natural number.

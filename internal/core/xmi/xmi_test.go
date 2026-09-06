@@ -267,3 +267,44 @@ func TestUnresolvedReferences(t *testing.T) {
 		t.Errorf("Unresolved = %v", got)
 	}
 }
+
+// A child carrying href or xmi:idref is a reference however it is typed: the
+// xmi:type describes the target, which the proxy keeps.
+func TestTypedReferencesAreNotOwned(t *testing.T) {
+	m, err := Parse([]byte(`<?xml version="1.0"?>
+<xmi:XMI xmi:version="2.5.1" xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20161101">
+  <uml:Model xmi:id="_m" name="M">
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <generalization xmi:type="uml:Generalization" xmi:id="_g">
+        <general xmi:type="uml:Class" href="lib.xmi#_base"/>
+      </generalization>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p" name="p">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_q" name="q">
+        <type xmi:type="uml:Class" xmi:idref="_a"/>
+      </ownedAttribute>
+    </packagedElement>
+  </uml:Model>
+</xmi:XMI>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := m.Lookup("_g")
+	if len(g.Children) != 0 {
+		t.Errorf("generalization owns %d children, want a reference", len(g.Children))
+	}
+	if base := m.Ref(g, "general"); base == nil || !base.IsProxy() || base.Type != "Class" {
+		t.Errorf("general = %+v", base)
+	}
+	p := m.Lookup("_p")
+	if typ := m.Ref(p, "type"); typ == nil || !typ.IsProxy() || typ.Name != "Real" || typ.Type != "PrimitiveType" {
+		t.Errorf("typed href = %+v", typ)
+	}
+	if len(p.Children) != 0 {
+		t.Errorf("property owns %d children, want a reference", len(p.Children))
+	}
+	if typ := m.Ref(m.Lookup("_q"), "type"); typ == nil || typ.ID != "_a" {
+		t.Errorf("typed idref = %+v", typ)
+	}
+}

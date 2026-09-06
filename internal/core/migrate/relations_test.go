@@ -680,3 +680,80 @@ func TestMalformedRealizingConnectorSettlesItsFlow(t *testing.T) {
 		t.Errorf("entries for _if = %+v, want one unmapped entry naming the three-ended connector", es)
 	}
 }
+
+// A typed href child (<type xmi:type="uml:PrimitiveType" href=.../>) is a
+// reference, so the property keeps its type and the generalization its target.
+func TestTypedHrefReferencesKeepTheirTargets(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <generalization xmi:type="uml:Generalization" xmi:id="_g">
+        <general xmi:type="uml:Class" href="lib.xmi#_base"/>
+      </generalization>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p" name="p">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_a"/>`)
+	wantLine(t, r.Notation, "attribute p : ScalarValues::Real;")
+	if es := entriesFor(r, "_p"); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+		t.Errorf("property entries = %+v", es)
+	}
+	es := entriesFor(r, "_a")
+	if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "generalization of library type") {
+		t.Errorf("block entries = %+v", es)
+	}
+	if diags := errors(t, "t.sysml", r.Notation); len(diags) > 0 {
+		t.Errorf("%v", diags)
+	}
+}
+
+// isOrdered and isUnique=false are written as the ordered and nonunique
+// modifiers, on properties and association ends alike.
+func TestCollectionModifiersAreWritten(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_o" name="o" isOrdered="true">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_ol" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_ou" value="*"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_n" name="n" isUnique="false" type="_a" aggregation="composite">
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_nl" value="2"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_nu" value="2"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_b" name="b" isOrdered="true" isUnique="false" type="_a">
+        <subsettedProperty xmi:idref="_n"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_u" name="u" isOrdered="false" isUnique="true" type="_a"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_as" name="Link" memberEnd="_e1 _e2">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_e1" name="first" type="_a" isOrdered="true">
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_e1l" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_e1u" value="*"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_e2" name="second" type="_a"/>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_a"/>`)
+	wantLine(t, r.Notation, "attribute o : ScalarValues::Real[0..*] ordered;")
+	wantLine(t, r.Notation, "part n : A[2] nonunique;")
+	wantLine(t, r.Notation, "ref part b : A ordered nonunique :> n;")
+	wantLine(t, r.Notation, "ref part u : A;")
+	wantLine(t, r.Notation, "end 'first' : A[0..*] ordered;")
+	for _, id := range []string{"_o", "_n", "_b", "_u", "_e1"} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+			t.Errorf("%s entries = %+v", id, es)
+		}
+	}
+	if diags := errors(t, "t.sysml", r.Notation); len(diags) > 0 {
+		t.Errorf("%v", diags)
+	}
+	ttl, err := export.Convert("t.sysml", r.Notation, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"isOrdered", "isNonunique"} {
+		if !strings.Contains(string(ttl), want) {
+			t.Errorf("Turtle lacks %s", want)
+		}
+	}
+}

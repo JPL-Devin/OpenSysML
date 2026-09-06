@@ -29,7 +29,7 @@ type Element struct {
 	// ID is the xmi:id, or the href for a proxy of an external element.
 	ID string
 	// Type is the local name of the xmi:type, such as "Class" or "Property".
-	// Empty for a proxy, whose document was not read.
+	// A proxy carries the type its reference declared, or "".
 	Type string
 	// Role is the XML element name that owns this element in its parent, such
 	// as "packagedElement" or "ownedAttribute"; empty for a root.
@@ -464,12 +464,16 @@ func (p *docParser) start(t xml.StartElement) error {
 			href = a.Value
 		}
 	}
+	// An xmi:type on a reference describes its target and does not make it owned.
 	switch {
-	case idref != "" && !hasXMIType(t.Attr):
+	case idref != "":
 		parent.addRef(name, idref)
 		p.stack = append(p.stack, nil)
-	case href != "" && !hasXMIType(t.Attr):
-		p.m.proxy(href)
+	case href != "":
+		px := p.m.proxy(href)
+		if typ := xmiType(t.Attr); typ != "" && px.Type == "" {
+			px.Type = typ
+		}
 		parent.addRef(name, href)
 		p.stack = append(p.stack, nil)
 	default:
@@ -543,13 +547,16 @@ func isXMINamespace(ns string) bool {
 	return strings.Contains(strings.ToLower(ns), "xmi")
 }
 
-func hasXMIType(attrs []xml.Attr) bool {
+func hasXMIType(attrs []xml.Attr) bool { return xmiType(attrs) != "" }
+
+// xmiType returns the local part of the xmi:type attribute, or "".
+func xmiType(attrs []xml.Attr) string {
 	for _, a := range attrs {
 		if a.Name.Local == "type" && isXMINamespace(a.Name.Space) {
-			return true
+			return local(a.Value)
 		}
 	}
-	return false
+	return ""
 }
 
 func (m *Model) newElement(t xml.StartElement, parent *Element) *Element {
