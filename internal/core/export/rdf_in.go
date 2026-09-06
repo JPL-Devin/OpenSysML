@@ -1572,14 +1572,20 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	words = append(words, relationships...)
 	if hasEnds {
-		ends, err := d.endWords(el, endForm)
+		// An anonymous connector's own multiplicity is its declaration, written
+		// ahead of the ends; after them it would read as the last end's.
+		ends, err := d.endWords(el, endForm, multPart != "")
 		if err != nil {
 			return "", err
+		}
+		if multPart != "" {
+			words = append(words, strings.TrimSpace(multPart))
+			multPart = ""
 		}
 		words = append(words, ends)
 		// The `= value` of a binding is one of its ends, already written above.
 		if endForm == formEquals {
-			return strings.Join(words, " ") + multPart, nil
+			return strings.Join(words, " "), nil
 		}
 	}
 	head := strings.Join(words, " ") + multPart

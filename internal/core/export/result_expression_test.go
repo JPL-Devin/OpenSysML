@@ -84,25 +84,25 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to turtle again: %v", err)
 	}
-	// Rebuilt notation parenthesizes every operator, so its text differs; the
-	// model it states must not: the re-encoded graph is the first one.
+	// Rebuilt notation may lay an expression out differently; the model it
+	// states must not: the re-encoded graph is the first one.
 	if string(withoutSourceText(t, again)) != string(stripped) {
 		t.Errorf("the structure alone did not carry the result expressions\n--- with text ---\n%s\n--- from the graph ---\n%s\n--- first ---\n%s\n--- second ---\n%s", withText, fromGraph, turtle, again)
 	}
 	for _, want := range []string{
-		"{ in y : Real; (y + x) }",
-		"{ in 'the input' : Real; ('the input' + x) }",
-		"{ in y : Real; Double(x = { in z : Real; (z + y) }) }",
+		"{ in y : Real; y + x }",
+		"{ in 'the input' : Real; 'the input' + x }",
+		"{ in y : Real; Double(x = { in z : Real; z + y }) }",
 		"{ doc /* the parameter, unchanged */ in y : Real; y }",
-		"in expr keep : Boolean {\n            in v : Real;\n            (v > x)\n        }",
+		"in expr keep : Boolean {\n            in v : Real;\n            v > x\n        }",
 		"Double(x = Double(x)).result",
-		"if (x > 0) ? x else (- x)",
+		"if x > 0 ? x else - x",
 		"(as Real[2])",
 		"(as Real[1..*])",
 		`"say \"hi\"\n\\ \t done"`,
 		"in x : Real;\n        {}",
 		"Double('the value' = x)",
-		"(x * 1.5E3)",
+		"x * 1.5E3",
 	} {
 		if !strings.Contains(string(fromGraph), want) {
 			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, fromGraph)
@@ -143,7 +143,7 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("back to notation from the membership alone: %v", err)
 	}
-	for _, want := range []string{"(x * 2)\n    }", "42\n    }", "(v.mass * 2)\n    }"} {
+	for _, want := range []string{"x * 2\n    }", "42\n    }", "v.mass * 2\n    }"} {
 		if !strings.Contains(string(back), want) {
 			t.Errorf("the notation lacks %q:\n%s", want, back)
 		}
@@ -281,7 +281,7 @@ ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C
 ex:r_a a sysml:FeatureReferenceExpression ; sysml:referent ex:x .
 ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
 `
-	const want = "x : Real;\n        (x * 2)\n    }"
+	const want = "x : Real;\n        x * 2\n    }"
 	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from a standard graph: %v", err)
@@ -341,7 +341,7 @@ ex:x_m a sysml:ParameterMembership ; sysml:membershipOwningNamespace ex:C ; sysm
 ex:y a sysml:AttributeUsage ; sysml:qualifiedName "P::C::y" ; sysml:declaredName "y" ; sysml:type ex:Real ; sysml:owningMembership ex:y_m .
 ex:y_m a sysml:FeatureMembership ; sysml:membershipOwningNamespace ex:C ; sysml:memberElement ex:y .
 `
-	const want = "calc def C {\n        in attribute x : Real;\n        attribute y : Real;\n        (x * 2)\n    }"
+	const want = "calc def C {\n        in attribute x : Real;\n        attribute y : Real;\n        x * 2\n    }"
 	// A member indexed as high as an index goes still comes ahead of the result.
 	indexed := strings.Replace(turtle, "ex:y a sysml:AttributeUsage ;",
 		fmt.Sprintf("ex:y a sysml:AttributeUsage ; <urn:opensysml:sysml:memberIndex> \"%d\"^^xsd:integer ;", math.MaxInt), 1)
@@ -383,7 +383,7 @@ ex:r_b a sysml:LiteralRational ; sysml:value "0.5"^^owl:real .
 	if err != nil {
 		t.Fatalf("back to notation from a standard graph: %v", err)
 	}
-	if want := "abstract calc def C {\n        (2 + 0.5)\n    }"; !strings.Contains(string(back), want) {
+	if want := "abstract calc def C {\n        2 + 0.5\n    }"; !strings.Contains(string(back), want) {
 		t.Errorf("the notation lacks %q:\n%s", want, back)
 	}
 }
@@ -393,10 +393,10 @@ func TestIntegerLiteralsAtTheBoundsAreRead(t *testing.T) {
 	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
 	const from = `sysml:value "2"^^xsd:integer ;`
 	for to, want := range map[string]string{
-		`sysml:value "2147483647"^^xsd:int ;`:                "(x * 2147483647)",
+		`sysml:value "2147483647"^^xsd:int ;`:                "x * 2147483647",
 		`sysml:value "-2147483648"^^xsd:int ;`:               "",
-		`sysml:value "2147483648"^^xsd:integer ;`:            "(x * 2147483648)",
-		`sysml:value "340282366920938463463"^^xsd:integer ;`: "(x * 340282366920938463463)",
+		`sysml:value "2147483648"^^xsd:integer ;`:            "x * 2147483648",
+		`sysml:value "340282366920938463463"^^xsd:integer ;`: "x * 340282366920938463463",
 	} {
 		back, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, from, to, 1)), export.FormatTurtle, export.FormatSysML)
 		if want == "" {
@@ -513,10 +513,10 @@ func TestLiteralValuesAreSpelledAsTokens(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ from, to, want, refused string }{
-		{rational, `sysml:value "3"^^xsd:decimal ;`, "(x * 3.0)", ""},
-		{rational, `sysml:value "3."^^xsd:decimal ;`, "(x * 3.0)", ""},
-		{rational, `sysml:value "3.E2"^^xsd:double ;`, "(x * 3.0E2)", ""},
-		{rational, `sysml:value ".5"^^xsd:decimal ;`, "(x * .5)", ""},
+		{rational, `sysml:value "3"^^xsd:decimal ;`, "x * 3.0", ""},
+		{rational, `sysml:value "3."^^xsd:decimal ;`, "x * 3.0", ""},
+		{rational, `sysml:value "3.E2"^^xsd:double ;`, "x * 3.0E2", ""},
+		{rational, `sysml:value ".5"^^xsd:decimal ;`, "x * .5", ""},
 		{boolean, `sysml:value "1"^^xsd:boolean .`, "in expr always {\n            true\n        }", ""},
 		{boolean, `sysml:value "0"^^xsd:boolean .`, "in expr always {\n            false\n        }", ""},
 		{integer, `sysml:value "-2"^^xsd:integer ;`, "", `the expression <urn:opensysml:expr:Results__Double___401_pa1>: the notation spells an integer literal as digits alone, not "-2"`},
@@ -588,7 +588,7 @@ func TestExpressionBodyKeepsTheOrderOfItsDeclarations(t *testing.T) {
 		t.Fatalf("back to notation from the body's structure: %v", err)
 	}
 	for _, want := range []string{
-		"{ in a : Real; private attribute k : Real = 1; in b : Real; ((a + b) + (k * x)) }",
+		"{ in a : Real; private attribute k : Real = 1; in b : Real; a + b + k * x }",
 		"{ private attribute k : Real = 1; }",
 	} {
 		if !strings.Contains(string(back), want) {
@@ -610,7 +610,7 @@ func TestExpressionBodyParameterLiteralIsQuoted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("back to notation from a literal parameter: %v", err)
 	}
-	if want := "{ in 'the input'; ('the input' + x) }"; !strings.Contains(string(back), want) {
+	if want := "{ in 'the input'; 'the input' + x }"; !strings.Contains(string(back), want) {
 		t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
 	}
 	if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
@@ -642,7 +642,7 @@ func TestNonStringLiteralsAreRefused(t *testing.T) {
 				if err != nil {
 					t.Fatalf("an xsd:string literal is a string: %v", err)
 				}
-				if want := "{ in 'the input'; ('the input' + x) }"; !strings.Contains(string(back), want) {
+				if want := "{ in 'the input'; 'the input' + x }"; !strings.Contains(string(back), want) {
 					t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
 				}
 				return
@@ -751,7 +751,7 @@ func TestExpressionBodyParameterOfAnotherShapeIsRefused(t *testing.T) {
 				if err != nil {
 					t.Fatalf("a parameter stating no direction is an `in` parameter: %v", err)
 				}
-				if want := "{ in 'the input' : Real; ('the input' + x) }"; !strings.Contains(string(back), want) {
+				if want := "{ in 'the input' : Real; 'the input' + x }"; !strings.Contains(string(back), want) {
 					t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
 				}
 				return
@@ -838,7 +838,7 @@ func TestSuperclassesStatedFirstStillClassify(t *testing.T) {
 	if string(got) != string(want) {
 		t.Errorf("stating the superclasses changed the notation\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}
-	if !strings.Contains(string(got), "attribute y : Real = (x + 1);\n        (y * y)\n    }") {
+	if !strings.Contains(string(got), "attribute y : Real = x + 1;\n        y * y\n    }") {
 		t.Errorf("the result expression did not come back bare after its members:\n%s", got)
 	}
 }
