@@ -603,7 +603,7 @@ expr:IrregularLayout__Rover__bounds___400_pcondition_pa1_pa1
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:IrregularLayout__Rover___409
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "IrregularLayout::Rover::@9" ;
     sysml:elementId "IrregularLayout__Rover___409" ;
     sysx:memberIndex "9"^^xsd:integer ;
@@ -611,7 +611,6 @@ elmt:IrregularLayout__Rover___409
     sysml:owner elmt:IrregularLayout__Rover ;
     sysml:owningRelationship elmt:IrregularLayout__Rover___409_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover___409_om ;
-    sysx:declaredPrefix "assert" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:IrregularLayout__Rover___409___400 ;
     sysml:ownedMembership elmt:IrregularLayout__Rover___409___400_om ;

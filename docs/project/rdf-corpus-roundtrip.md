@@ -9,7 +9,7 @@ pin in `scripts/pilot-pin.sh`.
 
 | Root | Files |
 |---|---|
-| `committed` (everything under `examples/` outside the downloaded roots) | 32 |
+| `committed` (everything under `examples/` outside the downloaded roots) | 33 |
 | `sysml-v2-training` | 100 |
 | `pilot-corpora/kerml-examples` | 58 |
 | `pilot-corpora/sysml-examples` | 99 |
@@ -59,34 +59,54 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 306 |
+| `stable` | 346 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
 | `unwritable` | 0 |
 | `unparseable` | 0 |
-| `refused` | 40 |
+| `refused` | 0 |
 | **total** | **346** |
 
-So 306 of 346 files convert to Turtle, and every one of them comes back as the same Turtle byte for
-byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
-it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
-back up to whitespace, as a different graph, or that could not be written back or re-read from
-canonical notation all moved to `stable` when it landed. The refusals by class: 23
-`feature-declaration`, 10 `event-declaration`, 3 each of `snapshot-declaration` and
-`assert-declaration`, and 1 `timeslice-declaration`. Three files were once refused as a
-`duplicate-declaration` because the parser read the anonymous binary connector `connector a to b;`
-as a connector *named* `a`; two of them (`parser_features_demo_advanced_connectors.kerml`,
-`Named Collection Members Example/VehicleTanks.kerml`) convert now that the ends are read as
-ends, and the third (`Simple Tests/ArgumentResolution.kerml`) meets the standing refusal of an
-anonymous `feature` declaration. The ends themselves — bare, behind a multiplicity, or named
-ahead of the feature they reference (`connector a ::> a.x to b;`, carried as `sysx:endName`) — are
-structure the decoder writes back without the source text
-([rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)). No file
-is refused for an expression any longer: a body's result expression is mapped
+So every one of the 346 files converts to Turtle, and every one comes back as the same Turtle byte
+for byte. That is the source text at work: the decoder writes each file back from the
+`sysx:sourceText` it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the
+files that came back up to whitespace, as a different graph, or that could not be written back or
+re-read from canonical notation all moved to `stable` when it landed.
+
+The last 40 refusals were one family: a synonym, portion, event or assertion keyword on a
+declaration with no name of its own (`feature :>> x;`, `event m.start;`, `snapshot :>> start { … }`,
+`assert c { … }`), which the encoder refused rather than let come back as the canonical keyword —
+23 `feature-declaration`, 10 `event-declaration`, 3 each of `snapshot-declaration` and
+`assert-declaration`, and 1 `timeslice-declaration`. Those declarations are now carried
+structurally ([rdf-mapping.md § What each element
+carries](../reference/rdf-mapping.md#what-each-element-carries)): the portion as
+`sysml:portionKind`, the event and the assertion as `sysml:EventOccurrenceUsage` and
+`sysml:AssertConstraintUsage` with the occurrence or constraint they name as `sysml:references`,
+and KerML's `feature` as `sysx:declaredKeyword`, on anonymous and named declarations alike. All 40
+moved to `stable`; none hid a second refusal behind the first. Seven of them do still stop on
+the graph-only trip — `sysx:sourceText` stripped, the notation written from the structure alone —
+at constructs the decoder does not yet write back and that stop on `main` in a file without any
+anonymous keyword: a `message m of T;` head with no `sysx:endForm` (`Interaction
+Example-2.sysml`, `17b-Sequence-Modeling.sysml`, `AHFSequences.sysml`), a `disjoint a from b;`
+statement (`parser_features_demo_declarations.kerml`), a succession whose ends are body members
+(`Simple Tests/Connectors.kerml`), and an invocation expression (`Simple
+Tests/Expressions.kerml`, `SimpleVehicleModel.sysml`); one more, `TimeVaryingFeatures.kerml`,
+comes back from the graph alone with a `featured by` name the second conversion no longer
+resolves, which a named feature reproduces on `main`. The gate measures the source-backed trip,
+where all of these are `stable`; the graph-only shapes are the open items in
+[rdf-mapping.md § Limitations](../reference/rdf-mapping.md#limitations).
+
+Three files were once refused as a `duplicate-declaration` because the parser read the anonymous
+binary connector `connector a to b;` as a connector *named* `a`; they convert now that the ends are
+read as ends. The ends themselves — bare, behind a multiplicity, or named ahead of the feature they
+reference (`connector a ::> a.x to b;`, carried as `sysx:endName`) — are structure the decoder
+writes back without the source text
+([rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)). No file is
+refused for an expression any longer: a body's result expression is mapped
 ([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
-took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an
-anonymous `feature` declaration (`Simple Tests/Expressions.kerml`), and the one `unwritable` file
-(`ExtendedOccurrences.kerml`) with it.
+took the 13 files refused for one from `refused` to `stable` (12) or, for `Simple
+Tests/Expressions.kerml`, to the anonymous `feature` refusal that has since been lifted, and the
+one `unwritable` file (`ExtendedOccurrences.kerml`) with it.
 
 Before metadata annotations were carried structurally, 285 files converted and 60 were refused,
 19 of them `prefix-metadata`; of those 19, 17 now convert and 2 fall to the `feature-declaration`
