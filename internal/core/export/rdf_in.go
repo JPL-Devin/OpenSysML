@@ -1572,14 +1572,26 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	words = append(words, relationships...)
 	if hasEnds {
-		ends, err := d.endWords(el, endForm)
+		// A connector's own multiplicity is its declaration, written ahead of
+		// the ends; after them it would read as the last end's.
+		declared := multPart != "" || len(words) > keywordAt+1
+		if declared && keywordAt < len(words) && words[keywordAt] == "bind" {
+			// SysML's `bind` shorthand declares nothing; `bind [1] a = b` gives the
+			// first end the `[1]`, so the declaration takes the `binding … bind` form.
+			words[keywordAt] = "binding"
+		}
+		ends, err := d.endWords(el, endForm, declared)
 		if err != nil {
 			return "", err
+		}
+		if multPart != "" {
+			words = append(words, strings.TrimSpace(multPart))
+			multPart = ""
 		}
 		words = append(words, ends)
 		// The `= value` of a binding is one of its ends, already written above.
 		if endForm == formEquals {
-			return strings.Join(words, " ") + multPart, nil
+			return strings.Join(words, " "), nil
 		}
 	}
 	head := strings.Join(words, " ") + multPart

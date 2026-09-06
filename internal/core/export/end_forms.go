@@ -362,13 +362,26 @@ func relationshipTarget(n *ast.Usage, kind ast.RelationshipKind) ast.Node {
 }
 
 // endWords rebuilds the ends of an end-binding head from the graph: the form it
-// states, the verb it writes them after, and the features it relates.
-func (d *decoder) endWords(el *element, form string) (string, error) {
+// states, the verb it writes them after, and the features it relates. declared
+// reports that a declaration part precedes the ends, which the verb then separates.
+func (d *decoder) endWords(el *element, form string, declared bool) (string, error) {
 	ends, payload, err := d.relatedEnds(el)
 	if err != nil {
 		return "", err
 	}
 	verb, _ := d.stringOf(el, rdf.OpenSysML+xEndVerb)
+	if verb == "" && declared {
+		// A declaration is followed by the verb (KerML.xtext BindingConnectorDeclaration,
+		// SysML.xtext BindingConnectorAsUsage); `binding [1] a = b` gives `[1]` to the end.
+		switch {
+		case form == formEquals && d.kerml(el):
+			verb = "of"
+		case form == formEquals:
+			verb = "bind"
+		case form == formFirstThen:
+			verb = "first"
+		}
+	}
 	if form == formEquals && len(ends) == 0 {
 		// A binding that relates no end nodes binds the feature it references to
 		// its value; the value is written by this notation, not after it.

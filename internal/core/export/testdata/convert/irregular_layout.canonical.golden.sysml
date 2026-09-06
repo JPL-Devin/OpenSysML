@@ -16,20 +16,20 @@ package IrregularLayout {
              its doc spans
                 lines too */
         attribute mass : Real = 80;
-        attribute limit : Real = (100 + 20);
+        attribute limit : Real = 100 + 20;
         attribute label = "two\nlines";
         attribute tabbed : Real = 1;
         part wheels : Wheel[4];
         part axle : Axle;
         connect wheels to axle;
         constraint bounds {
-            ((mass > 0) and (mass < limit));
+            mass > 0 and mass < limit;
         }
         assert constraint {
-            (mass > 0);
+            mass > 0;
         }
         calc speed : Speed {
-            in m = ((mass * 2) - 1);
+            in m = mass * 2 - 1;
         }
         comment about Rover /* a comment
    that wanders back
@@ -39,10 +39,10 @@ package IrregularLayout {
         in attribute count;
         attribute total;
         action tick;
-        if ((count > 0) and (total > 0)) {
+        if count > 0 and total > 0 {
             perform tick;
         }
-        while (count > 0) {
+        while count > 0 {
             perform tick;
         }
     }
@@ -51,6 +51,6 @@ package IrregularLayout {
         then off;
         state off;
         state on;
-        transition first off if (1 > 0) then on;
+        transition first off if 1 > 0 then on;
     }
 }

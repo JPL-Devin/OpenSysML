@@ -321,6 +321,7 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	head(rdf.SysMLTerm(mTransition))
 	e.name(subject, n.Name)
 	e.graph.Add(subject, e.sysx(xTransitionSyntax), rdf.String(e.transitionSyntax(n)))
+	e.transitionKeyword(subject, n)
 	if qualifiedText(n.Source) != "" {
 		e.graph.Add(subject, e.sysml(pSourceFeature), e.edgeReference(n.Source))
 	}
@@ -504,13 +505,28 @@ func (e *encoder) transitionSyntax(n *ast.TransitionMember) string {
 	if n.Source == nil {
 		return "accept"
 	}
-	fields := strings.Fields(e.text(n))
-	for i := 1; i < len(fields) && i <= 2; i++ {
-		if fields[i] == "first" {
-			return "first"
-		}
+	// The source is the node the AST places right after an optional `first`.
+	if head := words(e.before(n, n.Source)); len(head) > 0 && head[len(head)-1] == "first" {
+		return "first"
 	}
 	return "source"
+}
+
+// transitionKeyword records `succession` on a guarded succession, which the
+// parser reads as a transition; the keyword is the one written before the source.
+func (e *encoder) transitionKeyword(subject rdf.Term, n *ast.TransitionMember) {
+	if n.Source == nil {
+		return
+	}
+	for _, word := range words(e.before(n, n.Source)) {
+		switch word {
+		case "succession":
+			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(word))
+			return
+		case "transition":
+			return
+		}
+	}
 }
 
 // bracedBody reports whether a body was written with braces rather than as the
@@ -1214,9 +1230,18 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 		if source == "" {
 			return "", "", d.missing(el, "sysml:"+pSourceFeature, "a transition written with `transition` names the state it leaves")
 		}
-		words = append(words, "transition")
-		words = append(words, d.identWords(el)...)
-		if syntax == "first" {
+		keyword := "transition"
+		if written, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); ok {
+			keyword = written
+		}
+		ident := d.identWords(el)
+		if visibility := d.visibility(el); visibility != "" {
+			words = append(words, visibility)
+		}
+		words = append(words, keyword)
+		words = append(words, ident...)
+		// The grammar admits a bare source only on a nameless `transition`.
+		if syntax == "first" || len(ident) > 0 || keyword == "succession" {
 			words = append(words, "first")
 		}
 		words = append(words, source)

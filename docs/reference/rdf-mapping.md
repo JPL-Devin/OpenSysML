@@ -684,6 +684,18 @@ The rules the tree follows:
   a shape this mapping cannot write (a missing operator, an operand count an
   operator does not take, a literal with no value) is reported as unsupported,
   naming the node, never guessed.
+- **Parentheses follow the parser's precedence table.** The tree records no
+  parentheses, so the writer places them where the grammar needs them: an operand
+  that binds more loosely than the operator around it is parenthesized
+  (`size(ae) == (if isEmpty(af) ? 0 else 2) and …`, `(p ?? q) implies r`,
+  `(a + b)[1]`, `(x as T).f`, `- (1 + 2) ** 2`, `not (p and q)`), one that binds as
+  tightly or tighter is not (`a + b * c`, `if p ? x else - x`, `p hastype T or q`).
+  A conditional, being the loosest form, is parenthesized wherever it is an
+  operand or the condition of another conditional; as the operand of
+  `**` the left side must bind tighter than exponentiation, so `(a ** b) ** c`
+  keeps its parentheses while `a ** b ** c` groups to the right, as the parser
+  reads it. Text kept from `sysx:sourceText` is placed the same way, so a
+  foreign operand written into a kept expression is parenthesized when needed.
 - **An expression body is structure too.** `{ in y : Real; y + x }` is a
   `sysml:Expression` node whose `sysx:bodyParameter`s are nodes of their own —
   each typed `sysml:ReferenceUsage` with `sysml:direction "in"`, its name, `ref`
@@ -775,6 +787,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `accept sig : Signal;`, `accept when c;` | the usage's own metaclass | `sysml:isAccept`, and `sysx:declaredKeyword "accept"` where the optional `action` was not written |
 | `fork`, `join`, `merge`, `decide` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
 | `succession first a then b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
+| `public succession S first a if g then b;` (a guarded succession, which is a transition) | `sysml:TransitionUsage` | as a transition, with `sysx:declaredKeyword "succession"` for the keyword written; `sysx:transitionSyntax` is derived from where the AST places the source, not from the words ahead of it, so a visibility or a name does not change it. Written back, a named form always writes `first` (`succession S first a …`, `transition T first a …`), since only a nameless `transition` may state a bare source |
 | `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
 | `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
@@ -936,8 +949,8 @@ named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
 |----------------|----------|------|
 | `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b`, `connector c from a to b` |
 | `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
-| `equals` | `<end0> = <end1>` | `bind a = b` |
-| `firstThen` | `<end0> then <end1>` | `succession first a then b` |
+| `equals` | `<end0> = <end1>` | `bind a = b`, `binding [1] of a = b` |
+| `firstThen` | `<end0> then <end1>` | `succession first a then b`, `succession [n] first a then b` |
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
@@ -947,6 +960,16 @@ A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
 is a synonym for the kind (`verify` for a satisfy, `allocate` for an
 allocation) it is carried as `sysx:declaredKeyword`, as elsewhere.
+
+An anonymous connector's own multiplicity (`sysml:lowerBound`/`sysml:upperBound`
+on the connector, as against on an end node) is its declaration, and is written
+ahead of the ends: `succession [n] first a then b`, `binding [1] of a = b`. A
+declaration is always followed by the end verb, since `binding [1] a = b` reads
+the leading `[1]` as the first end's multiplicity in both notations: a `binding`
+or `succession` that declares something but recorded no `sysx:endVerb` is written
+with KerML `of`/`first` or SysML `bind`/`first`, which the second hop then records
+as its verb. SysML's `bind` shorthand declares nothing, so a `bind` whose graph
+states a multiplicity is written `binding [1] bind a = b`.
 
 **The form is only recorded when rebuilding from it reproduces the head's tokens.**
 The encoder writes the ends back from `sysx:endForm` and compares them with the
