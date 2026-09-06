@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 259,
-        "digest": "sha256:422640c9d2ea84902190e874fee73c971e69d5d4923b5be51e2a408cfb906c95"
+        "files": 261,
+        "digest": "sha256:2ee6aec46111fb93063629a167fdde791d6c5e78297e9040a23ed6a84f56af7f"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 259,
-    "bothReject": 250,
+    "cases": 261,
+    "bothReject": 252,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 127,
-      "bothReject": 118,
+      "cases": 129,
+      "bothReject": 120,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1549,6 +1549,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/k53-cross-feature-typed-narrower-than-end.kerml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2092,6 +2101,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/s88-cross-feature-typed-narrower-than-end.sysml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
       "source": "semantic",
       "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
@@ -2484,8 +2502,8 @@
       }
     ],
     "totals": {
-      "cases": 259,
-      "bothReject": 250,
+      "cases": 261,
+      "bothReject": 252,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
