@@ -216,6 +216,58 @@ func TestNameInheritedFromTwoSupertypesIsReportedOnTheSubtype(t *testing.T) {
 	}
 }
 
+// Two inherited redefinitions of one ancestor feature are still two features
+// under one name: neither redefines the other, so the subtype and a usage
+// typed by one while subsetting the other both conflict — matched against the
+// pinned validate-sysml, which reports the same two warnings.
+func TestInheritedRedefinitionsOfACommonAncestorConflict(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def S { attribute d; }
+		part def A :> S { attribute :>> d = 1; }
+		part def B :> S { attribute :>> d = 2; }
+		part def C {
+			part b : B;
+			part x : A :> b;
+		}
+		part def D :> A, B;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 2 {
+		t.Fatalf("conflicts = %v, want two", r.Diagnostics)
+	}
+	for _, c := range conflicts {
+		if want := "Duplicate of inherited member name 'd' from A, B"; c.Message != want {
+			t.Errorf("message = %q, want %q", c.Message, want)
+		}
+	}
+}
+
+// An owned member redefining every colliding inherited namesake owns the name;
+// one redefining only some leaves the rest in conflict — matched against the
+// pinned validate-sysml.
+func TestOwnedRedefinitionOfCollidingInheritedNames(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def S { attribute d; }
+		part def A :> S { attribute :>> d = 1; }
+		part def B :> S { attribute :>> d = 2; }
+		part def L1 { attribute p; }
+		part def R1 { attribute p; }
+		part def C {
+			part b : B;
+			part x : A :> b { attribute :>> A::d, b::d; }
+		}
+		part def D :> L1, R1 { attribute :>> L1::p, R1::p; }
+		part def E :> L1, R1 { attribute :>> L1::p; }
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 || len(r.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %v, want one conflict for E's unredefined p", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from R1"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
 // A supertype's non-private imports are memberships it has, so a subtype
 // inherits the imported names too (KerML §8.4.3.2) — Xpect
 // ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.
