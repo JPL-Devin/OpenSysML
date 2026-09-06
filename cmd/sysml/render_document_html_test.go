@@ -196,6 +196,67 @@ func TestRenderDocumentHTMLMermaid(t *testing.T) {
 		2, "not the sheet")
 }
 
+// TestRenderDocumentHTMLTheme checks -html-theme layers a bundled theme over
+// the default sheet on a page, in a set's shared sheet and in the sheet
+// -html-default-css writes, and refuses what it cannot style.
+func TestRenderDocumentHTMLTheme(t *testing.T) {
+	binary := buildCLI(t)
+
+	themed := check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "report")
+	wantReport(t, themed, 0, "<!DOCTYPE html>", "--sysml-font-body: system-ui", "/* report:")
+	if strings.Index(themed.stdout, "/* report:") < strings.Index(themed.stdout, "--sysml-font-body: system-ui") {
+		t.Errorf("the theme must follow the default sheet it overrides:\n%s", themed.stdout)
+	}
+	if strings.Count(themed.stdout, "<style>") != 1 {
+		t.Errorf("default sheet and theme share one style element:\n%s", themed.stdout)
+	}
+	// The default theme, named, is the default sheet alone.
+	plain := check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-doc-form", "html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "default"), 0, plain.stdout)
+	for _, name := range []string{"modern", "print"} {
+		wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+			"-doc-form", "html", "-html-theme", name), 0, "/* "+name+":")
+	}
+
+	dir := filepath.Join(t.TempDir(), "site")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir, "-doc-form", "html", "-html-theme", "modern"), 0)
+	sheet, err := os.ReadFile(filepath.Join(dir, "sysml-document.css"))
+	if err != nil {
+		t.Fatalf("set wrote no shared sheet: %v", err)
+	}
+	if !strings.Contains(string(sheet), "@layer opensysml;") || !strings.Contains(string(sheet), "/* modern:") {
+		t.Errorf("the set's sheet carries default and theme:\n%s", sheet)
+	}
+
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-theme", "print")),
+		0, "@layer opensysml;", "/* print:")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-theme", "fancy")),
+		2, `no bundled theme is named "fancy"`, "default, modern, print, report")
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "fancy"), 2, `no bundled theme is named "fancy"`)
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-theme", "../document"), 2, "no bundled theme is named")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme="), 2, "-html-theme is empty")
+	wantReport(t, check(t, binary, documentModel, "-html-theme="), 2, "-html-theme is empty")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-fragment", "-html-theme", "report"), 2, "-html-theme styles a whole page")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-no-default-css", "-html-theme", "report"), 2, "ask for one or the other")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-no-default-css", "-html-theme", "report"), 2, "ask for one or the other")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-html-theme", "report"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "pdf", "-o", filepath.Join(t.TempDir(), "r.pdf"), "-html-theme", "report"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-html-theme", "report"),
+		2, "apply to -render-document")
+}
+
 // TestRenderDocumentHTMLFlagConflicts checks the HTML flag combinations the
 // run refuses.
 func TestRenderDocumentHTMLFlagConflicts(t *testing.T) {

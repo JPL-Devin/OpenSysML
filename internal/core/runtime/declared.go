@@ -33,7 +33,7 @@ func (r *DeclaredReader) Read(sym *symbols.Symbol, name string) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	val, err := fv.ReadValue(name)
+	val, err := r.ctx.readFeatureValue(fv, name)
 	if err != nil {
 		return Value{}, err
 	}

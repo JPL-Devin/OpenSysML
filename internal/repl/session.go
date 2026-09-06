@@ -1128,9 +1128,11 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 		return nil, err
 	}
 	// Give the runtime the buffer's text, so an error about a declaration reports
-	// the line it was submitted on rather than a byte offset.
+	// the line it was submitted on rather than a byte offset, and the buffer's
+	// scope tree, so a carried object is rebound to the symbols the prompt reaches.
 	for _, doc := range s.sessionDocs() {
 		ctx.RegisterSource(source.New(doc.Name, doc.Content))
+		ctx.RegisterScope(doc.Scope)
 	}
 	ctx.AdoptIdentities(s.replaced)
 	s.rtCtx = ctx

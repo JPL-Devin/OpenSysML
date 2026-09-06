@@ -86,6 +86,13 @@ CAPABILITY_STRICT_CONFORMANCE = "strict_conformance"
 #: the service sends an unsupported null naming the value, which is an error.
 CAPABILITY_COMPLEX_VALUES = "complex_values"
 
+#: An array, a vector and a vector quantity as ``Value.array``, ``Value.vector``
+#: and ``Value.vector_quantity``, read as :class:`~opensysml.values.Array`,
+#: :class:`~opensysml.values.Vector` and :class:`~opensysml.values.VectorQuantity`.
+#: Without it the service sends an unsupported null naming the value, which is
+#: an error, and refuses one sent to it with ``UNIMPLEMENTED``.
+CAPABILITY_STRUCTURED_VALUES = "structured_values"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

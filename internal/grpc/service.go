@@ -94,6 +94,11 @@ const CapabilityParseSources = "parse_sources"
 // Value.complex, rather than reporting it as an unsupported null.
 const CapabilityComplexValues = "complex_values"
 
+// CapabilityStructuredValues names the capability of carrying an array, a
+// vector and a vector quantity as Value.array, Value.vector and
+// Value.vector_quantity, rather than reporting them as unsupported nulls.
+const CapabilityStructuredValues = "structured_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
@@ -102,7 +107,7 @@ var capabilities = []string{
 	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
 	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
 	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
-	CapabilityParseSources, CapabilityComplexValues,
+	CapabilityParseSources, CapabilityComplexValues, CapabilityStructuredValues,
 }
 
 type capabilityAvailability struct {
@@ -243,7 +248,12 @@ func (s *Service) requireCapability(capability string) error {
 // is unavailable, rather than reading it as something else.
 func (s *Service) requireValueCapabilities(pv *pb.Value) error {
 	if ValueCarriesComplex(pv) {
-		return s.requireCapability(CapabilityComplexValues)
+		if err := s.requireCapability(CapabilityComplexValues); err != nil {
+			return err
+		}
+	}
+	if ValueCarriesStructured(pv) {
+		return s.requireCapability(CapabilityStructuredValues)
 	}
 	return nil
 }
