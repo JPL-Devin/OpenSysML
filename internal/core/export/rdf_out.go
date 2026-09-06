@@ -703,6 +703,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isSnapshot", n.Portion == ast.PortionSnapshot},
 			{"isTimeslice", n.Portion == ast.PortionTimeslice},
 			{"isComposite", n.IsComposite},
+			{"isPortion", n.IsPortion},
 			{"isDerived", n.IsDerived},
 			{"isOrdered", n.IsOrdered},
 			{"isNonunique", n.IsNonunique},
@@ -1316,6 +1317,7 @@ func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error
 		{"isReference", cross.IsReference},
 		{"isConstant", cross.IsConstant},
 		{"isComposite", cross.IsComposite},
+		{"isPortion", cross.IsPortion},
 		{"isDerived", cross.IsDerived},
 	})
 	if keyword := directionKeyword(cross.Direction); keyword != "" {

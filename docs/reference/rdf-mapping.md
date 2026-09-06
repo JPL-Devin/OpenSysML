@@ -196,8 +196,8 @@ triples come); a set of classes with no such member is refused, naming the subje
   `sysml:owner` as the compact spelling earlier releases wrote
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
-  `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,
-  `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
+  `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isPortion`,
+  `isDerived`, `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
   `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
 - Declaration-head relationships, as element IRIs where the target resolves
   inside the model — by name resolution, so a name reached through an import,

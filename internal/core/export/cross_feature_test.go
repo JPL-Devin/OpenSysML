@@ -150,17 +150,31 @@ func TestCrossFeaturePrefixComesBackFromTheGraphAlone(t *testing.T) {
 
 	kerml := `package Crossing {
     class A;
-    class B;
+    class B {
+        portion feature q : A;
+    }
     assoc C {
         end var x1[1] typed by A feature x : A;
         end out derived composite x2[1] feature y : B;
         end var [1] feature z : B;
+        end portion x4[1] feature w : B;
     }
 }
 `
 	turtle, err := export.Convert("m.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
+	}
+	g, err = rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatalf("parse turtle: %v", err)
+	}
+	for _, portion := range []string{"Crossing::B::q", "Crossing::C::w::x4"} {
+		wantLexical(t, g, elmt(portion), rdf.SysML+"isPortion", "true")
+		wantLexical(t, g, elmt(portion), rdf.SysML+"isComposite", "true")
+	}
+	if g.HasProperty(iri(elmt("Crossing::C::y::x2")), rdf.SysML+"isPortion") {
+		t.Errorf("the composite cross feature x2 is no portion")
 	}
 	out, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {

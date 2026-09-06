@@ -1,0 +1,1 @@
+- **A `portion` feature comes back from RDF as a portion.** The mapping stated a KerML `portion feature p : A` — and a `portion` cross feature — only as `sysml:isComposite`, so a graph without `sysx:sourceText` was written back as `composite feature p : A`. It now also states `sysml:isPortion`, and a composite feature that is a portion is written back with `portion`.

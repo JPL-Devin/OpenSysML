@@ -1328,7 +1328,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			continue
 		}
 		if d.boolOf(el, rdf.SysML+flag.property) {
-			words = append(words, flag.keyword)
+			words = append(words, d.compositeKeyword(el, flag))
 		}
 		// The cross feature an end owns is written right after `end`
 		// (SysML.xtext EndUsagePrefix `'end' OwnedCrossFeatureMember?`).
@@ -2173,7 +2173,7 @@ func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
 		{"isComposite", "composite"},
 	} {
 		if d.boolOf(cross, rdf.SysML+flag.property) {
-			words = append(words, flag.keyword)
+			words = append(words, d.compositeKeyword(cross, flag))
 		}
 	}
 	if prefix, ok := d.stringOf(cross, rdf.OpenSysML+xDeclaredPrefix); ok {
@@ -2191,6 +2191,15 @@ func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
 		}
 	}
 	return words
+}
+
+// compositeKeyword writes `portion` for a composite feature that is a portion
+// (KerML `portion feature p`: isPortion implies isComposite).
+func (d *decoder) compositeKeyword(el *element, flag struct{ property, keyword string }) string {
+	if flag.property == "isComposite" && d.boolOf(el, rdf.SysML+"isPortion") {
+		return "portion"
+	}
+	return flag.keyword
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the
