@@ -276,11 +276,14 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 	case *ast.NullExpr:
 		return ec.evalNull(n)
 	case *ast.FeatureReference:
-		return ec.evalFeatureReference(n)
+		val, err := ec.evalFeatureReference(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.QualifiedName:
-		return ec.evalName(n)
+		val, err := ec.evalName(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.FeatureChainExpr:
-		return ec.evalFeatureChain(n)
+		val, err := ec.evalFeatureChain(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.OperatorExpr:
 		return ec.evalOperator(n)
 	case *ast.SequenceExpr:
@@ -389,6 +392,37 @@ func (ec *EvalContext) evalLiteralString(n *ast.LiteralString) (Value, error) {
 // evalNull evaluates a null expression.
 func (ec *EvalContext) evalNull(n *ast.NullExpr) (Value, error) {
 	return Value{Kind: ValNull}, nil
+}
+
+// declaredElements types a feature read that yields no element by the quantity
+// dimension the read declares (KerML 8.4.4.9: a feature's values are of its type),
+// in that dimension's coherent unit; an aggregate of the read then keeps the kind.
+func (ec *EvalContext) declaredElements(node ast.Node, val Value, err error) (Value, error) {
+	if err != nil || !isEmptyValue(val) {
+		return val, err
+	}
+	if typed, ok := ec.ctx.emptyOfDeclared(ec.scope, node); ok {
+		return typed, nil
+	}
+	return val, nil
+}
+
+// emptyOfDeclared is the empty sequence of the quantities an expression is
+// statically declared to yield, in their coherent unit; false where the
+// declarations fix no dimension or a dimensionless one.
+func (ctx *Context) emptyOfDeclared(scope *symbols.Scope, node ast.Node) (Value, bool) {
+	if ctx.model == nil || scope == nil {
+		return Value{}, false
+	}
+	dim, ok := ctx.model.DimensionOfExpr(scope, node)
+	if !ok || dim.Term.Dimensionless() {
+		return Value{}, false
+	}
+	unit, ok := ctx.model.CoherentUnit(dim)
+	if !ok {
+		return Value{}, false
+	}
+	return NewEmptySequenceOf(unit), true
 }
 
 // evalFeatureReference evaluates a feature reference (variable lookup).

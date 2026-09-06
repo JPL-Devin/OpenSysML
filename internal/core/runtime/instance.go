@@ -533,6 +533,18 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
 	}
 
+	// A `default` applies only where nothing else populates the feature: the
+	// members subsetting it do (KerML 1.0 §7.3.4.5).
+	if ctx.valueBinds(fv.Feature) && fv.Feature.DefaultIsFallback() {
+		contributed, err := ctx.subsettingContributions(inst, name)
+		if err != nil {
+			return nil, err
+		}
+		if len(contributed) > 0 {
+			return inst.holdContributed(fv, name, contributed)
+		}
+	}
+
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling feature values it refers to.
 	// The feature holds what the default states, once that conforms to the
@@ -686,6 +698,12 @@ func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name str
 	if err != nil {
 		return nil, err
 	}
+	return inst.holdContributed(fv, name, contributed)
+}
+
+// holdContributed makes fv hold the values the features subsetting it contribute,
+// once they conform to its multiplicity.
+func (inst *Instance) holdContributed(fv *FeatureValue, name string, contributed []Value) (*FeatureValue, error) {
 	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
 		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
 	}

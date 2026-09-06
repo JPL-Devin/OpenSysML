@@ -779,6 +779,10 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 	if err != nil {
 		return Value{}, err
 	}
+	// A filter keeps the elements' type (KerML checkSelectExpressionResultSpecialization).
+	if unit, ok := args[0].Sequence().ElementUnit(); ok {
+		return NewEmptySequenceOf(unit), nil
+	}
 	if !applied {
 		return ec.newSequence(nil)
 	}
@@ -793,6 +797,23 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 		}
 	}
 	return ec.newSequence(kept)
+}
+
+// emptyMapping is the result of mapping no element through body: empty, and
+// typed by the dimension the body's result declares where its parameters fix one.
+func (ec *EvalContext) emptyMapping(val Value) Value {
+	body, ok := val.Expr().(*ast.BodyExpr)
+	if !ok || body.Result == nil {
+		return sequenceOf(nil)
+	}
+	env := val.exprEnv(ec)
+	if env.scope == nil {
+		return sequenceOf(nil)
+	}
+	if typed, ok := ec.ctx.emptyOfDeclared(symbols.BodyExprScope(env.scope, body), body.Result); ok {
+		return typed
+	}
+	return sequenceOf(nil)
 }
 
 // builtinControlSelectOne is ControlFunctions::selectOne, the first element the
@@ -821,8 +842,8 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	// The mapper returns `Anything[0..*]`, so a mapper answering several values
 	// contributes them all: the collected sequence is flat, as every KerML
 	// sequence is.
-	if !applied {
-		return sequenceOf(nil), nil
+	if !applied || len(elements) == 0 {
+		return ec.emptyMapping(args[1]), nil
 	}
 	var mapped []Value
 	for _, elem := range elements {
@@ -1013,12 +1034,18 @@ func builtinRealProduct(ec *EvalContext, args []Value) (Value, error) {
 
 // aggregate folds the collection's numeric elements with op, starting from its
 // identity element: 0 for a sum, 1 for a product, a Real where real says so.
-// A non-numeric element is reported rather than skipped or coerced.
+// A non-numeric element is reported rather than skipped or coerced. The sum of
+// no elements read from a quantity-typed declaration is that quantity's zero.
 func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (Value, error) {
 	if err := checkArity(op, args, 1); err != nil {
 		return Value{}, err
 	}
 	elements := elementsOf(args[0])
+	if operator == ast.OpAdd && len(elements) == 0 {
+		if unit, ok := args[0].Sequence().ElementUnit(); ok {
+			return typedZero(unit, real), nil
+		}
+	}
 	// A quantity carries its unit through an aggregation as through the folded
 	// operator, so a collection of measured values aggregates to one.
 	for _, elem := range elements {
@@ -1049,6 +1076,16 @@ func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (V
 		acc = next
 	}
 	return Value{Kind: ValConst, Const: acc}, nil
+}
+
+// typedZero is the additive identity of the quantities measured in unit: an
+// Integer 0 in that unit, or a Real one where real says so.
+func typedZero(unit Unit, real bool) Value {
+	num := semantics.Value{Kind: semantics.ValInt, Int: 0}
+	if real {
+		num = semantics.Value{Kind: semantics.ValReal, Real: 0}
+	}
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit})
 }
 
 // aggregateQuantities folds a collection holding a quantity in the unit of its

@@ -1,6 +1,10 @@
 package runtime
 
-import "testing"
+import (
+	"errors"
+	"slices"
+	"testing"
+)
 
 const redefinedCollectionModel = `
 	package test {
@@ -149,5 +153,148 @@ func TestSubsettingIgnoresALibraryFeatureOfTheSameName(t *testing.T) {
 	}
 	if got := len(elementsOf(fv.HeldValue())); got != 0 {
 		t.Errorf("mass holds %d elements, want 0", got)
+	}
+}
+
+// defaultNullCollectionModel: collections written `default null` that members
+// subset at the type, the usage, an inheriting and a redefining declaration.
+const defaultNullCollectionModel = `
+	package test {
+		private import ScalarValues::*;
+		private import SI::*;
+		private import ISQ::*;
+		private import NumericalFunctions::*;
+		part def Massed {
+			part subcomponents : Massed [*] default null;
+			attribute mass :> ISQ::mass;
+			attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
+		}
+		part def Leaf :> Massed { attribute :>> mass = 100 [kg]; }
+		part def Heavy :> Leaf { attribute :>> mass = 500 [kg]; }
+		part def Stack :> Massed {
+			attribute :>> mass = 10 [kg];
+			part a : Leaf :> subcomponents;
+			part b : Leaf subsets subcomponents;
+		}
+		part def Stack3 :> Stack { part c : Leaf :> subcomponents; }
+		part def StackR :> Stack { part :>> a : Heavy; }
+		part def Tower :> Massed {
+			attribute :>> mass = 1 [kg];
+			part s : Stack :> subcomponents;
+			part t : Stack3 :> subcomponents;
+		}
+		part def Alone :> Massed { attribute :>> mass = 7 [kg]; }
+		part def Engine;
+		part def Bound {
+			part engines : Engine [*] = ();
+			part engine : Engine :> engines;
+		}
+		part def Optional {
+			part engine : Engine [0..1] default null;
+			part main : Engine :> engine;
+		}
+		part def Crowded {
+			part engine : Engine [0..1] default null;
+			part pair : Engine [2] :> engine;
+		}
+		part leaf : Leaf;
+		part stack : Stack;
+		part stack3 : Stack3;
+		part stackR : StackR;
+		part tower : Tower;
+		part alone : Alone;
+		part usage : Massed {
+			attribute :>> mass = 1 [kg];
+			part p : Leaf :> subcomponents;
+			part q : Leaf :> subcomponents;
+		}
+		part bound : Bound;
+		part optional : Optional;
+		part crowded : Crowded;
+	}
+`
+
+// TestDefaultNullCollectionHoldsTheMembersSubsettingIt: `default null` is the
+// value of a collection only where nothing populates it; the members subsetting
+// it do, however the subsetting is declared, and a rollup over the collection
+// reads them recursively.
+func TestDefaultNullCollectionHoldsTheMembersSubsettingIt(t *testing.T) {
+	cases := []struct {
+		usage   string
+		members []string
+		total   string
+	}{
+		{"leaf", nil, "100 [kg]"},
+		{"stack", []string{"a", "b"}, "210 [kg]"},
+		{"stack3", []string{"a", "b", "c"}, "310 [kg]"},
+		{"stackR", []string{"a", "b"}, "610 [kg]"},
+		{"tower", []string{"s", "t"}, "521 [kg]"},
+		{"alone", nil, "7 [kg]"},
+		{"usage", []string{"p", "q"}, "201 [kg]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.usage, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, defaultNullCollectionModel))
+			inst := instantiateNamed(t, ctx, idx, "test::"+tc.usage)
+			fv, err := inst.GetFeatureValue(ctx, "subcomponents")
+			if err != nil {
+				t.Fatalf("GetFeatureValue(subcomponents): %v", err)
+			}
+			members := elementsOf(fv.HeldValue())
+			if len(members) != len(tc.members) {
+				t.Fatalf("subcomponents = %s, want %d members", FormatValue(fv.HeldValue()), len(tc.members))
+			}
+			for _, name := range tc.members {
+				member, err := inst.GetFeatureValue(ctx, name)
+				if err != nil {
+					t.Fatalf("GetFeatureValue(%s): %v", name, err)
+				}
+				if !slices.Contains(members, member.HeldValue()) {
+					t.Errorf("subcomponents = %s, want it to hold %s = %s", FormatValue(fv.HeldValue()), name, FormatValue(member.HeldValue()))
+				}
+			}
+			total, err := inst.GetFeatureValue(ctx, "totalMass")
+			if err != nil {
+				t.Fatalf("GetFeatureValue(totalMass): %v", err)
+			}
+			if got := FormatValue(total.HeldValue()); got != tc.total {
+				t.Errorf("totalMass = %s, want %s", got, tc.total)
+			}
+		})
+	}
+}
+
+// TestDefaultIsFallbackOnlyWhereWrittenDefault: a collection bound with `=`
+// holds what the binding states whatever subsets it; a scalar `default null`
+// yields to the one member subsetting it, and two members violate its
+// multiplicity rather than being dropped.
+func TestDefaultIsFallbackOnlyWhereWrittenDefault(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, defaultNullCollectionModel))
+
+	bound := instantiateNamed(t, ctx, idx, "test::bound")
+	fv, err := bound.GetFeatureValue(ctx, "engines")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(engines): %v", err)
+	}
+	if got := len(elementsOf(fv.HeldValue())); got != 0 {
+		t.Errorf("engines = %s, want the bound empty sequence", FormatValue(fv.HeldValue()))
+	}
+
+	optional := instantiateNamed(t, ctx, idx, "test::optional")
+	fv, err = optional.GetFeatureValue(ctx, "engine")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(engine): %v", err)
+	}
+	main, err := optional.GetFeatureValue(ctx, "main")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(main): %v", err)
+	}
+	if fv.HeldValue() != main.HeldValue() || fv.HeldValue().Kind != ValInstance {
+		t.Errorf("engine = %s, want main = %s", FormatValue(fv.HeldValue()), FormatValue(main.HeldValue()))
+	}
+
+	crowded := instantiateNamed(t, ctx, idx, "test::crowded")
+	if _, err := crowded.GetFeatureValue(ctx, "engine"); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("GetFeatureValue(engine) error = %v, want ErrMultiplicityViolation", err)
 	}
 }
