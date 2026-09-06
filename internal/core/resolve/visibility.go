@@ -109,7 +109,7 @@ func (r *Resolver) specializationChain(from *symbols.Symbol) []*symbols.Symbol {
 func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	var found *symbols.Symbol
 	r.eachInheritedImport(scope, name, func(from *symbols.Scope, imp *ast.Import) bool {
-		found, _ = r.matchImport(from, imp, name)
+		found, _ = r.matchImportInto(scope, from, imp, name)
 		return found == nil
 	})
 	return found, found != nil
@@ -120,7 +120,7 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 func (r *Resolver) inheritedImportCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	r.eachInheritedImport(scope, name, func(from *symbols.Scope, imp *ast.Import) bool {
-		for _, sym := range r.importMatchesAll(from, imp, name) {
+		for _, sym := range r.importMatchesAllInto(scope, from, imp, name) {
 			out = appendSymbol(out, sym)
 		}
 		return true
