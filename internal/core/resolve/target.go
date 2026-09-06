@@ -227,6 +227,19 @@ type Reference struct {
 	Subsetting ast.Node
 	// Member is the declaration whose text QN is written in, when known.
 	Member ast.Node
+	// Head is set when QN is written in a head relationship of a declaration
+	// with a scope of its own, where the target may resolve ahead of Scope.
+	Head *HeadRelationship
+}
+
+// HeadRelationship places a reference in a declaration's head relationship: its
+// target resolves in Scope, the declaration's own, when it opens with a member there.
+type HeadRelationship struct {
+	Scope *symbols.Scope
+	Kind  ast.RelationshipKind
+	// Member is the chain member the reference is a segment of; nil when the
+	// reference is the name decided on.
+	Member *ast.QualifiedName
 }
 
 // Spelled returns ref as it would be collected had qn been written in its
@@ -259,6 +272,9 @@ func (r *Resolver) ProbeReference(ref Reference) (*symbols.Symbol, bool) {
 func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	if ref.QN == nil {
 		return nil, false
+	}
+	if ref.Head != nil {
+		ref.Scope, ref.Head = r.headScope(ref), nil
 	}
 	var hide *refFilter
 	if ref.Referrer != nil {
@@ -320,6 +336,19 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		return r.ResolveInvocationName(ref.Scope, ref.QN)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
+}
+
+// headScope is the scope ref, written in a head relationship, resolves in as the
+// document walk reads it; spelled differently, the same occurrence may switch.
+func (r *Resolver) headScope(ref Reference) *symbols.Scope {
+	name, chain := ref.QN, ref.Chain != nil
+	if ref.Head.Member != nil {
+		name, chain = ref.Head.Member, true
+	}
+	if r.resolvesInHeader(ref.Head.Scope, name, chain, ref.Head.Kind) {
+		return ref.Head.Scope
+	}
+	return ref.Scope
 }
 
 // leadingName returns the qualified name a relationship target starts with: the

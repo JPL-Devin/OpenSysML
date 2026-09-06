@@ -662,16 +662,9 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 		resolvesInHeader := false
 		switch target := target.(type) {
 		case *ast.QualifiedName:
-			if len(target.Parts) > 0 {
-				resolvesInHeader = rel.Kind != ast.RelTyping &&
-					rel.Kind != ast.RelSpecializes &&
-					rel.Kind != ast.RelSubsets &&
-					r.headerHasName(header, target.Parts[0].Text, rel.Kind)
-			}
+			resolvesInHeader = r.resolvesInHeader(header, target, false, rel.Kind)
 		case *ast.FeatureChainExpr:
-			if len(target.Member.Parts) > 0 {
-				resolvesInHeader = r.headerHasName(header, target.Member.Parts[0].Text, rel.Kind)
-			}
+			resolvesInHeader = r.resolvesInHeader(header, target.Member, true, rel.Kind)
 		}
 		if resolvesInHeader {
 			r.resolveRelationships(header, decl, []*ast.Relationship{rel})
@@ -679,6 +672,21 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 			r.resolveRelationships(parent, decl, []*ast.Relationship{rel})
 		}
 	}
+}
+
+// resolvesInHeader reports whether a head relationship's target, opening with name,
+// resolves in the declaring element's own scope; a plain `: T`, `:> T`, `:>> T` never does.
+func (r *Resolver) resolvesInHeader(header *symbols.Scope, name *ast.QualifiedName, chain bool, kind ast.RelationshipKind) bool {
+	if name == nil || len(name.Parts) == 0 {
+		return false
+	}
+	switch kind {
+	case ast.RelTyping, ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
+		if !chain {
+			return false
+		}
+	}
+	return r.headerHasName(header, name.Parts[0].Text, kind)
 }
 
 func (r *Resolver) headerHasName(scope *symbols.Scope, name string, kind ast.RelationshipKind) bool {
