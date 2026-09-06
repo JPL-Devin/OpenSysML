@@ -3563,11 +3563,13 @@ func (p *Parser) reportMisplacedPrefixMetadata(prefixes []*ast.PrefixMetadata, k
 	edits := make([]quickfix.Edit, 0, len(prefixes)+1)
 	var span source.Span
 	for i, pm := range prefixes {
-		// A node span runs to the next token, so it is trimmed back to the text.
+		// A node span runs to the next token, past any comment; the name's does not.
 		sp := pm.Span()
-		text := strings.TrimRight(p.src.Text(sp), " \t\r\n")
-		texts = append(texts, text)
-		end := sp.Offset + len(text)
+		end := sp.Offset + len(strings.TrimRight(p.src.Text(sp), " \t\r\n"))
+		if n := len(pm.Type.Parts); n > 0 {
+			end = pm.Type.Parts[n-1].Span.End()
+		}
+		texts = append(texts, p.src.Text(source.Span{Offset: sp.Offset, Len: end - sp.Offset}))
 		if i == 0 {
 			span.Offset = sp.Offset
 		}

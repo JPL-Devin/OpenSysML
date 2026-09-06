@@ -81,6 +81,40 @@ func TestPrefixMetadataBeforeMemberKeywordIsReported(t *testing.T) {
 	}
 }
 
+// A comment between the misplaced run and the keyword stays where it is: the
+// fix moves only the annotations, and the diagnostic spans only them.
+func TestPrefixMetadataBeforeMemberKeywordFixLeavesCommentsInPlace(t *testing.T) {
+	cases := []struct{ name, invalid, valid, run string }{
+		{"line_comment", "requirement def R {\n\t#M // note\n\tsubject s : T;\n}", "requirement def R {\n\t// note\n\tsubject #M s : T;\n}", "#M"},
+		{"block_comment", "requirement def R { #M /* note */ assume constraint a : C; }", "requirement def R { /* note */ assume #M constraint a : C; }", "#M"},
+		{"comment_between_prefixes", "requirement def R { #M /* one */ #Q::N // two\n require constraint r : C; }", "requirement def R { /* one */ // two\n require #M #Q::N constraint r : C; }", "#M /* one */ #Q::N"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := New(source.New("neg.sysml", []byte(c.invalid)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) != 1 || len(p.Diagnostics[0].Fixes) != 1 {
+				t.Fatalf("diagnostics = %v, want one with one fix", p.Diagnostics)
+			}
+			d := p.Diagnostics[0]
+			if got := spanText(c.invalid, d.Span); got != c.run {
+				t.Errorf("span covers %q, want %q", got, c.run)
+			}
+			if got := applyEdits(c.invalid, d.Fixes[0].Edits); got != c.valid {
+				t.Errorf("fixed source = %q, want %q", got, c.valid)
+			}
+			valid := New(source.New("pos.sysml", []byte(c.valid)))
+			want := valid.ParseFile()
+			if len(valid.Diagnostics) != 0 {
+				t.Fatalf("fixed source has diagnostics: %v", valid.Diagnostics)
+			}
+			if got, want := ast.Dump(root), ast.Dump(want); got != want {
+				t.Errorf("recovered AST differs from the fixed source's:\n got: %s\nwant: %s", got, want)
+			}
+		})
+	}
+}
+
 // The accepted placements parse clean, and prefix metadata ahead of an
 // ordinary usage or definition, a modifier or `assert` stays as it is.
 func TestPrefixMetadataPlacementsThatStayClean(t *testing.T) {
