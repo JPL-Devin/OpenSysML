@@ -1346,20 +1346,25 @@ func (r *Resolver) walkFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainEx
 				return ok
 			})
 			if outward {
-				outwardSym = r.followChainMemberType(outwardSym)
 				return resolution{sym: outwardSym, ok: outwardSym != nil}
 			}
 		}
 	}
 
 	memberSym := r.resolveMemberChain(operandSym, fc.Member, fc)
-	memberSym = r.followChainMemberType(memberSym)
 	return resolution{sym: memberSym, ok: memberSym != nil}
 }
 
-// chainMember looks a chain segment up as the member walk does: as a member of
-// sym when a model is attached, else in sym's own scope.
+// chainMember looks a chain segment up as a member of sym itself — flattened over
+// its generalizations when a model is attached — else of its type or its value.
 func (r *Resolver) chainMember(sym *symbols.Symbol, name string, chain ast.Node) (*symbols.Symbol, bool) {
+	return r.chainMemberOf(sym, name, chain, nil)
+}
+
+func (r *Resolver) chainMemberOf(sym *symbols.Symbol, name string, chain ast.Node, seen map[*symbols.Symbol]bool) (*symbols.Symbol, bool) {
+	if sym == nil {
+		return nil, false
+	}
 	found, ok := r.lookupMember(sym, name)
 	if ok && namedByChain(found, chain) {
 		found, ok = r.lookupContributedMember(sym, name)
@@ -1369,14 +1374,24 @@ func (r *Resolver) chainMember(sym *symbols.Symbol, name string, chain ast.Node)
 			return found, true
 		}
 	}
-	if sym == nil {
-		return nil, false
-	}
 	found, ok = r.LocalBinding(sym.Scope, name)
-	if !ok || namedByChain(found, chain) || !r.namedThroughNamespace(found) {
+	if ok && !namedByChain(found, chain) && r.namedThroughNamespace(found) {
+		return found, true
+	}
+	// A usage without the member reads it from its type or, untyped, from the
+	// feature its value names; seen stops a chain of values from looping.
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage || seen[sym] || r.IsBaseThat(sym) || r.IsOccurrenceThis(sym) {
 		return nil, false
 	}
-	return found, true
+	if seen == nil {
+		seen = make(map[*symbols.Symbol]bool)
+	}
+	seen[sym] = true
+	if typed := r.getUsageType(sym.OwnerScope, usage); typed != nil {
+		return r.chainMemberOf(typed, name, chain, seen)
+	}
+	return nil, false
 }
 
 // namedByChain reports whether sym borrowed its name from chain, the feature
@@ -1442,8 +1457,8 @@ func (r *Resolver) walkMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedN
 	return cur, true
 }
 
-// getOperandSymbol returns the symbol of an expression operand WITHOUT following
-// type relationships. Used in feature chains to access usage inline members.
+// getOperandSymbol returns the feature an expression operand names, which the
+// chain's next segment is read as a member of (see chainMember).
 func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
 	switch v := e.(type) {
 	case *ast.FeatureReference:
@@ -1465,45 +1480,21 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		if !ok {
 			return nil
 		}
-		// If usage has inline members (scope), return it to access those members
-		// Otherwise follow type for inherited members
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !r.IsBaseThat(sym) && !r.IsOccurrenceThis(sym) {
-			if sym.Scope != nil &&
-				(len(sym.Scope.Members()) > 0 || len(r.importsOf(sym.Scope.Node())) > 0) {
-				// Usage has inline members, return usage symbol
-				return sym
-			}
-			// No inline members, follow type
-			typeSym := r.getUsageType(sym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
 		return sym
 	case *ast.FeatureChainExpr:
 		return r.resolveFeatureChain(scope, v)
+	case *ast.IndexExpr:
+		// `a#(i)` names one element of the sequence a, of a's own type.
+		if v.Bracket {
+			r.resolveExpr(scope, e)
+			return nil
+		}
+		r.resolveExpr(scope, v.Index)
+		return r.getOperandSymbol(scope, v.Operand)
 	default:
 		r.resolveExpr(scope, e)
 		return nil
 	}
-}
-
-// followChainMemberType follows a usage's type when it has no inline members.
-func (r *Resolver) followChainMemberType(sym *symbols.Symbol) *symbols.Symbol {
-	if sym == nil {
-		return nil
-	}
-	usage, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage {
-		return sym
-	}
-	if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
-		return sym
-	}
-	if typeSym := r.getUsageType(sym.OwnerScope, usage); typeSym != nil {
-		return typeSym
-	}
-	return sym
 }
 
 // baseThatFQN is the implicit `that` feature every usage takes from the base
@@ -1561,7 +1552,7 @@ func (r *Resolver) getUsageType(scope *symbols.Scope, usage *ast.Usage) *symbols
 	return r.valueType(scope, usage)
 }
 
-// valueType returns what a usage's value expression names, for the member
+// valueType returns the feature a usage's value expression names, for the member
 // lookups a chain through the usage makes. Only the forms that denote a feature
 // are followed; anything else has no members to reach.
 func (r *Resolver) valueType(scope *symbols.Scope, usage *ast.Usage) *symbols.Symbol {
@@ -1580,8 +1571,5 @@ func (r *Resolver) valueType(scope *symbols.Scope, usage *ast.Usage) *symbols.Sy
 			sym = found
 		}
 	})
-	if sym == nil {
-		return nil
-	}
-	return r.followChainMemberType(sym)
+	return sym
 }

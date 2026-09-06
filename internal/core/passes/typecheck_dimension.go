@@ -17,6 +17,11 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 	if ec.model == nil || !commensurabilityRequired(e.Operator) || len(e.Operands) != 2 {
 		return
 	}
+	// A comparison reads an operand stating no measurement (`length > 0`) in the
+	// other's unit, as a binding does; a sum's result must carry one dimension.
+	if comparesOperands(e.Operator) && (statesNoMeasurement(e.Operands[0]) || statesNoMeasurement(e.Operands[1])) {
+		return
+	}
 	lhs, ok := ec.model.DimensionOfExpr(scope, e.Operands[0])
 	if !ok {
 		return
@@ -113,6 +118,17 @@ func statesNoMeasurement(element ast.Node) bool {
 func commensurabilityRequired(op ast.OperatorKind) bool {
 	switch op {
 	case ast.OpAdd, ast.OpSub, ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpEq, ast.OpNeq:
+		return true
+	default:
+		return false
+	}
+}
+
+// comparesOperands reports an operator whose result is a truth value about its
+// operands rather than a quantity of their dimension.
+func comparesOperands(op ast.OperatorKind) bool {
+	switch op {
+	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpEq, ast.OpNeq:
 		return true
 	default:
 		return false
