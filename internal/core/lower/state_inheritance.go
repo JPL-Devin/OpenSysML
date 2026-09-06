@@ -17,11 +17,23 @@ var ErrRecursiveStateTyping = errors.New("recursive state typing")
 // cannot represent, rather than dropping it.
 var ErrUnsupportedStateContent = errors.New("unsupported state machine content")
 
-// StateTypeResolver resolves the declaration a type name reaches and the scope
-// of that declaration's body. The name-resolution tier implements it; lowering
-// falls back to the scope tree for a machine lowered without it.
+// TypeLookup is what a StateTypeResolver reports about a type name.
+type TypeLookup int
+
+const (
+	// TypeUnresolved: the name reaches no declaration the resolver knows.
+	TypeUnresolved TypeLookup = iota
+	// TypeResolved: the name reaches the declaration and body scope returned.
+	TypeResolved
+	// TypeWithheld: the name resolves, but the resolver deliberately
+	// contributes none of that declaration's content to the machine.
+	TypeWithheld
+)
+
+// StateTypeResolver resolves the declaration a type name reaches and its body scope.
+// Lowering falls back to the scope tree only without one or on TypeUnresolved.
 type StateTypeResolver interface {
-	TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool)
+	TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, TypeLookup)
 }
 
 // inheritedMember is one member a state inherits, with the body that declares
@@ -117,11 +129,14 @@ func (g *StateGraph) putCompletion(owner ast.Node, vertex *ast.StateNode) {
 }
 
 // stateType resolves what a type name reaches: through the name-resolution tier
-// when lowering runs with it, else from the scope tree alone.
+// when lowering runs with it, else from the scope tree; a withheld type reaches nothing.
 func (g *StateGraph) stateType(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
 	if types, ok := g.endpoints.(StateTypeResolver); ok {
-		if decl, body, found := types.TypeDecl(scope, qn); found {
+		switch decl, body, lookup := types.TypeDecl(scope, qn); lookup {
+		case TypeResolved:
 			return decl, body, true
+		case TypeWithheld:
+			return nil, nil, false
 		}
 	}
 	return resolve.TypeDeclInScope(scope, qn)
