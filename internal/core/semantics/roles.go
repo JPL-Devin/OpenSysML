@@ -11,32 +11,36 @@ const (
 	noCaseRole caseRole = iota
 	subjectRole
 	objectiveRole
-	// renderingRole is a view's `render` member: every one redefines the
-	// library `viewRendering`, so it hides the one its view inherits.
-	renderingRole
 )
 
-// ImplicitRoleRedefinitions returns the same-role features of the owner's generals
-// that sym does not redefine by name: a role redefines every one it inherits.
+// viewRenderingFQN is the library feature every `render` member redefines
+// (SysML v2 8.3.26 RenderingUsage).
+const viewRenderingFQN = "Views::View::viewRendering"
+
+// ImplicitRoleRedefinitions returns the features sym redefines by its role: the
+// same-role features of the owner's generals for a subject or objective, and the
+// library `viewRendering` for a view's `render` member.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	if isViewRendering(sym.Decl) {
+		return m.viewRenderingRedefinition(sym)
+	}
 	role := roleOf(sym)
-	if role == noCaseRole || sym.OwnerScope == nil {
+	if role == noCaseRole {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	playsRole := behaviorLike
-	if role == renderingRole {
-		playsRole = IsView
-	}
-	if owner == nil || !playsRole(owner) {
+	if owner == nil || !behaviorLike(owner) {
 		return nil
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
 	seenRoles := m.explicitRedefinitions(sym)
 	for _, sup := range m.DirectSupertypes(owner) {
-		if playsRole(sup) {
-			for _, inherited := range m.effectiveRoles(sup, role, playsRole, seenCases) {
+		if behaviorLike(sup) {
+			for _, inherited := range m.effectiveRoles(sup, role, seenCases) {
 				if !seenRoles[inherited] {
 					seenRoles[inherited] = true
 					out = append(out, inherited)
@@ -47,20 +51,43 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	return out
 }
 
+// viewRenderingRedefinition is the library `viewRendering` a `render` member
+// redefines, unless a clause of its own already names it.
+func (m *Model) viewRenderingRedefinition(sym *symbols.Symbol) []*symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	explicit := m.explicitRedefinitions(sym)
+	for _, lib := range m.resolver.Index().LookupQualified(viewRenderingFQN) {
+		if lib != nil && lib != sym && !explicit[lib] {
+			return []*symbols.Symbol{lib}
+		}
+	}
+	return nil
+}
+
+func isViewRendering(node ast.Node) bool {
+	if wrapper, ok := node.(*ast.Membership); ok {
+		node = wrapper.Member
+	}
+	usage, ok := node.(*ast.Usage)
+	return ok && usage.Kind == ast.UsageViewRendering
+}
+
 // SubjectParameterOf returns the subject parameter of a requirement or case,
 // owned or inherited along its generals, or nil when it has none.
 func (m *Model) SubjectParameterOf(sym *symbols.Symbol) *symbols.Symbol {
 	if m == nil || sym == nil {
 		return nil
 	}
-	subjects := m.effectiveRoles(sym, subjectRole, behaviorLike, map[*symbols.Symbol]bool{})
+	subjects := m.effectiveRoles(sym, subjectRole, map[*symbols.Symbol]bool{})
 	if len(subjects) == 0 {
 		return nil
 	}
 	return subjects[0]
 }
 
-func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, playsRole func(*symbols.Symbol) bool, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sym == nil || seen[sym] {
 		return nil
 	}
@@ -70,8 +97,8 @@ func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, playsRole fun
 	}
 	var out []*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(sym) {
-		if playsRole(sup) {
-			out = append(out, m.effectiveRoles(sup, role, playsRole, seen)...)
+		if behaviorLike(sup) {
+			out = append(out, m.effectiveRoles(sup, role, seen)...)
 		}
 	}
 	return out
@@ -117,8 +144,6 @@ func roleOfNode(node ast.Node) caseRole {
 			return subjectRole
 		case ast.UsageObjective:
 			return objectiveRole
-		case ast.UsageViewRendering:
-			return renderingRole
 		}
 	}
 	return noCaseRole

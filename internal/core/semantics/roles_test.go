@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
@@ -113,5 +114,43 @@ func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
 	got := m.AllRedefinedFeatures(cSubject)
 	if len(got) != 2 || got[0] != aSubject || got[1] != bSubject {
 		t.Fatalf("AllRedefinedFeatures(C's subject) = %v, want [A::s B::s]", got)
+	}
+}
+
+// A `render` member redefines the library `viewRendering` and nothing else: a
+// rendering of another name in a derived view leaves the inherited one in
+// place (SysML v2 8.3.26 RenderingUsage), as the pilot resolves it.
+func TestRenderMemberRedefinesOnlyTheLibraryViewRendering(t *testing.T) {
+	m, root := stdlibModelWithDoc(t, "views.sysml", `package P {
+		rendering def AsTree;
+		rendering def AsTable;
+		view def Base { render rendering r : AsTree { attribute a; } }
+		view def Derived :> Base { render rendering s : AsTable; }
+		view def Twice :> Base { render rendering :>> r; }
+	}`)
+	p := sym(t, root, "P")
+	r := nested(t, p.Scope, "Base", "r")
+	derived := nested(t, p.Scope, "Derived")
+	s := nested(t, derived.Scope, "s")
+
+	if got := m.ImplicitRoleRedefinitions(s); len(got) != 1 || !symbols.HasFQN(got[0], viewRenderingFQN) {
+		t.Fatalf("ImplicitRoleRedefinitions(s) = %v, want [%s]", got, viewRenderingFQN)
+	}
+	if got := m.AllRedefinedFeatures(s); len(got) != 1 || !symbols.HasFQN(got[0], viewRenderingFQN) {
+		t.Fatalf("AllRedefinedFeatures(s) = %v, want [%s]", got, viewRenderingFQN)
+	}
+	if inherited, ok := m.LookupMember(derived, "r"); !ok || inherited != r {
+		t.Fatalf("LookupMember(Derived, r) = %v, %v; want Base::r", inherited, ok)
+	}
+	if _, ok := m.LookupMember(r, "a"); !ok {
+		t.Fatal("Base::r::a is not reachable through the inherited rendering")
+	}
+
+	twice := nested(t, p.Scope, "Twice")
+	if got := m.ImplicitRoleRedefinitions(nested(t, twice.Scope, "r")); len(got) != 1 || !symbols.HasFQN(got[0], viewRenderingFQN) {
+		t.Fatalf("ImplicitRoleRedefinitions(Twice's render) = %v, want [%s]", got, viewRenderingFQN)
+	}
+	if got, ok := m.LookupMember(twice, "r"); !ok || got.OwnerScope != twice.Scope {
+		t.Fatalf("LookupMember(Twice, r) = %v, %v; want the redefining render", got, ok)
 	}
 }
