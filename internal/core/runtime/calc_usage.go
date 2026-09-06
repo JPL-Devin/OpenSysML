@@ -38,9 +38,7 @@ type calcOutput struct {
 }
 
 // calcOutputs flattens the output features declared along chain (most general
-// first). An output redeclared closer to the invoked calc keeps its inherited
-// position and its inherited binding unless it binds a new one, as an input
-// parameter does; one redeclared under a new name records the old one in aliases.
+// first), as calcParameters does the inputs, recording renamed ones in aliases.
 func (ctx *Context) calcOutputs(chain []*symbols.Symbol, aliases *map[string]string) []calcOutput {
 	var outs []calcOutput
 	index := make(map[string]int)

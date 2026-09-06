@@ -879,8 +879,7 @@ func (ctx *Context) namedBehavior(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // classifierBehaviorArguments evaluates the values a binding declaration
-// supplies to the behavior's parameters, against the object running it, keyed
-// by the parameter each binds: the one it redefines, else its own name.
+// supplies to the behavior's parameters, against the object running it.
 func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierBehaviorDecl) (map[string]Value, error) {
 	if len(decl.behavior.Arguments) == 0 {
 		return nil, nil

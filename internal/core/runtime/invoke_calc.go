@@ -214,10 +214,8 @@ func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
 	return append(chain, sym)
 }
 
-// calcParameters flattens the input parameters declared along chain (most
-// general first). A parameter redeclared closer to the invoked calc keeps its
-// inherited position and its inherited default unless it binds a new one; one
-// redeclared under a new name records the old one in aliases.
+// calcParameters flattens the input parameters declared along chain (most general
+// first): a redeclaration keeps its position and default, a renamed one is aliased.
 func (ctx *Context) calcParameters(chain []*symbols.Symbol, aliases *map[string]string) []calcParameter {
 	var params []calcParameter
 	index := make(map[string]int)
