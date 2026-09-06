@@ -124,8 +124,12 @@ func (ec *exprChecker) checkMemberOperators(scope *symbols.Scope, members []ast.
 		m = unwrapType(m)
 		d, ok := featureDeclOf(m)
 		if !ok {
-			if md, ok := m.(*ast.MultiplicityDecl); ok {
-				ec.checkBoundOperators(scope, md.Range)
+			switch n := m.(type) {
+			case *ast.MultiplicityDecl:
+				ec.checkBoundOperators(scope, n.Range)
+				ec.checkMemberOperators(childScopeOr(scope, n), n.Members)
+			case *ast.RelationshipMember:
+				ec.checkMemberOperators(childScopeOr(scope, n), n.Members)
 			}
 			continue
 		}

@@ -5,4 +5,6 @@
   `{ … }` makes are reached too, and a bound's operators are judged by the type tier, so an
   unrelated error elsewhere in the document no longer silences them. Every bound the notation
   writes is covered: a `multiplicity m [lo..hi]` declaration, a body parameter's `in x : T[lo..hi]`,
-  a cast's, a connector end's, a cross feature's and a subject's or assume/require's.
+  a cast's, a connector end's, a cross feature's and a subject's or assume/require's. The members
+  a `multiplicity` or `specialization` declaration owns in its body are type-checked like any other
+  body's, so an invalid cast or value in them is reported too.

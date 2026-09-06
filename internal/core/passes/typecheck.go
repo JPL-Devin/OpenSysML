@@ -90,6 +90,13 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			tc.checkBehaviorMember(scope, d)
 		case *ast.MultiplicityDecl:
 			tc.expr.checkBoundOperators(scope, d.Range)
+			if child := childScopeOf(scope, d); child != nil {
+				tc.walk(child, d.Members)
+			}
+		case *ast.RelationshipMember:
+			if child := childScopeOf(scope, d); child != nil {
+				tc.walk(child, d.Members)
+			}
 		case *ast.Package:
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)

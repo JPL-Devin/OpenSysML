@@ -504,3 +504,38 @@ func TestOperatorRulesInEveryMultiplicityForm(t *testing.T) {
 		"10:34 cast argument is typed by Integer, unrelated to the target C",
 		"11:42 cast argument is typed by Integer, unrelated to the target C")
 }
+
+// The members a multiplicity or relationship declaration owns are reached like any
+// other body — top level, feature body or expression body — once each, in their own scope.
+func TestOperatorRulesInMultiplicityAndRelationshipBodies(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K; classifier K2 :> K;
+	multiplicity m [0..3] { feature f : K[0..(1 as C)]; feature g : Integer = 2 as C; }
+	specialization s subtype K2 :> K { feature h : K[0..(3 as C)]; feature i : Integer = 4 as C; }
+	feature outer : K { specialization subtype K2 :> K { feature j : K[0..(5 as C)]; } }
+	feature v = { feature x { multiplicity mm [0..(6 as C)] { feature q : K[0..(7 as C)]; } specialization subtype K2 :> K { feature r : K[0..(8 as C)]; } } 1 };
+	package Q { filter { feature y { multiplicity mn [0..3] { feature t : K[0..(9 as C)]; } specialization subtype K2 :> K { feature w : K[0..(10 as C)]; } } 1 == 1 }; }
+	multiplicity ok [0..3] { feature f : K[0..(1 as Integer)]; feature g : Integer = 2 as Integer; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:44 cast argument is typed by Integer, unrelated to the target C",
+		"4:76 cast argument is typed by Integer, unrelated to the target C",
+		"5:55 cast argument is typed by Integer, unrelated to the target C",
+		"5:87 cast argument is typed by Integer, unrelated to the target C",
+		"6:73 cast argument is typed by Integer, unrelated to the target C",
+		"7:49 cast argument is typed by Integer, unrelated to the target C",
+		"7:78 cast argument is typed by Integer, unrelated to the target C",
+		"7:141 cast argument is typed by Integer, unrelated to the target C",
+		"8:78 cast argument is typed by Integer, unrelated to the target C",
+		"8:141 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	multiplicity m [0..3] { attribute f : K[0..(1 as C)]; attribute g : Integer = 2 as C; }
+	part v : K { multiplicity mm [0..3] { attribute q : K[0..(3 as C)]; } }
+}`,
+		"4:46 cast argument is typed by Integer, unrelated to the target C",
+		"4:80 cast argument is typed by Integer, unrelated to the target C",
+		"5:60 cast argument is typed by Integer, unrelated to the target C")
+}
