@@ -1507,8 +1507,10 @@ func (m *migration) writeComments(e *xmi.Element, first bool) {
 		}
 		if others {
 			refs := make([]string, 0, len(about))
+			var omitted []string
 			for _, a := range about {
 				if !m.written(a) {
+					omitted = append(omitted, describe(a))
 					continue
 				}
 				refs = append(refs, m.ref(a, m.scope))
@@ -1518,7 +1520,11 @@ func (m *migration) writeComments(e *xmi.Element, first bool) {
 			} else {
 				m.w.lines(prefixFirst("comment about "+strings.Join(refs, ", ")+" ", commentLines(text)))
 			}
-			m.add(c, verdictFor(missing), "", missing)
+			note := missing
+			if len(omitted) > 0 {
+				note = joinNotes(note, "the comment also annotates "+strings.Join(omitted, ", ")+", which has no v2 declaration in the document and is not written as a subject")
+			}
+			m.add(c, verdictFor(note), "", note)
 			continue
 		}
 		if first {

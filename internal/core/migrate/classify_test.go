@@ -248,3 +248,26 @@ func TestInstanceWithSeveralClassifiers(t *testing.T) {
 		t.Errorf("%v", d)
 	}
 }
+
+// A comment that also annotates an element with no v2 declaration keeps its
+// writable subjects and is approximated, naming what it left out.
+func TestCommentAboutUnwrittenElementIsApproximated(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing"/>
+    <packagedElement xmi:type="uml:Activity" xmi:id="_act" name="Run"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req">
+      <ownedComment xmi:type="uml:Comment" xmi:id="_c1" body="see both" annotatedElement="_r _b _act"/>
+      <ownedComment xmi:type="uml:Comment" xmi:id="_c2" body="see the run" annotatedElement="_r _act"/>
+    </packagedElement>`, `<sysml:Block xmi:id="_s1" base_Class="_b"/><sysml:Block xmi:id="_s2" base_Class="_r"/>`)
+	wantLine(t, r.Notation, "comment about Req, Thing /* see both */")
+	wantLine(t, r.Notation, "comment about Req /* see the run */")
+	for _, id := range []string{"_c1", "_c2"} {
+		es := entriesFor(r, id)
+		if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "Run") {
+			t.Errorf("%s entries = %+v", id, es)
+		}
+	}
+	for _, d := range errors(t, "self.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}

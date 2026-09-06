@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -303,6 +304,25 @@ func TestConvertMigratesXMI(t *testing.T) {
 	// The written notation must be what the ttl was built from.
 	run(t, binary, model, "-convert", "ttl")
 
+	// A copy of the input, so a refused overwrite that slipped through could not touch testdata.
+	source, err := os.ReadFile(xmi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1 := filepath.Join(dir, "v1.xmi")
+	if err := os.WriteFile(v1, source, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hardLink := filepath.Join(dir, "v1-hard.xmi")
+	if err := os.Link(v1, hardLink); err != nil {
+		hardLink = v1
+	}
+	t.Cleanup(func() {
+		if got, err := os.ReadFile(v1); err != nil || !bytes.Equal(got, source) {
+			t.Errorf("the v1 model was modified (err %v)", err)
+		}
+	})
+
 	for name, tc := range map[string]struct {
 		args []string
 		want string
@@ -317,6 +337,10 @@ func TestConvertMigratesXMI(t *testing.T) {
 		"report over the input, spelled differently":   {[]string{xmi, "-convert", "sysml", "-migration-report", filepath.Join(filepath.Dir(xmi), ".", filepath.Base(xmi))}, "names the model being migrated"},
 		"report over the input through a link":         {[]string{xmi, "-convert", "sysml", "-migration-report", symlinkTo(t, dir, "input-link", xmi)}, "names the model being migrated"},
 		"report over the model, spelled differently":   {[]string{xmi, "-convert", "sysml", "-o", filepath.Join(filepath.Dir(textReport), ".", filepath.Base(textReport)), "-migration-report", textReport}, "-migration-report and -o both name"},
+		"output over the input":                        {[]string{v1, "-convert", "sysml", "-o", v1}, "-o names the model being migrated"},
+		"output over the input, spelled differently":   {[]string{v1, "-convert", "sysml", "-o", filepath.Join(dir, ".", "v1.xmi")}, "-o names the model being migrated"},
+		"output over the input through a link":         {[]string{v1, "-convert", "sysml", "-o", symlinkTo(t, dir, "v1-link", v1)}, "-o names the model being migrated"},
+		"output over the input through a hard link":    {[]string{v1, "-convert", "sysml", "-o", hardLink}, "-o names the model being migrated"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			out, err := exec.Command(binary, tc.args...).CombinedOutput()

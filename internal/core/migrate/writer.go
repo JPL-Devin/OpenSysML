@@ -2,20 +2,30 @@ package migrate
 
 import "strings"
 
-// writer accumulates indented lines of notation.
+// writer accumulates indented lines of notation. Each open block writes into a
+// buffer of its own, so deciding whether a body is empty never copies the
+// output written before it.
 type writer struct {
-	b      strings.Builder
+	bufs   []*strings.Builder
 	indent int
 }
 
+func (w *writer) buf() *strings.Builder {
+	if len(w.bufs) == 0 {
+		w.bufs = append(w.bufs, &strings.Builder{})
+	}
+	return w.bufs[len(w.bufs)-1]
+}
+
 func (w *writer) line(s string) {
+	b := w.buf()
 	if s == "" {
-		w.b.WriteByte('\n')
+		b.WriteByte('\n')
 		return
 	}
-	w.b.WriteString(strings.Repeat("    ", w.indent))
-	w.b.WriteString(s)
-	w.b.WriteByte('\n')
+	b.WriteString(strings.Repeat("    ", w.indent))
+	b.WriteString(s)
+	b.WriteByte('\n')
 }
 
 func (w *writer) lines(ls []string) {
@@ -27,21 +37,20 @@ func (w *writer) lines(ls []string) {
 // block writes header with a brace-delimited body, or as `header;` when the
 // body writes nothing.
 func (w *writer) block(header string, body func()) {
-	saved := w.b.String()
-	w.b.Reset()
+	w.buf()
+	w.bufs = append(w.bufs, &strings.Builder{})
 	w.indent++
 	body()
-	inner := w.b.String()
 	w.indent--
-	w.b.Reset()
-	w.b.WriteString(saved)
+	inner := w.bufs[len(w.bufs)-1].String()
+	w.bufs = w.bufs[:len(w.bufs)-1]
 	if inner == "" {
 		w.line(header + ";")
 		return
 	}
 	w.line(header + " {")
-	w.b.WriteString(inner)
+	w.buf().WriteString(inner)
 	w.line("}")
 }
 
-func (w *writer) String() string { return w.b.String() }
+func (w *writer) String() string { return w.buf().String() }
