@@ -124,6 +124,8 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 			rels = d.Relationships
 		case *ast.Definition:
 			rels = d.Relationships
+		case *ast.CrossFeatureMember:
+			rels = d.Relationships
 		case *ast.SubjectMember:
 			rels = d.Relationships
 		default:
@@ -145,7 +147,7 @@ func isFeatureDecl(decl ast.Node) bool {
 		return true
 	}
 	switch decl.(type) {
-	case *ast.Usage, *ast.SubjectMember:
+	case *ast.Usage, *ast.SubjectMember, *ast.CrossFeatureMember:
 		return true
 	}
 	return false

@@ -676,7 +676,7 @@ func (m *migration) association(e *xmi.Element) {
 }
 
 // featureKeyword decides the v2 usage keyword of a v1 property from its type
-// and aggregation, given the category of its owner.
+// and aggregation, given the category of its owner; prefix is `ref ` or empty.
 func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, prefix, note string) {
 	t := m.model.Ref(p, "type")
 	if p.Type == "Port" {
@@ -721,25 +721,6 @@ func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, pre
 	return "part", "ref ", ""
 }
 
-// featureDirection is the direction prefix of a property: a port's, a flow
-// property's, or `in` for a constraint block's parameter.
-func featureDirection(p *xmi.Element, owner category) (dir, note string) {
-	switch {
-	case p.Type == "Port":
-		return portDirection(p)
-	case owner == catConstraintDef:
-		return "in ", ""
-	case owner == catPortDef:
-		if fp := stereo(p, "FlowProperty"); fp != nil {
-			switch fp.Tag("direction") {
-			case "in", "out", "inout":
-				return fp.Tag("direction") + " ", ""
-			}
-		}
-	}
-	return "", ""
-}
-
 // feature writes a property or port of the current scope.
 func (m *migration) feature(p *xmi.Element) {
 	ownerCat, _ := m.classify(m.scope)
@@ -758,21 +739,38 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("private ")
 		note = joinNotes(note, "package visibility is written as private")
 	}
-	// Modifiers follow SysML.xtext RefPrefix: direction, derived, abstract, constant, then ref.
-	dir, dnote := featureDirection(p, ownerCat)
-	b.WriteString(dir)
-	note = joinNotes(note, dnote)
+	// The v2 usage prefix orders direction, derived, abstract, constant, ref.
+	switch {
+	case p.Type == "Port":
+		dir, dnote := portDirection(p)
+		b.WriteString(dir)
+		note = joinNotes(note, dnote)
+	case ownerCat == catConstraintDef:
+		b.WriteString("in ")
+	case ownerCat == catPortDef:
+		if fp := stereo(p, "FlowProperty"); fp != nil {
+			switch fp.Tag("direction") {
+			case "in":
+				b.WriteString("in ")
+			case "out":
+				b.WriteString("out ")
+			case "inout":
+				b.WriteString("inout ")
+			}
+		}
+	}
 	if p.Attrs["isDerived"] == "true" {
 		b.WriteString("derived ")
 	}
 	if p.Attrs["isAbstract"] == "true" {
 		b.WriteString("abstract ")
 	}
-	if p.Attrs["isReadOnly"] == "true" && kw == "attribute" {
-		if ownerCat.occurrence() {
-			b.WriteString("constant ")
+	if p.Attrs["isReadOnly"] == "true" {
+		// A value type's features cannot vary, so `constant` is not allowed there.
+		if ownerCat == catAttributeDef {
+			note = joinNotes(note, "read-only is not written: the features of an attribute definition cannot vary")
 		} else {
-			note = joinNotes(note, "isReadOnly is dropped: only a feature of an occurrence type can be constant")
+			b.WriteString("constant ")
 		}
 	}
 	b.WriteString(prefix)

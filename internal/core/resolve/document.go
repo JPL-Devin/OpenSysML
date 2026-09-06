@@ -154,8 +154,9 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
-		if d.CrossFeature != nil {
-			r.resolveMultiplicity(scope, d.CrossFeature.Multiplicity)
+		if cross := d.CrossFeature; cross != nil {
+			r.resolveHeaderRelationships(scope, child, cross, cross.Relationships)
+			r.resolveMultiplicity(scope, cross.Multiplicity)
 		}
 		// An accept node keeps its trigger in the usage's value, and a trigger's
 		// names are not all references (see resolveTrigger).
@@ -726,6 +727,8 @@ func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
 			name = d.Ident.Name
 		case *ast.Usage:
 			name, _ = ast.EffectiveName(d)
+		case *ast.CrossFeatureMember:
+			name = d.Ident.Name
 		case *ast.SubjectMember:
 			name, _ = d.EffectiveName()
 		}
@@ -881,6 +884,8 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 		case *ast.Definition:
 			rels = decl.Relationships
 		case *ast.Usage:
+			rels = decl.Relationships
+		case *ast.CrossFeatureMember:
 			rels = decl.Relationships
 		default:
 			return nil

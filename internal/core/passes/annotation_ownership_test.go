@@ -68,3 +68,31 @@ func TestAnnotationOwnershipSysML(t *testing.T) {
 		t.Fatalf("annotation-ownership lines = %v, want %v", got, want)
 	}
 }
+
+// An unresolved reference elsewhere in the document gates only the annotation
+// that states it; a self-annotation beside it is still reported.
+func TestAnnotationOwnershipSurvivesUnrelatedFailures(t *testing.T) {
+	const sysml = `package P {
+		part def A;
+		metadata def M;
+		part unrelated : Missing;
+		comment C1 about C1 /* self */
+		comment C2 about Missing /* unresolved, no cascade */
+		metadata m3 : M about Missing, m3;
+		part def C { comment about Missing /* owned by C */ }
+	}`
+	if got, want := annotationOwnershipLines(t, sysml, false), []int{5, 7}; !sameLines(got, want) {
+		t.Fatalf("SysML annotation-ownership lines = %v, want %v", got, want)
+	}
+	const kerml = `package P {
+		class A;
+		metaclass M;
+		feature unrelated : Missing;
+		comment C1 about C1 /* self */
+		comment C2 about Missing /* unresolved, no cascade */
+		@m3 : M about Missing, m3;
+	}`
+	if got, want := annotationOwnershipLines(t, kerml, true), []int{5, 7}; !sameLines(got, want) {
+		t.Fatalf("KerML annotation-ownership lines = %v, want %v", got, want)
+	}
+}

@@ -45,8 +45,6 @@
         (Usage kind="assoc" name="A2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
-              (Relationship kind="subsets" target=C1::a
-                (*ast.QualifiedName))
               (Relationship kind="typing" target=C1
                 (*ast.QualifiedName))
               (CrossFeatureMember name="xa"
@@ -55,4 +53,108 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
               (Relationship kind="typing" target=C2
-                (*ast.QualifiedName)))))))))
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x1" variable=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="typing" target=C1
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x2" derived=true constant=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="typing" target=C2
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x1" direction="in"
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x2" abstract=true composite=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A5" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" variable=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A6" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name=""
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="subsets" target=C1::a
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name=""
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="subsets" target=C2::b
+                  (*ast.QualifiedName))
+                (Relationship kind="typing" target=C1
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A7" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x1" ordered=true
+                (Multiplicity range=true
+                  (LiteralInteger value="1")
+                  (LiteralInfinity)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" ordered=true nonunique=true
+                (Multiplicity range=false
+                  (LiteralInfinity))
+                (Relationship kind="subsets" target=C2::b
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A8" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" ordered=true nonunique=true)))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" nonunique=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))))))))))

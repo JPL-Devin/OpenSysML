@@ -32,6 +32,78 @@
             (Multiplicity range=false
               (LiteralInteger value="1")))))))
   (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="Crossing"
+      (Membership visibility="default"
+        (Usage kind="item" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="x1" direction="in"
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (Relationship kind="typing" target=TireBead
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Usage kind="item" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="x2" derived=true ref=true
+            (Multiplicity range=false
+              (LiteralInteger value="1")))))))
+  (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="CrossingAfterMultiplicity"
+      (Membership visibility="default"
+        (Usage kind="item" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name=""
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (Relationship kind="subsets" target=beads
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Usage kind="item" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (CrossFeatureMember name=""
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInteger value="1"))
+            (Relationship kind="subsets" target=rims
+              (*ast.QualifiedName))
+            (Relationship kind="typing" target=TireMountingRim
+              (*ast.QualifiedName)))))))
+  (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="OrderedCrossing"
+      (Membership visibility="default"
+        (Usage kind="item" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="beads" ordered=true
+            (Multiplicity range=true
+              (LiteralInteger value="1")
+              (LiteralInfinity)))))
+      (Membership visibility="default"
+        (Usage kind="item" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="" ordered=true nonunique=true
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (Relationship kind="subsets" target=rims
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Usage kind="item" name="z" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="" ordered=true)))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="w" ref=true direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name="" nonunique=true
+            (Multiplicity range=false
+              (LiteralInteger value="2")))))))
+  (Membership visibility="default"
     (Definition kind="interface" abstract=false variation=false name="FuelInterface"
       (Membership visibility="default"
         (Usage kind="port" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
