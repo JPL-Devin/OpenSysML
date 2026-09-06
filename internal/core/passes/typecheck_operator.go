@@ -67,6 +67,36 @@ func (ec *exprChecker) checkOperatorRules(scope *symbols.Scope, node ast.Node) {
 		for i := range e.Params {
 			ec.checkOperatorRules(scope, e.Params[i].Value)
 		}
+		ec.checkBodyMembers(scope, e)
 		ec.checkOperatorRules(ec.bodyScope(scope, e), e.Result)
+	}
+}
+
+// checkBoundOperators applies the operator rules to the bounds a multiplicity writes.
+func (ec *exprChecker) checkBoundOperators(scope *symbols.Scope, mult *ast.Multiplicity) {
+	if mult == nil {
+		return
+	}
+	ec.checkOperatorRules(scope, mult.Lower)
+	if mult.IsRange {
+		ec.checkOperatorRules(scope, mult.Upper)
+	}
+}
+
+// checkMemberOperators applies the operator rules to the values the declarations
+// of an expression body write, for a checker that types nothing else of them.
+func (ec *exprChecker) checkMemberOperators(scope *symbols.Scope, members []ast.Node) {
+	for _, m := range members {
+		m = unwrapType(m)
+		d, ok := featureDeclOf(m)
+		if !ok {
+			continue
+		}
+		ec.checkOperatorRules(scope, d.value)
+		if u, ok := m.(*ast.Usage); ok {
+			if child := childScopeOf(scope, u); child != nil {
+				ec.checkMemberOperators(child, u.Members)
+			}
+		}
 	}
 }

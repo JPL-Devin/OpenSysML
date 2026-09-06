@@ -39,6 +39,7 @@ func (ElementFilterPass) Run(ctx *Context, name string, root *ast.RootNamespace)
 		expr:  &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind},
 		seen:  make(map[*symbols.Scope]bool),
 	}
+	fc.expr.walkMembers = fc.expr.checkMemberOperators
 	fc.walk(rootScope)
 	return append(fc.diags, fc.expr.diags...)
 }

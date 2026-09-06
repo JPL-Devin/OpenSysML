@@ -26,22 +26,16 @@ func (MultiplicityBoundsPass) Run(ctx *Context, name string, root *ast.RootNames
 	if rootScope == nil {
 		return nil
 	}
-	c := &multiplicityBoundsChecker{
-		resolver: ctx.Resolver(),
-		model:    ctx.Model(),
-		expr:     &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind},
-	}
+	c := &multiplicityBoundsChecker{resolver: ctx.Resolver(), model: ctx.Model()}
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, c.check)
-	return append(c.diags, c.expr.diags...)
+	return c.diags
 }
 
 type multiplicityBoundsChecker struct {
 	resolver *resolve.Resolver
 	model    *semantics.Model
-	// expr applies the operator-expression rules to the operators a bound writes.
-	expr  *exprChecker
-	diags []Diagnostic
+	diags    []Diagnostic
 }
 
 func (c *multiplicityBoundsChecker) check(sym *symbols.Symbol) {
@@ -60,7 +54,6 @@ func (c *multiplicityBoundsChecker) checkBound(scope *symbols.Scope, bound ast.N
 	if bound == nil {
 		return
 	}
-	c.expr.checkOperatorRules(scope, bound)
 	if v, ok := c.model.EvalIn(scope, bound); ok {
 		if v.Kind == semantics.ValInfinity || (v.Kind == semantics.ValInt && v.Int >= 0) {
 			return

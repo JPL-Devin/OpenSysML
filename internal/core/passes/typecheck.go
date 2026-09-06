@@ -36,7 +36,16 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	}
 	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
+	tc.checkMultiplicityBounds(ctx, rootScope)
 	return append(tc.diags, tc.expr.diags...)
+}
+
+// checkMultiplicityBounds applies the operator rules to every multiplicity bound
+// of the document, which no declaration's value walk reaches.
+func (tc *typeChecker) checkMultiplicityBounds(ctx *Context, rootScope *symbols.Scope) {
+	for _, sym := range w8cSymbols(ctx, rootScope) {
+		tc.expr.checkBoundOperators(w8cScopeOf(sym), w8cMultiplicityOf(sym))
+	}
 }
 
 type typeChecker struct {

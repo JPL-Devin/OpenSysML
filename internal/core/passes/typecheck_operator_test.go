@@ -391,3 +391,57 @@ func TestCastConformanceOfCalculationUsages(t *testing.T) {
 		"22:51 cast argument is typed by Name, unrelated to the target String",
 	)
 }
+
+// A bound's operators are judged by the type tier, so an unrelated type error
+// elsewhere in the document does not silence them.
+func TestOperatorRulesInMultiplicityBoundsSurviveUnrelatedErrors(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	feature bad : Integer = "s";
+	feature a : K[0..(2 as C)];
+}`
+	root := parser.New(source.New("a.kerml", []byte(kerml))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument("a.kerml", root)
+	idx.ExpandWildcardImports()
+	var errs, casts int
+	for _, d := range Analyze("a.kerml", root, nil, idx) {
+		switch {
+		case d.Code == codeCastConformance:
+			casts++
+		case d.Severity == SeverityError:
+			errs++
+		}
+	}
+	if errs != 1 || casts != 1 {
+		t.Fatalf("want the binding error and the bound's cast warning, got %d errors and %d cast warnings", errs, casts)
+	}
+}
+
+// The members an expression body declares are reached wherever the body is
+// written: in a filter condition, a bound or an ordinary value, once each.
+func TestOperatorRulesInBodyMembers(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	package Q1 { filter { feature m = 1 as C; m == 1 }; }
+	feature a : K[0..{ feature m = 2 as C; m }];
+	feature v = { feature m = 3 as C; feature n { feature o = 4 as C; } m };
+	package Q2 { filter { in x; feature m = { 5 as C }; m == x }; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:36 cast argument is typed by Integer, unrelated to the target C",
+		"5:33 cast argument is typed by Integer, unrelated to the target C",
+		"6:28 cast argument is typed by Integer, unrelated to the target C",
+		"6:60 cast argument is typed by Integer, unrelated to the target C",
+		"7:44 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	package Q1 { filter { attribute m = 1 as C; m == 1 }; }
+	part a : K[0..{ attribute m = 2 as C; m }];
+}`,
+		"4:38 cast argument is typed by Integer, unrelated to the target C",
+		"5:32 cast argument is typed by Integer, unrelated to the target C")
+}
