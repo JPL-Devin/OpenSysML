@@ -162,7 +162,8 @@ reported, so a script that reads it takes the output from the first `{`.
 | `--strict` | | Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning (see [Strict conformance](../guide/03-command-line.md#strict-conformance)) |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
-| `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
+| `--from <format>` | | Input format for `--convert`: the `--convert` formats, or `xmi`/`mdzip` for a SysML v1 model to migrate (default: from the input's extension; `.xmi` and `.mdzip` are recognized) — see [SysML v1 migration](sysml-v1-migration.md) |
+| `--migration-report <file>` | | With `--convert` from `xmi`: write the element-by-element migration report to this file, JSON when it ends in `.json`, text otherwise. Without it the one-line summary goes to stderr |
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
