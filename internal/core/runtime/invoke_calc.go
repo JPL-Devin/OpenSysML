@@ -177,10 +177,9 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs, shape.Aliases)
 	shape.Bindings = calcBindings(chain)
 	shape.ResultExpr = resultBindingExpr(shape.Bindings)
-	// A calc computes nothing when it neither returns a value nor binds an output
-	// feature — by a declaration or by an assignment in its body. An analysis
-	// whose body performs steps computes through them, its objective its answer.
-	performs := shape.Kind == "analysis" && len(shape.Nodes) > 0
+	// A calc computes nothing unless it returns or binds an output; an analysis
+	// also computes through its steps, or answers with its verdicts alone.
+	performs := shape.Kind == "analysis" && (len(shape.Nodes) > 0 || ctx.analysisChecks(sym))
 	computes := lower.Returns(shape.Body) || len(shape.BodyOutputs) > 0 || shape.ResultExpr != nil || shape.hasInitialOutput() || performs
 	if !computes {
 		if len(shape.Outputs) > 0 && shape.resultOutput() == nil {

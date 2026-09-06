@@ -378,6 +378,20 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 	return verdicts
 }
 
+// analysisChecks reports whether the case states an objective or asserts a
+// condition, so running it decides a verdict even when it computes no output.
+func (ctx *Context) analysisChecks(sym *symbols.Symbol) bool {
+	if len(ctx.ObjectivesOf(sym, nil)) > 0 {
+		return true
+	}
+	for _, cond := range ctx.CaseConditionsOf(sym, nil) {
+		if cond.Required {
+			return true
+		}
+	}
+	return false
+}
+
 // assertionName names an asserted condition: the named constraint stating it, or
 // the condition as written when only a case (the one run, or its definition)
 // names it. The symbol is the named constraint, nil when there is none.
