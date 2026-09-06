@@ -336,6 +336,9 @@ func TestNegative(t *testing.T) {
 		{"binding_ends_then", "package P { part def D { attribute a; attribute b; attribute c; bind a = b then c; } }"},
 		{"binding_named_end_expression", "package P { part def D { attribute a; attribute b; bind e1 ::> a = b + 1; } }"},
 		{"binding_declaration_bind_no_ends", "package P { part def D { attribute a; binding x : AB bind ; } }"},
+		// A SysML UsageDeclaration puts its multiplicity after the name; a bracket
+		// before the name is a connector end's (pilot: `no viable alternative at input 'ab2'`).
+		{"binding_multiplicity_before_name", "package P { part def D { attribute a; attribute b; binding [1] ab2 : AB bind a = b; } }"},
 
 		// A connection, interface or flow usage stating its ends where its name
 		// would go still states both ends and closes the body it opens.

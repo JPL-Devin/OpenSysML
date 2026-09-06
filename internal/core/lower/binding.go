@@ -59,6 +59,9 @@ func lowerBinding(u *ast.Usage, scope *symbols.Scope) (Binding, bool) {
 	}
 	var ends [2]BindingEnd
 	for i, end := range u.ConnectorEnds {
+		if end == nil {
+			return Binding{}, false
+		}
 		target := end.AttachedTarget()
 		if target == nil {
 			return Binding{}, false
