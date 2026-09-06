@@ -140,6 +140,62 @@ func TestRenderDocumentHTMLDocumentOptions(t *testing.T) {
 		`<span class="sysml-section-number">1</span>`)
 }
 
+// TestRenderDocumentHTMLMermaid checks -html-mermaid loads the pinned CDN
+// release or the URL named, on a single page and on every page of a set.
+func TestRenderDocumentHTMLMermaid(t *testing.T) {
+	binary := buildCLI(t)
+	pinned := `<script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"></script>`
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "cdn"), 0, pinned, "</article>\n"+pinned+"\n</body>")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "https://example.test/mermaid.js"),
+		0, `<script src="https://example.test/mermaid.js"></script>`)
+	plain := check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-doc-form", "html")
+	wantReport(t, plain, 0, "<!DOCTYPE html>")
+	if strings.Contains(plain.stdout, "<script") {
+		t.Errorf("a page loads no script unless asked:\n%s", plain.stdout)
+	}
+
+	dir := filepath.Join(t.TempDir(), "site")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir, "-doc-form", "html", "-html-mermaid", "cdn"), 0)
+	pages, err := filepath.Glob(filepath.Join(dir, "*.html"))
+	if err != nil || len(pages) == 0 {
+		t.Fatalf("set wrote no pages: %v", err)
+	}
+	for _, page := range pages {
+		content, err := os.ReadFile(page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), pinned) {
+			t.Errorf("%s does not load Mermaid:\n%s", page, content)
+		}
+	}
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "mermaid.js"),
+		2, "-html-mermaid takes cdn or the URL of a Mermaid script")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-mermaid", "mermaid.js"),
+		2, "-html-mermaid takes cdn or the URL of a Mermaid script")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-fragment", "-html-mermaid", "cdn"),
+		2, "load Mermaid in the page you embed it in")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-html-mermaid", "cdn"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "pdf", "-o", filepath.Join(t.TempDir(), "r.pdf"), "-html-mermaid", "cdn"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-html-mermaid", "cdn"),
+		2, "apply to -render-document")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-mermaid", "cdn")),
+		2, "not the sheet")
+}
+
 // TestRenderDocumentHTMLFlagConflicts checks the HTML flag combinations the
 // run refuses.
 func TestRenderDocumentHTMLFlagConflicts(t *testing.T) {

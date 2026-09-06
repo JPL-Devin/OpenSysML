@@ -123,6 +123,21 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 	return ok && len(inst.FeatureValues) == 0 && semantics.IsValueType(inst.Type)
 }
 
+// noValueError reports the read of node, which found the unset value val, naming
+// the feature that holds it.
+func (ctx *Context) noValueError(val Value, node ast.Node) *NoValueError {
+	err := &NoValueError{Feature: conditionText(node)}
+	if ref, ok := node.(*ast.FeatureReference); ok {
+		err.Ref = ref.Name
+	}
+	if inst, ok := ctx.instances[val.Instance]; ok && inst.owner != nil {
+		if fv, ok := inst.owner.FeatureValues[inst.ownerFeature]; ok && fv.Feature != nil {
+			err.Symbol = fv.Feature.Symbol
+		}
+	}
+	return err
+}
+
 // Instantiate materializes an instance of the given usage/definition symbol.
 // Allocates ID, creates feature values per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy, then starts the behaviors the type exhibits or

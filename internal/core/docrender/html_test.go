@@ -69,6 +69,32 @@ func TestHTMLTelescopeReportFragmentGolden(t *testing.T) {
 	checkGolden(t, got, filepath.Join("testdata", "telescope_report.fragment.golden.html"))
 }
 
+// TestHTMLMermaidScript checks a page asked to load Mermaid carries one
+// script element after the document, a fragment none, and a default page none.
+func TestHTMLMermaidScript(t *testing.T) {
+	path := filepath.Join("testdata", "telescope_report.sysml")
+	url := `https://cdn.example/mermaid.js?a=1&b="2"`
+	got := renderFixtureHTML(t, path, "Observatory::MassReport", HTMLOptions{MermaidScript: url})
+	script := `<script src="https://cdn.example/mermaid.js?a=1&amp;b=&#34;2&#34;"></script>`
+	if strings.Count(got, "<script") != 1 || !strings.Contains(got, script) {
+		t.Errorf("page lacks the one script element %s:\n%s", script, got)
+	}
+	if strings.Index(got, "</article>") > strings.Index(got, script) || !strings.HasSuffix(got, script+"\n</body>\n</html>\n") {
+		t.Errorf("script must follow the document, before </body>:\n%s", got)
+	}
+	if !strings.Contains(got, `<pre class="mermaid">`) {
+		t.Errorf("diagram source must stay for the script to draw:\n%s", got)
+	}
+	for name, opts := range map[string]HTMLOptions{
+		"default":  {},
+		"fragment": {Fragment: true, MermaidScript: url},
+	} {
+		if out := renderFixtureHTML(t, path, "Observatory::MassReport", opts); strings.Contains(out, "<script") {
+			t.Errorf("%s page loads a script:\n%s", name, out)
+		}
+	}
+}
+
 // TestHTMLSemanticStructure checks the semantic skeleton and the model facts
 // carried on it: the document element, nested sections at valid heading
 // levels, typed rows and cells, and a diagram figure.
@@ -116,6 +142,34 @@ func TestHTMLQuantityCells(t *testing.T) {
 	}
 	if strings.Count(got, `data-column="mass" data-value-kind="quantity"`) != 4 {
 		t.Errorf("rendering does not carry four mass cells\n%s", got)
+	}
+}
+
+// TestHTMLDerivedQuantityCells checks that a quantity derived from other
+// features renders as a quantity cell — unit in the text, magnitude and unit
+// apart as data attributes — and reaches list items and definitions.
+func TestHTMLDerivedQuantityCells(t *testing.T) {
+	got := renderFixtureHTML(t, filepath.Join("testdata", "derived_report.sysml"),
+		"Derived::MassReport", HTMLOptions{})
+	for _, want := range []string{
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2290000" data-unit="kg">2290000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="mass" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="2280000" data-unit="kg">2280000 [kg]</span></td>`,
+		`<td class="sysml-cell" data-column="engines" data-value-kind="integer"><span class="sysml-value" data-value-kind="integer">3</span></td>`,
+		`<td class="sysml-cell" data-column="class" data-value-kind="string"><span class="sysml-value" data-value-kind="string">light</span></td>`,
+		`<td class="sysml-cell" data-column="perEngine" data-value-kind="quantity"><span class="sysml-value" data-value-kind="quantity" data-magnitude="458000" data-unit="kg">458000 [kg]</span></td>`,
+		`<li class="sysml-item" data-element="Derived::rocket::s1" data-element-kind="partUsage">s1 2290000 [kg]</li>`,
+		`<dt class="sysml-term">rocket</dt>`,
+		`<dd class="sysml-description">4689000 [kg]</dd>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Count(got, `data-column="mass" data-value-kind="quantity"`) != 3 {
+		t.Errorf("rendering does not carry three mass cells\n%s", got)
+	}
+	if strings.Contains(got, `data-element="Derived::rocket::s2" data-element-kind="partUsage">s2`) {
+		t.Errorf("list holds s2, whose derived mass is not above the threshold\n%s", got)
 	}
 }
 

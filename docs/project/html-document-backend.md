@@ -209,7 +209,10 @@ Decisions, each with its reason:
 - **No script, no network reference.** The default page is self-contained: one inline
   stylesheet, no CDN, no JavaScript. A rendered document is an artifact that has to open
   from a file on a machine with no network, and a generated page that silently fetches a
-  script is not that.
+  script is not that. Loading Mermaid is therefore opt-in: `-html-mermaid cdn` or
+  `-html-mermaid <url>` adds one `<script src>` before `</body>` — nothing is bundled, the
+  browser fetches the script under Mermaid's own terms — and a fragment refuses it, since the
+  embedding page owns the shell.
 - **Every separator is an element, not bare punctuation.** A multi-valued cell renders each
   value in `span.sysml-value` with the `, ` between them in `span.sysml-separator`, and a
   group key gets `span.sysml-group-key`. Markdown has to join those with punctuation; HTML
@@ -222,10 +225,12 @@ Decisions, each with its reason:
 A diagram's rendering comes from the view engine as Mermaid source. The HTML backend writes
 that source in `<pre class="mermaid">` inside the `<figure>` by default — it is exactly what
 Mermaid's own client-side renderer looks for, so a site that already loads Mermaid renders it
-with no further work, and a site that does not shows the source rather than nothing. When
-pre-rendered images are supplied, the `<pre>` is replaced by `<img>` with the caption as its
-`alt` text; that is the path the PDF converters use, since no print engine runs Mermaid.
-Table-kind views keep rendering as a table, as they do in Markdown.
+with no further work, and a site that does not shows the source rather than nothing. A
+standalone page asked to with `-html-mermaid` loads that renderer itself, from the pinned
+jsDelivr release or a URL the caller names. When pre-rendered images are supplied, the `<pre>`
+is replaced by `<img>` with the caption as its `alt` text; that is the path the PDF converters
+use, since no print engine runs Mermaid. Table-kind views keep rendering as a table, as they do
+in Markdown.
 
 Supplying the images stays out of `docrender`: rendering them means running `mmdc` as a
 subprocess, which is `docpdf`'s job and must not become a dependency of a pure renderer. So
@@ -388,10 +393,11 @@ Markdown.
 ## Known limitations
 
 - **No HTML for the REPL or the LSP preview.** Both stay Markdown by choice, stated above.
-- **Client-side Mermaid by default.** A page opened without a Mermaid script shows diagram
-  source rather than a diagram. Pre-rendered images are available through the PDF path's
-  machinery, but wiring `mmdc` into the HTML form — an `-html-diagrams svg` option — is
-  deliberately out of scope for the two steps above and left as follow-on work.
+- **Client-side Mermaid only.** A page opened without a Mermaid script shows diagram source
+  rather than a diagram; `-html-mermaid` has the page load the script, which still needs a
+  browser with access to the script's URL. Pre-rendered images are available through the PDF
+  path's machinery, but wiring `mmdc` into the HTML form — an `-html-diagrams svg` option — is
+  deliberately out of scope and left as follow-on work.
 - **One stylesheet, no theme set.** The default is a starting point, not a theme system. A
   themed set (print, screen, house style) is a separate piece of work that the layer and the
   token vocabulary enable rather than deliver.

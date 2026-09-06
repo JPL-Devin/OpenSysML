@@ -46,7 +46,7 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 		return Value{}, ec.notAQuantityError(n, err)
 	}
 
-	magnitude, err := ec.Eval(n.Operand)
+	magnitude, err := ec.valueOperand(n.Operand)
 	if err != nil {
 		return Value{}, err
 	}

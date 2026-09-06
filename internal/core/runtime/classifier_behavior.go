@@ -250,6 +250,9 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
 // startClassifierBehaviorsOf starts the behaviors of every one of the objects as
 // one collective run, so objects materialized together exchange messages.
 func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) error {
+	if ctx.declarative {
+		return nil
+	}
 	attached := len(ctx.objectBehaviors)
 	if err := ctx.startBehaviorsOfAll(objects); err != nil {
 		ctx.abandonCreationSince(mark, attached)
