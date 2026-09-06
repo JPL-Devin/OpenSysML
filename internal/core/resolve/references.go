@@ -235,7 +235,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.headerRelationships(scope, child, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		if d.CrossFeature != nil {
-			c.crossFeature(scope, d)
+			c.crossFeature(scope, child, d)
 		}
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
@@ -578,11 +578,11 @@ func (c *refCollector) prefixes(scope *symbols.Scope, decl ast.Node, prefixes []
 
 // crossFeature collects the references the cross feature an end declares ahead
 // of itself writes, as that feature's; they resolve where the end's do.
-func (c *refCollector) crossFeature(scope *symbols.Scope, u *ast.Usage) {
+func (c *refCollector) crossFeature(scope, header *symbols.Scope, u *ast.Usage) {
 	prev := c.member
 	c.member = u.CrossFeature
 	defer func() { c.member = prev }()
-	c.relationships(scope, u.CrossFeature, u.CrossFeature.Relationships)
+	c.headerRelationships(scope, header, u.CrossFeature, u.CrossFeature.Relationships)
 	c.multiplicity(scope, u.CrossFeature.Multiplicity)
 }
 

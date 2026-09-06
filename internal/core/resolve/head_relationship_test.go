@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // The document walk reads `featured by startShot` in the feature's own scope,
@@ -65,6 +66,69 @@ func TestHeadRelationshipReferenceResolvesWhereTheDocumentDid(t *testing.T) {
 	if !isPortion(portion.Decl) {
 		t.Errorf("`featured by CC1::startShot` resolves to %T, want the portion redefining startShot", portion.Decl)
 	}
+}
+
+// An end's cross feature has no scope of its own: its head relationships are
+// read in the end's scope, as the end's are, where a chain's root may be a
+// member of the end's body ahead of the sibling end of the same name.
+const crossFeatureHeadModel = `package P {
+	class Item;
+	class Cart {
+		feature items : Item;
+	}
+	class Product;
+	assoc A {
+		end feature cart : Cart;
+		end items :> cart.items feature product : Product {
+			feature cart : Cart;
+		}
+	}
+}`
+
+func TestCrossFeatureHeadReferenceResolvesWhereTheDocumentDid(t *testing.T) {
+	walk, root, rootScope := resolvedDocNamed(t, "app.kerml", crossFeatureHeadModel)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every name: %v", walk.Diagnostics)
+	}
+
+	var chainRoot *resolve.Reference
+	for _, ref := range resolve.References(root, rootScope) {
+		ref := ref
+		if nameText(ref.QN) == "cart" {
+			chainRoot = &ref
+		}
+	}
+	if chainRoot == nil {
+		t.Fatal("the root of `:> cart.items` was not collected")
+	}
+	if _, ok := chainRoot.Member.(*ast.CrossFeatureMember); !ok || chainRoot.Head == nil {
+		t.Fatalf("the chain root should be collected as a head relationship of the cross feature, got member %T, head %v", chainRoot.Member, chainRoot.Head)
+	}
+
+	walked, ok := walk.PartSymbol(chainRoot.QN, 0)
+	if !ok {
+		t.Fatal("the document walk did not bind the root of `:> cart.items`")
+	}
+	if !declaredInEnd(walked, "product") {
+		t.Fatalf("the document walk bound `cart` outside the end's body: %v", walked.Decl)
+	}
+
+	sym, ok := walk.ResolveReference(*chainRoot)
+	if !ok {
+		t.Fatal("the root of `:> cart.items` does not resolve on its own")
+	}
+	if sym != walked {
+		t.Errorf("the root of `:> cart.items` resolves to a different declaration on its own than in the document walk")
+	}
+}
+
+// declaredInEnd reports whether sym is a body member of the end usage named end.
+func declaredInEnd(sym *symbols.Symbol, end string) bool {
+	if sym.OwnerScope == nil {
+		return false
+	}
+	u, ok := sym.OwnerScope.Node().(*ast.Usage)
+	return ok && u.IsEnd && u.Ident.Name == end
 }
 
 func isFeature(n ast.Node) bool {
