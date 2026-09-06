@@ -1084,15 +1084,20 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		if !ok {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
 		}
-		if !finite(f.GetExponent()) {
-			return semantics.UnitTerm{}, fmt.Errorf("%w: %s**%g", ErrUnitExponentUnusable, f.GetUnitId(), f.GetExponent())
-		}
 		term.Factors = append(term.Factors, semantics.UnitFactor{
 			Unit:     unit,
 			Exponent: f.GetExponent(),
 		})
 	}
-	return term.Normalized(), nil
+	// Checked after normalization: repeated factors sum their exponents, and
+	// finite powers can overflow in that sum.
+	term = term.Normalized()
+	for _, f := range term.Factors {
+		if !finite(f.Exponent) {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s**%g", ErrUnitExponentUnusable, symbols.FQNOf(f.Unit), f.Exponent)
+		}
+	}
+	return term, nil
 }
 
 // finite reports whether a wire double is a number a unit term can carry.

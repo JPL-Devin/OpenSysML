@@ -266,6 +266,18 @@ func TestQuantityFromWireNeedsTheModel(t *testing.T) {
 		}
 	}
 
+	overflowing := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "SI::m",
+		UnitTerm: &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{
+			{UnitId: "SI::metre", Exponent: math.MaxFloat64},
+			{UnitId: "SI::metre", Exponent: math.MaxFloat64},
+		}},
+	}
+	if _, err := ProtoToQuantity(overflowing, idx, sem); !errors.Is(err, ErrUnitExponentUnusable) {
+		t.Errorf("over repeated exponents summing past the largest double: err = %v, want ErrUnitExponentUnusable", err)
+	}
+
 	noMagnitude := &pb.Quantity{Unit: "SI::kg"}
 	if _, err := ProtoToQuantity(noMagnitude, idx, sem); err == nil {
 		t.Error("a quantity with no magnitude must be reported, not read as zero")
