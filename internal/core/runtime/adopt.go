@@ -670,16 +670,17 @@ func (a *adoption) commit() {
 			}
 			done[fv] = true
 			fv.Feature = plan.featureFor(name, fv)
+			// What read fv did so in the previous analysis, where its dependents stay
+			// or derive again here; no edge is kept between the two.
+			fv.dependents = nil
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
 			if a.ctx.derivedFeatureValue(fv) {
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
-				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			if a.ctx.collectedFeatureValue(fv) {
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
-				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			// A connector reads the features the `connect` clause names, which are
@@ -690,7 +691,6 @@ func (a *adoption) commit() {
 					plan.obj.keepConnector(fv, id)
 				}
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
-				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			fv.Value = a.rewrite(fv.Value)

@@ -48,10 +48,79 @@ func (ctx *Context) priorValue(fv *FeatureValue) (Value, bool) {
 // noteChanged unmaterializes what depended on fv before a write, unless fv still
 // holds prior; a dependent recorded during the write read what fv holds now.
 func (ctx *Context) noteChanged(fv *FeatureValue, prior Value, had bool) {
-	if !had || len(fv.dependents) == 0 || (fv.Materialized && valueIdentical(prior, fv.HeldValue())) {
+	if !had || len(fv.dependents) == 0 || (fv.Materialized && heldSame(prior, fv.HeldValue())) {
 		return
 	}
 	ctx.invalidateDependents(fv)
+}
+
+// heldSame reports whether now is prior as a derivation reads it: `===`, and for a
+// quantity the same unit too, which an operation over it carries into its result.
+func heldSame(prior, now Value) bool {
+	if isEmptyValue(prior) || isEmptyValue(now) {
+		return isEmptyValue(prior) && isEmptyValue(now)
+	}
+	if prior.Kind != now.Kind {
+		return false
+	}
+	switch prior.Kind {
+	case ValQuantity:
+		return prior.Quantity().Unit.Product.Equal(now.Quantity().Unit.Product) && valueIdentical(prior, now)
+	case ValVectorQuantity:
+		return vectorQuantityHeldSame(prior.VectorQuantity(), now.VectorQuantity())
+	case ValSequence:
+		return elementsHeldSame(prior.Sequence().Elements(), now.Sequence().Elements())
+	case ValArray:
+		return valueIdentical(prior, now) && elementsHeldSame(prior.Array().Elements, now.Array().Elements)
+	case ValSet:
+		return setHeldSame(prior.Set(), now.Set())
+	}
+	return valueIdentical(prior, now)
+}
+
+func vectorQuantityHeldSame(prior, now *VectorQuantity) bool {
+	if prior == nil || now == nil || prior.Dimension() != now.Dimension() {
+		return prior == now
+	}
+	for i := range prior.Num {
+		if !heldSame(NewQuantityValue(prior.component(i)), NewQuantityValue(now.component(i))) {
+			return false
+		}
+	}
+	return true
+}
+
+func elementsHeldSame(prior, now []Value) bool {
+	if len(prior) != len(now) {
+		return false
+	}
+	for i := range prior {
+		if !heldSame(prior[i], now[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func setHeldSame(prior, now *Set) bool {
+	if prior == nil || now == nil || prior.Size() != now.Size() {
+		return prior == now
+	}
+	rights := now.Elements()
+	used := make([]bool, len(rights))
+	for _, left := range prior.Elements() {
+		found := false
+		for i, right := range rights {
+			if !used[i] && heldSame(left, right) {
+				used[i], found = true, true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // invalidateDependents unmaterializes what was derived from fv, transitively. Each

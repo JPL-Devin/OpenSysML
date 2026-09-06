@@ -42,8 +42,14 @@ const derivedInvalidationModel = `
 			attribute twice : Integer = shown * 2;
 		}
 		part def Loop { attribute x : Integer = x + 1; }
+		part def Rod {
+			attribute len :> ISQ::length default 1 [m];
+			attribute alt :> ISQ::length = 100 [cm];
+			attribute twice :> ISQ::length = len * 2;
+		}
 
 		part box : Box;
+		part rod : Rod;
 		part stack : Stack;
 		part bare : Bare;
 		part rig : Rig;
@@ -131,6 +137,37 @@ func TestWriteOfTheSameValueLeavesDerivedValues(t *testing.T) {
 	setInt(t, ctx, box, "a", 5)
 	if dd := readInt(t, ctx, box, "dd"); dd != 11 {
 		t.Fatalf("dd = %d after a := 5, want 11", dd)
+	}
+}
+
+// TestWriteOfAnEqualQuantityInAnotherUnitRecomputesDerivedValues: a quantity
+// equal in magnitude but stated in another unit is a change to what read it, as
+// an operation over it carries the unit into its result.
+func TestWriteOfAnEqualQuantityInAnotherUnitRecomputesDerivedValues(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, derivedInvalidationModel))
+	rod := instantiateNamed(t, ctx, idx, "test::rod")
+	if got := readFormatted(t, ctx, rod, "twice"); got != "2 [m]" {
+		t.Fatalf("twice = %s before the write, want 2 [m]", got)
+	}
+	alt, err := rod.GetFeatureValue(ctx, "alt")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(alt): %v", err)
+	}
+	if err := rod.SetFeatureValue(ctx, "len", alt.HeldValue()); err != nil {
+		t.Fatalf("SetFeatureValue(len, 100 [cm]): %v", err)
+	}
+	if twice := rod.FeatureValues["twice"]; twice.Materialized {
+		t.Fatalf("twice is still materialized as %s after len was restated in cm", FormatValue(twice.HeldValue()))
+	}
+	if got := readFormatted(t, ctx, rod, "twice"); got != "200 [cm]" {
+		t.Fatalf("twice = %s after len := 100 [cm], want 200 [cm]", got)
+	}
+	// The same quantity in the same unit is no change.
+	if err := rod.SetFeatureValue(ctx, "len", alt.HeldValue()); err != nil {
+		t.Fatalf("SetFeatureValue(len, 100 [cm]) again: %v", err)
+	}
+	if twice := rod.FeatureValues["twice"]; !twice.Materialized {
+		t.Fatal("writing len's own value again unmaterialized twice")
 	}
 }
 
