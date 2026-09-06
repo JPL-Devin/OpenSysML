@@ -25,8 +25,8 @@ type relationshipMemberForm struct {
 }
 
 // relationshipMemberForms are the keyword-first relationship members, keyed by
-// the keyword introducing the first end (KerML.xtext:390, 408, 486, 634, 665,
-// 683, 712).
+// the keyword introducing the first end (KerML.xtext:390, 408, 426, 486, 634,
+// 665, 683, 712).
 var relationshipMemberForms = map[string]relationshipMemberForm{
 	"subtype":       {kind: ast.RelSpecializes, sepKeyword: "specializes", sepToken: lexer.ColonGt, prefix: "specialization"},
 	"subclassifier": {kind: ast.RelSpecializes, sepKeyword: "specializes", sepToken: lexer.ColonGt, prefix: "specialization"},
@@ -35,7 +35,18 @@ var relationshipMemberForms = map[string]relationshipMemberForm{
 	"redefinition":  {kind: ast.RelRedefines, sepKeyword: "redefines", sepToken: lexer.ColonGtGt, prefix: "specialization"},
 	"conjugate":     {kind: ast.RelSpecializes, sepKeyword: "conjugates", sepToken: lexer.Tilde, conjugated: true, prefix: "conjugation"},
 	"inverse":       {kind: ast.RelInverseOf, sepKeyword: "of", sepToken: lexer.EOF, prefix: "inverting"},
+	"disjoint":      {kind: ast.RelDisjoint, sepKeyword: "from", sepToken: lexer.EOF, prefix: "disjoining"},
 }
+
+// relationshipMemberKeywords are the keys of relationshipMemberForms; a
+// relationship's identification stops at one rather than reading it as a name.
+var relationshipMemberKeywords = func() []string {
+	kws := make([]string, 0, len(relationshipMemberForms))
+	for kw := range relationshipMemberForms {
+		kws = append(kws, kw)
+	}
+	return kws
+}()
 
 // atRelationshipMember reports whether the cursor is at a keyword-first KerML
 // relationship member. The forms are KerML-only, so SysML notation is untouched.
@@ -82,7 +93,8 @@ func (p *Parser) atRelationshipMemberKeyword() bool {
 
 // atRelationshipMemberFirstEnd reports whether a name starts at off, which is
 // what tells `inverse f of g;` (a member) from the `inverse of g` clause of a
-// feature declaration.
+// feature declaration. A feature-chain end (`disjoint a.b from c.d;`) starts
+// with a name too, so it answers here as well.
 func (p *Parser) atRelationshipMemberFirstEnd(off int) bool {
 	t := p.peekN(off)
 	return t.Kind == lexer.Identifier || t.Kind == lexer.UnrestrictedName
@@ -104,7 +116,7 @@ func (p *Parser) parseRelationshipMember(start int, vis ast.Visibility, trivia [
 		prefix = kw
 		p.advance()
 		if !p.atRelationshipMemberKeyword() {
-			ident = p.parseIdentification()
+			ident = p.parseIdentificationStopping(relationshipMemberKeywords...)
 		}
 		kw = p.peek().KeywordID
 		form, ok = relationshipMemberForms[kw]

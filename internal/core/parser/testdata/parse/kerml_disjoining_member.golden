@@ -1,0 +1,38 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="DisjoiningMember" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="A"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="B"))
+      (Membership visibility="default"
+        (Usage kind="class" name="Occ" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="successors" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Occ
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="predecessors" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Occ
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="earlier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=Occ
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="later" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=Occ
+            (*ast.QualifiedName))))
+      (RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="A" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="disjoint" name="D" keyword="disjoint" source="A" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="disjoint" name="<d2>" keyword="disjoint" source="B" target="A" conjugated=false)
+      (RelationshipMember visibility="private" kind="disjoint" name="Documented" keyword="disjoint" source="A" target="B" conjugated=false
+        (Membership visibility="default"
+          (Documentation locale="")))
+      (RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="earlier.successors" target="later.predecessors" conjugated=false)
+      (Membership visibility="default"
+        (Usage kind="class" name="C" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="specializes" target=A
+            (*ast.QualifiedName))
+          (Relationship kind="disjoint" target=B
+            (*ast.QualifiedName)))))))

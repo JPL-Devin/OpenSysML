@@ -1119,7 +1119,7 @@ func (d *decoder) head(el *element) (string, error) {
 	case "Dependency":
 		return d.dependencyHead(el)
 	case "Specialization", "FeatureTyping", "Subsetting", "Redefinition",
-		"FeatureInverting", "TypeFeaturing", "Conjugation":
+		"FeatureInverting", "TypeFeaturing", "Conjugation", "Disjoining":
 		return d.relationshipElementHead(el)
 	case "Comment":
 		return d.commentHead(el)

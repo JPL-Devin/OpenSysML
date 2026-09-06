@@ -241,6 +241,26 @@ triples come); a set of classes with no such member is refused, naming the subje
   actions the loop body declares. A body expression's parameter, a `for` loop's
   variable and a trigger's parameter are no elements of the graph: a reference
   to one stays its name, even where it shadows a feature of the same name.
+- A KerML relationship written keyword-first as a member of its own
+  (`specialization Gen subtype A specializes B;`, `subset f subsets g;`,
+  `inverse f of g;`, `featuring of f by T;`, `disjoint A from B;`) is an element
+  typed by its metaclass, and its two ends are two properties whose order the
+  metamodel fixes: `sysml:Specialization` with `specific` and `general`;
+  `sysml:FeatureTyping` with `typedFeature` and `type`; `sysml:Subsetting` with
+  `subsettingFeature` and `subsettedFeature`; `sysml:Redefinition` with
+  `redefiningFeature` and `redefinedFeature`; `sysml:Conjugation` with
+  `conjugatedType` and `originalType`; `sysml:FeatureInverting` with
+  `invertingFeature` and `featureInverted`; `sysml:TypeFeaturing` with
+  `featureOfType` and `featuringType`; `sysml:Disjoining` with `typeDisjoined`
+  and `disjoiningType`. Each end is a link or a literal by the rule above, so a
+  feature chain (`disjoint earlier.successors from later.predecessors;`) is
+  carried as `sysx:Expression` text. `sysx:declaredKeyword` keeps the keyword
+  the member was written with (`subtype` against `subclassifier`) and
+  `sysx:declaredPrefix` the `specialization`, `inverting` or `disjoining` that
+  introduces its name; the notation is written back from the two ends, so
+  swapping them in the graph swaps them in the notation. This is distinct from
+  the clause of a declaration (`class C specializes A disjoint from B;`), which
+  stays a property of `C` (`sysml:specializes`, `sysml:disjointFrom`).
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node, with

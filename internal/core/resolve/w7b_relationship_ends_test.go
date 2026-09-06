@@ -11,14 +11,16 @@ import (
 )
 
 const relationshipMembers = `package P {
-	classifier A;
-	classifier B;
+	classifier A { feature next : A; }
+	classifier B { feature prev : B; }
 	feature f : A;
 	feature g : B;
 	specialization Gen subtype A specializes B;
 	specialization Sub subset f subsets g;
 	featuring F of f by A;
 	inverting i inverse f of g;
+	disjoining D disjoint A from B;
+	disjoint f.next from g.prev;
 }
 `
 
@@ -55,7 +57,7 @@ func TestW7BRelationshipEndsResolve(t *testing.T) {
 // is the element that name denotes.
 func TestW7BRelationshipMemberIsNamed(t *testing.T) {
 	_, idx := relationshipWorkspace(t)
-	for _, name := range []string{"P::Gen", "P::Sub", "P::F", "P::i"} {
+	for _, name := range []string{"P::Gen", "P::Sub", "P::F", "P::i", "P::D"} {
 		syms := idx.LookupQualified(name)
 		if len(syms) != 1 {
 			t.Fatalf("%s names %d symbols, want 1", name, len(syms))

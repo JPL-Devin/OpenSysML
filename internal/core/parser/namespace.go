@@ -303,9 +303,6 @@ func (p *Parser) parseMember() ast.Node {
 		al.SetLeadingTrivia(trivia)
 		return al
 	}
-	if p.atKeyword("disjoint") {
-		return p.parseDisjointMember(start, vis, trivia)
-	}
 	if p.atRelationshipMember() {
 		return p.parseRelationshipMember(start, vis, trivia)
 	}
