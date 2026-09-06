@@ -305,8 +305,9 @@ func TestObjectivesOfInheritedProjectConditions(t *testing.T) {
 	}
 }
 
-// An objective restating an inherited one stands where it is restated and takes
-// the value it states there, the objective it restates being the same objective.
+// An objective restating an inherited one, by redefinition or by name, is the same
+// objective declared again: it keeps the inherited place in the lexicographic
+// order and takes the value it states, whichever general it is inherited through.
 // Its `eval` binds the inherited result rather than stating a second result
 // expression, which the pilot rejects.
 func TestObjectivesOfRedeclared(t *testing.T) {
@@ -332,12 +333,27 @@ func TestObjectivesOfRedeclared(t *testing.T) {
 					in calc :>> eval { return :>> result = cost + 1; }
 				}
 			}
+			analysis def Renamed :> Base {
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = cost + 2; }
+				}
+			}
+			analysis def Other :> Base;
+			analysis def Diamond :> Other, Refined;
+			analysis def Reversed :> Refined, Other;
 		}
 	`)
-	got := objectiveLabels(objectivesOfCase(t, ctx, scope, "Refined"))
-	want := "maximize widest = margin; minimize cheapest = cost + 1"
-	if got != want {
-		t.Errorf("objectives are [%s], want [%s]", got, want)
+	for _, tc := range []struct{ name, want string }{
+		{"Refined", "minimize cheapest = cost + 1; maximize widest = margin"},
+		{"Renamed", "minimize cheapest = cost + 2; maximize widest = margin"},
+		{"Diamond", "minimize cheapest = cost + 1; maximize widest = margin"},
+		{"Reversed", "minimize cheapest = cost + 1; maximize widest = margin"},
+	} {
+		got := objectiveLabels(objectivesOfCase(t, ctx, scope, tc.name))
+		if got != tc.want {
+			t.Errorf("%s: objectives are [%s], want [%s]", tc.name, got, tc.want)
+		}
 	}
 }
 

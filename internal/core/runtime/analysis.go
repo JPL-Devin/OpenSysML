@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -121,7 +123,7 @@ func RequireAnalysis(sym *symbols.Symbol) error {
 
 // ObjectivesOf returns the objectives sym states, its inherited ones first and
 // in declaration order. An objective restating an inherited one, by name or by
-// redefinition, stands where it is restated.
+// redefinition, is the same objective declared again and keeps its place.
 func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Objective {
 	if sym == nil {
 		return nil
@@ -129,7 +131,7 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	var all []Objective
+	var out []Objective
 	for _, member := range ctx.chainMembers(sym, scope) {
 		usage, ok := member.node.(*ast.Usage)
 		if !ok || usage.Kind != ast.UsageObjective {
@@ -139,41 +141,29 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 		if objSym == nil {
 			continue
 		}
-		all = append(all, ctx.objectiveOf(objSym, sym))
-	}
-	return ctx.dropRestated(all)
-}
-
-// dropRestated keeps the objectives no other one restates, by a later same name or
-// by redefinition, by clause or by role: a redeclared objective is the same
-// objective declared again, wherever the general declaring it was met.
-func (ctx *Context) dropRestated(all []Objective) []Objective {
-	redefined := map[*symbols.Symbol]bool{}
-	for _, obj := range all {
-		for _, target := range ctx.model.AllRedefinedFeatures(obj.Symbol) {
-			redefined[target] = true
-		}
-	}
-	var out []Objective
-	for i, obj := range all {
-		if redefined[obj.Symbol] || restatedByName(all[i+1:], obj.Name) {
-			continue
-		}
-		out = append(out, obj)
+		out = ctx.placeObjective(out, ctx.objectiveOf(objSym, sym))
 	}
 	return out
 }
 
-func restatedByName(later []Objective, name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, obj := range later {
-		if obj.Name == name {
-			return true
+// placeObjective adds obj to out: in place of the first objective it restates,
+// nowhere when it is already placed or redefined by a placed one, at the end otherwise.
+func (ctx *Context) placeObjective(out []Objective, obj Objective) []Objective {
+	for i, prev := range out {
+		if prev.Symbol == obj.Symbol || ctx.redefines(prev, obj) {
+			return out
+		}
+		if ctx.redefines(obj, prev) || (obj.Name != "" && obj.Name == prev.Name) {
+			out[i] = obj
+			return out
 		}
 	}
-	return false
+	return append(out, obj)
+}
+
+// redefines reports whether obj redefines prev, by clause, position or role.
+func (ctx *Context) redefines(obj, prev Objective) bool {
+	return slices.Contains(ctx.model.AllRedefinedFeatures(obj.Symbol), prev.Symbol)
 }
 
 // objectiveOf reads one objective usage: its direction from the definition it is
