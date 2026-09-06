@@ -758,8 +758,8 @@ func TestCollectionModifiersAreWritten(t *testing.T) {
 	}
 }
 
-// The prefix keywords come out in the v2 grammar's order — direction, derived,
-// abstract, constant — and a read-only property is `constant` on every usage kind.
+// Prefix keywords come out in grammar order (direction, derived, abstract, constant,
+// ref); read-only is `constant` except in a value type, where it is only noted.
 func TestPrefixModifiersFollowTheGrammarOrder(t *testing.T) {
 	r := migrateDocument(t, `
     <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
@@ -767,6 +767,17 @@ func TestPrefixModifiersFollowTheGrammarOrder(t *testing.T) {
         <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Boolean"/>
       </ownedAttribute>
       <ownedAttribute xmi:type="uml:Property" xmi:id="_da" name="da" isDerived="true" isReadOnly="true" type="_a" aggregation="composite"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_sh" name="sh" isReadOnly="true" type="_a" aggregation="shared"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_cb" name="Limit">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_cp" name="cp" isDerived="true" isReadOnly="true">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:DataType" xmi:id="_vt" name="Mass">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_vp" name="vp" isReadOnly="true">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
     </packagedElement>
     <packagedElement xmi:type="uml:Class" xmi:id="_if" name="I">
       <ownedAttribute xmi:type="uml:Property" xmi:id="_fp" name="fp" isDerived="true" isReadOnly="true">
@@ -775,12 +786,22 @@ func TestPrefixModifiersFollowTheGrammarOrder(t *testing.T) {
     </packagedElement>`, `
   <sysml:Block xmi:id="_s1" base_Class="_a"/>
   <sysml:InterfaceBlock xmi:id="_s2" base_Class="_if"/>
-  <sysml:FlowProperty xmi:id="_s3" base_Property="_fp" direction="out"/>`)
+  <sysml:FlowProperty xmi:id="_s3" base_Property="_fp" direction="out"/>
+  <sysml:ConstraintBlock xmi:id="_s4" base_Class="_cb"/>
+  <sysml:ValueType xmi:id="_s5" base_DataType="_vt"/>`)
 	wantLine(t, r.Notation, "constant attribute ro : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "derived constant part da : A;")
+	wantLine(t, r.Notation, "constant ref part sh : A;")
+	wantLine(t, r.Notation, "in derived constant attribute cp : ScalarValues::Real;")
 	wantLine(t, r.Notation, "out derived constant attribute fp : ScalarValues::Real;")
-	for _, id := range []string{"_ro", "_da", "_fp"} {
+	wantLine(t, r.Notation, "attribute vp : ScalarValues::Real;")
+	for _, id := range []string{"_ro", "_da", "_cp", "_fp"} {
 		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+			t.Errorf("%s entries = %+v", id, es)
+		}
+	}
+	for id, want := range map[string]string{"_sh": "shared aggregation", "_vp": "read-only is not written"} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, want) {
 			t.Errorf("%s entries = %+v", id, es)
 		}
 	}
