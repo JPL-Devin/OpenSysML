@@ -2828,7 +2828,9 @@ func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) 
 
 	// An inline action usage or definition: `<kind> action warmUp : WarmUp;`.
 	if p.atKeyword("action") {
-		return []ast.Node{p.parseBodyMember()}, nil
+		member := p.parseBodyMember()
+		markStateSubaction(member, kind)
+		return []ast.Node{member}, nil
 	}
 
 	// A behavioral statement: `<kind> assign x := 1;`, `<kind> send s to t;`.
@@ -2846,6 +2848,19 @@ func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) 
 	en := &ast.ErrorNode{Message: msg}
 	en.NodeSpan = p.spanFrom(start)
 	return nil, en
+}
+
+// markStateSubaction records the subaction keyword as the prefix of the action
+// usage it introduces: `entry action ::> a` performs `a` just as `perform
+// action ::> a` does (SysML.xtext StateActionUsage → PerformActionUsage).
+func markStateSubaction(member ast.Node, kind stateSubactionKind) {
+	m, ok := member.(*ast.Membership)
+	if !ok {
+		return
+	}
+	if u, ok := m.Member.(*ast.Usage); ok && u.Kind == ast.UsageAction && u.PrefixKeyword == "" {
+		u.PrefixKeyword = string(kind)
+	}
 }
 
 // parseStateSubactionBlock parses the braced action sequence of a subaction;

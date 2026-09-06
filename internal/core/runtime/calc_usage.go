@@ -38,10 +38,8 @@ type calcOutput struct {
 }
 
 // calcOutputs flattens the output features declared along chain (most general
-// first). An output redeclared closer to the invoked calc keeps its inherited
-// position and its inherited binding unless it binds a new one, as an input
-// parameter does.
-func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
+// first), as calcParameters does the inputs, recording renamed ones in aliases.
+func (ctx *Context) calcOutputs(chain []*symbols.Symbol, aliases *map[string]string) []calcOutput {
 	var outs []calcOutput
 	index := make(map[string]int)
 
@@ -56,8 +54,9 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 			}
 			// An output written as a redefinition names the one it overrides.
 			name, _ := ast.EffectiveName(usage)
+			sym := memberSymbol(declScope(link), usage)
 			out := calcOutput{Name: name, Value: usage.Value, Owner: link, IsResult: usage.IsResult,
-				Decl: ctx.calcMemberDeclOf(link, usage, name)}
+				Decl: ctx.calcMemberDeclOf(link, sym, name)}
 			if usage.Direction == ast.DirInOut {
 				// The value an `inout` declares is the default of the parameter, not a
 				// binding of the output: the invocation binds it either way.
@@ -67,7 +66,7 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 			var at int
 			var seen bool
 			if name != "" {
-				at, seen = index[name]
+				at, seen = ctx.redeclaredIndex(index, sym, name)
 			} else {
 				// An anonymous result parameter has no name to redeclare by, so
 				// it refines the anonymous result it inherits.
@@ -79,6 +78,10 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 					out.Owner = outs[at].Owner
 				}
 				out.Decl = out.Decl.redeclaring(outs[at].Decl)
+				if name != "" {
+					*aliases = aliasRedefined(*aliases, outs[at].Name, name)
+					index[name] = at
+				}
 				outs[at] = out
 				continue
 			}
@@ -129,11 +132,16 @@ func calcSteps(body []lower.Statement) []lower.Statement {
 
 // assignedOutputs are the outputs the body's statements assign, on any path
 // through it: what the calc computes, whichever way an execution branches.
-func assignedOutputs(stmts []lower.Statement, outputs []calcOutput) map[string]bool {
-	declared := make(map[string]bool, len(outputs))
+func assignedOutputs(stmts []lower.Statement, outputs []calcOutput, aliases map[string]string) map[string]bool {
+	declared := make(map[string]string, len(outputs)+len(aliases))
 	for _, out := range outputs {
 		if out.Name != "" && !out.IsInOut {
-			declared[out.Name] = true
+			declared[out.Name] = out.Name
+		}
+	}
+	for alias, name := range aliases {
+		if _, ok := declared[name]; ok {
+			declared[alias] = name
 		}
 	}
 	assigned := make(map[string]bool)
@@ -142,14 +150,14 @@ func assignedOutputs(stmts []lower.Statement, outputs []calcOutput) map[string]b
 }
 
 // collectAssignedOutputs walks the statements, and the blocks they carry, for
-// assignments to a declared output. A chained target writes a feature of
-// another object, so it binds no output of the calc however it ends.
-func collectAssignedOutputs(stmts []lower.Statement, declared, assigned map[string]bool) {
+// assignments to a declared output, by any name declared maps to it. A chained
+// target writes a feature of another object, so it binds no output of the calc.
+func collectAssignedOutputs(stmts []lower.Statement, declared map[string]string, assigned map[string]bool) {
 	for _, stmt := range stmts {
 		switch s := stmt.(type) {
 		case lower.Assign:
-			if s.Chain == nil && declared[s.Target] {
-				assigned[s.Target] = true
+			if name, ok := declared[s.Target]; ok && s.Chain == nil {
+				assigned[name] = true
 			}
 		case lower.Block:
 			collectAssignedOutputs(s.Steps(), declared, assigned)
@@ -177,6 +185,7 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 	if name == "" {
 		return calcOutput{}, false
 	}
+	name = canonical(shape.Aliases, name)
 	for _, out := range shape.Outputs {
 		if out.Name == name {
 			return out, true
@@ -469,7 +478,7 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 		ec.trace.RecordCalcEnter(shape.Name)
 	}
 
-	env := mapFrame(make(map[string]Value, len(shape.Params)))
+	env := frame{vars: make(map[string]Value, len(shape.Params)), aliases: shape.Aliases}
 	ec.pushFrame(env)
 
 	// A usage declared in a behavior's body is written in that body, so its own
@@ -534,7 +543,7 @@ func (ctx *Context) runCalcUsage(
 	shape *calcShape, ec, nested *EvalContext, env frame, reader *EvalContext,
 ) (*calcRun, error) {
 	host := &calcStmtHost{ctx: ctx, shape: shape, self: reader.self}
-	engine := newStmtEngine(ctx, host, env.vars)
+	engine := newStmtEngineIn(ctx, host, env, nil)
 	result, returned, err := runCalcSteps(engine, host, shape)
 	if err != nil {
 		if ec.trace != nil {
@@ -808,7 +817,8 @@ func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance,
 // about reading the usage itself rather than one of its outputs.
 func (ctx *Context) calcUsageOutputSummary(sym *symbols.Symbol) string {
 	names := make([]string, 0)
-	for _, out := range ctx.calcOutputs(ctx.calcChain(sym)) {
+	var aliases map[string]string
+	for _, out := range ctx.calcOutputs(ctx.calcChain(sym), &aliases) {
 		if out.Name != "" {
 			names = append(names, out.Name)
 		}

@@ -190,7 +190,7 @@ func TestUnnamedRedefinitionTakesRedefinedName(t *testing.T) {
 		if !ok {
 			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
 		}
-		if !sym.EffectiveName {
+		if !sym.EffectiveName() {
 			t.Fatalf("%s should be marked as an effective name, not a declared one", name)
 		}
 	}
@@ -232,10 +232,10 @@ func TestReferenceSubsettingOutranksRedefinitionAsNamingFeature(t *testing.T) {
 	}
 }
 
-// A declared short name is no declared name: KerML derives effectiveName from
-// declaredName alone, so the naming feature still names the declaration and the
-// short name is its own key.
-func TestShortNameLeavesTheNamingFeatureInPlace(t *testing.T) {
+// A declared short name is a declared name too (KerML 7.3.4.5): the feature
+// then takes no name from its redefinition and is a member by its short name
+// alone, as the pinned pilot reads `part <e> :>> engine;`.
+func TestShortNameSuppressesTheDerivedName(t *testing.T) {
 	root := build(t, `package P {
 		part def Vehicle { part engine; }
 		part v : Vehicle { part <e> :>> engine; }
@@ -243,16 +243,21 @@ func TestShortNameLeavesTheNamingFeatureInPlace(t *testing.T) {
 
 	pkg, _ := root.LookupLocal("P")
 	v, _ := pkg.Scope.LookupLocal("v")
-	for _, name := range []string{"e", "engine"} {
-		if _, ok := v.Scope.LookupLocal(name); !ok {
-			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
-		}
+	e, ok := v.Scope.LookupLocal("e")
+	if !ok {
+		t.Fatalf("v members = %v, want e", v.Scope.MemberNames())
+	}
+	if _, ok := v.Scope.LookupLocal("engine"); ok {
+		t.Fatalf("v members = %v; a short-named redefinition must not answer to engine", v.Scope.MemberNames())
+	}
+	if e.Name != "e" || e.Naming != NamedByDeclaration || e.NamingTarget != nil {
+		t.Errorf("e = %q naming=%v target=%v; want a declared short name and no derived one", e.Name, e.Naming, e.NamingTarget)
 	}
 }
 
-// Two redefinitions have no single naming feature, so the declaration stays
-// anonymous rather than picking one of the redefined names.
-func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {
+// The first redefinition names a feature that redefines several (KerML
+// 7.3.4.5, Feature::namingFeature): `v.engine` reaches it, `v.motor` nothing.
+func TestTwoRedefinitionsNameTheFeatureByTheFirst(t *testing.T) {
 	root := build(t, `package P {
 		part def Vehicle { part engine; part motor; }
 		part v : Vehicle { part :>> engine :>> motor; }
@@ -260,8 +265,35 @@ func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {
 
 	pkg, _ := root.LookupLocal("P")
 	v, _ := pkg.Scope.LookupLocal("v")
-	if names := v.Scope.MemberNames(); len(names) != 0 {
-		t.Fatalf("v members = %v, want none", names)
+	if names := v.Scope.MemberNames(); len(names) != 1 || names[0] != "engine" {
+		t.Fatalf("v members = %v, want [engine]", names)
+	}
+	e, _ := v.Scope.LookupLocal("engine")
+	if e.Naming != NamedByRedefinition || e.NamingTarget == nil {
+		t.Errorf("engine naming=%v target=%v; want the first redefinition", e.Naming, e.NamingTarget)
+	}
+}
+
+// A feature chain is a nameless feature of its own, so a member whose first
+// redefinition is a chain takes no name from it — nor from a later plain one —
+// while a performed chain is named by its target (pinned pilot on both shapes).
+func TestChainRedefinitionNamesNothing(t *testing.T) {
+	root := build(t, `package P {
+		part def H { part p { part q; action a; } part q2; }
+		part h : H { part :>> p.q :>> q2; perform p.a; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	h, _ := pkg.Scope.LookupLocal("h")
+	if names := h.Scope.MemberNames(); len(names) != 1 || names[0] != "a" {
+		t.Fatalf("h members = %v, want [a]", names)
+	}
+	if anon := h.Scope.AnonymousMembers(); len(anon) != 1 || anon[0].Naming != NamedByDeclaration {
+		t.Fatalf("anonymous members of h = %v, want the one chain redefinition with no derived name", anon)
+	}
+	a, _ := h.Scope.LookupLocal("a")
+	if a.Naming != NamedByReference {
+		t.Errorf("a naming=%v, want the performed chain's target", a.Naming)
 	}
 }
 
@@ -333,7 +365,7 @@ func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
 
 // A prefixed anonymous `assume`/`require constraint` is an anonymous constraint
 // usage symbol, as `constraint { … }` is, so metadata written on it is analysed.
-// A reference member (`require Other;`) declares no usage.
+// A reference member (`require Other;`) declares a usage named by its reference.
 func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	src := `package P {
 		metadata def M;
@@ -367,12 +399,13 @@ func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	if body := ConstraintBodyScope(r.Scope, require.Decl); body != require.Scope {
 		t.Fatalf("anonymous require body = %v, want its own scope", body)
 	}
-	for _, sym := range r.Scope.AllMembers() {
-		if _, ok := sym.Decl.(*ast.RequireMember); ok && sym != require {
-			t.Fatalf("the reference form `require Other;` declares no symbol, got %v", sym)
-		}
-		if _, ok := sym.Decl.(*ast.AssumeMember); ok && sym != assume {
-			t.Fatalf("the reference form `assume Other;` declares no symbol, got %v", sym)
+	refs := r.Scope.LookupLocalAll("Other")
+	if len(refs) != 2 {
+		t.Fatalf("members of R named Other = %d, want the two reference forms", len(refs))
+	}
+	for _, sym := range refs {
+		if sym.Kind != SymbolConstraintUsage || sym.Naming != NamedByReference || sym.NamingTarget == nil {
+			t.Fatalf("reference form %v = %v named %v, want a constraint usage named by its reference", sym.Decl, sym.Kind, sym.Naming)
 		}
 	}
 }

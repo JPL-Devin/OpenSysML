@@ -8333,10 +8333,10 @@ func testOneFeatureValuedUnderTwoNames(t *testing.T) {
 			part def Band :> Ring { attribute bandCost :>> ringCost; }
 			part conflicted : Band {
 				attribute :>> bandCost = 400.0;
-				attribute :>> ringCost = 500.0;
+				attribute :>> Ring::ringCost = 500.0;
 			}
 		}`
-	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "ringCost")
+	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "bandCost")
 	if !errors.Is(err, ErrConflictingRedefinition) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrConflictingRedefinition", got, err)
 	}

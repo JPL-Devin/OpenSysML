@@ -3,7 +3,8 @@ package repl
 import "testing"
 
 // ownedConstraintFixture declares named require/assume constraints with a body,
-// typed by a constraint definition, and redefined by a specialization. A
+// typed by a constraint definition, and redefined by a specialization under the
+// same name (a requirement constraint takes no name from what it redefines). A
 // redefinition keeps the inherited condition (KerML 8.3.4.8): one tightening it
 // nests an assertion beside it rather than stating a body of its own.
 const ownedConstraintFixture = `package Power {
@@ -16,24 +17,24 @@ const ownedConstraintFixture = `package Power {
         require constraint typed : Shortfall;
     }
     requirement def Tight :> Margin {
-        require constraint :>> enough { assert constraint { 600.0 >= 650.0 } }
+        require constraint enough :>> enough { assert constraint { 600.0 >= 650.0 } }
     }
     requirement def Ample {
         require constraint enough { 600.0 >= 450.0 }
         assume constraint supplied : Positive;
     }
     requirement def Kept :> Margin {
-        require constraint :>> tooLittle;
-        require constraint :>> typed;
+        require constraint tooLittle :>> tooLittle;
+        require constraint typed :>> typed;
     }
     requirement def Braced :> Margin {
-        require constraint :>> tooLittle { }
-        require constraint :>> typed { doc /* still the shortfall rule */ }
+        require constraint tooLittle :>> tooLittle { }
+        require constraint typed :>> typed { doc /* still the shortfall rule */ }
     }
     requirement def Nested :> Margin {
-        require constraint :>> tooLittle { assert constraint { } }
-        require constraint :>> typed { assert constraint { doc /* no condition */ } }
-        require constraint :>> enough { assert constraint { 600.0 >= 650.0 } }
+        require constraint tooLittle :>> tooLittle { assert constraint { } }
+        require constraint typed :>> typed { assert constraint { doc /* no condition */ } }
+        require constraint enough :>> enough { assert constraint { 600.0 >= 650.0 } }
     }
     requirement def Pair {
         require constraint low { 300.0 >= 450.0 }

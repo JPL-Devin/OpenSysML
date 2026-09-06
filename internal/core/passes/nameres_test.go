@@ -1,6 +1,8 @@
 package passes
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -226,23 +228,107 @@ func TestInheritedNameConflictExemptsRedefiningFeatures(t *testing.T) {
 	}
 }
 
-// `render r;` names the rendering the view uses and declares no member of its
-// own (SysML.xtext ViewRenderingUsage), so it does not conflict with the
-// inherited rendering it names, and the name resolves to that rendering.
-func TestRenderReferenceToInheritedRenderingIsNoConflict(t *testing.T) {
+// `render r;` is named by the rendering it references (SysML
+// RenderingUsage::namingFeature), so it is an owned member `r` that duplicates
+// the inherited `r` it does not redefine, as the pilot reports.
+func TestRenderReferenceToInheritedRenderingDuplicatesIt(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		rendering def AsTree;
 		view def Base { rendering r : AsTree; }
 		view def Derived :> Base { render r; }
+	}`)
+	if len(got) != 1 || got[0].Code != "name-conflict" || got[0].Severity != SeverityWarning {
+		t.Fatalf("got %+v, want one name-conflict warning", got)
+	}
+}
+
+// A reference-named member whose target resolves to nothing binds no name, so
+// repeating it is no duplicate and its spelling is offered for nothing.
+func TestUnresolvedReferenceDerivedNamesAreNoDuplicates(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		part def H { action a; }
+		part h : H {
+			perform zz;
+			perform zz;
+			perform a;
+		}
+	}`)
+	var codes []string
+	for _, d := range got {
+		codes = append(codes, d.Code)
+		if d.Code == "unresolved" && strings.Contains(d.Message, "did you mean") {
+			t.Errorf("%s: suggests a name nothing binds", d.Message)
+		}
+	}
+	if want := []string{"unresolved", "unresolved", "name-conflict"}; !slices.Equal(codes, want) {
+		t.Fatalf("got %+v, want %v: only the resolved reference duplicates the inherited a", got, want)
+	}
+}
+
+// A reference-named member whose target is a definition binds no name either,
+// against a sibling of the same spelling or an inherited member.
+func TestNonFeatureReferenceDerivedNamesAreNoDuplicates(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		action def A;
+		part def H { attribute A; }
+		part h : H {
+			perform P::A;
+			perform P::A;
+		}
+	}`)
+	for _, d := range got {
+		if d.Code == "name-conflict" {
+			t.Fatalf("got %+v, want no name-conflict: a definition names no feature", got)
+		}
+	}
+}
+
+// The rendering `render r;` names inside a view of `H` is the one `H` renders;
+// both redefine the library `viewRendering`, so the name is no duplicate there.
+func TestRenderReferenceToOwnRenderingIsNoConflict(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		rendering def AsTree;
+		view def H { render rendering r : AsTree; }
+		view h : H { render r; }
 	}`)
 	if len(got) != 0 {
 		t.Fatalf("got %+v, want no diagnostics", got)
 	}
 }
 
-// A rendering the view declares for itself does conflict with an inherited one
-// of the same name, exactly as any other declaration does: only the reference
-// form declares nothing.
+// A `render` of another name redefines only the library `viewRendering`, so the
+// inherited rendering and its members stay resolvable in the derived view.
+func TestRenderOfAnotherNameLeavesInheritedRenderingResolvable(t *testing.T) {
+	sym, _ := resolvedInBody(t, `package P {
+		rendering def AsTree;
+		rendering def AsTable;
+		view def Base { render rendering r : AsTree { attribute a; } }
+		view def Derived :> Base {
+			render rendering s : AsTable;
+			attribute x = r.a;
+		}
+		view v : Derived { attribute y = r.a; }
+	}`, "P::Derived", "r")
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil || sym.OwnerScope.Owner().Name != "Base" {
+		t.Fatalf("r resolved to %v, want Base::r", sym)
+	}
+	got := nameresDiags(t, `package P {
+		rendering def AsTree;
+		rendering def AsTable;
+		view def Base { render rendering r : AsTree { attribute a; } }
+		view def Derived :> Base {
+			render rendering s : AsTable;
+			attribute x = r.a;
+		}
+		view v : Derived { attribute y = r.a; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
+
+// A rendering the view declares for itself conflicts with an inherited one of
+// the same name, exactly as any other declaration does.
 func TestRenderDeclarationOfInheritedNameConflicts(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		rendering def AsTree;

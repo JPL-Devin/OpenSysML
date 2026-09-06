@@ -186,7 +186,7 @@ func (r *Renderer) addSuccessionUsage(succession *symbols.Symbol, into *interact
 		return
 	}
 	name := ""
-	if simple := simpleName(r.fqn(succession)); simple != "" && !succession.EffectiveName {
+	if simple := simpleName(r.fqn(succession)); simple != "" && !succession.EffectiveName() {
 		name = notationName(simple)
 	}
 	into.orders = append(into.orders, order{from: from, to: to, name: name})
@@ -313,7 +313,7 @@ func (r *Renderer) noticeSubject(sym *symbols.Symbol) string {
 // subject names an element a notice is about: what it is and its name, else what
 // it is and where it is written, since anonymity is normal notation.
 func (r *Renderer) subject(sym *symbols.Symbol, kind string) string {
-	if name := simpleName(r.fqn(sym)); name != "" && !sym.EffectiveName {
+	if name := simpleName(r.fqn(sym)); name != "" && !sym.EffectiveName() {
 		return kind + " " + notationName(name)
 	}
 	if owner := ownerOf(sym); owner != nil {
@@ -355,7 +355,7 @@ func endText(end ast.Node) string {
 // else the payload it carries as written, else the keyword that declared it. An
 // anonymous message is normal notation, so it is never left unlabeled.
 func (r *Renderer) messageLabel(flow *symbols.Symbol) string {
-	if name := simpleName(r.fqn(flow)); name != "" && !flow.EffectiveName {
+	if name := simpleName(r.fqn(flow)); name != "" && !flow.EffectiveName() {
 		return notationName(name)
 	}
 	if declared := declType(flow); declared != "" {

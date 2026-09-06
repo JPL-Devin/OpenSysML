@@ -1254,7 +1254,7 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 func checkLibrarySignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol, fn *libraryFunction) {
 	t.Helper()
 	var declared []declaredParam
-	for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
+	for _, param := range ctx.calcParameters(ctx.calcChain(sym), new(map[string]string)) {
 		declared = append(declared, declaredParam{
 			name:     param.Name,
 			optional: param.Default != nil || param.optional(),

@@ -39,8 +39,9 @@ func (r *Resolver) suggestFor(scope *symbols.Scope, name string, at ast.Node) []
 	table := r.suggestTable()
 	var cands []suggest.Candidate
 	for _, fqn := range table.Qualified(name) {
-		// An alias that names nothing is no spelling of anything.
-		if r.AliasNamesNothing(r.idx.Declaring(fqn)) {
+		// An alias that names nothing, or a member that binds no name, is no
+		// spelling of anything.
+		if decl := r.idx.Declaring(fqn); r.AliasNamesNothing(decl) || !r.BindsName(decl) {
 			continue
 		}
 		cands = append(cands, suggest.Candidate{Spelling: fqn, Library: r.libraryFQN(fqn)})

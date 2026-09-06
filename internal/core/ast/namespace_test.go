@@ -40,3 +40,38 @@ func TestMembershipVisibility(t *testing.T) {
 	}
 	_ = source.Span{}
 }
+
+// A usage, subject or owned constraint declared under a short name alone is
+// known by that name; only a nameless declaration takes its naming feature's.
+func TestEffectiveNameShortNameOnly(t *testing.T) {
+	target := &QualifiedName{Parts: []NameSegment{{Text: "x", Span: source.Span{Offset: 9, Len: 1}}}}
+	redefines := &Relationship{Kind: RelRedefines, Target: target}
+	references := &Relationship{Kind: RelReferences, Target: target}
+	short := Identification{ShortName: "f", ShortNameSpan: source.Span{Offset: 1, Len: 1}}
+
+	if name, span := short.DeclaredName(); name != "f" || span.Offset != 1 {
+		t.Fatalf("DeclaredName() = %q %v, want f at 1", name, span)
+	}
+	cases := []struct {
+		what string
+		got  func(Identification) (string, source.Span)
+	}{
+		{"usage", func(id Identification) (string, source.Span) {
+			return EffectiveName(&Usage{Ident: id, Relationships: []*Relationship{redefines}})
+		}},
+		{"subject", func(id Identification) (string, source.Span) {
+			return (&SubjectMember{Ident: id, Relationships: []*Relationship{redefines}}).EffectiveName()
+		}},
+		{"constraint", func(id Identification) (string, source.Span) {
+			return OwnedConstraint{Ident: id, Relationships: []*Relationship{references}}.EffectiveName()
+		}},
+	}
+	for _, tc := range cases {
+		if name, span := tc.got(short); name != "f" || span.Offset != 1 {
+			t.Errorf("%s <f> naming x: effective name = %q %v, want f at 1", tc.what, name, span)
+		}
+		if name, span := tc.got(Identification{}); name != "x" || span.Offset != 9 {
+			t.Errorf("%s naming x unnamed: effective name = %q %v, want x at 9", tc.what, name, span)
+		}
+	}
+}

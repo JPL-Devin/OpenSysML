@@ -15,17 +15,28 @@ const (
 	objectiveRole
 )
 
-// ImplicitRoleRedefinitions returns the same-role features of the owner's generals that sym
-// does not redefine by name: every one for a subject, each general's first for a first
-// objective. An analysis case may state several objectives, and each one redefines the
-// general's effective objective at the same position.
+// viewRenderingFQN is the library feature every `render` member redefines
+// (SysML v2 8.3.26 RenderingUsage).
+const viewRenderingFQN = "Views::View::viewRendering"
+
+// ImplicitRoleRedefinitions returns the features sym redefines by its role: the library
+// `viewRendering` for a view's `render` member, and the same-role features of the owner's
+// generals that sym does not redefine by name: every one for a subject, each general's
+// first for a first objective. An analysis case may state several objectives, and each
+// one redefines the general's effective objective at the same position.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	if isViewRendering(sym.Decl) {
+		return m.viewRenderingRedefinition(sym)
+	}
 	role := roleOf(sym)
-	if role == noCaseRole || sym.OwnerScope == nil {
+	if role == noCaseRole {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	if !behaviorLike(owner) {
+	if owner == nil || !behaviorLike(owner) {
 		return nil
 	}
 	if role == objectiveRole {
@@ -61,6 +72,29 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 		}
 	}
 	return out
+}
+
+// viewRenderingRedefinition is the library `viewRendering` a `render` member
+// redefines, unless a clause of its own already names it.
+func (m *Model) viewRenderingRedefinition(sym *symbols.Symbol) []*symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	explicit := m.explicitRedefinitions(sym)
+	for _, lib := range m.resolver.Index().LookupQualified(viewRenderingFQN) {
+		if lib != nil && lib != sym && !explicit[lib] {
+			return []*symbols.Symbol{lib}
+		}
+	}
+	return nil
+}
+
+func isViewRendering(node ast.Node) bool {
+	if wrapper, ok := node.(*ast.Membership); ok {
+		node = wrapper.Member
+	}
+	usage, ok := node.(*ast.Usage)
+	return ok && usage.Kind == ast.UsageViewRendering
 }
 
 // roleSources are the cases whose subjects and objectives sym inherits: its generals and
@@ -366,7 +400,7 @@ func (m *Model) explicitRedefinitions(sym *symbols.Symbol) map[*symbols.Symbol]b
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
-		if target := m.resolveRelTarget(sym, rel); target != nil {
+		if target := m.relationshipTarget(sym, rel); target != nil {
 			out[target] = true
 		}
 	}

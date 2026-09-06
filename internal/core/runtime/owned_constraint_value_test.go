@@ -16,11 +16,11 @@ func ownedConstraintValueFixture(t *testing.T) (*Context, *symbols.Scope) {
 		package test {
 			constraint plain = false;
 			requirement def Base {
-				require constraint failed = false;
+				require constraint failed default = false;
 				assume constraint granted = true;
 			}
 			requirement def Sub :> Base {
-				require constraint :>> failed = true;
+				require constraint failed :>> failed = true;
 			}
 			requirement base : Base;
 			requirement sub : Sub;

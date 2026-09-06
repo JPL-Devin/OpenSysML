@@ -26,7 +26,7 @@ func (r *Resolver) checkDistinguishability(scope *symbols.Scope) {
 // separate namespace of their own: an alias collides with an owned name and with
 // another alias, each under its own wording.
 func (r *Resolver) checkOwnedNames(scope *symbols.Scope) {
-	owned, aliases := declaredMembers(scope)
+	owned, aliases := r.DistinguishableMembers(scope)
 	ownedByName := byName(owned)
 	aliasByName := byName(aliases)
 	for _, sym := range owned {
@@ -62,7 +62,7 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	if len(inherited) == 0 {
 		return
 	}
-	owned, aliases := DistinguishableMembers(scope)
+	owned, aliases := r.DistinguishableMembers(scope)
 	declared := map[string]bool{}
 	for _, sym := range append(owned, aliases...) {
 		declared[sym.Name] = true
@@ -230,7 +230,7 @@ func (r *Resolver) inheritableMembers(owner, sup *symbols.Symbol, model supertyp
 		out = append(out, r.inheritableMembers(owner, next, model, seen)...)
 	}
 	if sup.Scope != nil {
-		owned, aliases := DistinguishableMembers(sup.Scope)
+		owned, aliases := r.DistinguishableMembers(sup.Scope)
 		for _, sym := range append(owned, aliases...) {
 			if sym.Visibility != ast.VisibilityPrivate {
 				out = append(out, sym)
@@ -251,7 +251,7 @@ func (r *Resolver) importedMembers(owner, sup *symbols.Symbol) []*symbols.Symbol
 			continue
 		}
 		for _, sym := range r.ImportedElementsInto(owner.Scope, sup.Scope, imp) {
-			if sym != nil && sym.Name != "" && !r.idx.Library(sym) && contributesName(sym) {
+			if sym != nil && sym.Name != "" && !r.idx.Library(sym) && contributesName(sym) && r.BindsName(sym) {
 				out = append(out, sym)
 			}
 		}
@@ -275,10 +275,8 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 			kept = append(kept, sym)
 			continue
 		}
+		// What a dropped member redefines still stops being inherited.
 		redefines := r.redefinedClosure(sym)
-		if redefinedByOther(redefines, byOwner, sym) {
-			continue
-		}
 		for target := range redefines {
 			if target != sym {
 				if byInherited == nil {
@@ -287,7 +285,9 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 				byInherited[target] = true
 			}
 		}
-		kept = append(kept, sym)
+		if !redefinedByOther(redefines, byOwner, sym) {
+			kept = append(kept, sym)
+		}
 	}
 	out := make([]*symbols.Symbol, 0, len(kept))
 	for _, sym := range kept {
@@ -393,12 +393,13 @@ func (r *Resolver) aliasTarget(sym *symbols.Symbol) *symbols.Symbol {
 	return sym
 }
 
-// duplicateName reports one indistinguishable name at the member declaring it.
-// from names the namespaces a duplicate comes from, which the reference's
-// wording carries for a name it did not find in the namespace itself.
+// duplicateName reports one indistinguishable name at the member declaring it,
+// or at the whole member when the name is derived rather than declared. from
+// names the namespaces a duplicate comes from, which the reference's wording
+// carries for a name it did not find in the namespace itself.
 func (r *Resolver) duplicateName(sym *symbols.Symbol, message string, from []*symbols.Symbol) {
 	span := sym.NameSpan
-	if span == (source.Span{}) {
+	if span == (source.Span{}) || sym.Naming != symbols.NamedByDeclaration {
 		span = sym.DeclSpan
 	}
 	if names := ownerNames(sym, from); len(names) > 0 {
@@ -450,33 +451,16 @@ func ownerNames(sym *symbols.Symbol, dups []*symbols.Symbol) []string {
 	return out
 }
 
-// declaredMembers is DistinguishableMembers restricted to members declaring a
-// name of their own: an effective name our model borrows from a reference is not
-// reliable enough to report an owned duplicate on.
-func declaredMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
-	owned, aliases = DistinguishableMembers(scope)
-	return declaredOnly(owned), declaredOnly(aliases)
-}
-
-func declaredOnly(syms []*symbols.Symbol) []*symbols.Symbol {
-	out := make([]*symbols.Symbol, 0, len(syms))
-	for _, sym := range syms {
-		if !sym.EffectiveName {
-			out = append(out, sym)
-		}
-	}
-	return out
-}
-
 // DistinguishableMembers splits the members of scope whose names the
-// distinguishability rules compare into owned members and aliases. Exported for
-// the library-base half of the rule in internal/core/passes.
-func DistinguishableMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
+// distinguishability rules compare into owned members and aliases: those that
+// bind a name, as LocalBinding finds them. Exported for the library-base half
+// of the rule in internal/core/passes.
+func (r *Resolver) DistinguishableMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
 	for _, name := range scope.MemberNames() {
 		for _, sym := range scope.LookupLocalAll(name) {
 			// A member declaring both a short and a primary name is registered
 			// under both keys; it is compared once, under its own name.
-			if sym.Name != name || !contributesName(sym) {
+			if sym.Name != name || !contributesName(sym) || !r.BindsName(sym) {
 				continue
 			}
 			if sym.Kind == symbols.SymbolAlias {
@@ -496,9 +480,9 @@ func contributesName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
 		if decl.Ident.Name == "" && decl.Ident.ShortName == "" {
-			// An unnamed feature takes a name from the feature it redefines,
-			// never from one it merely references (KerML 7.4.9).
-			return sym.EffectiveName && !namedByReference(sym)
+			// An unnamed feature contributes the name its naming feature
+			// gives it, if any (KerML 7.3.4.5).
+			return sym.EffectiveName()
 		}
 		// A metadata usage without a typing is malformed (SysML.xtext
 		// MetadataUsageDeclaration requires one) and contributes no name.

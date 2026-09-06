@@ -100,53 +100,83 @@ func TargetName(node Node) (string, source.Span) {
 }
 
 // NamingFeature returns the relationship that names a usage lacking a declared
-// name (KerML 7.3.4.5): its reference subsetting, else its lone redefinition.
-// A usage that declares a name, or redefines more than one feature, has none.
-// A declared short name is no name here: KerML derives effectiveName from
-// declaredName alone.
+// name (KerML 7.3.4.5): its first redefinition, or for the SysML members named
+// by what they reference (Usage.NamedByReference) that reference. A declared
+// short name is a declaration too: the feature then derives no name. A
+// requirement's assume/require/verify member is named by its reference alone
+// (SysML ConstraintUsage::namingFeature): a redefinition leaves it anonymous.
 func NamingFeature(u *Usage) *Relationship {
-	if u == nil || u.Ident.Name != "" {
+	if u == nil || u.Ident.Declared() {
 		return nil
 	}
-	// A binding's reference subsetting is the end it binds, not a name it
-	// answers to: `bind a.b.c = d` declares no member `c`.
-	return namingRelationship(u.Relationships, u.Kind != UsageBinding)
-}
-
-// namingRelationship is NamingFeature over a declaration's relationships, with
-// reference subsettings considered only when referencesName is set.
-func namingRelationship(rels []*Relationship, referencesName bool) *Relationship {
-	var redefinitions []*Relationship
-	for _, rel := range rels {
-		if rel == nil {
-			continue
+	if u.NamedByReference() {
+		if ref := u.ReferenceSubsetting(); ref != nil {
+			if name, _ := TargetName(ref.Target); name != "" {
+				return ref
+			}
 		}
-		switch rel.Kind {
-		case RelReferences:
-			if !referencesName {
-				continue
-			}
-			if name, _ := TargetName(rel.Target); name != "" {
-				return rel
-			}
-		case RelRedefines:
-			redefinitions = append(redefinitions, rel)
+		if u.IsRequirementConstraint() || u.IsVerifiedRequirement() {
+			return nil
 		}
 	}
-	if len(redefinitions) == 1 {
-		return redefinitions[0]
+	return firstRedefinition(u.Relationships)
+}
+
+// firstRedefinition returns the first redefinition among rels, the naming
+// feature of an unnamed feature (KerML Feature::namingFeature). A redefined
+// feature chain is a nameless feature of its own, so it names nothing.
+func firstRedefinition(rels []*Relationship) *Relationship {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == RelRedefines {
+			if IsFeatureChain(rel.Target) {
+				return nil
+			}
+			return rel
+		}
 	}
 	return nil
 }
 
-// EffectiveName returns the name a usage answers to: its declared name, else
-// the name its naming feature supplies.
+// IsFeatureChain reports whether a relationship target is written as a feature
+// chain (`p.q`) rather than a plain or qualified name.
+func IsFeatureChain(node Node) bool {
+	switch n := node.(type) {
+	case *FeatureChainExpr:
+		return true
+	case *FeatureReference:
+		return IsFeatureChain(n.Name)
+	case *QualifiedName:
+		for _, part := range n.Parts {
+			if part.Chained {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// namingReference returns the named reference subsetting among rels, the
+// naming feature of a member named by what it references.
+func namingReference(rels []*Relationship) *Relationship {
+	for _, rel := range rels {
+		if rel == nil || !rel.Kind.ReferenceSubsets() {
+			continue
+		}
+		if name, _ := TargetName(rel.Target); name != "" {
+			return rel
+		}
+	}
+	return nil
+}
+
+// EffectiveName returns the name a usage answers to: its declared name (a short
+// name alone included), else the name its naming feature supplies.
 func EffectiveName(u *Usage) (string, source.Span) {
 	if u == nil {
 		return "", source.Span{}
 	}
-	if u.Ident.Name != "" {
-		return u.Ident.Name, u.Ident.NameSpan
+	if u.Ident.Declared() {
+		return u.Ident.DeclaredName()
 	}
 	if rel := NamingFeature(u); rel != nil {
 		return TargetName(rel.Target)
@@ -160,6 +190,21 @@ type Identification struct {
 	ShortNameSpan source.Span
 	Name          string
 	NameSpan      source.Span
+}
+
+// Declared reports whether either name is declared, which is when a feature
+// takes no name from its naming feature (KerML 7.3.4.5).
+func (id Identification) Declared() bool {
+	return id.Name != "" || id.ShortName != ""
+}
+
+// DeclaredName returns the name a declaration is known by: its name, else its
+// short name, as the symbol table registers it.
+func (id Identification) DeclaredName() (string, source.Span) {
+	if id.Name != "" {
+		return id.Name, id.NameSpan
+	}
+	return id.ShortName, id.ShortNameSpan
 }
 
 // Membership wraps a namespace member with a visibility prefix. Member is
