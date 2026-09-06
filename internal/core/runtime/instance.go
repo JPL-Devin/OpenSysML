@@ -206,7 +206,7 @@ func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *Fea
 func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature) {
 	*fv = FeatureValue{Feature: feat}
 	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
-		ctx.restatedInValuedBody(feat) == "" {
+		ctx.restatedInValuedBody(feat) == "" && !ctx.defaultYieldsToSubsetters(inst.Type, feat) {
 		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 			val := Value{Kind: ValConst, Const: semVal}
 			if ctx.checkDefault(inst, fv, feat.Name, val, admitDeclared) == nil {
@@ -215,6 +215,12 @@ func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *Eff
 			}
 		}
 	}
+}
+
+// defaultYieldsToSubsetters reports whether feat's `default` may be superseded by
+// a feature of typ subsetting it, so it must wait to be read rather than be folded.
+func (ctx *Context) defaultYieldsToSubsetters(typ *symbols.Symbol, feat *EffectiveFeature) bool {
+	return feat.DefaultIsFallback() && len(ctx.SubsettingFeatures(nil, typ, feat.Name)) > 0
 }
 
 // materialize builds the object and its feature values and registers it, before
@@ -541,7 +547,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			return nil, err
 		}
 		if len(contributed) > 0 {
-			return inst.holdContributed(fv, name, contributed)
+			return inst.holdContributed(ctx, fv, name, contributed)
 		}
 	}
 
@@ -698,21 +704,26 @@ func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name str
 	if err != nil {
 		return nil, err
 	}
-	return inst.holdContributed(fv, name, contributed)
+	return inst.holdContributed(ctx, fv, name, contributed)
 }
 
 // holdContributed makes fv hold the values the features subsetting it contribute,
-// once they conform to its multiplicity.
-func (inst *Instance) holdContributed(fv *FeatureValue, name string, contributed []Value) (*FeatureValue, error) {
-	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
-		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
+// once they conform to its multiplicity and type and are classified as its values.
+func (inst *Instance) holdContributed(ctx *Context, fv *FeatureValue, name string, contributed []Value) (*FeatureValue, error) {
+	val := sequenceOf(contributed)
+	if err := ctx.checkDefault(inst, fv, name, val, admitDeclared); err != nil {
+		return nil, err
+	}
+	val, err := ctx.admitted(fv.Feature, val, admitDeclared)
+	if err != nil {
+		return nil, fmt.Errorf("feature value %s.%s: %w", inst.Type.Name, name, err)
 	}
 	if fv.Feature.Scalar() {
 		if len(contributed) == 1 {
-			fv.Value = contributed[0]
+			fv.Value = val
 		}
 	} else {
-		fv.Values = sequenceOf(contributed)
+		fv.Values = val
 	}
 	fv.Materialized = true
 	return fv, nil

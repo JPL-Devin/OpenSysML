@@ -197,6 +197,20 @@ const defaultNullCollectionModel = `
 			part engine : Engine [0..1] default null;
 			part pair : Engine [2] :> engine;
 		}
+		part def Rated {
+			attribute rating : Integer default 5;
+			attribute measured : Integer :> rating = 7;
+			attribute limit : Integer default 9;
+		}
+		part def Wheel;
+		part def Mistyped {
+			part engines : Engine [*] default null;
+			part wheel : Wheel :> engines;
+		}
+		part def Sized {
+			attribute size : Integer default 1;
+			attribute exact : Real :> size = 2.5;
+		}
 		part leaf : Leaf;
 		part stack : Stack;
 		part stack3 : Stack3;
@@ -211,6 +225,9 @@ const defaultNullCollectionModel = `
 		part bound : Bound;
 		part optional : Optional;
 		part crowded : Crowded;
+		part rated : Rated;
+		part mistyped : Mistyped;
+		part sized : Sized;
 	}
 `
 
@@ -267,7 +284,8 @@ func TestDefaultNullCollectionHoldsTheMembersSubsettingIt(t *testing.T) {
 // TestDefaultIsFallbackOnlyWhereWrittenDefault: a collection bound with `=`
 // holds what the binding states whatever subsets it; a scalar `default null`
 // yields to the one member subsetting it, and two members violate its
-// multiplicity rather than being dropped.
+// multiplicity rather than being dropped. A constant scalar default yields
+// to its subsetter too, while one nothing subsets is still folded.
 func TestDefaultIsFallbackOnlyWhereWrittenDefault(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, defaultNullCollectionModel))
 
@@ -296,5 +314,32 @@ func TestDefaultIsFallbackOnlyWhereWrittenDefault(t *testing.T) {
 	crowded := instantiateNamed(t, ctx, idx, "test::crowded")
 	if _, err := crowded.GetFeatureValue(ctx, "engine"); !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("GetFeatureValue(engine) error = %v, want ErrMultiplicityViolation", err)
+	}
+
+	rated := instantiateNamed(t, ctx, idx, "test::rated")
+	for name, want := range map[string]string{"rating": "7", "measured": "7", "limit": "9"} {
+		fv, err := rated.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if got := FormatValue(fv.HeldValue()); got != want {
+			t.Errorf("%s = %s, want %s", name, got, want)
+		}
+	}
+}
+
+// TestSubsetterContributionIsTypedByTheSubsettedFeature: what a subsetter
+// contributes is judged by the subsetted feature's own type, an object or a
+// scalar alike, and a refused contribution leaves the feature unmaterialized.
+func TestSubsetterContributionIsTypedByTheSubsettedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, defaultNullCollectionModel))
+	for usage, feature := range map[string]string{"mistyped": "engines", "sized": "size"} {
+		inst := instantiateNamed(t, ctx, idx, "test::"+usage)
+		if _, err := inst.GetFeatureValue(ctx, feature); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s.GetFeatureValue(%s) error = %v, want ErrTypeMismatch", usage, feature, err)
+		}
+		if fv := inst.FeatureValues[feature]; fv.Materialized || fv.Value.Kind != ValInvalid || fv.Values.Kind != ValInvalid {
+			t.Errorf("%s.%s = %+v after the refusal, want it left unmaterialized", usage, feature, fv)
+		}
 	}
 }
