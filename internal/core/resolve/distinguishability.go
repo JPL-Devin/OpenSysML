@@ -204,7 +204,7 @@ func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeProvid
 	var candidates []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{owner: true}
 	for _, sup := range model.DirectSupertypes(owner) {
-		candidates = append(candidates, r.inheritableMembers(sup, model, seen)...)
+		candidates = append(candidates, r.inheritableMembers(owner, sup, model, seen)...)
 	}
 	if len(candidates) == 0 {
 		return nil
@@ -218,15 +218,16 @@ func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeProvid
 
 // inheritableMembers is what a supertype contributes to its subtypes: its own
 // non-private members plus what it inherits itself, redefined ones removed at
-// each level, so a redefinition anywhere up the chain hides its target.
-func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeProvider, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+// each level, so a redefinition anywhere up the chain hides its target. What an
+// inherited expose contributes is admitted against owner's conditions too.
+func (r *Resolver) inheritableMembers(owner, sup *symbols.Symbol, model supertypeProvider, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sup == nil || seen[sup] || r.idx.Library(sup) {
 		return nil
 	}
 	seen[sup] = true
 	var out []*symbols.Symbol
 	for _, next := range model.DirectSupertypes(sup) {
-		out = append(out, r.inheritableMembers(next, model, seen)...)
+		out = append(out, r.inheritableMembers(owner, next, model, seen)...)
 	}
 	if sup.Scope != nil {
 		owned, aliases := DistinguishableMembers(sup.Scope)
@@ -235,7 +236,7 @@ func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeProvid
 				out = append(out, sym)
 			}
 		}
-		out = append(out, r.importedMembers(sup)...)
+		out = append(out, r.importedMembers(owner, sup)...)
 	}
 	return r.removeRedefinedFeatures(sup, out)
 }
@@ -243,13 +244,13 @@ func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeProvid
 // importedMembers is what a namespace's non-private imports contribute to it: a
 // membership is inherited whether the namespace owns it or imported it
 // (KerML 8.4.3.2). Library elements are left out, as library supertypes are.
-func (r *Resolver) importedMembers(sup *symbols.Symbol) []*symbols.Symbol {
+func (r *Resolver) importedMembers(owner, sup *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	for _, imp := range r.importsOf(sup.Scope.Node()) {
 		if imp.Visibility == ast.VisibilityPrivate {
 			continue
 		}
-		for _, sym := range r.ImportedElements(sup.Scope, imp) {
+		for _, sym := range r.ImportedElementsInto(owner.Scope, sup.Scope, imp) {
 			if sym != nil && sym.Name != "" && !r.idx.Library(sym) && contributesName(sym) {
 				out = append(out, sym)
 			}

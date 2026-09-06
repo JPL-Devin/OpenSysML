@@ -51,6 +51,8 @@ type UndeterminedBindingError struct {
 	Target   string
 	Binding  string
 	Endpoint string
+	// Other is the binding's end opposite Endpoint, as written.
+	Other string
 	// Across names the collection the binding's end path crosses to reach Target, if any.
 	Across string
 }
@@ -60,8 +62,8 @@ func (e *UndeterminedBindingError) Error() string {
 		return fmt.Sprintf("%s: %s is bound by `%s` through every object %s holds; the model does not determine which of the bound values %s holds",
 			ErrBindingEnd, e.Target, e.Binding, e.Across, e.Target)
 	}
-	return fmt.Sprintf("%s: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
-		ErrBindingEnd, e.Target, e.Binding, e.Endpoint)
+	return fmt.Sprintf("%s: %s is bound by `%s`, which makes some value of %s a value of %s without saying which value of either; the model does not state what %s holds",
+		ErrBindingEnd, e.Target, e.Binding, e.Endpoint, e.Other, e.Endpoint)
 }
 
 func (e *UndeterminedBindingError) Unwrap() error { return ErrBindingEnd }
@@ -288,6 +290,7 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 					Target:   bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
 					Binding:  ctx.bindingText(binding),
 					Endpoint: endpointName,
+					Other:    ctx.bindingEndpointText(binding, 1-bindingEndForPath(binding, endpointName)),
 					Across:   across,
 				}
 			}

@@ -1,0 +1,2 @@
+- A view usage's `expose` now honours the `filter` conditions of its view definition and that definition's supertypes, not only the conditions written in the usage itself.
+- An `expose` a view inherits from its definition or supertypes is now admitted against the inheriting view's own `filter` conditions too, so a view narrowing its definition exposes only what satisfies both.

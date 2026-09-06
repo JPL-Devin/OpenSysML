@@ -319,8 +319,13 @@ func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, fro
 		if !r.importVisibleFrom(target, from, imp) {
 			continue
 		}
+		// An expose inherited by specialization is judged by the inheriting view too.
+		into := targetScope
+		if imp.IsExpose && from != nil && r.specializes(from.Owner(), target) {
+			into = from
+		}
 		r.importStack[imp] = true
-		if sym, ok := r.matchImport(targetScope, imp, name); ok {
+		if sym, ok := r.matchImportInto(into, targetScope, imp, name); ok {
 			delete(r.importStack, imp)
 			return sym, true
 		}
@@ -399,8 +404,14 @@ func importsOf(node ast.Node) []*ast.Import {
 // either: another element of the same name elsewhere in an imported subtree may
 // be admitted.
 func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name string) (*symbols.Symbol, bool) {
+	return r.matchImportInto(scope, scope, imp, name)
+}
+
+// matchImportInto is matchImport for an import inherited into the namespace
+// owning into, whose conditions an inherited expose has to satisfy as well.
+func (r *Resolver) matchImportInto(into, scope *symbols.Scope, imp *ast.Import, name string) (*symbols.Symbol, bool) {
 	var found *symbols.Symbol
-	r.eachImportMatch(scope, imp, name, func(sym *symbols.Symbol) bool {
+	r.eachImportMatch(into, scope, imp, name, func(sym *symbols.Symbol) bool {
 		found = sym
 		return false
 	})
@@ -410,8 +421,14 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 // importMatchesAll is matchImport collecting every element the import surfaces
 // under name, in the order matchImport would find them, without duplicates.
 func (r *Resolver) importMatchesAll(scope *symbols.Scope, imp *ast.Import, name string) []*symbols.Symbol {
+	return r.importMatchesAllInto(scope, scope, imp, name)
+}
+
+// importMatchesAllInto is importMatchesAll for an import inherited into the
+// namespace owning into (see matchImportInto).
+func (r *Resolver) importMatchesAllInto(into, scope *symbols.Scope, imp *ast.Import, name string) []*symbols.Symbol {
 	var out []*symbols.Symbol
-	r.eachImportMatch(scope, imp, name, func(sym *symbols.Symbol) bool {
+	r.eachImportMatch(into, scope, imp, name, func(sym *symbols.Symbol) bool {
 		out = appendSymbol(out, sym)
 		return true
 	})
@@ -420,7 +437,7 @@ func (r *Resolver) importMatchesAll(scope *symbols.Scope, imp *ast.Import, name 
 
 // eachImportMatch calls yield with each element imp surfaces under name until
 // yield returns false.
-func (r *Resolver) eachImportMatch(scope *symbols.Scope, imp *ast.Import, name string, yield func(*symbols.Symbol) bool) {
+func (r *Resolver) eachImportMatch(into, scope *symbols.Scope, imp *ast.Import, name string, yield func(*symbols.Symbol) bool) {
 	if imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return
 	}
@@ -437,7 +454,7 @@ func (r *Resolver) eachImportMatch(scope *symbols.Scope, imp *ast.Import, name s
 	if !ok {
 		return
 	}
-	admit := r.importAdmits(scope, imp)
+	admit := r.importAdmitsInto(into, scope, imp)
 	if imp.Kind == ast.ImportMembership {
 		// A membership import names a membership: `import P::Car` where Car is an
 		// alias imports that name, so the alias is what it surfaces.

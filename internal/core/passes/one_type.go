@@ -40,9 +40,9 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, d featureDecl) {
 		return
 	}
 	msg, ok := oneTypeUsageMessages[d.kind]
-	// An attribute typed by an enumeration definition takes no other type
-	// (SysMLValidator checkAttributeUsage), even though attributes otherwise may.
-	if !ok && d.kind == ast.UsageAttribute && tc.typesAnEnumeration(scope, d.relationships) {
+	// An `attribute` typed by an enumeration takes no other type (SysMLValidator
+	// checkAttributeUsage); a bare or `ref` usage is a reference usage, not checked.
+	if !ok && d.keyword == "attribute" && tc.typesAnEnumeration(scope, d.relationships) {
 		msg, ok = msgEnumerationAttributeTypes, true
 	}
 	if !ok {
@@ -72,14 +72,18 @@ func (tc *typeChecker) enumeratedValueTypeDiffers(scope *symbols.Scope, d featur
 			return true
 		}
 	}
-	typ := tc.enumeratedValueType(scope, u)
-	return typ != nil && !tc.owningEnumerationConformsTo(scope, typ)
+	for _, typ := range tc.enumeratedValueTypes(scope, u) {
+		if !tc.owningEnumerationConformsTo(scope, typ) {
+			return true
+		}
+	}
+	return false
 }
 
-// enumeratedValueType is the type a non-default value gives an enumerated value
+// enumeratedValueTypes are the types a non-default value gives an enumerated value
 // declaring no generalization (KerML checkFeatureValuationSpecialization): the
-// result its syntax declares, else that of the feature or function it names.
-func (tc *typeChecker) enumeratedValueType(scope *symbols.Scope, u *ast.Usage) *symbols.Symbol {
+// result its syntax declares, else those of the feature or function it names.
+func (tc *typeChecker) enumeratedValueTypes(scope *symbols.Scope, u *ast.Usage) []*symbols.Symbol {
 	if u.Value == nil || u.ValueIsDefault || u.Direction != ast.DirNone {
 		return nil
 	}
@@ -88,13 +92,16 @@ func (tc *typeChecker) enumeratedValueType(scope *symbols.Scope, u *ast.Usage) *
 			return nil
 		}
 	}
-	if typ := tc.expr.model.ExprResultType(scope, u.Value); typ != nil {
-		return typ
+	if types := tc.expr.model.ExprResultTypes(scope, u.Value); len(types) > 0 {
+		return types
 	}
 	if typ := tc.expr.valueTypeSymbol(scope, u.Value); typ != nil {
-		return typ
+		return []*symbols.Symbol{typ}
 	}
-	return tc.expr.invocationResultTypeSymbol(scope, u.Value)
+	if typ := tc.expr.invocationResultTypeSymbol(scope, u.Value); typ != nil {
+		return []*symbols.Symbol{typ}
+	}
+	return nil
 }
 
 // owningEnumeration is the enumeration definition whose body scope is, or nil.

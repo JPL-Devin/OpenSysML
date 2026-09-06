@@ -275,6 +275,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_feature_value", testCyclicDerivedFeatureValue)
+	t.Run("cyclic_subsetting_of_default_collections", testCyclicSubsettingOfDefaultCollections)
 	t.Run("derived_feature_value_over_missing_feature", testDerivedFeatureValueOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
@@ -486,7 +487,7 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
 		}
 		if got, want := err.Error(), "binding end cannot be resolved: Sys.edges is bound by `bind [0..1] edges = [0..1] leftEdge`, "+
-			"which links one unspecified value of each end; the model does not determine which value edges holds"; got != want {
+			"which makes some value of edges a value of leftEdge without saying which value of either; the model does not state what edges holds"; got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
 		fv := inst.FeatureValues["edges"]
@@ -2314,6 +2315,45 @@ func testCyclicDerivedFeatureValue(t *testing.T) {
 
 	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
 		t.Fatalf("GetFeatureValue error = %v, want ErrCyclicFeatureValue", fvErr)
+	}
+}
+
+// testCyclicSubsettingOfDefaultCollections: two `default null` collections that
+// subset each other are reported as a cycle when either is read, rather than
+// populating each other until the stack runs out.
+func testCyclicSubsettingOfDefaultCollections(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Loop {
+				part xs : Loop [*] :> ys default null;
+				part ys : Loop [*] :> xs default null;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Loop", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Loop part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	for _, name := range []string{"xs", "ys"} {
+		done := make(chan struct{})
+		var fvErr error
+		go func() {
+			defer close(done)
+			_, fvErr = inst.GetFeatureValue(ctx, name)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("GetFeatureValue(%s) hung on collections subsetting each other", name)
+		}
+		if !errors.Is(fvErr, ErrCyclicFeatureValue) {
+			t.Fatalf("GetFeatureValue(%s) error = %v, want ErrCyclicFeatureValue", name, fvErr)
+		}
 	}
 }
 

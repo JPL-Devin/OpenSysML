@@ -522,11 +522,71 @@ calc def Totals :> Query {
 	}
 }
 
+// TestExecuteProjectsEmptyQuantitySumsAndDefaultedSubsettedParts: the rollup as
+// a library writes it — `subcomponents [*] default null`, and no leaf redefining
+// `totalMass` — projects a leaf's mass plus the zero mass of its empty
+// subcomponents, and a stack's mass plus the masses of the parts subsetting
+// `subcomponents` despite the default.
+func TestExecuteProjectsEmptyQuantitySumsAndDefaultedSubsettedParts(t *testing.T) {
+	fixture := derivedFixture(t, `
+private import NumericalFunctions::sum;
+
+part def MassedComponent {
+	part subcomponents : MassedComponent [*] default null;
+	attribute mass :> ISQ::mass;
+	attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
+	attribute childMasses :> ISQ::mass [*] = subcomponents.totalMass;
+}
+part def Leaf :> MassedComponent {
+	attribute :>> mass = 100 [kg];
+}
+part def Stack :> MassedComponent {
+	attribute :>> mass = 10 [kg];
+	part a : Leaf :> subcomponents;
+	part b : Leaf subsets subcomponents;
+}
+part hangar {
+	part leaf : Leaf;
+	part stack : Stack;
+}
+calc def Totals :> Query {
+	in root : Element;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "PartUsage"),
+		properties = ("name", "totalMass", "childMasses")
+	)
+}
+`)
+	result := quantityRows(t, fixture, "Totals", "hangar")
+	if got := cellTexts(t, result, 0); !slices.Equal(got, []string{"leaf", "stack"}) {
+		t.Fatalf("names = %v", got)
+	}
+	if got := cellTexts(t, result, 1); !slices.Equal(got, []string{"100 [kg]", "210 [kg]"}) {
+		t.Errorf("totalMass = %v, want [100 [kg] 210 [kg]]", got)
+	}
+	for row, want := range [][]string{nil, {"100 [kg]", "100 [kg]"}} {
+		var masses []string
+		for _, value := range result.Rows()[row].Cells()[2].Values() {
+			quantity, ok := value.Quantity()
+			if !ok {
+				t.Fatalf("row %d: childMasses holds %s, want quantities", row, value.Kind())
+			}
+			masses = append(masses, quantity.String())
+		}
+		if !slices.Equal(masses, want) {
+			t.Errorf("row %d: childMasses = %v, want %v", row, masses, want)
+		}
+	}
+	if got := cellTexts(t, quantityRows(t, fixture, "Totals", "Stack"), 1); !slices.Equal(got, []string{"100 [kg]", "100 [kg]"}) {
+		t.Errorf("Stack's subsetting members' totalMass = %v, want [100 [kg] 100 [kg]]", got)
+	}
+}
+
 // TestExecuteNamesTheSubexpressionOfAnUnevaluableDerivedValue: a value that is
 // not declaratively evaluable — an unbound `in` parameter, a cycle, an object
-// where a value is needed, a quantity summed with the dimensionless `0.0` that
-// `sum` makes of an empty collection — is a typed error naming the row, the
-// feature and the runtime's reason.
+// where a value is needed, a quantity summed with the dimensionless count that
+// `sum` makes of an empty collection of Integers — is a typed error naming the
+// row, the feature and the runtime's reason.
 func TestExecuteNamesTheSubexpressionOfAnUnevaluableDerivedValue(t *testing.T) {
 	fixture := derivedFixture(t, derivedMassesQuery+`
 private import RealFunctions::sum;
@@ -548,7 +608,7 @@ part def Objectified :> Stage {
 part def Leaf :> Stage {
 	part tanks : Stage [*] default null;
 	attribute :>> dryMass = 1 [kg];
-	attribute :>> propellantMass = 1 [kg] + sum(tanks.mass);
+	attribute :>> propellantMass = 1 [kg] + sum(tanks.nozzles);
 }
 part parametric { part sensor : Sensor; }
 part cyclic { part loop : Cyclic; }

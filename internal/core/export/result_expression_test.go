@@ -475,6 +475,12 @@ func TestRepeatedSingleValuedPropertiesAreRefused(t *testing.T) {
 			`sysx:isNamespaceImport "true"^^xsd:boolean , "false"^^xsd:boolean ;`,
 			`it states sysx:isNamespaceImport twice, as "true"^^xsd:boolean and "false"^^xsd:boolean`,
 		},
+		{
+			"anonymous_portions",
+			`sysml:portionKind "timeslice" ;`,
+			`sysml:portionKind "timeslice" , "snapshot" ;`,
+			`it states sysml:portionKind twice, as "timeslice" and "snapshot"`,
+		},
 	} {
 		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {

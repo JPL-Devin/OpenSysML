@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+# Template: rendered by scripts/render-winget-manifests.sh (see packaging/winget/README.md).
+PackageIdentifier: OpenMBEE.OpenSysML
+PackageVersion: "__VERSION__"
+PackageLocale: en-US
+Publisher: Open-MBEE
+PublisherUrl: https://www.openmbee.org/
+PublisherSupportUrl: https://github.com/Open-MBEE/OpenSysML/issues
+PackageName: OpenSysML
+PackageUrl: https://github.com/Open-MBEE/OpenSysML
+License: Apache-2.0
+LicenseUrl: https://github.com/Open-MBEE/OpenSysML/blob/__TAG__/LICENSE
+Copyright: Copyright (c) the OpenSysML contributors
+ShortDescription: SysML v2 and KerML toolchain (REPL/CLI and language server)
+Description: |-
+  OpenSysML is an implementation of SysML v2 and KerML in Go. This package installs
+  the sysml REPL/CLI and the sysml-lsp language server. The Z3 SMT solver is installed
+  as a dependency for the experimental %check and %explain commands; set OPENSYSML_SMT
+  to use a different solver.
+Moniker: opensysml
+Tags:
+  - kerml
+  - mbse
+  - modeling
+  - sysml
+  - sysml-v2
+Documentations:
+  - DocumentLabel: Handbook
+    DocumentUrl: https://open-mbee.github.io/OpenSysML/
+ReleaseNotesUrl: https://github.com/Open-MBEE/OpenSysML/releases/tag/__TAG__
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

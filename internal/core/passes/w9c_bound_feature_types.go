@@ -216,12 +216,12 @@ func (c *w9cBindingChecker) checkSatisfySubject(sym *symbols.Symbol, u *ast.Usag
 	c.report(by.Span())
 }
 
-// valueConforms reports whether a value's result type conforms to one of the
-// types of the feature it is bound to, or the reverse; an unknown result type
-// is not judged.
+// valueConforms reports whether one of a value's result types conforms to one of
+// the types of the feature it is bound to, or the reverse; an unknown result
+// type is not judged.
 func (c *w9cBindingChecker) valueConforms(scope *symbols.Scope, value ast.Node, want []*symbols.Symbol) bool {
-	got := c.model.ExprResultType(scope, value)
-	return got == nil || w9cTypesConform(c.model, []*symbols.Symbol{got}, want)
+	got := c.model.ExprResultTypes(scope, value)
+	return len(got) == 0 || w9cTypesConform(c.model, got, want)
 }
 
 func (c *w9cBindingChecker) report(span source.Span) {

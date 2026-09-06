@@ -63,6 +63,21 @@ final class Rendering {
       builder.setQuantity(quantity(quantity.quantity()));
     } else if (value instanceof Value.EnumerationValue literal) {
       builder.setEnumLiteral(literal(literal.literal()));
+    } else if (value instanceof Value.ArrayValue array) {
+      org.openmbee.opensysml.proto.Array.Builder elements =
+          org.openmbee.opensysml.proto.Array.newBuilder().addAllDimensions(array.dimensions());
+      array.elements().forEach(element -> elements.addElements(value(element)));
+      builder.setArray(elements);
+    } else if (value instanceof Value.VectorValue vector) {
+      org.openmbee.opensysml.proto.Vector.Builder components =
+          org.openmbee.opensysml.proto.Vector.newBuilder();
+      vector.components().forEach(component -> components.addComponents(value(component)));
+      builder.setVector(components);
+    } else if (value instanceof Value.VectorQuantityValue vector) {
+      org.openmbee.opensysml.proto.VectorQuantity.Builder components =
+          org.openmbee.opensysml.proto.VectorQuantity.newBuilder();
+      vector.components().forEach(component -> components.addComponents(quantity(component)));
+      builder.setVectorQuantity(components);
     } else {
       throw new IllegalStateException("no rendering for " + value.getClass());
     }

@@ -211,13 +211,14 @@ Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evalu
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
 `cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured
 when this record was last updated and are not the current baseline — `go run ./cmd/pilot-exec-diff`
-prints the current ones. State of the 121 committed cases, the original 32, the 62 the
-expression round added, the 10 of `value_classification.cases`, the 3 of `contextual_names.cases`
-and the 14 of `rational_terms.cases`:
+prints the current ones. State of the 126 committed cases, the original 32, the 62 the
+expression round added, the 10 of `value_classification.cases`, the 3 of `contextual_names.cases`,
+the 14 of `rational_terms.cases` and the 5 the empty-aggregate and subsetting round added to
+`w6d_expr_depth.cases`:
 
 ```
-agree: 69 · kind-only: 1 · order-only: 0 · disagree: 1
-pilot-unevaluated: 34 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
+agree: 69 · kind-only: 1 · order-only: 0 · disagree: 4
+pilot-unevaluated: 36 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
 nondeterministic: 0
 ```
 
@@ -293,12 +294,27 @@ The one `kind-only` is `2 ** 40` (above). The `pilot-error`, `pilot-unevaluated`
 buckets — 26 cases, more than a quarter of the corpus — are the pilot's limits rather than
 disagreements, which is the central finding of this page restated as a count.
 
-The single `disagree` is `w6d:complex-is-zero-qualified`: the pilot answers `false` for
+The first `disagree` is `w6d:complex-is-zero-qualified`: the pilot answers `false` for
 `ComplexFunctions::isZero(rect(0.0, 0.0))` where we answer `true`. It is not a value verdict against
 us — the pilot's `re`/`im` have no evaluable body, and the same run answers `false` for
 `isZero(rect(3.0, 4.0))` too, so its result folds against unevaluated operands rather than deciding
 zero. Read it as unrefereeable, and see the `ComplexFunctions` row of
 [spec-compliance.md](spec-compliance.md) for the adjudication.
+
+The other three are the subsetting-membership cases added with the fix they were meant to
+referee, and they are unrefereeable in the same way. `w6d:subsetting-defaulted-count` asks
+`size(subsystem)` of a `part subsystem : Sub[*] default null;` that `part a : Sub :> subsystem;`
+and `part b : Sub :> subsystem;` subset: we answer `2`, the pilot `0`. Its `0` is the folded
+default, not a count of members — `w6d:subsetting-two-count` drops the default and the pilot
+answers `1` for the same two parts, and `w6d:subsetting-none-count` answers `1` for a collection
+nothing subsets (we answer `2` and `0`). A count that is `1` for two members and for none is the
+static evaluator reading the feature as one value, so it decides nothing about which objects a
+subsetted collection holds; `w6d:subsetting-rollup` agrees only because `Sub::mass` defaults to
+`1.0` and one part subsets. The two empty-aggregate cases of the same round land in
+`pilot-unevaluated`: `sum(qsNone)` over an empty `MassValue[*]` is `InvocationExpression sum` and
+`3.0 [SI::kg] + sum(qsNone)` is `OperatorExpression +` where we answer `0 [kg]` and `3.0 [SI::kg]`,
+so the kind of an empty quantity sum, like every other unit-carrying value, has no reference
+verdict. See the aggregate and subsetting rows of [spec-compliance.md](spec-compliance.md).
 
 The dedicated Complex value moved no case between buckets — the counts above are as remeasured
 after it — but it changed one answer inside `pilot-unevaluated`: `w6d:complex-mul-re`,

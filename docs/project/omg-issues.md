@@ -13,6 +13,7 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
 | `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
+| `Domain Libraries/Geometry/ShapeItems.sysml` | `item def CuboidOrTriangularPrism` (`Cuboid`, `RectangularCuboid`, `Box`) | `item tfe [2] :> edges;` … `binding [1] bind [0..1] tf.edges = [0..1] tfe;` `binding [1] bind [0..1] ff.edges = [0..1] tfe;` — every named edge group and vertex group (`tfe`…`urre`, `tflv`…`brrv`) is valued only by bindings whose ends link *one unspecified* value each; and `item :>> vertices; assert constraint { size(vertices) == size(edges) }` beside `Quadrilateral`'s `item :>> vertices [8];` and `StructuredSpaceObject`'s `faces.vertices subsets vertices` | the groups and everything read through them (`box.tfe`, `box.tflv`, `box.tfe.length`, `box.vertices`) are the typed `ErrBindingEnd` naming the binding; the runtime never picks a member (`runtime/binding.go` `UndeterminedBindingError`) | No conjunction of the bindings, the `MatesWith` connections and the `size(...)` assertions identifies which of a face's four edges a group holds, so no evaluator can name `tfe`; and a `Cuboid`'s `vertices` cannot be both a superset of its six faces' 48 vertex objects and 24 long. The draft below records both |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
 ## `includingAt` — the vendored declaration
@@ -133,6 +134,141 @@ number computed over the vector's `num` components — `norm(⟨3.0, 4.0⟩ [m])
 declaration (`runtime/vector_functions.go`; conformance
 `calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
 results as declared (`runtime/quantity_functions.go`).
+
+## `ShapeItems::CuboidOrTriangularPrism` — edge and vertex groups fixed only by `[0..1]` bindings, and a vertex count its faces exceed
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Geometry/ShapeItems.sysml`
+(`CuboidOrTriangularPrism`; `Cuboid` adds the `srf`, `tsre`, `ufre`, `urre`,
+`tfrv`, `trrv` bindings in the same form):
+
+```sysml
+		item :>> edges = faces.edges;
+		...
+		assert constraint { size(edges) == 18 or size(edges) == 24 }
+
+		item tfe  [2]	 :> edges;
+		item tre  [2]	 :> edges;
+		item tsle [2]	 :> edges;
+		...
+		item :>> vertices;
+		assert constraint { size(vertices) == size(edges) }
+
+		item tflv [3]	 :> vertices;
+		...
+		/* Bind face edges to specific edges */
+		binding [1] bind [0..1] tf.edges = [0..1] tfe;
+		binding [1] bind [0..1] tf.edges = [0..1] tre;
+		binding [1] bind [0..1] tf.edges = [0..1] tsle;
+		...
+		binding [1] bind [0..1] ff.edges = [0..1] tfe;
+		...
+		/* Bind edge vertices to specific vertices */
+		binding [1] bind [0..1] tfe.vertices = [0..1] tflv;
+		binding [1] bind [0..1] tsle.vertices = [0..1] tflv;
+		binding [1] bind [0..1] ufle.vertices = [0..1] tflv;
+		...
+		/* Meeting edges */
+		connection :MatesWith connect [1] tfe to [1] tfe;
+		...
+		/* Meeting vertices  */
+		connection :MatesWith connect [2] tflv to [2] tflv;
+```
+
+and from `Polygon` and `Quadrilateral` in the same file and `StructuredSpaceObject`
+in `Kernel Libraries/Kernel Semantic Library/Objects.kerml`:
+
+```sysml
+	item def Polygon :> Path, PlanarCurve {
+		item :>> edges : Line { item :>> vertices [2]; }
+		...
+	item def Quadrilateral :> Polygon {
+		item :>> edges [4] = (e1, e2, e3, e4);
+		...
+		item :>> vertices [8];
+```
+
+```kerml
+	portion feature faces : StructuredSurface[0..*] ordered subsets structuredSpaceObjectCells {
+		feature redefines that : StructuredSpaceObject;
+		feature redefines edges subsets that.edges;
+		feature redefines vertices subsets that.vertices;
+	}
+```
+
+````markdown
+**Library question, two parts.**
+
+**1. The edge and vertex groups are underdetermined.** `tfe [2] :> edges` (the two
+edge portions where the top and front faces meet) is valued by nothing but
+`binding [1] bind [0..1] tf.edges = [0..1] tfe` and
+`binding [1] bind [0..1] ff.edges = [0..1] tfe`. The `[0..1]` on each end is a
+connector-end multiplicity (KerML 1.0 §7.4.6.2): each binding declares exactly one
+`SelfLink` (§8.4.4.6.2 BindingConnector) joining *some* value of `tf.edges` to *some*
+value of `tfe`, and constrains how many values of either end take part — it does not say
+which of `tf`'s four edges is meant. Nothing else in the model does either:
+`tf.edges` and `ff.edges` are disjoint objects, so their bindings pick two different
+members of `tfe` without relating them to each other; the other bindings on `tf.edges`
+(`tre`, `tsle`, and `tsre` in `Cuboid`) each pick one unspecified edge too, and no
+constraint says the four groups partition `tf.edges`; `connection :MatesWith connect
+[1] tfe to [1] tfe` relates the two members of the group to one another, which every
+choice satisfies alike; and `size(edges) == 24` counts `faces.edges`, which the groups
+do not affect. The three `[0..1] tfe.vertices` / `tsle.vertices` / `ufle.vertices`
+bindings on `tflv [3]` repeat the pattern one level down, over the four vertices of
+each group's two edges. So any two edges of `tf` are as good a `tfe` as any other —
+the model determines the groups' sizes, not their members — and an evaluator asked
+for `tfe`, `tflv`, `tfe.length` or `vertices` (subsetted by the groups) has nothing
+to answer with but a guess. Are the bindings intended as an identification of a
+*particular* edge (e.g. `tf.e1` and `ff.e3`), spelled by position as `Quadrilateral`
+spells `edges [4] = (e1, e2, e3, e4)`? If so the groups need a value, or the bindings
+need to name the members (`bind tf.e1 = tfe#(1)`).
+
+**2. `size(vertices) == size(edges)` is unsatisfiable for a `Cuboid`.** `vertices`
+is inherited from `StructuredSpaceObject`, whose `faces.vertices subsets vertices`,
+and each `Quadrilateral` face declares `vertices [8]` (two per edge, the endpoints of
+consecutive edges being distinct mating occurrences). A `Cuboid` therefore holds at
+least 6 × 8 = 48 vertex objects, while `edges = faces.edges` holds 6 × 4 = 24 and the
+assertion requires 24 vertices. The eight corner groups `tflv [3]` … `brrv [3]` sum
+to exactly 24, so the assertion appears to count those and to intend `vertices` to
+be the corner groups alone — which the inherited subsetting forbids. Should the
+assertion read over the groups (or over the distinct meeting points), or should
+`vertices` be redefined to exclude the faces' own vertices?
+
+(Aside: the face redefinitions in `CuboidOrTriangularPrism`, `TriangularPrism` and
+`Cuboid` read `ref :>> Quadrilateral::edges, ConeOrCylinder::faces::edges;` — they
+name `ConeOrCylinder`'s faces from a `Polyhedron` that is not one. `faces::edges`
+resolves the same feature, as the `ff`/`rf` declarations beside them spell it.)
+````
+
+The pinned pilot implementation (`2026-07`) offers no reference here: asked through
+`build/pilot-evaluator/eval-sysml` for `box.tfe`, `box.tflv`, `box.vertices` and
+`box.edges` over `part box : ShapeItems::Box { :>> length = 2 [m]; :>> width = 1 [m];
+:>> height = 3 [m]; }`, it answers the unevaluated `ItemUsage tfe`, `ItemUsage tflv`,
+`ItemUsage vertices` and `ItemUsage edges`, and `box.tfe.length` is
+`Couldn't resolve reference to Feature 'length'`. Neither validator reports the pattern:
+the specification places no conformance rule between a connector end's multiplicity and
+the multiplicity of the feature it relates (`[0..1]` ends over `[2]` and `[4]` features
+are well-formed): OpenSysML's `-validate` accepts the `Box` model clean, and the pilot
+loads the library and the model without complaint before leaving the usages unevaluated.
+
+OpenSysML answers `box.faces` (6), `box.edges` (24), `box.tf.edges` (4) and every
+face-local value; the groups and everything read through them are the typed
+`ErrBindingEnd` naming the binding and both ends, on `-e`, `%eval`, `-instantiate`
+and `%features` alike (`runtime/binding.go` `UndeterminedBindingError`; conformance
+`instance_library_geometry_box`):
+
+```text
+binding end cannot be resolved: box.tfe is bound by `bind [0..1] tf.edges = [0..1] tfe`, which makes some value of tfe a value of tf.edges without saying which value of either; the model does not state what tfe holds
+```
+
+The runtime reads each partial binding on its own and does not solve the conjunction of several, so a group two partial bindings *would*
+pin down — two collections sharing exactly one value, bound `[0..1]` to a `[1]`
+feature — is reported the same way; that is a limitation recorded in
+[spec-compliance.md](spec-compliance.md), not a reading of this library, whose groups
+no conjunction pins down.
 
 ---
 

@@ -2,13 +2,15 @@ package opensysml
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // Value is one evaluated SysML value. It is a sealed sum: the concrete types
 // are Int, Real, Complex, Bool, String, InstanceID, Sequence, Null, Unset,
-// Quantity and EnumLiteral, and a type switch over them is exhaustive.
+// Quantity, EnumLiteral, Array, Vector and VectorQuantity, and a type switch
+// over them is exhaustive.
 type Value interface {
 	isValue()
 }
@@ -91,6 +93,25 @@ type EnumLiteral struct {
 	Name string
 }
 
+// Array is a Collections::Array: its elements in row-major order under its
+// dimensions. Its rank is the number of dimensions; an array of rank 0 holds
+// one element. Elements are Values, so an array of quantities or of arrays is
+// one as such.
+type Array struct {
+	// Dimensions are the positive extents, one per rank.
+	Dimensions []int64
+	// Elements fill the dimensions in row-major order.
+	Elements []Value
+}
+
+// Vector is a numerical vector: its components in order, each an Int or a Real,
+// kept apart as the rest of Value does. Its dimension is the number of them.
+type Vector []Number
+
+// VectorQuantity is a vector quantity: one Quantity per axis, unit and
+// reduction included, since the axes need not share a unit.
+type VectorQuantity []Quantity
+
 // String renders the quantity as it was written: magnitude then unit.
 func (q Quantity) String() string {
 	magnitude := fmt.Sprintf("%v", q.Magnitude)
@@ -103,6 +124,50 @@ func (q Quantity) String() string {
 // String renders the number in rectangular form as SysML writes it: `1.5 - 2.0i`.
 func (z Complex) String() string {
 	return runtime.FormatComplex(complex128(z))
+}
+
+// String renders the array as SysML formats it: `Array(2, 2)[1, 2, 3, 4]`.
+func (a Array) String() string {
+	dims := make([]string, len(a.Dimensions))
+	for i, d := range a.Dimensions {
+		dims[i] = fmt.Sprintf("%d", d)
+	}
+	elements := make([]string, len(a.Elements))
+	for i, e := range a.Elements {
+		elements[i] = fmt.Sprintf("%v", e)
+	}
+	return "Array(" + strings.Join(dims, ", ") + ")[" + strings.Join(elements, ", ") + "]"
+}
+
+// String renders the vector as SysML formats it: `⟨3.0, 4.0⟩`.
+func (v Vector) String() string {
+	parts := make([]string, len(v))
+	for i, c := range v {
+		parts[i] = fmt.Sprintf("%v", c)
+	}
+	return "⟨" + strings.Join(parts, ", ") + "⟩"
+}
+
+// String renders the vector quantity as SysML formats it: `⟨3.0, 4.0⟩ m` when
+// every axis shares a unit, else each component with its own.
+func (vq VectorQuantity) String() string {
+	shared := len(vq) > 0
+	for _, q := range vq[min(1, len(vq)):] {
+		shared = shared && q.Unit == vq[0].Unit
+	}
+	parts := make([]string, len(vq))
+	for i, q := range vq {
+		if shared {
+			parts[i] = fmt.Sprintf("%v", q.Magnitude)
+		} else {
+			parts[i] = q.String()
+		}
+	}
+	out := "⟨" + strings.Join(parts, ", ") + "⟩"
+	if shared && vq[0].Unit != "" {
+		out += " " + vq[0].Unit
+	}
+	return out
 }
 
 // String is the literal as a reader writes it, the Name the service reported.
@@ -124,17 +189,20 @@ func (Unset) String() string {
 	return "unset"
 }
 
-func (Int) isValue()         { /* marker: closed Value set */ }
-func (Real) isValue()        { /* marker: closed Value set */ }
-func (Complex) isValue()     { /* marker: closed Value set */ }
-func (Bool) isValue()        { /* marker: closed Value set */ }
-func (String) isValue()      { /* marker: closed Value set */ }
-func (InstanceID) isValue()  { /* marker: closed Value set */ }
-func (Sequence) isValue()    { /* marker: closed Value set */ }
-func (Null) isValue()        { /* marker: closed Value set */ }
-func (Unset) isValue()       { /* marker: closed Value set */ }
-func (Quantity) isValue()    { /* marker: closed Value set */ }
-func (EnumLiteral) isValue() { /* marker: closed Value set */ }
+func (Int) isValue()            { /* marker: closed Value set */ }
+func (Real) isValue()           { /* marker: closed Value set */ }
+func (Complex) isValue()        { /* marker: closed Value set */ }
+func (Bool) isValue()           { /* marker: closed Value set */ }
+func (String) isValue()         { /* marker: closed Value set */ }
+func (InstanceID) isValue()     { /* marker: closed Value set */ }
+func (Sequence) isValue()       { /* marker: closed Value set */ }
+func (Null) isValue()           { /* marker: closed Value set */ }
+func (Unset) isValue()          { /* marker: closed Value set */ }
+func (Quantity) isValue()       { /* marker: closed Value set */ }
+func (EnumLiteral) isValue()    { /* marker: closed Value set */ }
+func (Array) isValue()          { /* marker: closed Value set */ }
+func (Vector) isValue()         { /* marker: closed Value set */ }
+func (VectorQuantity) isValue() { /* marker: closed Value set */ }
 
 func (Int) isNumber()  { /* marker: closed Number set */ }
 func (Real) isNumber() { /* marker: closed Number set */ }

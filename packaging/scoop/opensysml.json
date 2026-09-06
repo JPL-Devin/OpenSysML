@@ -1,0 +1,35 @@
+{
+    "##": "Template rendered by scripts/render-scoop-manifest.sh; __TAG__ / __VERSION__ / __SHA256_*__ are placeholders. See packaging/scoop/README.md.",
+    "version": "__VERSION__",
+    "description": "SysML v2 and KerML toolchain: REPL/CLI (sysml) and language server (sysml-lsp)",
+    "homepage": "https://github.com/Open-MBEE/OpenSysML",
+    "license": "Apache-2.0",
+    "notes": [
+        "The z3 SMT solver is installed as a dependency and found on PATH by the experimental %check/%explain commands.",
+        "To use another solver, set OPENSYSML_SMT to its executable (see docs/guide/01-install.md)."
+    ],
+    "depends": "z3",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/opensysml-windows-amd64.zip",
+            "hash": "__SHA256_WINDOWS_AMD64__"
+        }
+    },
+    "bin": [
+        "sysml.exe",
+        "sysml-lsp.exe"
+    ],
+    "checkver": {
+        "github": "https://github.com/Open-MBEE/OpenSysML"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/Open-MBEE/OpenSysML/releases/download/v$version/opensysml-windows-amd64.zip",
+                "hash": {
+                    "url": "$baseurl/SHA256SUMS.txt"
+                }
+            }
+        }
+    }
+}

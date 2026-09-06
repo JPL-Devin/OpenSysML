@@ -38,6 +38,9 @@ public final class Capabilities {
   /** A complex number travels as itself rather than as an unsupported null. */
   public static final String COMPLEX_VALUES = "complex_values";
 
+  /** An array, a vector and a vector quantity travel as themselves rather than as unsupported nulls. */
+  public static final String STRUCTURED_VALUES = "structured_values";
+
   /** The {@code ApplyEdits} RPC edits a parsed model's own source. */
   public static final String APPLY_EDITS = "apply_edits";
 

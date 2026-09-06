@@ -466,7 +466,7 @@ expr:Constraints__Rover__limit__limit_pvalue
     sysml:value "100"^^xsd:integer .
 
 elmt:Constraints__Rover__massOK
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::massOK" ;
     sysml:elementId "Constraints__Rover__massOK" ;
     sysx:memberIndex "2"^^xsd:integer ;
@@ -475,7 +475,6 @@ elmt:Constraints__Rover__massOK
     sysml:owningRelationship elmt:Constraints__Rover__massOK_om ;
     sysml:owningMembership elmt:Constraints__Rover__massOK_om ;
     sysml:declaredName "massOK" ;
-    sysx:declaredPrefix "assert" ;
     sysml:type elmt:Constraints__MassLimit ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        assert constraint massOK : MassLimit;\n" .
@@ -493,7 +492,7 @@ elmt:Constraints__Rover__massOK_om
     sysml:owningType elmt:Constraints__Rover .
 
 elmt:Constraints__Rover__massBad
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::massBad" ;
     sysml:elementId "Constraints__Rover__massBad" ;
     sysx:memberIndex "3"^^xsd:integer ;
@@ -502,7 +501,6 @@ elmt:Constraints__Rover__massBad
     sysml:owningRelationship elmt:Constraints__Rover__massBad_om ;
     sysml:owningMembership elmt:Constraints__Rover__massBad_om ;
     sysml:declaredName "massBad" ;
-    sysx:declaredPrefix "assert" ;
     sysml:isNegated "true"^^xsd:boolean ;
     sysml:type elmt:Constraints__MassLimit ;
     sysx:hasBody "false"^^xsd:boolean ;
@@ -521,7 +519,7 @@ elmt:Constraints__Rover__massBad_om
     sysml:owningType elmt:Constraints__Rover .
 
 elmt:Constraints__Rover___404
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::@4" ;
     sysml:elementId "Constraints__Rover___404" ;
     sysx:memberIndex "4"^^xsd:integer ;
@@ -529,7 +527,6 @@ elmt:Constraints__Rover___404
     sysml:owner elmt:Constraints__Rover ;
     sysml:owningRelationship elmt:Constraints__Rover___404_om ;
     sysml:owningMembership elmt:Constraints__Rover___404_om ;
-    sysx:declaredPrefix "assert" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Rover___404___400 ;
     sysml:ownedMembership elmt:Constraints__Rover___404___400_om ;

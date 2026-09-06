@@ -124,6 +124,10 @@ type Resolver struct {
 	trial *ast.QualifiedName
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
+	// viewFilters memoizes the conditions a view inherits from the views it
+	// specializes; viewFiltersInProgress cuts the re-entrant query short.
+	viewFilters           map[*symbols.Scope][]symbols.ElementFilter
+	viewFiltersInProgress map[*symbols.Scope]bool
 	// payloads are the accept-node payloads a scope's body shares, collected
 	// once per scope: see (*Resolver).acceptPayload.
 	payloads map[*symbols.Scope]map[string]*symbols.Symbol
@@ -246,26 +250,28 @@ func (r *Resolver) Journal(node ast.Node, drop func()) {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:              idx,
-		memo:             map[ast.Node]resolution{},
-		modeMemo:         map[modeMemoKey]resolution{},
-		filtered:         map[filteredMemoKey]resolution{},
-		resolving:        map[ast.Node]int{},
-		featureChains:    map[featureChainKey]resolution{},
-		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
-		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
-		endpoints:        map[*ast.QualifiedName]resolution{},
-		initials:         map[*ast.InitialNode]*symbols.Symbol{},
-		imports:          map[ast.Node][]*ast.Import{},
-		importStack:      map[*ast.Import]bool{},
-		resolvingImports: map[*ast.Import]bool{},
-		naming:           map[*symbols.Symbol]bool{},
-		valuesInProgress: map[*ast.Usage]bool{},
-		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
-		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
-		redefined:        map[*symbols.Symbol][]*symbols.Symbol{},
-		bodyOwners:       map[*symbols.Scope]*symbols.Symbol{},
-		effNames:         map[*symbols.Symbol]bool{},
+		idx:                   idx,
+		memo:                  map[ast.Node]resolution{},
+		modeMemo:              map[modeMemoKey]resolution{},
+		filtered:              map[filteredMemoKey]resolution{},
+		resolving:             map[ast.Node]int{},
+		featureChains:         map[featureChainKey]resolution{},
+		parts:                 map[*ast.QualifiedName][]*symbols.Symbol{},
+		aliasNames:            map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints:             map[*ast.QualifiedName]resolution{},
+		initials:              map[*ast.InitialNode]*symbols.Symbol{},
+		imports:               map[ast.Node][]*ast.Import{},
+		importStack:           map[*ast.Import]bool{},
+		resolvingImports:      map[*ast.Import]bool{},
+		naming:                map[*symbols.Symbol]bool{},
+		valuesInProgress:      map[*ast.Usage]bool{},
+		nsFilters:             map[*symbols.Scope][]symbols.ElementFilter{},
+		viewFilters:           map[*symbols.Scope][]symbols.ElementFilter{},
+		viewFiltersInProgress: map[*symbols.Scope]bool{},
+		payloads:              map[*symbols.Scope]map[string]*symbols.Symbol{},
+		redefined:             map[*symbols.Symbol][]*symbols.Symbol{},
+		bodyOwners:            map[*symbols.Scope]*symbols.Symbol{},
+		effNames:              map[*symbols.Symbol]bool{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},

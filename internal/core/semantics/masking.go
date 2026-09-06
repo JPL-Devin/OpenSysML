@@ -87,43 +87,37 @@ func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 // EffectiveNameOf is Element::effectiveName: the declared name, or the one of
 // the feature an unnamed feature takes its identifiers from (KerML 1.1 §8.2.4).
 func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
-	return inheritedIdentifier(sym, declaredName, m.namingFeature)
+	return inheritedIdentifier(sym, declaresIdentifier, declaredName, m.namingFeature)
 }
 
-// EffectiveShortNameOf is Element::shortName: the declared short name, or the
-// one of the feature an unnamed feature takes its identifiers from (KerML 1.1
-// §8.2.4, §8.3.3.3).
+// EffectiveShortNameOf is Element::shortName: the declared short name, or, for
+// a feature declaring neither identifier, that of the feature it takes its
+// identifiers from (KerML 1.1 §8.2.4, §8.3.3.3).
 func (m *Model) EffectiveShortNameOf(sym *symbols.Symbol) string {
-	return inheritedIdentifier(sym, declaredShortName, m.namingFeature)
+	return inheritedIdentifier(sym, declaresIdentifier, declaredShortName, m.namingFeature)
 }
 
-// declaredName and declaredShortName read the identifiers a symbol declares;
-// a symbol named by its naming feature (KerML 7.3.4.5) declares neither.
-func declaredName(sym *symbols.Symbol) string {
-	if sym.Naming != symbols.NamedByDeclaration {
-		return ""
-	}
-	return sym.Name
+func declaredName(sym *symbols.Symbol) string      { return sym.Name }
+func declaredShortName(sym *symbols.Symbol) string { return sym.ShortName }
+
+// declaresIdentifier reports whether sym's declaration states a name or a short
+// name of its own; a symbol named by its naming feature (KerML 7.3.4.5) declares neither.
+func declaresIdentifier(sym *symbols.Symbol) bool {
+	return sym.Naming == symbols.NamedByDeclaration && (sym.Name != "" || sym.ShortName != "")
 }
 
-func declaredShortName(sym *symbols.Symbol) string {
-	if sym.Naming != symbols.NamedByDeclaration {
-		return ""
-	}
-	return sym.ShortName
-}
-
-// inheritedIdentifier reads the identifier sym declares, or the one the feature
-// from names has, following that relation until a declared identifier or a cycle.
-// A feature declaring either identifier derives neither (KerML 7.3.4.5).
-func inheritedIdentifier(sym *symbols.Symbol, declared func(*symbols.Symbol) string, from func(*symbols.Symbol) *symbols.Symbol) string {
+// inheritedIdentifier reads identifier id from the first of sym and the
+// features from leads to that declares one; "" past a cycle or the chain's end.
+func inheritedIdentifier(
+	sym *symbols.Symbol,
+	declares func(*symbols.Symbol) bool,
+	id func(*symbols.Symbol) string,
+	from func(*symbols.Symbol) *symbols.Symbol,
+) string {
 	seen := make(map[*symbols.Symbol]bool)
 	for sym != nil && !seen[sym] {
-		if id := declared(sym); id != "" {
-			return id
-		}
-		if sym.Naming == symbols.NamedByDeclaration && (sym.Name != "" || sym.ShortName != "") {
-			return ""
+		if declares(sym) {
+			return id(sym)
 		}
 		seen[sym] = true
 		sym = from(sym)

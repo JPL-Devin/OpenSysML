@@ -228,6 +228,11 @@ type Context struct {
 	// error about a declaration can say where it was written. A file no caller
 	// registered is reported by name and byte offset instead.
 	sources map[string]*source.SourceFile
+
+	// scopes holds the scope trees the caller resolves references in; declared
+	// maps each declaration node to the symbol they declare for it, built on first use.
+	scopes   []*symbols.Scope
+	declared map[ast.Node]*symbols.Symbol
 }
 
 // featureValueRef identifies one feature value of one instance.
@@ -326,6 +331,49 @@ func (ctx *Context) RegisterSource(sf *source.SourceFile) {
 		return
 	}
 	ctx.sources[sf.Name()] = sf
+}
+
+// RegisterScope gives the context a scope tree the caller resolves references
+// in, so a declaration carried over by Adopt is rebound to the symbol that tree
+// declares for it rather than to the index's own.
+func (ctx *Context) RegisterScope(scope *symbols.Scope) {
+	if scope == nil {
+		return
+	}
+	ctx.scopes = append(ctx.scopes, scope)
+	ctx.declared = nil
+}
+
+// declaredSymbol is the symbol a registered scope tree declares for the
+// declaration sym stands for, or sym itself when none does (a library declaration,
+// or a context resolving in the index's tree alone).
+func (ctx *Context) declaredSymbol(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.Decl == nil || len(ctx.scopes) == 0 {
+		return sym
+	}
+	if ctx.declared == nil {
+		ctx.declared = make(map[ast.Node]*symbols.Symbol)
+		for _, scope := range ctx.scopes {
+			collectDeclared(scope, ctx.declared)
+		}
+	}
+	if local, ok := ctx.declared[sym.Decl]; ok {
+		return local
+	}
+	return sym
+}
+
+// collectDeclared records the symbol declared by each node under scope.
+func collectDeclared(scope *symbols.Scope, into map[ast.Node]*symbols.Symbol) {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
+		if sym.Decl != nil {
+			into[sym.Decl] = sym
+		}
+		return true
+	})
+	for _, child := range scope.Children() {
+		collectDeclared(child, into)
+	}
 }
 
 // sourceLocation renders where a span in a file was written, as

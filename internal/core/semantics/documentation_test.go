@@ -116,6 +116,36 @@ func TestEffectiveShortNameFollowsTheReferencedFeature(t *testing.T) {
 	}
 }
 
+func TestEffectiveShortNameStopsAtADeclaredName(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		action def Provide;
+		action <ss> steer : Provide;
+		part def A { part <p1> a; }
+		part def B :> A { part b :>> a; }
+		part def C :> B { part :>> b; }
+		part vehicle { perform action turn references steer; }
+	}`)
+	p := sym(t, root, "P").Scope
+	turn := sym(t, sym(t, p, "vehicle").Scope, "turn")
+	if got := m.EffectiveShortNameOf(turn); got != "" {
+		t.Fatalf("EffectiveShortNameOf(turn) = %q, want none: turn declares its name", got)
+	}
+	if got := m.EffectiveNameOf(turn); got != "turn" {
+		t.Fatalf("EffectiveNameOf(turn) = %q, want turn", got)
+	}
+	renamed := sym(t, sym(t, p, "B").Scope, "b")
+	if got := m.EffectiveShortNameOf(renamed); got != "" {
+		t.Fatalf("EffectiveShortNameOf(B::b) = %q, want none: b declares its name", got)
+	}
+	unnamed := sym(t, sym(t, p, "C").Scope, "b")
+	if unnamed.Naming != symbols.NamedByRedefinition {
+		t.Fatal("C's redefinition of b should take the name b")
+	}
+	if got := m.EffectiveShortNameOf(unnamed); got != "" {
+		t.Fatalf("EffectiveShortNameOf(C::b) = %q, want none: B::b has no short name to pass on", got)
+	}
+}
+
 // The pilot names a plain usage by its first redefinition alone: a `::>`
 // reference on it supplies no name (Feature::namingFeature).
 func TestEffectiveShortNameOfARedefinitionOutranksItsReference(t *testing.T) {
