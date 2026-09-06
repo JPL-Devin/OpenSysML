@@ -38,7 +38,11 @@ Two things about the session model are worth understanding before you start a lo
   `%state` debugging session over an unaffected declaration keeps running. A surviving object
   keeps its identity but not its execution state: the behaviors its type exhibits or performs
   restart from their initial states. Everything dropped or restarted is reported on a `note:`
-  line.
+  line. A surviving object is the one object every command reads: what an action wrote on it
+  before the submission is what `%features` lists, what `%eval` answers for the feature or for
+  a member reached through it, and what a debugger session still running writes to afterwards.
+  A submission that *does* change the object's declaration drops it, and every command then
+  reports the loss rather than answering from a fresh object.
 
 `%list` shows the session's declarations, `%clear` resets the session, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)). `%clear` discards every declaration, so nothing it held is
