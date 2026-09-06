@@ -290,3 +290,14 @@ func TestRunQueryListedInHelpAndCompletion(t *testing.T) {
 		t.Errorf("%%run-query is not completed: %v", comp.Candidates)
 	}
 }
+
+// A measurement reference binds as the one unit declaration it names, so a query
+// traverses from it; a unit composed of several names no element to bind.
+func TestRunQueryBindsAMeasurementReference(t *testing.T) {
+	s := docQuerySession(t)
+	wants(t, run(t, s, `%run-query NamedSubsystems root=SI::km pattern="unit"`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: SI::kilometre::unitConversion")
+	wants(t, run(t, s, `%run-query NamedSubsystems root=SI::m / SI::s pattern="unit"`),
+		"error:", "the measurement reference m/s names no single declaration to bind to a query parameter")
+}

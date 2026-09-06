@@ -235,8 +235,8 @@ The project is under active development, with the core infrastructure operationa
 - **Corpus agreement:** 337 of 367 files agree diagnostic-by-diagnostic; 21 diagnostics are ours alone and 596 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](docs/project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 511 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 244 we report word-for-word; 248 wording-only and 7 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 2 elsewhere in the file ([Xpect oracle](docs/project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
-- **Permissiveness gaps:** of 261 invalid models we wrote ourselves, the reference rejects 3 that we accept by default, and 249 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
-- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 338 of 367 files agreeing, 20 diagnostics ours alone and 596 the reference's alone, 0 declared rows we are silent on, and 0 of 261 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
+- **Permissiveness gaps:** of 259 invalid models we wrote ourselves, the reference rejects 3 that we accept by default, and 247 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
+- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 338 of 367 files agreeing, 20 diagnostics ours alone and 596 the reference's alone, 0 declared rows we are silent on, and 0 of 259 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
 - **Self-assessed surface:** the action, state-machine and classifier-behavior rows have no external referee at all — the four refereed figures above cannot see them, because the pinned artifact evaluates expressions but executes neither actions nor state machines. [Spec compliance](docs/project/spec-compliance.md) counts them.
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
@@ -350,11 +350,16 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
-binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized; see
-[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries are
-Authenticode signed through [SignPath Foundation](https://signpath.org) once the project's
-application is approved; the signed files are published as separate `*-signed*` assets beside
-the unsigned ones that `SHA256SUMS.txt` covers. See the [Code signing policy](#code-signing-policy).
+binaries, and `SHA256SUMS.txt`. Windows also gets an installer,
+`opensysml-<x.y.z>-windows-amd64.msi` (`sysml`, `sysml-lsp`, `sysml-grpc`, optional bundled Z3
+solver; see [packaging/msi](packaging/msi/README.md)), built by the GitHub Actions release
+workflow after CircleCI publishes the release, with its digest in `SHA256SUMS-windows-msi.txt`.
+macOS binaries are not Developer ID signed or notarized; see
+[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries and
+the MSI are Authenticode signed through [SignPath Foundation](https://signpath.org) once the
+project's application is approved; the signed files are published as separate `*-signed*`
+assets beside the unsigned ones that `SHA256SUMS.txt` covers. See the
+[Code signing policy](#code-signing-policy).
 
 ## Code signing policy
 
@@ -367,11 +372,15 @@ built by the GitHub Actions workflow
 tagged commit of this repository and submitted to SignPath for signing from that workflow, so
 every signed file traces back to a public commit and a public build log. The signed files are
 published on the GitHub release as `sysml-windows-amd64-signed.zip`,
-`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe` and
-`opensysml-windows-amd64-signed.zip`, with their digests in `SHA256SUMS-windows-signed.txt`.
-Every signed executable carries `ProductName` `OpenSysML` and the release tag as
-`ProductVersion`/`FileVersion`. Signing is not in effect until the project's SignPath
-application is approved; releases made before that carry only unsigned Windows assets.
+`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe`,
+`opensysml-windows-amd64-signed.zip` and the installer `opensysml-<x.y.z>-windows-amd64-signed.msi`
+(built from the signed executables and itself signed), with their digests in
+`SHA256SUMS-windows-signed.txt`. Every signed executable carries `ProductName` `OpenSysML` and
+the release tag as `ProductVersion`/`FileVersion`. The Z3 solver the MSI optionally bundles is
+upstream open-source software and is never signed with the Foundation certificate; the
+installer carries it unsigned, as the SignPath Foundation terms allow. Signing is not in effect
+until the project's SignPath application is approved; releases made before that carry only
+unsigned Windows assets (including the unsigned MSI).
 
 **Team roles**
 

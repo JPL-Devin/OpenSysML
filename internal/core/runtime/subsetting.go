@@ -472,6 +472,7 @@ func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (
 			fill.fv.Values = sequenceOf(fill.held)
 		}
 		fill.fv.Materialized = true
+		ctx.invalidateDependents(fill.fv)
 	}
 	return made, undo, nil
 }

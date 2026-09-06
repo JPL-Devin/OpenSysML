@@ -620,6 +620,24 @@ untyped body parameter (`->collect { in x; x * x }`), still sums to the
 number `0`, and `10 [kg] + 0 [m]` or `10 [kg] + 5` remain the
 `incommensurable units` error above.
 
+A value written with `=` holds for as long as the object does, not just on
+the first read: it is derived from what the object holds *now*. When a run
+assigns a feature the expression read (`assign a := 9;`), when a binding
+propagates a new value into it, or when a `default null` collection is
+superseded by a part that subsets it, the derived value is dropped and
+derived again the next time it is read — through a part or a binding the
+expression read through, and on through the values that read *it*. Nothing is
+recomputed until something asks, and a value a run assigned is never
+recomputed: `assign d := 100;` fixes `d` whatever `a` does afterwards, while
+a `dd = d + 1` beside it keeps following `d`. A probe or transaction that
+wrote such a feature is rolled back with the values that read it.
+
+The parameters of a calculation or action usage are the boundary. They are
+bound once, when the invocation starts, and stay bound while its outputs are
+read — an assignment to a feature an `in` named does not rebind it for a
+later output read of the same invocation. Only the `=` value of an object's
+own feature follows what it read.
+
 ## Computed columns
 
 A projection may also derive columns: each `Column(name, expression)` entry

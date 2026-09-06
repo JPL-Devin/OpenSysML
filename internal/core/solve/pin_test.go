@@ -284,3 +284,22 @@ func quantityValue(t *testing.T, ctx *runtime.Context, idx *symbols.Index, fqn s
 	t.Fatalf("%s declares no value to read", fqn)
 	return runtime.Value{}
 }
+
+// TestPinRefusesAMeasurementReference: a unit is not a number, so the reference
+// its quantity was measured in fixes nothing; the refusal is typed and names it.
+func TestPinRefusesAMeasurementReference(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	length := quantityValue(t, ctx, idx, "test::Panel::clearance")
+	sym := symbolNamed(t, idx, "test::Panel::fits")
+	width := symbolNamed(t, idx, "test::Panel::width")
+	_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{
+		Feature: width, Name: "width", Value: runtime.NewMeasurementRefValue(length.Quantity().Unit), Source: PinChosen,
+	}})
+	var refusal *PinError
+	if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+		t.Fatalf("error %v, want a typed refusal to fix a measurement reference", err)
+	}
+	if !strings.Contains(refusal.Reason, "is a measurement reference") {
+		t.Errorf("refusal %+v does not say the value is a measurement reference", refusal)
+	}
+}

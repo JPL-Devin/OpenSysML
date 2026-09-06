@@ -170,6 +170,8 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return ctx.quantityConforms(*value, declared)
 	case ValArray, ValVector, ValVectorQuantity:
 		return ctx.structuredConforms(scope, *value, declared, how)
+	case ValMeasurementRef:
+		return ctx.measurementRefConforms(value.MeasurementRef(), declared)
 	}
 	if id, ok := value.Object(); ok {
 		// An object, a selected variant's included, is what its usage is; declared as a

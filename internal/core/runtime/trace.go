@@ -358,6 +358,11 @@ func FormatTraceValue(v Value) string {
 			return v.Kind.String()
 		}
 		return v.VectorQuantity().format(formatConst)
+	case ValMeasurementRef:
+		if v.MeasurementRef() == nil {
+			return v.Kind.String()
+		}
+		return v.MeasurementRef().String()
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr()))
 	default:
