@@ -56,7 +56,7 @@ from opensysml.errors import (
 )
 from opensysml.query import build_query, elements_of
 from opensysml.values import Array, Quantity, Vector, VectorQuantity, value_to_python
-from opensysml.verdict import CalcResult, Verdict
+from opensysml.verdict import AnalysisResult, CalcResult, Verdict
 
 
 #: Port the service listens on when a caller names none.
@@ -1368,6 +1368,77 @@ class Connection:
         if not outputs and response.HasField('result'):
             value = self._value_to_python(response.result)
         return CalcResult(value, outputs, diagnostics=diagnostics)
+
+    def run_analysis(self, symbol_id, model_hash, subject=None, arguments=None,
+                     named_arguments=None):
+        """Run an analysis case, as the REPL's ``%analysis`` does.
+
+        The subject named is instantiated and bound as the case's subject; a
+        usage that binds its own subject needs none. Positional arguments bind
+        the case's ``in`` parameters in declaration order, the subject excluded;
+        named arguments bind them by name. Its objective and each ``assert
+        constraint`` in its body are then checked against what it computed
+        (SysML 7.22).
+
+        Args:
+            symbol_id (str): FQN of the analysis case definition or usage
+            model_hash (str): Hash from ParseFile response
+            subject (str, optional): FQN of a part/usage to instantiate and run
+                the case on
+            arguments (list, optional): Positional arguments, as Python values
+            named_arguments (dict, optional): Arguments by parameter name
+
+        Returns:
+            AnalysisResult: The outputs the case computed and the verdict of
+                its objective and assertions
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not an
+                analysis case
+            ExecutionError: If the case could not run — an unbound subject, an
+                input with no value, a failing step
+            MissingCapabilityError: If the service cannot verify, or an
+                argument holds a ``complex`` and the service predates
+                ``complex_values``, or an array, vector or vector quantity and
+                the service predates ``structured_values``; nothing is sent
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.RunAnalysisRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id,
+            subject_symbol_id=subject or "",
+            arguments=[self._python_to_value(arg) for arg in (arguments or [])],
+        )
+        for name, arg in (named_arguments or {}).items():
+            request.named_arguments[name].CopyFrom(self._python_to_value(arg))
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal(
+                (CAPABILITY_VERIFICATION, CAPABILITY_COMPLEX_VALUES, CAPABILITY_STRUCTURED_VALUES)
+            )
+        ):
+            response = self._stub.RunAnalysis(request)
+
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
+
+        outputs = {}
+        for output in response.outputs:
+            try:
+                outputs[output.name] = self._value_to_python(output.value)
+            except UnsupportedValueError as exc:
+                outputs[output.name] = exc
+        instances = self._instances_of(response)
+        verdicts = [
+            Verdict(pb_verdict, instances=instances, diagnostics=diagnostics)
+            for pb_verdict in response.verdicts
+        ]
+        return AnalysisResult(
+            outputs, verdicts, instances=instances, diagnostics=diagnostics
+        )
 
     def _require_verification(self):
         """Refuse a verification the connected service does not implement."""

@@ -183,6 +183,14 @@ func (r *remote) evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) 
 	return resp.Msg, nil
 }
 
+func (r *remote) runAnalysis(ctx context.Context, req *pb.RunAnalysisRequest) (*pb.RunAnalysisResponse, error) {
+	resp, err := r.rpc.RunAnalysis(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
 func (r *remote) query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
 	resp, err := r.rpc.Query(ctx, connect.NewRequest(req))
 	if err != nil {

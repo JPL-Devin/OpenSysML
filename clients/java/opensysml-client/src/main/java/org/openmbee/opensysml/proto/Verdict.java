@@ -60,7 +60,8 @@ private static final long serialVersionUID = 0L;
   private volatile java.lang.Object kind_ = "";
   /**
    * <pre>
-   * What was verified: "constraint", "requirement" or "satisfy".
+   * What was verified: "constraint", "requirement" or "satisfy"; for a check
+   * an analysis case run made, "objective" or "assertion".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -81,7 +82,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * What was verified: "constraint", "requirement" or "satisfy".
+   * What was verified: "constraint", "requirement" or "satisfy"; for a check
+   * an analysis case run made, "objective" or "assertion".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -107,7 +109,8 @@ private static final long serialVersionUID = 0L;
   private volatile java.lang.Object elementId_ = "";
   /**
    * <pre>
-   * FQN of the element verified; empty for an anonymous satisfy assertion.
+   * FQN of the element verified; empty for an anonymous satisfy assertion or
+   * an anonymous assertion in a case body.
    * </pre>
    *
    * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -128,7 +131,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * FQN of the element verified; empty for an anonymous satisfy assertion.
+   * FQN of the element verified; empty for an anonymous satisfy assertion or
+   * an anonymous assertion in a case body.
    * </pre>
    *
    * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -155,7 +159,8 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The element as a reader names it: its FQN, or, for an anonymous satisfy
-   * assertion, the assertion as written ("satisfy Range by cruise").
+   * assertion, the assertion as written ("satisfy Range by cruise"); for an
+   * objective or assertion of a case, its name or its condition as written.
    * </pre>
    *
    * <code>string element = 3 [json_name = "element"];</code>
@@ -177,7 +182,8 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The element as a reader names it: its FQN, or, for an anonymous satisfy
-   * assertion, the assertion as written ("satisfy Range by cruise").
+   * assertion, the assertion as written ("satisfy Range by cruise"); for an
+   * objective or assertion of a case, its name or its condition as written.
    * </pre>
    *
    * <code>string element = 3 [json_name = "element"];</code>
@@ -899,7 +905,8 @@ private static final long serialVersionUID = 0L;
     private java.lang.Object kind_ = "";
     /**
      * <pre>
-     * What was verified: "constraint", "requirement" or "satisfy".
+     * What was verified: "constraint", "requirement" or "satisfy"; for a check
+     * an analysis case run made, "objective" or "assertion".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -919,7 +926,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * What was verified: "constraint", "requirement" or "satisfy".
+     * What was verified: "constraint", "requirement" or "satisfy"; for a check
+     * an analysis case run made, "objective" or "assertion".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -940,7 +948,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * What was verified: "constraint", "requirement" or "satisfy".
+     * What was verified: "constraint", "requirement" or "satisfy"; for a check
+     * an analysis case run made, "objective" or "assertion".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -957,7 +966,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * What was verified: "constraint", "requirement" or "satisfy".
+     * What was verified: "constraint", "requirement" or "satisfy"; for a check
+     * an analysis case run made, "objective" or "assertion".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -971,7 +981,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * What was verified: "constraint", "requirement" or "satisfy".
+     * What was verified: "constraint", "requirement" or "satisfy"; for a check
+     * an analysis case run made, "objective" or "assertion".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -991,7 +1002,8 @@ private static final long serialVersionUID = 0L;
     private java.lang.Object elementId_ = "";
     /**
      * <pre>
-     * FQN of the element verified; empty for an anonymous satisfy assertion.
+     * FQN of the element verified; empty for an anonymous satisfy assertion or
+     * an anonymous assertion in a case body.
      * </pre>
      *
      * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -1011,7 +1023,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * FQN of the element verified; empty for an anonymous satisfy assertion.
+     * FQN of the element verified; empty for an anonymous satisfy assertion or
+     * an anonymous assertion in a case body.
      * </pre>
      *
      * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -1032,7 +1045,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * FQN of the element verified; empty for an anonymous satisfy assertion.
+     * FQN of the element verified; empty for an anonymous satisfy assertion or
+     * an anonymous assertion in a case body.
      * </pre>
      *
      * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -1049,7 +1063,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * FQN of the element verified; empty for an anonymous satisfy assertion.
+     * FQN of the element verified; empty for an anonymous satisfy assertion or
+     * an anonymous assertion in a case body.
      * </pre>
      *
      * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -1063,7 +1078,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * FQN of the element verified; empty for an anonymous satisfy assertion.
+     * FQN of the element verified; empty for an anonymous satisfy assertion or
+     * an anonymous assertion in a case body.
      * </pre>
      *
      * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -1084,7 +1100,8 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The element as a reader names it: its FQN, or, for an anonymous satisfy
-     * assertion, the assertion as written ("satisfy Range by cruise").
+     * assertion, the assertion as written ("satisfy Range by cruise"); for an
+     * objective or assertion of a case, its name or its condition as written.
      * </pre>
      *
      * <code>string element = 3 [json_name = "element"];</code>
@@ -1105,7 +1122,8 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The element as a reader names it: its FQN, or, for an anonymous satisfy
-     * assertion, the assertion as written ("satisfy Range by cruise").
+     * assertion, the assertion as written ("satisfy Range by cruise"); for an
+     * objective or assertion of a case, its name or its condition as written.
      * </pre>
      *
      * <code>string element = 3 [json_name = "element"];</code>
@@ -1127,7 +1145,8 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The element as a reader names it: its FQN, or, for an anonymous satisfy
-     * assertion, the assertion as written ("satisfy Range by cruise").
+     * assertion, the assertion as written ("satisfy Range by cruise"); for an
+     * objective or assertion of a case, its name or its condition as written.
      * </pre>
      *
      * <code>string element = 3 [json_name = "element"];</code>
@@ -1145,7 +1164,8 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The element as a reader names it: its FQN, or, for an anonymous satisfy
-     * assertion, the assertion as written ("satisfy Range by cruise").
+     * assertion, the assertion as written ("satisfy Range by cruise"); for an
+     * objective or assertion of a case, its name or its condition as written.
      * </pre>
      *
      * <code>string element = 3 [json_name = "element"];</code>
@@ -1160,7 +1180,8 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The element as a reader names it: its FQN, or, for an anonymous satisfy
-     * assertion, the assertion as written ("satisfy Range by cruise").
+     * assertion, the assertion as written ("satisfy Range by cruise"); for an
+     * objective or assertion of a case, its name or its condition as written.
      * </pre>
      *
      * <code>string element = 3 [json_name = "element"];</code>

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/client/opensysml"
@@ -76,6 +78,8 @@ func (c *pkgClient) dispatch(ctx context.Context, method string, request protore
 		return c.verifySatisfaction(ctx, request)
 	case "EvaluateCalc":
 		return c.evaluateCalc(ctx, request)
+	case "RunAnalysis":
+		return c.runAnalysis(ctx, request)
 	case "Query":
 		return c.query(ctx, request)
 	case "RunDocumentQuery":
@@ -418,6 +422,54 @@ func (c *pkgClient) evaluateCalc(ctx context.Context, request protoreflect.Messa
 			Name:  output.Name,
 			Value: valueToProto(output.Value),
 		})
+	}
+	return response, nil
+}
+
+func (c *pkgClient) runAnalysis(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.RunAnalysisRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	opts := []opensysml.AnalysisOption{opensysml.Subject(req.SubjectSymbolId)}
+	for _, argument := range req.Arguments {
+		converted, ok := valueFromProto(argument)
+		if !ok {
+			return nil, &uncoveredError{reason: "the public Go API cannot send a vector with a non-numeric component"}
+		}
+		opts = append(opts, opensysml.Arguments(converted))
+	}
+	for _, name := range slices.Sorted(maps.Keys(req.NamedArguments)) {
+		converted, ok := valueFromProto(req.NamedArguments[name])
+		if !ok {
+			return nil, &uncoveredError{reason: "the public Go API cannot send a vector with a non-numeric component"}
+		}
+		opts = append(opts, opensysml.Argument(name, converted))
+	}
+	analysis, err := c.api.RunAnalysis(ctx, c.model(req.ModelHash), req.SymbolId, opts...)
+	var verifyErr *opensysml.VerifyError
+	if errors.As(err, &verifyErr) {
+		return &pb.RunAnalysisResponse{
+			Error:         verifyErr.Message,
+			FailureReason: pb.FailureReason(verifyErr.Reason),
+			Diagnostics:   diagnosticsToProto(verifyErr.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.RunAnalysisResponse{
+		Instances:   instancesToProto(analysis.Instances),
+		Diagnostics: diagnosticsToProto(analysis.Diagnostics),
+	}
+	for _, output := range analysis.Outputs {
+		response.Outputs = append(response.Outputs, &pb.CalcOutput{
+			Name:  output.Name,
+			Value: valueToProto(output.Value),
+		})
+	}
+	for i := range analysis.Verdicts {
+		response.Verdicts = append(response.Verdicts, verdictToProto(&analysis.Verdicts[i]))
 	}
 	return response, nil
 }

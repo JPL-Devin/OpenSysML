@@ -34,6 +34,7 @@ const (
 	SysMLService_VerifyRequirement_FullMethodName  = "/sysml.SysMLService/VerifyRequirement"
 	SysMLService_VerifySatisfaction_FullMethodName = "/sysml.SysMLService/VerifySatisfaction"
 	SysMLService_EvaluateCalc_FullMethodName       = "/sysml.SysMLService/EvaluateCalc"
+	SysMLService_RunAnalysis_FullMethodName        = "/sysml.SysMLService/RunAnalysis"
 	SysMLService_Query_FullMethodName              = "/sysml.SysMLService/Query"
 	SysMLService_RunDocumentQuery_FullMethodName   = "/sysml.SysMLService/RunDocumentQuery"
 	SysMLService_RenderDocument_FullMethodName     = "/sysml.SysMLService/RenderDocument"
@@ -72,15 +73,16 @@ type SysMLServiceClient interface {
 	// spans, and the result is re-parsed and validated before it is returned.
 	// Reported as the "apply_edits" capability.
 	ApplyEdits(ctx context.Context, in *ApplyEditsRequest, opts ...grpc.CallOption) (*ApplyEditsResponse, error)
-	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
-	// and %calc give, so "does this model satisfy its requirements?" can be asked
-	// by a script. Each evaluates the same runtime paths the prompt does and
-	// returns a verdict rather than formatted lines. Reported as the
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+	// %calc and %analysis give, so "does this model satisfy its requirements?"
+	// can be asked by a script. Each evaluates the same runtime paths the prompt
+	// does and returns a verdict rather than formatted lines. Reported as the
 	// "verification" capability.
 	VerifyConstraint(ctx context.Context, in *VerifyConstraintRequest, opts ...grpc.CallOption) (*VerifyConstraintResponse, error)
 	VerifyRequirement(ctx context.Context, in *VerifyRequirementRequest, opts ...grpc.CallOption) (*VerifyRequirementResponse, error)
 	VerifySatisfaction(ctx context.Context, in *VerifySatisfactionRequest, opts ...grpc.CallOption) (*VerifySatisfactionResponse, error)
 	EvaluateCalc(ctx context.Context, in *EvaluateCalcRequest, opts ...grpc.CallOption) (*EvaluateCalcResponse, error)
+	RunAnalysis(ctx context.Context, in *RunAnalysisRequest, opts ...grpc.CallOption) (*RunAnalysisResponse, error)
 	// Run a SysML v2 API & Services Query over a parsed model: scope/select/where
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
@@ -237,6 +239,15 @@ func (c *sysMLServiceClient) EvaluateCalc(ctx context.Context, in *EvaluateCalcR
 	return out, nil
 }
 
+func (c *sysMLServiceClient) RunAnalysis(ctx context.Context, in *RunAnalysisRequest, opts ...grpc.CallOption) (*RunAnalysisResponse, error) {
+	out := new(RunAnalysisResponse)
+	err := c.cc.Invoke(ctx, SysMLService_RunAnalysis_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sysMLServiceClient) Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error) {
 	out := new(QueryResponse)
 	err := c.cc.Invoke(ctx, SysMLService_Query_FullMethodName, in, out, opts...)
@@ -297,15 +308,16 @@ type SysMLServiceServer interface {
 	// spans, and the result is re-parsed and validated before it is returned.
 	// Reported as the "apply_edits" capability.
 	ApplyEdits(context.Context, *ApplyEditsRequest) (*ApplyEditsResponse, error)
-	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
-	// and %calc give, so "does this model satisfy its requirements?" can be asked
-	// by a script. Each evaluates the same runtime paths the prompt does and
-	// returns a verdict rather than formatted lines. Reported as the
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+	// %calc and %analysis give, so "does this model satisfy its requirements?"
+	// can be asked by a script. Each evaluates the same runtime paths the prompt
+	// does and returns a verdict rather than formatted lines. Reported as the
 	// "verification" capability.
 	VerifyConstraint(context.Context, *VerifyConstraintRequest) (*VerifyConstraintResponse, error)
 	VerifyRequirement(context.Context, *VerifyRequirementRequest) (*VerifyRequirementResponse, error)
 	VerifySatisfaction(context.Context, *VerifySatisfactionRequest) (*VerifySatisfactionResponse, error)
 	EvaluateCalc(context.Context, *EvaluateCalcRequest) (*EvaluateCalcResponse, error)
+	RunAnalysis(context.Context, *RunAnalysisRequest) (*RunAnalysisResponse, error)
 	// Run a SysML v2 API & Services Query over a parsed model: scope/select/where
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
@@ -368,6 +380,9 @@ func (UnimplementedSysMLServiceServer) VerifySatisfaction(context.Context, *Veri
 }
 func (UnimplementedSysMLServiceServer) EvaluateCalc(context.Context, *EvaluateCalcRequest) (*EvaluateCalcResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EvaluateCalc not implemented")
+}
+func (UnimplementedSysMLServiceServer) RunAnalysis(context.Context, *RunAnalysisRequest) (*RunAnalysisResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunAnalysis not implemented")
 }
 func (UnimplementedSysMLServiceServer) Query(context.Context, *QueryRequest) (*QueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Query not implemented")
@@ -661,6 +676,24 @@ func _SysMLService_EvaluateCalc_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SysMLService_RunAnalysis_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunAnalysisRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).RunAnalysis(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_RunAnalysis_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).RunAnalysis(ctx, req.(*RunAnalysisRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SysMLService_Query_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryRequest)
 	if err := dec(in); err != nil {
@@ -781,6 +814,10 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EvaluateCalc",
 			Handler:    _SysMLService_EvaluateCalc_Handler,
+		},
+		{
+			MethodName: "RunAnalysis",
+			Handler:    _SysMLService_RunAnalysis_Handler,
 		},
 		{
 			MethodName: "Query",

@@ -267,9 +267,9 @@ sysml \-validate \-strict model.sysml
 # Invoke a calculation
 sysml \-calc "Fall(3, 4)" model.sysml
 # Run an analysis case
-sysml \-analysis An::shipCost model.sysml
+sysml \-analysis shipCost model.sysml
 # \&...on an object as its subject
-sysml \-analysis "An::CostAnalysis An::ship" model.sysml
+sysml \-analysis "CostAnalysis ship" model.sysml
 # Execute a document query
 sysml \-run\-query "Heavy root=scope" model.sysml
 # Run an action to completion

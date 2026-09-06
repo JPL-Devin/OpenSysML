@@ -126,6 +126,11 @@ func (a *ConnectAdapter) EvaluateCalc(ctx context.Context, req *connect.Request[
 	return connectCall(ctx, req, a.svc.EvaluateCalc)
 }
 
+// RunAnalysis runs an analysis case with the subject and arguments given.
+func (a *ConnectAdapter) RunAnalysis(ctx context.Context, req *connect.Request[pb.RunAnalysisRequest]) (*connect.Response[pb.RunAnalysisResponse], error) {
+	return connectCall(ctx, req, a.svc.RunAnalysis)
+}
+
 // Query evaluates a SysML v2 API & Services Query over a parsed model.
 func (a *ConnectAdapter) Query(ctx context.Context, req *connect.Request[pb.QueryRequest]) (*connect.Response[pb.QueryResponse], error) {
 	return connectCall(ctx, req, a.svc.Query)

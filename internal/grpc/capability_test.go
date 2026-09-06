@@ -112,6 +112,10 @@ func TestCapabilityGatedRequestsAreRefused(t *testing.T) {
 			_, err := s.EvaluateCalc(ctx, &pb.EvaluateCalcRequest{})
 			return err
 		}},
+		{"run analysis", CapabilityVerification, func(s *Service) error {
+			_, err := s.RunAnalysis(ctx, &pb.RunAnalysisRequest{})
+			return err
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

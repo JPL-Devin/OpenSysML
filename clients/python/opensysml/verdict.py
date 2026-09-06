@@ -14,6 +14,8 @@ from opensysml.errors import ExecutionError
 KIND_CONSTRAINT = "constraint"
 KIND_REQUIREMENT = "requirement"
 KIND_SATISFY = "satisfy"
+KIND_OBJECTIVE = "objective"
+KIND_ASSERTION = "assertion"
 
 
 class Verdict:
@@ -25,7 +27,8 @@ class Verdict:
             print(verdict.explain())
 
     Attributes:
-        kind (str): What was verified: 'constraint', 'requirement' or 'satisfy'
+        kind (str): What was verified: 'constraint', 'requirement', 'satisfy',
+            or an analysis case's 'objective' or 'assertion'
         element_id (str): FQN of the element verified; empty for an anonymous
             satisfaction assertion
         element (str): The element as a reader names it — its FQN, or the
@@ -183,3 +186,49 @@ class CalcResult:
 
     def __repr__(self):
         return f"CalcResult(value={self.value!r}, outputs={self.outputs!r})"
+
+
+class AnalysisResult:
+    """What an analysis case computed and decided.
+
+    Running a case computes its ``out`` and ``return`` values, which are
+    :attr:`outputs` in declaration order, then checks its objective and each
+    ``assert constraint`` in its body against them, which are :attr:`verdicts`
+    (SysML 7.22). A verdict of false is the case's answer, not an exception; an
+    objective that could not be decided carries the reason in ``verdict.error``.
+
+    Attributes:
+        outputs (dict): Output features the case computed, by name; a value the
+            wire format cannot represent is an UnsupportedValueError in its place
+        verdicts (list[Verdict]): The objective and assertion verdicts, in the
+            order the case states them
+        instances (list[Instance]): The subject the case ran on and the objects
+            reachable from it; empty when the case bound no subject
+        diagnostics (list[Diagnostic]): Diagnostics the service reported
+    """
+
+    def __init__(self, outputs, verdicts, instances=None, diagnostics=None):
+        self.outputs = dict(outputs or {})
+        self.verdicts = list(verdicts or [])
+        self.instances = list(instances or [])
+        self.diagnostics = list(diagnostics or [])
+
+    @property
+    def satisfied(self):
+        """Whether every objective and assertion holds; a case stating none is satisfied."""
+        return all(v.holds for v in self.verdicts)
+
+    def __bool__(self):
+        """A result is truthy when the case's objective and assertions hold."""
+        return self.satisfied
+
+    def __str__(self):
+        lines = [f"{name} = {val}" for name, val in self.outputs.items()]
+        lines.extend(v.explain() for v in self.verdicts)
+        return "\n".join(lines)
+
+    def __repr__(self):
+        return (
+            f"AnalysisResult(outputs={self.outputs!r}, "
+            f"verdicts={self.verdicts!r})"
+        )

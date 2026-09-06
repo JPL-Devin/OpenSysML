@@ -193,6 +193,43 @@ class CalcOutput(_message.Message):
     value: Value
     def __init__(self, name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
 
+class RunAnalysisRequest(_message.Message):
+    __slots__ = ("model_hash", "symbol_id", "subject_symbol_id", "arguments", "named_arguments")
+    class NamedArgumentsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: Value
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_FIELD_NUMBER: _ClassVar[int]
+    NAMED_ARGUMENTS_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    symbol_id: str
+    subject_symbol_id: str
+    arguments: _containers.RepeatedCompositeFieldContainer[Value]
+    named_arguments: _containers.MessageMap[str, Value]
+    def __init__(self, model_hash: _Optional[str] = ..., symbol_id: _Optional[str] = ..., subject_symbol_id: _Optional[str] = ..., arguments: _Optional[_Iterable[_Union[Value, _Mapping]]] = ..., named_arguments: _Optional[_Mapping[str, Value]] = ...) -> None: ...
+
+class RunAnalysisResponse(_message.Message):
+    __slots__ = ("outputs", "verdicts", "instances", "error", "diagnostics", "failure_reason")
+    OUTPUTS_FIELD_NUMBER: _ClassVar[int]
+    VERDICTS_FIELD_NUMBER: _ClassVar[int]
+    INSTANCES_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
+    outputs: _containers.RepeatedCompositeFieldContainer[CalcOutput]
+    verdicts: _containers.RepeatedCompositeFieldContainer[Verdict]
+    instances: _containers.RepeatedCompositeFieldContainer[Instance]
+    error: str
+    diagnostics: _containers.RepeatedCompositeFieldContainer[Diagnostic]
+    failure_reason: FailureReason
+    def __init__(self, outputs: _Optional[_Iterable[_Union[CalcOutput, _Mapping]]] = ..., verdicts: _Optional[_Iterable[_Union[Verdict, _Mapping]]] = ..., instances: _Optional[_Iterable[_Union[Instance, _Mapping]]] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., failure_reason: _Optional[_Union[FailureReason, str]] = ...) -> None: ...
+
 class ParseFileRequest(_message.Message):
     __slots__ = ("file_path", "content", "content_hash", "language", "strict_conformance")
     FILE_PATH_FIELD_NUMBER: _ClassVar[int]

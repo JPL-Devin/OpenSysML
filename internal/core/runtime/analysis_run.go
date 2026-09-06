@@ -164,6 +164,10 @@ type AnalysisVerdict struct {
 	// anonymous assertion's condition as written.
 	Name string
 
+	// Symbol declares the objective or the named constraint asserted; nil for an
+	// anonymous assertion.
+	Symbol *symbols.Symbol
+
 	// Status is what the check decided.
 	Status VerdictStatus
 
@@ -354,7 +358,9 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 			sym: obj.Symbol, kind: "objective", what: "require condition",
 			element: name, self: run.self, bindings: bindings,
 		}
-		verdicts = append(verdicts, ctx.analysisVerdict("objective", name, check, obj.Conditions))
+		verdict := ctx.analysisVerdict("objective", name, check, obj.Conditions)
+		verdict.Symbol = obj.Symbol
+		verdicts = append(verdicts, verdict)
 	}
 	for _, cond := range ctx.CaseConditionsOf(sym, scope) {
 		if !cond.Required {
@@ -364,23 +370,27 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 			sym: sym, kind: run.shape.Kind, what: "assertion",
 			element: run.shape.Name, self: run.self, bindings: bindings,
 		}
-		verdicts = append(verdicts, ctx.analysisVerdict("assertion", assertionName(cond), check, []Condition{cond}))
+		name, named := assertionName(cond)
+		verdict := ctx.analysisVerdict("assertion", name, check, []Condition{cond})
+		verdict.Symbol = named
+		verdicts = append(verdicts, verdict)
 	}
 	return verdicts
 }
 
 // assertionName names an asserted condition: the named constraint stating it, or
-// the condition as written when only a case (the one run, or its definition) names it.
-func assertionName(cond Condition) string {
+// the condition as written when only a case (the one run, or its definition)
+// names it. The symbol is the named constraint, nil when there is none.
+func assertionName(cond Condition) (string, *symbols.Symbol) {
 	for i := len(cond.Constraints) - 1; i >= 0; i-- {
-		if name := cond.Constraints[i].Name; name != "" {
-			return name
+		if c := cond.Constraints[i]; c.Name != "" {
+			return c.Name, c
 		}
 	}
 	if owner := cond.Owner(); owner != nil && !IsAnalysisSymbol(owner) {
-		return owner.Name
+		return owner.Name, owner
 	}
-	return cond.Label()
+	return cond.Label(), nil
 }
 
 // analysisVerdict evaluates one check's conditions and words what it decided.
