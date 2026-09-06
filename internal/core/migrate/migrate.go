@@ -746,7 +746,7 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("derived ")
 	}
 	if p.Attrs["isReadOnly"] == "true" && kw == "attribute" {
-		b.WriteString("readonly ")
+		b.WriteString("constant ")
 	}
 	if p.Type == "Port" {
 		dir, dnote := portDirection(p)

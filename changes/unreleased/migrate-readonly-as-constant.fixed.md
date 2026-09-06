@@ -1,0 +1,1 @@
+- **Migrated read-only properties are written as `constant` attributes.** The pinned SysML v2 grammar spells `isReadOnly` as `constant`, so the migration now writes `constant attribute` instead of `readonly attribute`, which the parser and the pilot both reject as a syntax error.
