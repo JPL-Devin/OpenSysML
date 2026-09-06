@@ -20,7 +20,7 @@ func (ec *EvalContext) outerFeatureValue(sym *symbols.Symbol) (Value, bool, erro
 		if err != nil {
 			return Value{}, true, err
 		}
-		val, err := fv.ReadValue(name)
+		val, err := ec.ctx.readFeatureValue(fv, name)
 		return val, true, err
 	}
 	return Value{}, false, nil
