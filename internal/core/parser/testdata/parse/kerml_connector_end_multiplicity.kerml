@@ -20,5 +20,11 @@ package ConnectorEndMultiplicity {
 		succession p.s1 then [0..1] p.s2;
 		succession [1] first p.s1 then p.s2;
 		succession sn [1] first p.s1 then p.s2;
+
+		// A first end may be a global name or a named end (KerML.xtext:854).
+		succession [1] $::ConnectorEndMultiplicity::Forms::p.s1 then p.s2;
+		succession [1] e1 ::> p.s1 then p.s2;
+		succession [0..1] e2 references p.s1 then [*] e3 ::> p.s2;
+		succession e4 ::> p.s1 then p.s2;
 	}
 }

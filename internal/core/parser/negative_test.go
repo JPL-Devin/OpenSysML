@@ -689,6 +689,8 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_end_multiplicity_unclosed", "package P { behavior B { step a; step b; succession [1 a then b; } }"},
 		{"succession_second_end_multiplicity_no_end", "package P { behavior B { step a; step b; succession [1] a then [1] ; } }"},
 		{"succession_end_multiplicity_no_terminator", "package P { behavior B { step a; step b; succession [1] a then [1] b } }"},
+		{"succession_named_end_no_target", "package P { behavior B { step a; step b; succession [1] e ::> then b; } }"},
+		{"succession_global_end_no_name", "package P { behavior B { step a; step b; succession [1] $:: then b; } }"},
 
 		// A named multiplicity states bounds or a subsetting, and the
 		// subsetting names one multiplicity (KerML.xtext:754).

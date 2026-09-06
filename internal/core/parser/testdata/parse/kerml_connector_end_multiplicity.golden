@@ -132,4 +132,53 @@
                   (FeatureReference name="p")))
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="$::ConnectorEndMultiplicity::Forms::p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e1"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="s1"
+                    (FeatureReference name="p"))))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e2"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="s1"
+                    (FeatureReference name="p"))))
+              (ConnectorEnd target="e3"
+                (Multiplicity range=false
+                  (LiteralInfinity))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="s2"
+                    (FeatureReference name="p"))))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e4"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="s1"
+                    (FeatureReference name="p"))))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
                   (FeatureReference name="p"))))))))))
