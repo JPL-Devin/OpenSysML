@@ -739,6 +739,17 @@ func (p *Parser) atEnumeratedValueDeclaration() bool {
 	return p.atFeatureSpecializationPartAt(off)
 }
 
+// atLeadingEndMultiplicity reports whether the multiplicity at the current
+// token is followed directly by a connector end (a name, chain or `$::` path)
+// rather than by a declaration part, so it is that end's crossing multiplicity.
+func (p *Parser) atLeadingEndMultiplicity() bool {
+	if !p.at(lexer.LBracket) {
+		return false
+	}
+	next := p.pastBracketed(0)
+	return p.atNameAt(next) || (p.peekN(next).Kind == lexer.Dollar && p.peekN(next+1).Kind == lexer.ColonColon)
+}
+
 // atNameAt reports whether the token off positions ahead can begin a name
 // segment, as atName does for the current token.
 func (p *Parser) atNameAt(off int) bool {
@@ -2136,9 +2147,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	if kind == ast.UsageBinding {
 		// Check for multiplicity before name: binding [mult] name ...
 		if p.at(lexer.LBracket) {
-			if keyword == "bind" {
-				// `bind [mult] a = b` declares no connector, so the multiplicity is
-				// the first end's (SysML.xtext:1020 BindingConnectorAsUsage, ConnectorEnd).
+			// `binding [mult] bind …` keeps `bind` as the SysML keyword in either file kind.
+			after := p.peekN(p.pastBracketed(0))
+			bindFollows := after.Kind == lexer.Keyword && after.KeywordID == "bind"
+			if keyword == "bind" || (p.src.Kind() == source.KindKerML && !bindFollows && p.atLeadingEndMultiplicity()) {
+				// `bind [mult] a = b` and KerML `binding [mult] a = b` declare no
+				// connector, so the multiplicity is the first end's (SysML.xtext:1020
+				// BindingConnectorAsUsage; KerML.xtext:875 alternative 2, ConnectorEnd).
 				p.parseBindingEnd(u)
 			} else {
 				u.Multiplicity = p.parseMultiplicity()
@@ -2268,7 +2283,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		isAnonymous = p.atConnectorBinaryEnds()
 	}
 	anonymousConnector := kind == ast.UsageConnector && isAnonymous
-	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && p.at(lexer.LBracket) {
+	// `succession [mult] a then b` declares no connector, so the multiplicity is
+	// the first end's (KerML.xtext:891 alternative 2); `succession [mult] first a
+	// then b` still declares the connector's own.
+	leadingEndMultiplicity := kind == ast.UsageSuccession && isAnonymous && p.atLeadingEndMultiplicity()
+	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && !leadingEndMultiplicity && p.at(lexer.LBracket) {
 		earlyMultiplicity = p.parseMultiplicity()
 	}
 
@@ -2322,22 +2341,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 	}
 
-	// Parse post-multiplicity modifiers (ordered/nonunique)
-	postMods := p.parsePostModifiers()
-	if postMods.isOrdered {
-		u.IsOrdered = true
-	}
-	if postMods.isNonunique {
-		u.IsNonunique = true
-	}
-
-	// DEBUG: trace token after post-modifiers
-	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n",
-	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
-
-	// Parse additional relationships after modifiers (e.g., :> target)
-	postRels := p.parseRelationships(true)
-	u.Relationships = append(u.Relationships, postRels...)
+	p.parseSpecializationsAfterMultiplicity(u)
 	p.checkTypeDeclarationSpecialization(u, keyword)
 
 	p.parseUsageValue(u)
@@ -3139,33 +3143,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 				u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
 			}
 
-			// Parse optional multiplicity
-			if p.at(lexer.LBracket) {
-				u.Multiplicity = p.parseMultiplicity()
-			}
 			u.CrossFeature = mods.cross
-
-			// Parse post-multiplicity modifiers (ordered/nonunique)
-			postMods := p.parsePostModifiers()
-			if postMods.isOrdered {
-				u.IsOrdered = true
-			}
-			if postMods.isNonunique {
-				u.IsNonunique = true
-			}
-
-			// Parse additional relationships
-			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-			// A multiplicity may follow the specializations instead of preceding
-			// them (KerML.xtext FeatureSpecializationPart): `ref redefines x[4];`.
-			if u.Multiplicity == nil && p.at(lexer.LBracket) {
-				u.Multiplicity = p.parseMultiplicity()
-				if post := p.parsePostModifiers(); post.isOrdered || post.isNonunique {
-					u.IsOrdered = u.IsOrdered || post.isOrdered
-					u.IsNonunique = u.IsNonunique || post.isNonunique
-				}
-			}
+			p.parseFeatureSpecializationPart(u)
 
 			// Parse optional value (= expr or default expr)
 			p.parseUsageValue(u)
@@ -3201,23 +3180,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Parse typing/relationships
 		p.advance() // consume ':'
 		u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
-
-		// Parse optional multiplicity
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// Parse post-multiplicity modifiers (ordered/nonunique)
-		postMods := p.parsePostModifiers()
-		if postMods.isOrdered {
-			u.IsOrdered = true
-		}
-		if postMods.isNonunique {
-			u.IsNonunique = true
-		}
-
-		// Parse additional relationships
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+		p.parseFeatureSpecializationPart(u)
 
 		// Parse optional value (= expr or default expr)
 		p.parseUsageValue(u)
@@ -3636,6 +3599,26 @@ func (p *Parser) parsePreNameRelationships(isUsage bool) []*ast.Relationship {
 		return nil
 	}
 	return p.parseRelationships(isUsage)
+}
+
+// parseFeatureSpecializationPart parses a usage's
+// `FeatureSpecialization* MultiplicityPart? FeatureSpecialization*`
+// (KerML.xtext:574) onto u; a multiplicity it states replaces none.
+func (p *Parser) parseFeatureSpecializationPart(u *ast.Usage) {
+	u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+	if p.at(lexer.LBracket) {
+		u.Multiplicity = p.parseMultiplicity()
+	}
+	p.parseSpecializationsAfterMultiplicity(u)
+}
+
+// parseSpecializationsAfterMultiplicity parses the `ordered`/`nonunique` tail of
+// a MultiplicityPart and the FeatureSpecialization* that may follow it onto u.
+func (p *Parser) parseSpecializationsAfterMultiplicity(u *ast.Usage) {
+	post := p.parsePostModifiers()
+	u.IsOrdered = u.IsOrdered || post.isOrdered
+	u.IsNonunique = u.IsNonunique || post.isNonunique
+	u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 }
 
 // parseRelationships parses zero or more relationship clauses. isUsage selects

@@ -1,0 +1,135 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ConnectorEndMultiplicity" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="A" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="B" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="step" name="s1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="step" name="s2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="class" name="Forms" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=A
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=A
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=B
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x"))
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="x"))
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x"))
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1")))
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="y")))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x")))
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="y"))
+                (Multiplicity range=false
+                  (LiteralInfinity)))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x")))
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="x")))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="bb" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x")))
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="x")))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInfinity))
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p")))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="sn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s1"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="s2"
+                  (FeatureReference name="p"))))))))))

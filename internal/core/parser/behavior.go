@@ -368,37 +368,33 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		ident = p.parseIdentificationStopping("ordered", "nonunique")
 	}
 
-	// Optional multiplicity before relationships (e.g., name[mult]: Type)
-	var multiplicity *ast.Multiplicity
-	if p.at(lexer.LBracket) {
-		multiplicity = p.parseMultiplicity()
+	// Create Usage node with direction
+	usage := &ast.Usage{
+		Kind:         kind,
+		Ident:        ident,
+		IsReference:  isRef,
+		Direction:    direction,
+		IsEvent:      isEvent,
+		IsIndividual: isIndividual,
+		Portion:      portion,
 	}
 
-	// Optional typing and relationships, written either as an operator (`:>`) or
-	// as the keyword it stands for (`subsets`); parseRelationships consumes
-	// nothing when neither begins the token at the cursor.
-	relationships := p.parseRelationships(true)
-
-	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
-	if multiplicity == nil && p.at(lexer.LBracket) {
-		multiplicity = p.parseMultiplicity()
-	}
-
-	// Parse post-multiplicity modifiers (ordered/nonunique)
-	postMods := p.parsePostModifiers()
+	// A parameter specializes and states its multiplicity as any usage does
+	// (`in x : T[1] redefines y`, `in x[1] : T`), so it shares the usage loop.
+	p.parseFeatureSpecializationPart(usage)
 
 	// Optional value (= expr, := expr, or default [=] expr)
-	var value ast.Node
 	valueOp, hasValue := p.acceptValueOperator()
 	if hasValue {
-		value = p.ParseExpression()
+		usage.Value = p.ParseExpression()
 	}
+	usage.ValueOperatorSpan = valueOp.span
+	usage.ValueIsDefault = valueOp.isDefault
+	usage.ValueIsInitial = valueOp.isInitial
 
 	// Optional body or semicolon
-	var members []ast.Node
-	var hasBody bool
 	if p.accept2(lexer.Semicolon) {
-		hasBody = false
+		usage.HasBody = false
 	} else if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
 		// Parse body members generically
@@ -406,35 +402,14 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			m := p.parseBodyMember()
 			if m != nil {
-				members = append(members, m)
+				usage.Members = append(usage.Members, m)
 			}
 		}
 		leave()
 		p.expect(lexer.RBrace, "expected '}'")
-		hasBody = true
+		usage.HasBody = true
 	} else {
 		p.error(p.peek().Span, "expected ';' or '{' after parameter")
-	}
-
-	// Create Usage node with direction
-	usage := &ast.Usage{
-		Kind:              kind,
-		Ident:             ident,
-		Relationships:     relationships,
-		Multiplicity:      multiplicity,
-		Value:             value,
-		ValueOperatorSpan: valueOp.span,
-		ValueIsDefault:    valueOp.isDefault,
-		ValueIsInitial:    valueOp.isInitial,
-		Members:           members,
-		HasBody:           hasBody,
-		IsReference:       isRef,
-		Direction:         direction,
-		IsOrdered:         postMods.isOrdered,
-		IsNonunique:       postMods.isNonunique,
-		IsEvent:           isEvent,
-		IsIndividual:      isIndividual,
-		Portion:           portion,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 
@@ -1573,45 +1548,8 @@ func (p *Parser) parseResultMember() ast.Node {
 		}
 
 		// FeatureSpecializationPart: the typing and the specializations, in the
-		// order written (`: T`, `:> engine`, `: T :>> x`).
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-		// Parse optional multiplicity '[n..m]'
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// Parse additional feature modifiers after multiplicity (e.g., 'nonunique')
-		// Stdlib pattern: return : Type[mult] nonunique;
-		mods2 := p.parseFeatureModifiers()
-		if mods2.isAbstract {
-			u.IsAbstract = true
-		}
-		if mods2.isReference {
-			u.IsReference = true
-		}
-		if mods2.isEnd {
-			u.IsEnd = true
-		}
-		if mods2.isComposite {
-			u.IsComposite = true
-		}
-		if mods2.isPortion {
-			u.IsPortion = true
-		}
-		if mods2.isDerived {
-			u.IsDerived = true
-		}
-		if mods2.isOrdered {
-			u.IsOrdered = true
-		}
-		if mods2.isNonunique {
-			u.IsNonunique = true
-		}
-
-		// Parse additional relationships after post-modifiers (e.g., redefines result redefines values)
-		postModRels := p.parseRelationships(true)
-		u.Relationships = append(u.Relationships, postModRels...)
+		// order written (`: T`, `:> engine`, `: T[1] nonunique :>> x`).
+		p.parseFeatureSpecializationPart(u)
 
 		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
 		p.parseUsageValue(u)
