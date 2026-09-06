@@ -98,7 +98,7 @@ maintenance: |
 knowledge:
   - name: lint
     contents: |
-      go vet ./... && gofmt -l . && staticcheck ./... && gosec -quiet ./...
+      go vet ./... && test -z "$(gofmt -l .)" && make lint
   - name: test
     contents: |
       go test ./...
