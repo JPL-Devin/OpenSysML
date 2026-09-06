@@ -109,7 +109,7 @@ subset it or none does (and folds a `default null` one to `0`). See
   such file or directory`.
 - **Additivity.** `go run ./cmd/pilot-diff` must still print the headline the
   committed baseline holds (`367 file(s), 337 fully agreeing; 34 agreed
-  diagnostic(s), 21 only ours, 572 only the pilot's` after the unbound-parameter round — read it from the baseline JSON, not from this line, since each
+  diagnostic(s), 21 only ours, 596 only the pilot's` after the unbound-parameter round — read it from the baseline JSON, not from this line, since each
   fix round moves it) and `jq -S` diff clean against
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`
   empty at the end.
