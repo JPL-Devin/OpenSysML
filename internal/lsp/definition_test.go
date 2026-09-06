@@ -238,6 +238,45 @@ func TestDefinitionConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
 	}
 }
 
+// The first end of `connector eng to t;` and the `eng` a named end references
+// both go to the featuring type's feature (KerML.xtext:836).
+func TestDefinitionKerMLBinaryConnectorFirstEnd(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_kerml_first_end.kerml").Filename()
+	src := `package P {
+	class V {
+		feature eng;
+		feature t;
+		connector eng to t;
+		connector a ::> eng to t;
+		connector [0..1] eng to [1..*] t;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	for _, probe := range []string{"connector eng to", "::> eng to", "[0..1] eng to"} {
+		off := strings.Index(src, probe) + strings.Index(probe, "eng")
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", probe, len(locs))
+		}
+		// `feature eng;` is on line 2.
+		if locs[0].Range.Start.Line != 2 {
+			t.Errorf("%s: decl line = %d, want 2 (the feature, not the connector)", probe, locs[0].Range.Start.Line)
+		}
+	}
+}
+
 // A name in a filter condition resolves through the imports of its own
 // namespace, which the namespace's filters must not restrict — the diagnostics
 // pass resolves it that way, and the editor has to agree or rename skips it.

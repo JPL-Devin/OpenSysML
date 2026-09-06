@@ -117,7 +117,20 @@ func documentOptions() docrender.HTMLOptions {
 		TitlePage:           pdfTitlePage,
 		TOC:                 pdfTOC,
 		NumberSections:      pdfNumbering,
+		MermaidScript:       mermaidScriptURL(),
 	}
+}
+
+// The -html-mermaid value naming the pinned CDN release.
+const mermaidCDN = "cdn"
+
+// mermaidScriptURL resolves -html-mermaid: cdn names the pinned release,
+// anything else is the URL to load as it stands.
+func mermaidScriptURL() string {
+	if htmlMermaid == mermaidCDN {
+		return docrender.MermaidScriptURL
+	}
+	return htmlMermaid
 }
 
 // setStylesheets resolves the stylesheets of an HTML set: the default sheet
@@ -136,7 +149,7 @@ func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
 		add(docrender.StylesheetFileName, docrender.DefaultStylesheet())
 	}
 	for _, css := range htmlCSS {
-		if isStylesheetURL(css) {
+		if isWebURL(css) {
 			links = append(links, docrender.LinkedStylesheet(css))
 			continue
 		}
@@ -215,7 +228,7 @@ func shortenStylesheetName(name string) string {
 func htmlOptions() (docrender.HTMLOptions, error) {
 	opts := documentOptions()
 	for _, css := range htmlCSS {
-		if isStylesheetURL(css) {
+		if isWebURL(css) {
 			opts.Stylesheets = append(opts.Stylesheets, docrender.LinkedStylesheet(css))
 			continue
 		}
@@ -229,9 +242,9 @@ func htmlOptions() (docrender.HTMLOptions, error) {
 	return opts, nil
 }
 
-// isStylesheetURL reports whether -html-css named a stylesheet to link rather
-// than a file to inline.
-func isStylesheetURL(css string) bool {
+// isWebURL reports whether a value is an http(s) or protocol-relative URL a
+// page can load a resource from, rather than a local file.
+func isWebURL(css string) bool {
 	lower := strings.ToLower(css)
 	for _, scheme := range []string{"http://", "https://", "//"} {
 		if strings.HasPrefix(lower, scheme) {
@@ -547,7 +560,16 @@ const (
 // htmlFlagsGiven reports whether the run asked for anything only HTML output
 // shapes.
 func htmlFlagsGiven() bool {
-	return len(htmlCSS) > 0 || htmlNoCSS || htmlFragment
+	return len(htmlCSS) > 0 || htmlNoCSS || htmlFragment || htmlMermaid != ""
+}
+
+// checkMermaidScript rejects an -html-mermaid value that is neither cdn nor a
+// URL a page can load a script from.
+func checkMermaidScript() error {
+	if htmlMermaid == "" || htmlMermaid == mermaidCDN || isWebURL(htmlMermaid) {
+		return nil
+	}
+	return fmt.Errorf("-html-mermaid takes %s or the URL of a Mermaid script; %q is neither", mermaidCDN, htmlMermaid)
 }
 
 // documentSetForm resolves -doc-form for -render-documents, which writes a
@@ -568,6 +590,9 @@ func documentSetForm() (string, error) {
 	case docFormHTML:
 		if pdfEngine != "" {
 			return "", errors.New("-pdf-engine shapes PDF output; -doc-form html needs no external converter")
+		}
+		if err := checkMermaidScript(); err != nil {
+			return "", err
 		}
 		return form, nil
 	case docFormPDF:
@@ -609,6 +634,12 @@ func documentForm() (string, error) {
 		}
 		if htmlFragment && len(htmlCSS) > 0 {
 			return "", errors.New("-html-fragment writes the document element alone, with no place for a stylesheet; style the page you embed it in")
+		}
+		if htmlFragment && htmlMermaid != "" {
+			return "", errors.New("-html-fragment writes the document element alone, with no place for a script; load Mermaid in the page you embed it in")
+		}
+		if err := checkMermaidScript(); err != nil {
+			return "", err
 		}
 		return form, nil
 	case docFormPDF:
