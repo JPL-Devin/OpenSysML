@@ -912,7 +912,14 @@ the flat sequence of its elements:
   Every one of these accepts a scalar or vector quantity where it declares a
   `TensorQuantityValue` (`ScalarQuantityValue :> VectorQuantityValue :>
   TensorQuantityValue`) and answers a value of the operands' rank: a scalar for
-  order 0, a vector quantity for order 1, a tensor above (`tensorResult`). What
+  order 0, a vector quantity for order 1, a tensor above (`tensorResult`). A
+  result whose component units all cancel follows the scalar rule above — a
+  ratio of like quantities is a number of no unit (`3 [Pa] * 2 [Pa**-1]` is `6`),
+  and a vector quantity so reduced is a plain vector (`vectorResult`) — so
+  `TensorScalarQuantityMult(Tensor(2, 2)[…] [Pa], 2 [Pa**-1])` is the plain
+  `Array(2, 2)[…]`, which, like the number and the vector, the `TensorCalculations`
+  functions do not take back as a `TensorQuantityValue`; what a quantity of
+  dimension one carries is one decision for every rank and is not made here. What
   remains unevaluable is what the text does not determine: `tensorVectorMult`,
   `vectorTensorMult`, `tensorTensorMult` (no contraction convention),
   `VectorCalculations::outer` (declared to return a `VectorQuantityValue`, which
