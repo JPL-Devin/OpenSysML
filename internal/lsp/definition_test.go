@@ -277,6 +277,55 @@ func TestDefinitionKerMLBinaryConnectorFirstEnd(t *testing.T) {
 	}
 }
 
+// Both ends of a keyword-first Disjoining go to the element each names, the
+// disjoined end and the disjoining type alike (KerML.xtext:426).
+func TestDefinitionKerMLDisjoiningEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_kerml_disjoining.kerml").Filename()
+	src := `package P {
+	classifier A;
+	classifier B { feature next : B; }
+	feature b : B;
+	disjoining D disjoint A from B;
+	disjoint b.next from A;
+}
+`
+	ws.Open(name, []byte(src), 1)
+	for _, d := range ws.Diagnostics(name) {
+		t.Fatalf("the source reports %q", d.Message)
+	}
+
+	// Each probe is a unique snippet of src; the cursor lands on its last word.
+	for _, tc := range []struct {
+		probe string
+		decl  uint32
+	}{
+		{"disjoint A", 1},
+		{"A from B", 2},
+		{"disjoint b", 3},
+		{"b.next", 2},
+		{"next from A", 1},
+	} {
+		off := strings.Index(src, tc.probe) + strings.LastIndexAny(tc.probe, " .") + 1
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", tc.probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", tc.probe, len(locs))
+		}
+		if locs[0].Range.Start.Line != tc.decl {
+			t.Errorf("%s: decl line = %d, want %d", tc.probe, locs[0].Range.Start.Line, tc.decl)
+		}
+	}
+}
+
 // A name in a filter condition resolves through the imports of its own
 // namespace, which the namespace's filters must not restrict — the diagnostics
 // pass resolves it that way, and the editor has to agree or rename skips it.

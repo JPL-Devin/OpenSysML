@@ -251,6 +251,7 @@ var relationshipElementForm = map[ast.RelationshipKind]relationshipEndForm{
 	ast.RelRedefines:   {"Redefinition", "redefiningFeature", "redefinedFeature"},
 	ast.RelInverseOf:   {"FeatureInverting", "invertingFeature", "featureInverted"},
 	ast.RelFeaturedBy:  {"TypeFeaturing", "featureOfType", "featuringType"},
+	ast.RelDisjoint:    {"Disjoining", "typeDisjoined", "disjoiningType"},
 }
 
 // conjugationForm is the form a `conjugate x conjugates y` member takes, which
@@ -270,6 +271,7 @@ var relationshipMemberSyntax = map[string]struct {
 	"conjugate":     {"conjugatedType", "originalType", "conjugates"},
 	"inverse":       {"invertingFeature", "featureInverted", "of"},
 	"featuring":     {"featureOfType", "featuringType", "by"},
+	"disjoint":      {"typeDisjoined", "disjoiningType", "from"},
 }
 
 // relationshipSyntax gives the source syntax that introduces a relationship

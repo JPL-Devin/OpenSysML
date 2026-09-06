@@ -122,6 +122,30 @@ func TestHoverKerMLBinaryConnectorFirstToken(t *testing.T) {
 	}
 }
 
+// Both ends of a keyword-first Disjoining are references, so hovering either
+// names the type it resolves to rather than the member it sits in.
+func TestHoverKerMLDisjoiningEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_disjoining.kerml").Filename()
+	src := "package P {\n\tclassifier A;\n\tclassifier B { feature next : B; }\n\tfeature b : B;\n\tdisjoining D disjoint A from B;\n\tdisjoint b.next from A;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for probe, want := range map[string]string{
+		"disjoint A":  "classifier A",
+		"A from B":    "classifier B",
+		"disjoint b":  "feature b",
+		"b.next":      "feature next",
+		"next from A": "classifier A",
+	} {
+		off := strings.Index(src, probe) + strings.LastIndexAny(probe, " .") + 1
+		res := hoverInSrc(t, s, name, src, off)
+		if res == nil || !strings.Contains(res.Contents.Value, want) {
+			t.Errorf("%s: hover = %+v, want %q", probe, res, want)
+		}
+	}
+}
+
 func TestHoverRendersMarkdownWhenClientSupportsIt(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

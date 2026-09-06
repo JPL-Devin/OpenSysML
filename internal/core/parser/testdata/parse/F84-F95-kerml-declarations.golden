@@ -38,11 +38,11 @@
         (Usage kind="attribute" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
       (Membership visibility="default"
         (Usage kind="attribute" name="g" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
-      (RelationshipMember kind="specializes" name="Gen" keyword="subtype" source="A" target="B" conjugated=false)
-      (RelationshipMember kind="typing" name="t1" keyword="typing" source="f" target="B" conjugated=false)
-      (RelationshipMember kind="subsets" name="Sub" keyword="subset" source="f" target="g" conjugated=false)
-      (RelationshipMember kind="featured by" name="F" keyword="featuring" source="f" target="A" conjugated=false)
-      (RelationshipMember kind="inverse" name="i" keyword="inverse" source="f" target="g" conjugated=false)
+      (RelationshipMember visibility="default" kind="specializes" name="Gen" keyword="subtype" source="A" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="typing" name="t1" keyword="typing" source="f" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="subsets" name="Sub" keyword="subset" source="f" target="g" conjugated=false)
+      (RelationshipMember visibility="default" kind="featured by" name="F" keyword="featuring" source="f" target="A" conjugated=false)
+      (RelationshipMember visibility="default" kind="inverse" name="i" keyword="inverse" source="f" target="g" conjugated=false)
       (Membership visibility="default"
         (Usage kind="attribute" name="x1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
           (Relationship kind="typing" target=A
@@ -124,7 +124,7 @@
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Usage kind="attribute" name="legalIdentification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
-      (RelationshipMember kind="redefines" name="" keyword="redefinition" source="D::vin" target="legalIdentification" conjugated=false)
+      (RelationshipMember visibility="default" kind="redefines" name="" keyword="redefinition" source="D::vin" target="legalIdentification" conjugated=false)
       (Membership visibility="default"
         (Usage kind="assoc" name="AS" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assoc struct"
           (Membership visibility="default"

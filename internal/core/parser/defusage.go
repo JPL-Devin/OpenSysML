@@ -2444,37 +2444,6 @@ func (p *Parser) parseTypeFeatureMember(start int, vis ast.Visibility, trivia []
 	return m
 }
 
-func (p *Parser) parseDisjointMember(start int, vis ast.Visibility, trivia []ast.Trivia) ast.Node {
-	p.advance() // consume 'disjoint'
-	if p.atKeyword("from") {
-		en := p.errorNodeSkip(start, "expected the disjoined type before 'from'")
-		en.SetLeadingTrivia(trivia)
-		return en
-	}
-
-	source := p.parseRelationshipTarget()
-	if !p.acceptKeyword("from") {
-		p.error(p.peek().Span, "expected 'from' after disjoint target")
-	}
-	target := p.parseRelationshipTarget()
-	p.accept2(lexer.Semicolon)
-
-	u := &ast.Usage{
-		Kind: ast.UsagePart,
-		Relationships: []*ast.Relationship{
-			{Kind: ast.RelDisjoint, Target: source},
-			{Kind: ast.RelDisjoint, Target: target},
-		},
-	}
-	u.NodeBase.NodeSpan = p.spanFrom(start)
-	u.SetLeadingTrivia(trivia)
-
-	m := &ast.Membership{Visibility: vis, Member: u}
-	m.NodeBase.NodeSpan = u.Span()
-	m.SetLeadingTrivia(trivia)
-	return m
-}
-
 // parseBodyMember parses one body member: an optional visibility prefix
 // followed by a declaration (which may be a nested def/usage). Import/Alias
 // carry their own visibility and are returned directly; other declarations are
@@ -2618,51 +2587,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseResultMember()
 	}
 
-	// Check for subset/disjoint constraint statements
-	// Pattern: subset X subsets Y; OR disjoint X from Y;
-	// These are anonymous features with relationships
-	if p.atKeyword("disjoint") {
-		return p.parseDisjointMember(start, vis, trivia)
-	}
+	// A KerML relationship written keyword-first: `subset X subsets Y;`,
+	// `disjoint X from Y;`.
 	if p.atRelationshipMember() {
 		return p.parseRelationshipMember(start, vis, trivia)
-	}
-	if p.atKeyword("subset") {
-		p.advance() // skip "subset" or "disjoint"
-
-		// Parse first target (source)
-		source := p.parseRelationshipTarget()
-
-		// Pattern: subset X subsets Y;
-		if !p.acceptKeyword("subsets") {
-			p.error(p.peek().Span, "expected 'subsets' after subset source")
-		}
-		target := p.parseRelationshipTarget()
-		p.accept2(lexer.Semicolon)
-
-		u := &ast.Usage{
-			Kind: ast.UsagePart, // Generic feature
-			Relationships: []*ast.Relationship{
-				{
-					Kind:   ast.RelSubsets,
-					Target: source,
-				},
-				{
-					Kind:   ast.RelSubsets,
-					Target: target,
-				},
-			},
-		}
-		u.NodeBase.NodeSpan = p.spanFrom(start)
-		u.SetLeadingTrivia(trivia)
-
-		m := &ast.Membership{
-			Visibility: vis,
-			Member:     u,
-		}
-		m.NodeBase.NodeSpan = u.Span()
-		m.SetLeadingTrivia(trivia)
-		return m
 	}
 
 	// Check for expose statement: expose <path>[::*|::**][filter];
@@ -3051,6 +2979,10 @@ func (p *Parser) noBodyMemberMessage() string {
 		return base + ": 'specializes' relates two types; a member refines an inherited feature by subsetting it, written 'subsets' or ':>'"
 	case "unions", "intersects", "chains", "inverse", "featured":
 		return base + ": '" + t.KeywordID + "' relates the declaration written before it, so a member cannot begin with it"
+	case "disjoint":
+		if p.peekIsKeyword(1, "from") {
+			return base + ": expected the disjoined type before 'from'"
+		}
 	}
 	return base
 }
