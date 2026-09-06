@@ -318,6 +318,24 @@ func TestSiblingRedefinitionMasksNothingInSpecializations(t *testing.T) {
 	}
 }
 
+// The owner exclusion is the redefining feature's, not each link's: a subtype
+// redefining a sibling redefinition masks the whole chain it inherits.
+func TestSubtypeRedefiningSiblingRedefinitionMasksTheChain(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; part b redefines a; }"+
+			" part def B specializes A { part c redefines b; }"+
+			" part def C specializes B; part d : C;")
+	for _, name := range []string{"B", "C", "d"} {
+		names := visibleNames(m, sym(t, root, name))
+		if names["a"] != 0 || names["b"] != 0 || names["c"] != 1 {
+			t.Fatalf("%s must offer c alone: %v", name, names)
+		}
+	}
+	if names := visibleNames(m, sym(t, root, "A")); names["a"] != 1 || names["b"] != 1 {
+		t.Fatalf("A keeps both of its own features: %v", names)
+	}
+}
+
 // Masking is keyed by element, not by visibility: the member view drops what a
 // redefinition masks whatever the redefined membership's visibility is, and the
 // visibility filter is the caller's (KerML 8.2.3.5 composes with 7.4.7).

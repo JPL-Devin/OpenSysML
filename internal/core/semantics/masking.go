@@ -266,20 +266,24 @@ func (m *Model) redefinitionMaskExcluding(sym, exclude *symbols.Symbol) map[*sym
 	})
 }
 
-// buildMask closes candidates' redefinitions transitively into the set of
+// buildMask closes each candidate's redefinitions transitively into the set of
 // elements sym does not inherit.
 func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map[*symbols.Symbol]bool {
 	mask := make(map[*symbols.Symbol]bool)
-	pending := candidates
-	for i := 0; i < len(pending); i++ {
-		redefining := pending[i]
-		for _, target := range m.maskingRedefinedFeatures(redefining) {
-			if target == sym || mask[target] {
-				continue
+	for _, candidate := range candidates {
+		reached := map[*symbols.Symbol]bool{sym: true}
+		pending := []*symbols.Symbol{candidate}
+		for i := 0; i < len(pending); i++ {
+			for _, target := range m.RedefinedFeatures(pending[i]) {
+				if reached[target] {
+					continue
+				}
+				reached[target] = true
+				pending = append(pending, target) // a redefined feature's own targets are masked too
 			}
-			mask[target] = true
-			pending = append(pending, target) // a redefined feature's own targets are masked too
 		}
+		delete(reached, sym)
+		m.addMasked(mask, candidate, reached)
 	}
 	// A local declaration is present whatever it redefines.
 	if sym.Scope != nil {
@@ -311,9 +315,7 @@ func (m *Model) buildMaskFromCandidates(
 			fallback = true
 			return false
 		}
-		for target := range closure {
-			mask[target] = true
-		}
+		m.addMasked(mask, candidate, closure)
 		return true
 	})
 	if fallback {
@@ -336,18 +338,15 @@ func (m *Model) buildMaskFromCandidates(
 	return mask
 }
 
-// maskingRedefinedFeatures is RedefinedFeatures less the targets redefining's own
-// owner declares: a redefinition affects only what its owner inherits.
-func (m *Model) maskingRedefinedFeatures(redefining *symbols.Symbol) []*symbols.Symbol {
-	targets := m.RedefinedFeatures(redefining)
-	out := make([]*symbols.Symbol, 0, len(targets))
-	for _, target := range targets {
+// addMasked adds redefining's closure to mask, less the features its own owner
+// declares: a redefinition affects only what its owner inherits.
+func (m *Model) addMasked(mask map[*symbols.Symbol]bool, redefining *symbols.Symbol, closure map[*symbols.Symbol]bool) {
+	for target := range closure {
 		if redefining.OwnerScope != nil && target.OwnerScope == redefining.OwnerScope {
 			continue
 		}
-		out = append(out, target)
+		mask[target] = true
 	}
-	return out
 }
 
 // redefinitionClosure returns the targets reached from candidate, transitively.
@@ -364,7 +363,7 @@ func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Sym
 	m.computingRedefClosure[candidate] = true
 	out := make(map[*symbols.Symbol]bool)
 	cyclic := false
-	for _, target := range m.maskingRedefinedFeatures(candidate) {
+	for _, target := range m.RedefinedFeatures(candidate) {
 		out[target] = true
 		child, childCyclic := m.redefinitionClosure(target)
 		if childCyclic {
