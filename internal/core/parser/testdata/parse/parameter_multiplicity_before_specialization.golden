@@ -1,0 +1,191 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ParameterMultiplicityBeforeSpecialization" library=false standard=false
+      (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Integer" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="In"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act"
+          (Relationship kind="specializes" target=In
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=In::x
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act2"
+          (Relationship kind="specializes" target=In
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=In::x
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act3"
+          (Relationship kind="specializes" target=In
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=In::x
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Out"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="o" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act4"
+          (Relationship kind="specializes" target=Out
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="o" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=Out::o
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="InOut"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="io" ref=false direction="inout" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act5"
+          (Relationship kind="specializes" target=InOut
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="io" ref=false direction="inout" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=InOut::io
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Many"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Act6"
+          (Relationship kind="specializes" target=Many
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=Many::xs
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="CBase"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="r" ref=false direction="out" composite=false derived=false ordered=true nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity)))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="C"
+          (Relationship kind="specializes" target=CBase
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=CBase::a
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=true nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (Relationship kind="redefines" target=CBase::r
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInteger value="1")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="CMany"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="bs" ref=false direction="in" composite=false derived=false ordered=true nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="r" ref=false direction="out" composite=false derived=false ordered=true nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity)))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="C2"
+          (Relationship kind="specializes" target=CMany
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="bs" ref=false direction="in" composite=false derived=false ordered=true nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=CMany::bs
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Usage kind="attribute" name="r" ref=false direction="out" composite=false derived=false ordered=true nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (Relationship kind="redefines" target=CMany::r
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInteger value="1")))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="A"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="w" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="B"
+          (Relationship kind="specializes" target=A
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="w" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=A::w
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="w2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Relationship kind="subsets" target=A::w
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1")))))))))

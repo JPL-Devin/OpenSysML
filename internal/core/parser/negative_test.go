@@ -378,6 +378,17 @@ func TestNegative(t *testing.T) {
 		// DefinitionDeclaration, UsageDeclaration).
 		{"name_before_usage_keyword", "part def B { foo attribute bar : A; }"},
 		{"name_before_definition_keyword", "package P { x part def Q; }"},
+
+		// A specialization following a parameter's multiplicity still names its
+		// target and closes its multiplicity (KerML.xtext:574).
+		{"parameter_multiplicity_redefines_no_target", "action def A { in x : Integer[1] redefines ; }"},
+		{"parameter_multiplicity_redefines_symbol_no_target", "action def A { in x : Integer[1] :>> ; }"},
+		{"parameter_multiplicity_ordered_subsets_no_target", "action def A { in xs : Integer[*] ordered :> ; }"},
+		{"parameter_multiplicity_unclosed_before_redefines", "action def A { in x : Integer[1 redefines A::x; }"},
+		{"parameter_multiplicity_redefines_no_terminator", "action def A { in x : Integer[1] redefines A::x }"},
+		{"out_parameter_multiplicity_redefines_no_target", "action def A { out x : Integer[1] redefines ; }"},
+		{"inout_parameter_multiplicity_redefines_no_target", "action def A { inout x : Integer[1] :>> ; }"},
+		{"return_multiplicity_redefines_no_target", "calc def C { return : Integer[1] ordered :>> ; }"},
 	}
 
 	for _, tt := range tests {
@@ -667,6 +678,19 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
 		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
+
+		// An end's crossing multiplicity is followed by its end (KerML.xtext:854), so
+		// one followed by nothing or the other end's keyword, or left unclosed, is reported.
+		{"binding_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] = b; }"},
+		{"binding_end_multiplicity_unclosed", "package P { feature a; feature b; binding [1 a = b; }"},
+		{"binding_second_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] a = [1] ; }"},
+		{"binding_end_multiplicity_no_terminator", "package P { feature a; feature b; binding [1] a = [1] b }"},
+		{"succession_end_multiplicity_no_end", "package P { behavior B { step a; step b; succession [1] then b; } }"},
+		{"succession_end_multiplicity_unclosed", "package P { behavior B { step a; step b; succession [1 a then b; } }"},
+		{"succession_second_end_multiplicity_no_end", "package P { behavior B { step a; step b; succession [1] a then [1] ; } }"},
+		{"succession_end_multiplicity_no_terminator", "package P { behavior B { step a; step b; succession [1] a then [1] b } }"},
+		{"succession_named_end_no_target", "package P { behavior B { step a; step b; succession [1] e ::> then b; } }"},
+		{"succession_global_end_no_name", "package P { behavior B { step a; step b; succession [1] $:: then b; } }"},
 
 		// A named multiplicity states bounds or a subsetting, and the
 		// subsetting names one multiplicity (KerML.xtext:754).
