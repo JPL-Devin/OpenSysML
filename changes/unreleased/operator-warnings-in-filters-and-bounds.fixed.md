@@ -7,4 +7,5 @@
   writes is covered: a `multiplicity m [lo..hi]` declaration, a body parameter's `in x : T[lo..hi]`,
   a cast's, a connector end's, a cross feature's and a subject's or assume/require's. The members
   a `multiplicity` or `specialization` declaration owns in its body are type-checked like any other
-  body's, so an invalid cast or value in them is reported too.
+  body's, so an invalid cast or value in them is reported too, also when the declaration sits under
+  a definition or package that a filter's expression body declares.

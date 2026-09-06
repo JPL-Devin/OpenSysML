@@ -122,25 +122,34 @@ func (ec *exprChecker) checkUsageBounds(scope *symbols.Scope, u *ast.Usage) {
 func (ec *exprChecker) checkMemberOperators(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		m = unwrapType(m)
-		d, ok := featureDeclOf(m)
-		if !ok {
-			switch n := m.(type) {
-			case *ast.MultiplicityDecl:
-				ec.checkBoundOperators(scope, n.Range)
-				ec.checkMemberOperators(childScopeOr(scope, n), n.Members)
-			case *ast.RelationshipMember:
-				ec.checkMemberOperators(childScopeOr(scope, n), n.Members)
+		if d, ok := featureDeclOf(m); ok {
+			ec.checkOperatorRules(scope, d.value)
+			if u, ok := m.(*ast.Usage); ok {
+				ec.checkUsageBounds(scope, u)
+			} else {
+				ec.checkBoundOperators(scope, d.multiplicity)
 			}
-			continue
 		}
-		ec.checkOperatorRules(scope, d.value)
-		if u, ok := m.(*ast.Usage); ok {
-			ec.checkUsageBounds(scope, u)
-			if child := childScopeOf(scope, u); child != nil {
-				ec.checkMemberOperators(child, u.Members)
-			}
-		} else {
-			ec.checkBoundOperators(scope, d.multiplicity)
+		var nested []ast.Node
+		switch n := m.(type) {
+		case *ast.Usage:
+			nested = n.Members
+		case *ast.Definition:
+			ec.checkBoundOperators(scope, n.Multiplicity)
+			ec.checkRelationshipBounds(scope, n.Relationships)
+			nested = n.Members
+		case *ast.MultiplicityDecl:
+			ec.checkBoundOperators(scope, n.Range)
+			nested = n.Members
+		case *ast.RelationshipMember:
+			nested = n.Members
+		case *ast.Package:
+			nested = n.Members
+		case *ast.Namespace:
+			nested = n.Members
+		}
+		if child := childScopeOf(scope, m); child != nil {
+			ec.checkMemberOperators(child, nested)
 		}
 	}
 }
