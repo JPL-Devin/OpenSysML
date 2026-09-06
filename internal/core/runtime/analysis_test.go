@@ -305,8 +305,9 @@ func TestObjectivesOfInheritedProjectConditions(t *testing.T) {
 	}
 }
 
-// An objective restating an inherited one stands where it is restated and takes
-// the value it states there, the objective it restates being the same objective.
+// An objective restating an inherited one, by redefinition or by name, is the same
+// objective declared again: it keeps the inherited place in the lexicographic
+// order and takes the value it states, whichever general it is inherited through.
 // Its `eval` binds the inherited result rather than stating a second result
 // expression, which the pilot rejects.
 func TestObjectivesOfRedeclared(t *testing.T) {
@@ -332,12 +333,40 @@ func TestObjectivesOfRedeclared(t *testing.T) {
 					in calc :>> eval { return :>> result = cost + 1; }
 				}
 			}
+			analysis def Renamed :> Base {
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = cost + 2; }
+				}
+			}
+			analysis def Other :> Base;
+			analysis def Diamond :> Other, Refined;
+			analysis def Reversed :> Refined, Other;
+			analysis def Positional :> Base {
+				objective;
+			}
+			analysis def Twice :> Positional {
+				objective { subject :>> selectedAlternative; }
+			}
+			analysis def Narrowed :> Refined {
+				objective : MinimizeObjective;
+			}
 		}
 	`)
-	got := objectiveLabels(objectivesOfCase(t, ctx, scope, "Refined"))
-	want := "maximize widest = margin; minimize cheapest = cost + 1"
-	if got != want {
-		t.Errorf("objectives are [%s], want [%s]", got, want)
+	for _, tc := range []struct{ name, want string }{
+		{"Refined", "minimize cheapest = cost + 1; maximize widest = margin"},
+		{"Renamed", "minimize cheapest = cost + 2; maximize widest = margin"},
+		{"Diamond", "minimize cheapest = cost + 1; maximize widest = margin"},
+		{"Reversed", "minimize cheapest = cost + 1; maximize widest = margin"},
+		// A positional restatement stating no `eval` keeps the inherited value.
+		{"Positional", "minimize cheapest = cost; maximize widest = margin"},
+		{"Twice", "minimize cheapest = cost; maximize widest = margin"},
+		{"Narrowed", "minimize cheapest = cost + 1; maximize widest = margin"},
+	} {
+		got := objectiveLabels(objectivesOfCase(t, ctx, scope, tc.name))
+		if got != tc.want {
+			t.Errorf("%s: objectives are [%s], want [%s]", tc.name, got, tc.want)
+		}
 	}
 }
 
@@ -510,5 +539,41 @@ func TestObjectivesOfAnalysisUsage(t *testing.T) {
 	sym := requirementNamed(t, scope, "trade")
 	if conds := labelsOf(ctx.CaseConditionsOf(sym, sym.OwnerScope)); conds != "required size >= 2" {
 		t.Errorf("conditions are [%s], want [required size >= 2]", conds)
+	}
+}
+
+// A restatement deeper in one branch of a diamond stands for the common
+// ancestor's objective seen through the other branch, in whichever order the
+// generals are written and traversed, and goes by the name it inherits.
+func TestObjectivesOfUnevenDiamond(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Base {
+				attribute cost : Integer;
+				attribute margin : Integer;
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { cost }
+				}
+			}
+			analysis def A :> Base;
+			analysis def Mid :> Base {
+				objective : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = cost + margin; }
+				}
+			}
+			analysis def B :> Mid;
+			analysis def D :> A, B;
+			analysis def Reversed :> B, A;
+		}
+	`)
+	for _, name := range []string{"D", "Reversed"} {
+		got := objectiveLabels(objectivesOfCase(t, ctx, scope, name))
+		if want := "minimize cheapest = cost + margin"; got != want {
+			t.Errorf("%s: objectives are [%s], want [%s]", name, got, want)
+		}
 	}
 }

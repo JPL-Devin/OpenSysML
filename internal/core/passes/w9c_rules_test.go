@@ -591,6 +591,34 @@ func TestW9CMultiTypedValuesSysML(t *testing.T) {
 	w9cWantLines(t, src, "bound-feature-types", 10, 12, 13, 14, 23, 24, 29, 30, 35, 36, 39, 41)
 }
 
+// A satisfy-by is judged against the subject that survives redefinition through a
+// diamond, whichever branch is written first and whether the restating branch is a
+// general or a referenced usage. The pinned pilot agrees line for line.
+func TestW9CSatisfySubjectRedefinedThroughDiamond(t *testing.T) {
+	src := `package Test {
+	part def A;
+	part def B :> A;
+	part def X :> A;
+	part b : B;
+	part x : X;
+	requirement def Base { subject s : A; }
+	requirement def L :> Base;
+	requirement r : Base { subject s2 : B :>> s; }
+	requirement d : L ::> r;
+	requirement def D :> L, Base { subject s3 : B :>> s; }
+	requirement def E :> L, D;
+	requirement def F :> D, L;
+	part def Sys {
+		satisfy d by x;
+		satisfy requirement e : E by x;
+		satisfy requirement f : F by x;
+		satisfy requirement g : L by x;
+		satisfy requirement h : E by b;
+	}
+}`
+	w9cWantLines(t, src, "bound-feature-types", 15, 16, 17)
+}
+
 // Operator results are judged by the library function's declared result: a
 // data value never fills a part, a Boolean never a Meters, while a conditional
 // or `??` (typed Anything) and arithmetic bound to a data type stay silent. The

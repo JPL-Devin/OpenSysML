@@ -340,6 +340,115 @@ func TestObjectiveWithGuardedDivision(t *testing.T) {
 	}
 }
 
+// TestDerivedAnalysisObjectivesRedefineByPosition: an analysis definition or
+// usage restating its general's several objectives without naming them takes
+// each one's direction at the same position, and the restatement stands in for
+// the objective it redefines rather than beside it (which, being valueless,
+// would refuse the whole analysis). A general restating only its first objective
+// still hands its second one down at that position.
+func TestDerivedAnalysisObjectivesRedefineByPosition(t *testing.T) {
+	ctx, idx := fixture(t, "derived_objectives.sysml", `package test {
+		private import ScalarValues::*;
+		private import TradeStudies::*;
+		analysis def Base {
+			attribute cost : Integer;
+			attribute margin : Integer;
+			require constraint { cost >= 1 and cost <= 9 }
+			require constraint { margin >= 0 and margin <= cost }
+			objective cheapest : MinimizeObjective;
+			objective widestMargin : MaximizeObjective;
+		}
+		analysis def Derived :> Base {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+		analysis d : Base {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+		analysis def Mid :> Base { objective { in calc :>> eval { cost } } }
+		analysis def ViaMid :> Mid {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+		analysis viaMid : Mid {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+	}`)
+	for _, name := range []string{"test::Derived", "test::d", "test::ViaMid", "test::viaMid"} {
+		sym := symbolNamed(t, idx, name)
+		objectives := ctx.ObjectivesOf(sym, sym.OwnerScope)
+		if len(objectives) != 2 {
+			t.Fatalf("%s states %d objectives, want its 2 restatements: %+v", name, len(objectives), objectives)
+		}
+		want := []struct {
+			direction runtime.ObjectiveDirection
+			typ, text string
+		}{{runtime.Minimize, "MinimizeObjective", "cost + 1"}, {runtime.Maximize, "MaximizeObjective", "margin"}}
+		for i, w := range want {
+			got := objectives[i]
+			if got.Direction != w.direction || got.Type == nil || got.Type.Name != w.typ || got.Text() != w.text {
+				t.Errorf("%s objective %d = %v %v %q, want %v %s %q", name, i, got.Direction, got.Type, got.Text(), w.direction, w.typ, w.text)
+			}
+		}
+		q, err := Analysis(ctx, sym, sym.OwnerScope)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		script := Script(q)
+		for _, line := range []string{"(minimize (+ |test::Base::cost| 1))", "(maximize |test::Base::margin|)"} {
+			if strings.Count(script, line) != 1 {
+				t.Errorf("%s script states %q %d times, want once:\n%s", name, line, strings.Count(script, line), script)
+			}
+		}
+	}
+}
+
+// TestPositionalObjectivesInheritValues: a positional restatement stating no
+// `eval` of its own keeps the inherited value, also through a chain of them,
+// so the analysis solves instead of being refused as valueless.
+func TestPositionalObjectivesInheritValues(t *testing.T) {
+	ctx, idx := fixture(t, "positional_objectives.sysml", `package test {
+		private import ScalarValues::*;
+		private import TradeStudies::*;
+		analysis def Base {
+			attribute cost : Integer;
+			attribute margin : Integer;
+			require constraint { cost >= 1 and cost <= 9 }
+			require constraint { margin >= 0 and margin <= cost }
+			objective cheapest : MinimizeObjective { in calc :>> eval { cost } }
+			objective widestMargin : MaximizeObjective { in calc :>> eval { margin } }
+		}
+		analysis def Derived :> Base { objective; }
+		analysis def Twice :> Derived {
+			objective;
+			objective { in calc :>> eval { margin - 1 } }
+		}
+		analysis d : Twice { objective : MinimizeObjective; }
+	}`)
+	for name, want := range map[string][]string{
+		"test::Derived": {"(minimize |test::Base::cost|)", "(maximize |test::Base::margin|)"},
+		"test::Twice":   {"(minimize |test::Base::cost|)", "(maximize (- |test::Base::margin| 1))"},
+		"test::d":       {"(minimize |test::Base::cost|)", "(maximize (- |test::Base::margin| 1))"},
+	} {
+		sym := symbolNamed(t, idx, name)
+		if objectives := ctx.ObjectivesOf(sym, sym.OwnerScope); len(objectives) != 2 || objectives[0].Name != "cheapest" || objectives[1].Name != "widestMargin" {
+			t.Fatalf("%s states %+v, want cheapest then widestMargin", name, objectives)
+		}
+		q, err := Analysis(ctx, sym, sym.OwnerScope)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		script := Script(q)
+		for _, line := range want {
+			if strings.Count(script, line) != 1 {
+				t.Errorf("%s script states %q %d times, want once:\n%s", name, line, strings.Count(script, line), script)
+			}
+		}
+	}
+}
+
 // TestObjectiveRefusals: every objective outside the translatable subset refuses
 // with a typed error naming why and where, rather than being skipped.
 func TestObjectiveRefusals(t *testing.T) {

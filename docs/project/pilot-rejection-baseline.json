@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 259,
-        "digest": "sha256:4bedb650478ed9eb8f98e1d976b6751114640f3850615dc159a96636784df4f4"
+        "files": 263,
+        "digest": "sha256:af10e9960b937a3e9c9a9f835af4fbcec447951e80a742edfa3985fe1fd6b46f"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 259,
-    "bothReject": 250,
+    "cases": 263,
+    "bothReject": 254,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 125,
-      "bothReject": 116,
+      "cases": 129,
+      "bothReject": 120,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -2110,6 +2110,42 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
+      "source": "semantic",
+      "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s90-requirement-def-inherits-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A requirement definition inheriting a subject from each of two generals has two subjects (SysML 7.20 Requirements; pilot validateRequirementDefinitionOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s91-case-references-second-objective.sysml",
+      "source": "semantic",
+      "rule": "A case usage inherits an objective from its definition and another from the case it reference-subsets, so it has two (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s92-requirement-references-second-subject.sysml",
+      "source": "semantic",
+      "rule": "A requirement usage inherits a subject from its definition and another from the requirement it reference-subsets, so it has two (SysML 7.20 Requirements; pilot validateRequirementUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2484,8 +2520,8 @@
       }
     ],
     "totals": {
-      "cases": 259,
-      "bothReject": 250,
+      "cases": 263,
+      "bothReject": 254,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
