@@ -662,6 +662,9 @@ func RequireConstraint(sym *symbols.Symbol) error {
 	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
 		return nil
 	}
+	if ast.ConstraintReferenceOf(sym.Decl) != nil {
+		return nil
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind == ast.DefConstraint {

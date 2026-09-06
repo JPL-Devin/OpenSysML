@@ -1428,7 +1428,7 @@ func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) 
 	if !declared {
 		return nil, "", false
 	}
-	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName {
+	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName() {
 		return nil, "", false
 	}
 	return sym.Decl, fqn, true

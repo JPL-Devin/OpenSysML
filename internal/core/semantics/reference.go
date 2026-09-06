@@ -62,9 +62,7 @@ func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
 		return end.ReferencedTarget()
 	}
 	for _, rel := range RelationshipsOf(sym) {
-		// `include 'add fuel'` is an OwnedReferenceSubsetting in the grammar
-		// (SysML.xtext IncludeUseCaseUsage), so an inclusion contributes too.
-		if rel != nil && (rel.Kind == ast.RelReferences || rel.Kind == ast.RelIncludes) && rel.Target != nil {
+		if rel != nil && rel.Kind.ReferenceSubsets() && rel.Target != nil {
 			return rel.Target
 		}
 	}

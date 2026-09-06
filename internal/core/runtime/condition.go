@@ -203,13 +203,13 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
-		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
+		out = ctx.appendReferencedConditions(out, m, m.Reference, scope, true, seen)
 		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
-		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
+		out = ctx.appendReferencedConditions(out, m, m.Reference, scope, false, seen)
 		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
 	case *ast.Membership:
 		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
@@ -339,12 +339,12 @@ func statementKeyword(node ast.Node) (string, bool) {
 // reference-subsets a requirement states: that requirement's own conditions,
 // which requiring it requires. A reference naming anything else, or one that
 // does not resolve, states the condition its name evaluates to.
-func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.QualifiedName, scope *symbols.Scope,
+func (ctx *Context) appendReferencedConditions(out []Condition, decl ast.Node, ref *ast.QualifiedName, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
 	if ref == nil || len(ref.Parts) == 0 {
 		return out
 	}
-	sym := ctx.referencedRequirement(scope, ref)
+	sym := ctx.referencedRequirement(scope, decl, ref)
 	if sym == nil {
 		return append(out, Condition{Expr: ref, Scope: scope, Required: required})
 	}
@@ -363,14 +363,14 @@ func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.Qualifi
 	return append(out, conds...)
 }
 
-// referencedRequirement resolves the requirement or constraint a require/assume
-// member reference-subsets, and returns nil when the reference names anything
-// else or does not resolve.
-func (ctx *Context) referencedRequirement(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+// referencedRequirement resolves the requirement or constraint the require/assume
+// member decl reference-subsets, and returns nil when the reference names
+// anything else or does not resolve.
+func (ctx *Context) referencedRequirement(scope *symbols.Scope, decl ast.Node, ref *ast.QualifiedName) *symbols.Symbol {
 	if ctx.resolver == nil {
 		return nil
 	}
-	sym, ok := ctx.resolver.ResolveQualified(scope, ref)
+	sym, ok := ctx.resolver.ResolveReferenceTarget(scope, decl, ref)
 	if !ok || sym == nil {
 		return nil
 	}

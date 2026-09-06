@@ -69,7 +69,7 @@ func TestBuildOwnedConstraintBorrowsRedefinedName(t *testing.T) {
 	if len(syms) != 1 {
 		t.Fatalf("S declares %d symbols named c, want 1", len(syms))
 	}
-	if !syms[0].EffectiveName || syms[0].NamingTarget == nil {
+	if !syms[0].EffectiveName() || syms[0].NamingTarget == nil {
 		t.Error("c's name is not recorded as borrowed from its redefinition")
 	}
 }
@@ -117,7 +117,7 @@ func TestBuildUnnamedOwnedConstraintsAreAnonymousMembers(t *testing.T) {
 		t.Fatalf("R has %d anonymous constraint usages, want 2", len(anon))
 	}
 	for _, sym := range anon {
-		if sym.Name != "" || sym.EffectiveName || sym.OwnerScope != r.Scope || sym.Scope == nil || sym.Scope.Owner() != sym {
+		if sym.Name != "" || sym.EffectiveName() || sym.OwnerScope != r.Scope || sym.Scope == nil || sym.Scope.Owner() != sym {
 			t.Errorf("%T: not an anonymous constraint usage R owns with a scope of its own", sym.Decl)
 		}
 		if ConstraintBodyScope(r.Scope, sym.Decl) != sym.Scope {

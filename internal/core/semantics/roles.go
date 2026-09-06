@@ -11,6 +11,9 @@ const (
 	noCaseRole caseRole = iota
 	subjectRole
 	objectiveRole
+	// renderingRole is a view's `render` member: every one redefines the
+	// library `viewRendering`, so it hides the one its view inherits.
+	renderingRole
 )
 
 // ImplicitRoleRedefinitions returns the same-role features of the owner's generals
@@ -21,15 +24,19 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	if !behaviorLike(owner) {
+	playsRole := behaviorLike
+	if role == renderingRole {
+		playsRole = IsView
+	}
+	if owner == nil || !playsRole(owner) {
 		return nil
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
 	seenRoles := m.explicitRedefinitions(sym)
 	for _, sup := range m.DirectSupertypes(owner) {
-		if behaviorLike(sup) {
-			for _, inherited := range m.effectiveRoles(sup, role, seenCases) {
+		if playsRole(sup) {
+			for _, inherited := range m.effectiveRoles(sup, role, playsRole, seenCases) {
 				if !seenRoles[inherited] {
 					seenRoles[inherited] = true
 					out = append(out, inherited)
@@ -46,14 +53,14 @@ func (m *Model) SubjectParameterOf(sym *symbols.Symbol) *symbols.Symbol {
 	if m == nil || sym == nil {
 		return nil
 	}
-	subjects := m.effectiveRoles(sym, subjectRole, map[*symbols.Symbol]bool{})
+	subjects := m.effectiveRoles(sym, subjectRole, behaviorLike, map[*symbols.Symbol]bool{})
 	if len(subjects) == 0 {
 		return nil
 	}
 	return subjects[0]
 }
 
-func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, playsRole func(*symbols.Symbol) bool, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sym == nil || seen[sym] {
 		return nil
 	}
@@ -63,8 +70,8 @@ func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*sym
 	}
 	var out []*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(sym) {
-		if behaviorLike(sup) {
-			out = append(out, m.effectiveRoles(sup, role, seen)...)
+		if playsRole(sup) {
+			out = append(out, m.effectiveRoles(sup, role, playsRole, seen)...)
 		}
 	}
 	return out
@@ -110,6 +117,8 @@ func roleOfNode(node ast.Node) caseRole {
 			return subjectRole
 		case ast.UsageObjective:
 			return objectiveRole
+		case ast.UsageViewRendering:
+			return renderingRole
 		}
 	}
 	return noCaseRole

@@ -1,7 +1,7 @@
 {
 	"type": "action",
 	"outputs": {
-		"x": {
+		"sx": {
 			"type": "Integer",
 			"value": 5
 		},

@@ -100,11 +100,7 @@ func (f *refFilter) hides(sym *symbols.Symbol) bool {
 // feature is itself the feature of that name here (KerML 7.3.4.5), so it is a
 // valid target, while a borrowed binding never is.
 func namedByReference(sym *symbols.Symbol) bool {
-	if !sym.EffectiveName {
-		return false
-	}
-	rel := ast.DeclNamingFeature(sym.Decl)
-	return rel == nil || rel.Kind != ast.RelRedefines
+	return sym.Naming == symbols.NamedByReference
 }
 
 // declNode returns the declaration f hides the bindings of, if any.
@@ -180,10 +176,20 @@ func (f *refFilter) lookupLocal(scope *symbols.Scope, name string) (*symbols.Sym
 	return symbols.PreferDeclared(visible)[0], true
 }
 
+// referenceFilter is the filter a reference subsetting owned by decl resolves
+// its target under; a chain target's prefix is looked up unhidden (see forPrefix).
+func referenceFilter(decl ast.Node, target ast.Node) *refFilter {
+	hide := &refFilter{decl: decl}
+	if _, ok := target.(*ast.FeatureChainExpr); ok {
+		hide = hide.forPrefix()
+	}
+	return hide
+}
+
 // ResolveReferenceTarget resolves the target of a reference subsetting owned by
 // decl, which is declared in scope.
 func (r *Resolver) ResolveReferenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) (*symbols.Symbol, bool) {
-	return r.resolveTarget(scope, target, &refFilter{decl: decl})
+	return r.resolveTarget(scope, target, referenceFilter(decl, target))
 }
 
 // Reference describes one occurrence of a name to resolve on its own, outside a

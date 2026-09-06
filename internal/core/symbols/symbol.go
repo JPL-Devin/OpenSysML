@@ -313,15 +313,37 @@ type Symbol struct {
 	// Empty if the declaration states none.
 	ShortName string
 
-	// EffectiveName reports that Name was taken from the feature this
-	// declaration references rather than declared (KerML Feature::effectiveName).
-	EffectiveName bool
+	// Naming records how the symbol came by its Name: declared, or derived
+	// from its naming feature (KerML 7.3.4.5 Feature::effectiveName).
+	Naming Naming
 
-	// NamingTarget is the reference that named this symbol when EffectiveName
-	// is set: the target of its reference subsetting or redefinition. Resolving
+	// NamingTarget is the reference that named this symbol when Naming is
+	// derived: the target of its reference subsetting or redefinition. Resolving
 	// that reference must not see the name it gave away, or it would resolve to
 	// the feature that borrowed it (KerML 7.3.4.5).
 	NamingTarget ast.Node
+}
+
+// Naming tells where a symbol's Name comes from.
+type Naming uint8
+
+const (
+	// NamedByDeclaration: Name is the declared name, or empty.
+	NamedByDeclaration Naming = iota
+
+	// NamedByReference: Name is the name of the feature the declaration
+	// references (`perform a;`), an ordinary member name that hides nothing.
+	NamedByReference
+
+	// NamedByRedefinition: Name is the name of the feature the declaration
+	// redefines (`part :>> p;`), which it replaces in its owner.
+	NamedByRedefinition
+)
+
+// EffectiveName reports whether Name was derived from a naming feature
+// rather than declared.
+func (s *Symbol) EffectiveName() bool {
+	return s.Naming != NamedByDeclaration
 }
 
 // AnnotationFacts is one metadata annotation reduced to names and constants: the

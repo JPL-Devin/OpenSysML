@@ -269,19 +269,19 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d, d.Prefixes)
-		r.resolveExpr(scope, d.Expression)
+		r.resolveCondition(scope, d, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
-		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d, d.Reference), d.Body)
 		return true
 	case *ast.RequireMember:
 		r.resolvePrefixes(scope, d, d.Prefixes)
-		r.resolveExpr(scope, d.Expression)
+		r.resolveCondition(scope, d, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
-		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d, d.Reference), d.Body)
 		return true
 	default:
 		return false
@@ -595,25 +595,20 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 					continue
 				}
 			}
-			if rel.Kind == ast.RelReferences && isImplicitCalcResult(scope, target) {
+			if rel.Kind.ReferenceSubsets() && isImplicitCalcResult(scope, target) {
 				continue
 			}
 
 			// A reference subsetting resolves its leading segment past the
 			// name decl borrows from it; memoizing that result makes the
 			// chain walk below see the referenced feature, not decl.
-			if rel.Kind == ast.RelReferences {
-				hide := &refFilter{
-					decl: decl,
-				}
+			if rel.Kind.ReferenceSubsets() {
+				hide := referenceFilter(decl, target)
 				// A connector end's participant is featured where the connector
 				// is, so a feature of the connector itself is not one
 				// (KerML 8.3.4.5).
 				if u, ok := decl.(*ast.Usage); ok && u.IsEnd && declaresConnector(scope) {
 					hide.featuredBy = scope
-				}
-				if _, ok := target.(*ast.FeatureChainExpr); ok {
-					hide = hide.forPrefix()
 				}
 				if _, ok := target.(*ast.QualifiedName); ok {
 					r.resolveTarget(scope, target, hide)
@@ -739,13 +734,24 @@ func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
 	return name != "" && qn.Parts[0].Text == name
 }
 
+// resolveCondition resolves the condition expression of the require/assume
+// member decl; a lone name is the reference form, so it resolves as one.
+func (r *Resolver) resolveCondition(scope *symbols.Scope, decl ast.Node, expr ast.Node) {
+	if ref := ast.ConditionReference(decl); ref != nil {
+		r.resolveTarget(scope, ref, referenceFilter(decl, ref))
+		return
+	}
+	r.resolveExpr(scope, expr)
+}
+
 // resolveConstraintReference resolves the requirement a require/assume member
-// subsets by reference (SysML.xtext RequirementConstraintUsage).
-func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+// decl subsets by reference (SysML.xtext RequirementConstraintUsage); the member
+// borrows its name, so it is no target of its own.
+func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, decl ast.Node, ref *ast.QualifiedName) *symbols.Symbol {
 	if ref == nil || len(ref.Parts) == 0 {
 		return nil
 	}
-	sym, ok := r.ResolveQualified(scope, ref)
+	sym, ok := r.resolveTarget(scope, ref, referenceFilter(decl, ref))
 	if !ok {
 		return nil
 	}
@@ -904,7 +910,7 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 	if !ok || sym == nil || sym.Decl == decl {
 		return false
 	}
-	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName) {
+	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName()) {
 		return false
 	}
 	r.recordRedefined(qn, sym, true)
@@ -936,10 +942,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		return
 	}
 
-	hide := &refFilter{
-		decl:             decl,
-		skipBorrowedName: true,
-	}
+	hide := &refFilter{decl: decl}
 	r.Enter()
 
 	if len(qn.Parts) == 1 {

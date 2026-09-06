@@ -226,23 +226,35 @@ func TestInheritedNameConflictExemptsRedefiningFeatures(t *testing.T) {
 	}
 }
 
-// `render r;` names the rendering the view uses and declares no member of its
-// own (SysML.xtext ViewRenderingUsage), so it does not conflict with the
-// inherited rendering it names, and the name resolves to that rendering.
-func TestRenderReferenceToInheritedRenderingIsNoConflict(t *testing.T) {
+// `render r;` is named by the rendering it references (SysML
+// RenderingUsage::namingFeature), so it is an owned member `r` that duplicates
+// the inherited `r` it does not redefine, as the pilot reports.
+func TestRenderReferenceToInheritedRenderingDuplicatesIt(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		rendering def AsTree;
 		view def Base { rendering r : AsTree; }
 		view def Derived :> Base { render r; }
+	}`)
+	if len(got) != 1 || got[0].Code != "name-conflict" || got[0].Severity != SeverityWarning {
+		t.Fatalf("got %+v, want one name-conflict warning", got)
+	}
+}
+
+// The rendering `render r;` names inside a view of `H` is the one `H` renders,
+// which the reference form redefines, so the name is no duplicate there.
+func TestRenderReferenceToOwnRenderingIsNoConflict(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		rendering def AsTree;
+		view def H { render rendering r : AsTree; }
+		view h : H { render r; }
 	}`)
 	if len(got) != 0 {
 		t.Fatalf("got %+v, want no diagnostics", got)
 	}
 }
 
-// A rendering the view declares for itself does conflict with an inherited one
-// of the same name, exactly as any other declaration does: only the reference
-// form declares nothing.
+// A rendering the view declares for itself conflicts with an inherited one of
+// the same name, exactly as any other declaration does.
 func TestRenderDeclarationOfInheritedNameConflicts(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		rendering def AsTree;

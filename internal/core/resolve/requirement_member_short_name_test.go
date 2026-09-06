@@ -26,8 +26,8 @@ const requirementMemberShortNameModel = `package P {
 		subject <s2> y :>> R::s;
 	}
 	requirement def R4 :> R {
-		subject <alias> :>> x;
-		require constraint { alias.v == x.v }
+		subject <al> :>> x;
+		require constraint { al.v == al.v }
 	}
 }`
 
@@ -88,18 +88,17 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 		t.Error("R3's subject is not one symbol under both its names")
 	}
 
-	// A redefining subject with a short name but no name of its own takes the
-	// redefined feature's name (KerML 7.3.4.5), as `part <p> :>> x` does: R4's
-	// subject is one symbol under `alias` and `x`, its `:>> x` names R's subject
-	// and its condition reads its own subject by either name.
+	// A redefining subject with a short name of its own declares a name (KerML
+	// 7.3.4.5), so it takes none from the redefined feature: R4's subject is a
+	// member by `al` alone and its `:>> x` names R's subject.
 	r4 := local(t, pkg.Scope, "R4")
-	aliased := local(t, r4.Scope, "alias")
-	if aliased != local(t, r4.Scope, "x") {
-		t.Error("R4's subject is not one symbol under `alias` and `x`")
+	aliased := local(t, r4.Scope, "al")
+	if _, ok := r4.Scope.LookupLocal("x"); ok {
+		t.Error("R4 answers to `x`; a short-named redefinition derives no name")
 	}
-	if !aliased.EffectiveName || aliased.NamingTarget == nil || aliased.Name != "x" || aliased.ShortName != "alias" {
-		t.Errorf("R4's subject = %q <%s> effective=%v target=%v; want x <alias> named by its redefinition",
-			aliased.Name, aliased.ShortName, aliased.EffectiveName, aliased.NamingTarget)
+	if aliased.EffectiveName() || aliased.NamingTarget != nil || aliased.Name != "al" || aliased.ShortName != "al" {
+		t.Errorf("R4's subject = %q <%s> effective=%v target=%v; want a member by <al> alone",
+			aliased.Name, aliased.ShortName, aliased.EffectiveName(), aliased.NamingTarget)
 	}
 	inherited := local(t, req.Scope, "x")
 	var redefines, reads int
@@ -114,7 +113,7 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 			if !ok || got != inherited {
 				t.Errorf("R4 :>> %s = %v, %v; want R::x", last, got, ok)
 			}
-		case last == "alias" || last == "x":
+		case last == "al":
 			reads++
 			if !ok || got != aliased {
 				t.Errorf("R4 condition %s = %v, %v; want R4's own subject", last, got, ok)

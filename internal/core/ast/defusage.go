@@ -280,6 +280,12 @@ const (
 	RelDifferences // 'differences'
 )
 
+// ReferenceSubsets reports whether k is a ReferenceSubsetting: `::>` or a use
+// case inclusion, an OwnedReferenceSubsetting in SysML.xtext IncludeUseCaseUsage.
+func (k RelationshipKind) ReferenceSubsets() bool {
+	return k == RelReferences || k == RelIncludes
+}
+
 func (k RelationshipKind) String() string {
 	switch k {
 	case RelTyping:
@@ -491,6 +497,84 @@ func (u *Usage) IsPerformedAction() bool {
 // a reference to an existing feature rather than a declaration of a new one.
 func (u *Usage) IsVariantReference() bool {
 	return u.IsVariant && u.Keyword == "variant"
+}
+
+// IsStateAction reports whether the usage is a state's `entry a;`, `do a;` or
+// `exit a;`, each a performed action (SysML v2 StateSubactionMembership).
+func (u *Usage) IsStateAction() bool {
+	if u.Kind != UsageAction {
+		return false
+	}
+	switch u.Keyword {
+	case "entry", "do", "exit":
+		return true
+	}
+	return false
+}
+
+// IsExhibitedState reports whether the usage is an `exhibit state s : S;` or an
+// `exhibit s;`: a state the owner exhibits (SysML v2 ExhibitStateUsage).
+func (u *Usage) IsExhibitedState() bool {
+	return u.Kind == UsageState && (u.Keyword == "exhibit" || u.Keyword == "exhibit state")
+}
+
+// IsIncludedUseCase reports whether the usage is an `include use case u : U;` or
+// an `include u;`: a use case the owner includes (SysML v2 IncludeUseCaseUsage).
+func (u *Usage) IsIncludedUseCase() bool {
+	if u.Kind != UsageUseCase {
+		return false
+	}
+	for _, rel := range u.Relationships {
+		if rel != nil && rel.Kind == RelIncludes {
+			return true
+		}
+	}
+	return false
+}
+
+// IsVerifiedRequirement reports whether the usage is an objective's `verify r;`
+// (SysML v2 RequirementVerificationMembership).
+func (u *Usage) IsVerifiedRequirement() bool {
+	return u.Kind == UsageSatisfy && u.Keyword == "verify"
+}
+
+// IsRequirementConstraint reports whether the usage is a requirement's
+// `assume`/`require` constraint (SysML v2 RequirementConstraintMembership).
+func (u *Usage) IsRequirementConstraint() bool {
+	if u.Kind != UsageConstraint {
+		return false
+	}
+	switch u.Keyword {
+	case "require", "assume":
+		return true
+	}
+	return u.PrefixKeyword == "require" || u.PrefixKeyword == "assume"
+}
+
+// NamedByReference reports whether an unnamed usage takes its name from the
+// feature it references: the members whose membership kind makes the reference
+// their naming feature in SysML v2 (perform, exhibit, include, assume/require,
+// verify, frame, render, variant), never a plain reference subsetting like
+// `assert q;` or `satisfy r;`.
+func (u *Usage) NamedByReference() bool {
+	if u.IsVariant {
+		return true
+	}
+	switch u.Kind {
+	case UsageAction:
+		return u.IsPerformedAction() || u.IsStateAction()
+	case UsageState:
+		return u.IsExhibitedState()
+	case UsageUseCase:
+		return u.IsIncludedUseCase()
+	case UsageConstraint:
+		return u.IsRequirementConstraint()
+	case UsageSatisfy:
+		return u.IsVerifiedRequirement()
+	case UsageFramedConcern, UsageViewRendering:
+		return true
+	}
+	return false
 }
 
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.

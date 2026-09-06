@@ -96,11 +96,7 @@ func (r *Resolver) localBinding(scope *symbols.Scope, name string, hide *refFilt
 // feature with no declared name takes the name of the feature it redefines, so
 // it binds none when that redefinition resolves to nothing (KerML 7.3.4.5).
 func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
-	if sym == nil || !sym.EffectiveName {
-		return true
-	}
-	rel := ast.DeclNamingFeature(sym.Decl)
-	if rel == nil || rel.Kind != ast.RelRedefines {
+	if sym == nil || sym.Naming != symbols.NamedByRedefinition {
 		return true
 	}
 	if named, done := r.effNames[sym]; done {
@@ -112,7 +108,7 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	r.naming[sym] = true
 	defer delete(r.naming, sym)
 	named := true
-	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, rel.Target) })
+	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, sym.NamingTarget) })
 	r.effNames[sym] = named
 	return named
 }

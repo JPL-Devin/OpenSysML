@@ -100,17 +100,14 @@ func TargetName(node Node) (string, source.Span) {
 }
 
 // NamingFeature returns the relationship that names a usage lacking a declared
-// name (KerML 7.3.4.5): its reference subsetting, else its lone redefinition.
-// A usage that declares a name, or redefines more than one feature, has none.
-// A declared short name is no name here: KerML derives effectiveName from
-// declaredName alone.
+// name (KerML 7.3.4.5): its lone redefinition, or for the SysML members named
+// by what they reference (Usage.NamedByReference) that reference. A declared
+// short name is a declaration too: the feature then derives no name.
 func NamingFeature(u *Usage) *Relationship {
-	if u == nil || u.Ident.Name != "" {
+	if u == nil || u.Ident.Declared() {
 		return nil
 	}
-	// A binding's reference subsetting is the end it binds, not a name it
-	// answers to: `bind a.b.c = d` declares no member `c`.
-	return namingRelationship(u.Relationships, u.Kind != UsageBinding)
+	return namingRelationship(u.Relationships, u.NamedByReference())
 }
 
 // namingRelationship is NamingFeature over a declaration's relationships, with
@@ -121,15 +118,15 @@ func namingRelationship(rels []*Relationship, referencesName bool) *Relationship
 		if rel == nil {
 			continue
 		}
-		switch rel.Kind {
-		case RelReferences:
+		switch {
+		case rel.Kind.ReferenceSubsets():
 			if !referencesName {
 				continue
 			}
 			if name, _ := TargetName(rel.Target); name != "" {
 				return rel
 			}
-		case RelRedefines:
+		case rel.Kind == RelRedefines:
 			redefinitions = append(redefinitions, rel)
 		}
 	}
@@ -160,6 +157,12 @@ type Identification struct {
 	ShortNameSpan source.Span
 	Name          string
 	NameSpan      source.Span
+}
+
+// Declared reports whether either name is declared, which is when a feature
+// takes no name from its naming feature (KerML 7.3.4.5).
+func (id Identification) Declared() bool {
+	return id.Name != "" || id.ShortName != ""
 }
 
 // Membership wraps a namespace member with a visibility prefix. Member is

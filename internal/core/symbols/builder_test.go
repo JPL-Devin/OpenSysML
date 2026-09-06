@@ -190,7 +190,7 @@ func TestUnnamedRedefinitionTakesRedefinedName(t *testing.T) {
 		if !ok {
 			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
 		}
-		if !sym.EffectiveName {
+		if !sym.EffectiveName() {
 			t.Fatalf("%s should be marked as an effective name, not a declared one", name)
 		}
 	}
@@ -232,10 +232,10 @@ func TestReferenceSubsettingOutranksRedefinitionAsNamingFeature(t *testing.T) {
 	}
 }
 
-// A declared short name is no declared name: KerML derives effectiveName from
-// declaredName alone, so the naming feature still names the declaration and the
-// short name is its own key.
-func TestShortNameLeavesTheNamingFeatureInPlace(t *testing.T) {
+// A declared short name is a declared name too (KerML 7.3.4.5): the feature
+// then takes no name from its redefinition and is a member by its short name
+// alone, as the pinned pilot reads `part <e> :>> engine;`.
+func TestShortNameSuppressesTheDerivedName(t *testing.T) {
 	root := build(t, `package P {
 		part def Vehicle { part engine; }
 		part v : Vehicle { part <e> :>> engine; }
@@ -243,10 +243,15 @@ func TestShortNameLeavesTheNamingFeatureInPlace(t *testing.T) {
 
 	pkg, _ := root.LookupLocal("P")
 	v, _ := pkg.Scope.LookupLocal("v")
-	for _, name := range []string{"e", "engine"} {
-		if _, ok := v.Scope.LookupLocal(name); !ok {
-			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
-		}
+	e, ok := v.Scope.LookupLocal("e")
+	if !ok {
+		t.Fatalf("v members = %v, want e", v.Scope.MemberNames())
+	}
+	if _, ok := v.Scope.LookupLocal("engine"); ok {
+		t.Fatalf("v members = %v; a short-named redefinition must not answer to engine", v.Scope.MemberNames())
+	}
+	if e.Name != "e" || e.Naming != NamedByDeclaration || e.NamingTarget != nil {
+		t.Errorf("e = %q naming=%v target=%v; want a declared short name and no derived one", e.Name, e.Naming, e.NamingTarget)
 	}
 }
 

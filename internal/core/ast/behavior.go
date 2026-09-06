@@ -552,11 +552,42 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 	return OwnedConstraint{}, false
 }
 
+// ConstraintReferenceOf returns the constraint or requirement an assume or
+// require member states by reference alone (`require P::r1;`), if it does.
+func ConstraintReferenceOf(n Node) *QualifiedName {
+	switch m := n.(type) {
+	case *AssumeMember:
+		return m.Reference
+	case *RequireMember:
+		return m.Reference
+	}
+	return nil
+}
+
+// ConditionReference returns the name an assume or require member's condition
+// consists of alone (`require r1;`): the reference form the parser keeps as a
+// condition expression, whose target is resolved as a reference subsetting's.
+func ConditionReference(n Node) *QualifiedName {
+	var expr Node
+	switch m := n.(type) {
+	case *AssumeMember:
+		expr = m.Expression
+	case *RequireMember:
+		expr = m.Expression
+	default:
+		return nil
+	}
+	if fr, ok := expr.(*FeatureReference); ok {
+		return fr.Name
+	}
+	return nil
+}
+
 // NamingFeature returns the relationship naming a constraint declared without a
-// name, as NamingFeature does for a usage; a short name alone is not a declared
-// name (KerML derives effectiveName from declaredName), so it leaves it in place.
+// name: a requirement constraint is named by the constraint it references
+// (SysML ConstraintUsage::namingFeature), else by its lone redefinition.
 func (c OwnedConstraint) NamingFeature() *Relationship {
-	if c.Ident.Name != "" {
+	if c.Ident.Declared() {
 		return nil
 	}
 	return namingRelationship(c.Relationships, true)
@@ -575,12 +606,13 @@ func (c OwnedConstraint) EffectiveName() (string, source.Span) {
 }
 
 // NamingFeature returns the relationship naming a subject declared without a
-// name, as for a usage: `subject <s> :>> vehicle;` answers to `vehicle`.
+// name: its lone redefinition, as for a usage (`subject :>> vehicle;` answers to
+// `vehicle`); a subject that merely references a feature stays anonymous.
 func (m *SubjectMember) NamingFeature() *Relationship {
-	if m == nil || m.Ident.Name != "" {
+	if m == nil || m.Ident.Declared() {
 		return nil
 	}
-	return namingRelationship(m.Relationships, true)
+	return namingRelationship(m.Relationships, false)
 }
 
 // EffectiveName returns the name the subject answers to: its declared name,

@@ -101,11 +101,15 @@ func declaredShortName(sym *symbols.Symbol) string { return sym.ShortName }
 
 // inheritedIdentifier reads the identifier sym declares, or the one the feature
 // from names has, following that relation until a declared identifier or a cycle.
+// A feature declaring either identifier derives neither (KerML 7.3.4.5).
 func inheritedIdentifier(sym *symbols.Symbol, declared func(*symbols.Symbol) string, from func(*symbols.Symbol) *symbols.Symbol) string {
 	seen := make(map[*symbols.Symbol]bool)
 	for sym != nil && !seen[sym] {
 		if id := declared(sym); id != "" {
 			return id
+		}
+		if sym.Naming == symbols.NamedByDeclaration && (sym.Name != "" || sym.ShortName != "") {
+			return ""
 		}
 		seen[sym] = true
 		sym = from(sym)

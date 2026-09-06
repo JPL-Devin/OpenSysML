@@ -26,7 +26,7 @@ func (r *Resolver) checkDistinguishability(scope *symbols.Scope) {
 // separate namespace of their own: an alias collides with an owned name and with
 // another alias, each under its own wording.
 func (r *Resolver) checkOwnedNames(scope *symbols.Scope) {
-	owned, aliases := declaredMembers(scope)
+	owned, aliases := DistinguishableMembers(scope)
 	ownedByName := byName(owned)
 	aliasByName := byName(aliases)
 	for _, sym := range owned {
@@ -449,24 +449,6 @@ func ownerNames(sym *symbols.Symbol, dups []*symbols.Symbol) []string {
 	return out
 }
 
-// declaredMembers is DistinguishableMembers restricted to members declaring a
-// name of their own: an effective name our model borrows from a reference is not
-// reliable enough to report an owned duplicate on.
-func declaredMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
-	owned, aliases = DistinguishableMembers(scope)
-	return declaredOnly(owned), declaredOnly(aliases)
-}
-
-func declaredOnly(syms []*symbols.Symbol) []*symbols.Symbol {
-	out := make([]*symbols.Symbol, 0, len(syms))
-	for _, sym := range syms {
-		if !sym.EffectiveName {
-			out = append(out, sym)
-		}
-	}
-	return out
-}
-
 // DistinguishableMembers splits the members of scope whose names the
 // distinguishability rules compare into owned members and aliases. Exported for
 // the library-base half of the rule in internal/core/passes.
@@ -495,9 +477,9 @@ func contributesName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
 		if decl.Ident.Name == "" && decl.Ident.ShortName == "" {
-			// An unnamed feature takes a name from the feature it redefines,
-			// never from one it merely references (KerML 7.4.9).
-			return sym.EffectiveName && !namedByReference(sym)
+			// An unnamed feature contributes the name its naming feature
+			// gives it, if any (KerML 7.3.4.5).
+			return sym.EffectiveName()
 		}
 		// A metadata usage without a typing is malformed (SysML.xtext
 		// MetadataUsageDeclaration requires one) and contributes no name.
