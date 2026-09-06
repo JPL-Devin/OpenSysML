@@ -169,6 +169,10 @@ var (
 	// event budget.
 	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
 
+	// ErrNoInitialState is returned when a state machine initializes with no
+	// entry into its states: it states no `entry; then <state>;`.
+	ErrNoInitialState = errors.New("no initial state found")
+
 	// ErrStatePerformanceOccurrence is returned when an exhibited machine cannot
 	// read or write the occurrence of its state usage.
 	ErrStatePerformanceOccurrence = errors.New("state performance occurrence unavailable")

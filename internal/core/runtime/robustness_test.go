@@ -96,6 +96,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
 	t.Run("state_def_specializing_the_library_state_action", testStateDefSpecializingTheLibraryStateAction)
 	t.Run("state_def_specializing_a_library_state_keeps_its_content", testStateDefSpecializingALibraryStateKeepsItsContent)
+	t.Run("exhibited_state_typed_by_the_library_state_action", testExhibitedStateTypedByTheLibraryStateAction)
+	t.Run("exhibited_state_typed_by_the_library_state_action_with_a_body", testExhibitedStateTypedByTheLibraryStateActionWithABody)
+	t.Run("exhibited_state_typed_by_a_state_action_specialization", testExhibitedStateTypedByAStateActionSpecialization)
 	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
@@ -5144,6 +5147,134 @@ func testStateDefSpecializingALibraryStateKeepsItsContent(t *testing.T) {
 	}
 	if got := FormatValue(seen); got != "1" {
 		t.Fatalf("burn.seen = %s, want 1", got)
+	}
+}
+
+// A body-less usage typed by the library's StateAction, however named, lowers
+// without recursing into `ref state self` and fails only for no initial state.
+func testExhibitedStateTypedByTheLibraryStateAction(t *testing.T) {
+	for _, tc := range []struct{ name, typing string }{
+		{"imported", "StateAction"},
+		{"qualified", "States::StateAction"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `
+			package test {
+				private import States::StateAction;
+				part def Mission {
+					attribute mass = 1;
+					exhibit state phases : ` + tc.typing + `;
+				}
+			}`
+			_, _, err := instantiateWithLibraries(t, src, "test::Mission")
+			if err == nil {
+				t.Fatal("expected the machine with no initial state to fail materialization")
+			}
+			if errors.Is(err, lower.ErrRecursiveStateTyping) {
+				t.Fatalf("error = %v, want StateAction's content withheld rather than recursed into", err)
+			}
+			if !errors.Is(err, ErrNoInitialState) {
+				t.Fatalf("error = %v, want ErrNoInitialState", err)
+			}
+			for _, want := range []string{"phases", "Mission", "StateAction"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %v, want it to name %s", err, want)
+				}
+			}
+		})
+	}
+}
+
+// testExhibitedStateTypedByTheLibraryStateActionWithABody: a state usage typed
+// by StateAction and stating its own body runs that body, inheriting nothing.
+func testExhibitedStateTypedByTheLibraryStateActionWithABody(t *testing.T) {
+	src := `
+	package test {
+		private import States::StateAction;
+		part def Mission {
+			attribute mass = 2;
+			exhibit state phases : StateAction { entry; then x; state x; }
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	assertExhibitedMachineIn(t, ctx, inst, "mass", 2, "x")
+}
+
+// A usage typed by a definition specializing StateAction inherits that
+// definition's content and nothing of the library's.
+func testExhibitedStateTypedByAStateActionSpecialization(t *testing.T) {
+	t.Run("with_content", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction { entry; then x; state x; }
+			part def Mission {
+				attribute mass = 3;
+				exhibit state phases : Phase;
+			}
+		}`
+		ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		assertExhibitedMachineIn(t, ctx, inst, "mass", 3, "x")
+	})
+	t.Run("own_body", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction;
+			part def Mission {
+				attribute mass = 4;
+				exhibit state phases : Phase { entry; then x; state x; }
+			}
+		}`
+		ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		assertExhibitedMachineIn(t, ctx, inst, "mass", 4, "x")
+	})
+	t.Run("empty", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction;
+			part def Mission {
+				attribute mass = 5;
+				exhibit state phases : Phase;
+			}
+		}`
+		_, _, err := instantiateWithLibraries(t, src, "test::Mission")
+		if !errors.Is(err, ErrNoInitialState) {
+			t.Fatalf("error = %v, want ErrNoInitialState", err)
+		}
+		if !strings.Contains(err.Error(), "phases") || !strings.Contains(err.Error(), "Phase") {
+			t.Errorf("error = %v, want it to name the machine and its definition", err)
+		}
+	})
+}
+
+// assertExhibitedMachineIn checks that an object exhibits a machine resting in
+// the named state, and that an ordinary attribute of it still reads.
+func assertExhibitedMachineIn(t *testing.T, ctx *Context, inst *Instance, attr string, want int64, state string) {
+	t.Helper()
+	fv, err := inst.GetFeatureValue(ctx, attr)
+	if err != nil {
+		t.Fatalf("%s: %v", attr, err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != want {
+		t.Errorf("%s = %s, want %d", attr, FormatValue(got), want)
+	}
+	machine, ok := inst.ExhibitedState()
+	if !ok || machine.State == nil {
+		t.Fatal("the object exhibits no machine")
+	}
+	if got := finalStateName(t, machine.State); got != state {
+		t.Errorf("final state = %q, want %q", got, state)
 	}
 }
 

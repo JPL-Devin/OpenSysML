@@ -1162,6 +1162,54 @@ func TestFailedMaterializationLeavesNoBehaviorBehind(t *testing.T) {
 	}
 }
 
+// An object exhibiting a machine typed by the library's StateAction, with its own
+// body, materializes, reads its attributes and runs that body, however named.
+func TestObjectExhibitsAMachineTypedByTheLibraryStateAction(t *testing.T) {
+	for _, tc := range []struct{ name, typing string }{
+		{"imported", "StateAction"},
+		{"qualified", "States::StateAction"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `
+			package test {
+				private import States::StateAction;
+				part def Mission {
+					attribute mass: Integer = 7;
+					attribute launched: Integer = 0;
+					exhibit state phases : ` + tc.typing + ` {
+						entry; then launch;
+						state launch { entry action mark { assign launched := 1; } }
+					}
+				}
+			}`
+			model, resolver, root := parseAndBuildLibraryModel(t, src)
+			pkg := resolveSymbol(t, root, "test")
+			ctx := NewContext(model, resolver, 10000)
+
+			inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Mission"))
+			if err != nil {
+				t.Fatalf("Instantiate: %v", err)
+			}
+			if got := featureInt(t, ctx, inst, "mass"); got != 7 {
+				t.Errorf("mass = %d, want 7", got)
+			}
+			if got := featureInt(t, ctx, inst, "launched"); got != 1 {
+				t.Errorf("launched = %d, want 1 once the machine entered launch", got)
+			}
+			machine, ok := inst.ExhibitedState()
+			if !ok || machine.State == nil {
+				t.Fatal("the object exhibits no machine")
+			}
+			if machine.Name != "phases" {
+				t.Errorf("machine name = %q, want phases", machine.Name)
+			}
+			if got := finalStateName(t, machine.State); got != "launch" {
+				t.Errorf("final state = %q, want launch", got)
+			}
+		})
+	}
+}
+
 // A creation that fails leaves none of the objects it reached in the session: a
 // sibling materialized on the way would otherwise survive running nothing.
 func TestFailedMaterializationLeavesNoNeighbourBehind(t *testing.T) {
