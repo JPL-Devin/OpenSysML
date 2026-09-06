@@ -79,7 +79,9 @@
     text-decoration: none;
   }
 
-  .sysml-document .sysml-link[href^="http"]::after {
+  .sysml-document .sysml-link[href^="http:" i]::after,
+  .sysml-document .sysml-link[href^="https:" i]::after,
+  .sysml-document .sysml-link[href^="//"]::after {
     content: " (" attr(href) ")";
     font-size: 0.85em;
     word-break: break-all;

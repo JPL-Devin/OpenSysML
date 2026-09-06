@@ -150,9 +150,12 @@ func HTML(document *docir.Document, opts HTMLOptions) (string, error) {
 			return "", err
 		}
 	}
-	base, err := ThemeStylesheet(opts.Theme)
-	if err != nil {
-		return "", err
+	var base string
+	if !opts.NoDefaultStylesheet {
+		var err error
+		if base, err = ThemeStylesheet(opts.Theme); err != nil {
+			return "", err
+		}
 	}
 	w := &htmlWriter{opts: opts, base: base, ids: contentIDs(document)}
 	w.numbers = sectionNumbers(document.Content(), nil, "", map[string]string{})

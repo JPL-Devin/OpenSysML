@@ -308,6 +308,19 @@ func TestHTMLThemes(t *testing.T) {
 	if _, err := HTML(doc, HTMLOptions{Theme: "fancy"}); err == nil {
 		t.Error("HTML accepted a theme that does not exist")
 	}
+	if _, err := HTML(doc, HTMLOptions{Theme: "fancy", NoDefaultStylesheet: true}); err != nil {
+		t.Errorf("HTML checked a theme it was told to leave out: %v", err)
+	}
+	// print spells out web links however the scheme is spelled.
+	printCSS, err := ThemeStylesheet("print")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sel := range []string{`[href^="http:" i]::after`, `[href^="https:" i]::after`, `[href^="//"]::after`} {
+		if !strings.Contains(printCSS, ".sysml-link"+sel) {
+			t.Errorf("print theme lacks the link selector %s", sel)
+		}
+	}
 }
 
 // TestHTMLSuppliedStylesheets checks supplied CSS lands after the default
