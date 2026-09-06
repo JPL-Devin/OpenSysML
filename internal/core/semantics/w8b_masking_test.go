@@ -326,3 +326,23 @@ func TestMaskingIsIndependentOfTheRedefinedMembershipVisibility(t *testing.T) {
 		}
 	}
 }
+
+// A redefinition of a namesake targets that namesake, not the redefining feature
+// itself, whichever specialization clause is resolved first (KerML 8.3.3.3.6).
+func TestSelfNamedRedefinitionTargetIsIndependentOfClauseOrder(t *testing.T) {
+	for _, clauses := range []string{":>> causes :> participant", ":> participant :>> causes"} {
+		m, root := buildModel(t, `package P {
+			abstract occurrence causes[*];
+			occurrence def Link { ref occurrence participant[*]; }
+			abstract occurrence def Multicausation :> Link {
+				abstract constant ref occurrence causes[1..*] `+clauses+`;
+			}
+		}`)
+		p := sym(t, root, "P")
+		outer := nested(t, p.Scope, "causes")
+		inner := nested(t, p.Scope, "Multicausation", "causes")
+		if got := m.RedefinedFeatures(inner); len(got) != 1 || got[0] != outer {
+			t.Fatalf("%q: RedefinedFeatures(Multicausation::causes) = %v, want [P::causes]", clauses, got)
+		}
+	}
+}
