@@ -1,6 +1,9 @@
 package repl
 
-import "testing"
+import (
+	"regexp"
+	"testing"
+)
 
 // measurementRefSession declares a part measured in kilometres whose unit
 // feature holds a measurement reference, with the SI units in scope.
@@ -52,14 +55,16 @@ func TestEvalQuantityCalculationsOverReferences(t *testing.T) {
 		"error:", "incommensurable units")
 }
 
-// What the runtime does not hold about a unit is a typed failure naming the
-// declaration, never a made-up value: the declaration's own members, a
-// measurement scale, and the coordinate frames a vector reference would need.
+// What the runtime does not hold about a unit is a typed failure, never a made-up value:
+// members of a unit composed at the prompt, a scale, the frames a vector reference needs.
 func TestEvalMeasurementReferenceLimitsAreTyped(t *testing.T) {
 	s := measurementRefSession(t)
-	wants(t, run(t, s, "%eval m.unitConversion"),
+	wants(t, run(t, s, "%eval (m / s).unitConversion"),
 		"error:", "library function is not evaluable",
-		"MeasurementReferences::ScalarMeasurementReference::unitConversion")
+		"MeasurementReferences::DerivedUnit::unitConversion: m/s is a MeasurementReferences::DerivedUnit reducing to metre·second^-1, which names no declaration")
+	wants(t, run(t, s, "%eval field.area.quantityDimension"),
+		"error:", "library function is not evaluable",
+		"MeasurementReferences::DerivedUnit::quantityDimension: m**2 is a MeasurementReferences::DerivedUnit reducing to metre^2")
 	wants(t, run(t, s, "%eval Time::UTC"),
 		"error:", "library function is not evaluable",
 		"Time::UTC: a measurement scale typed TimeScale is not held as a value")
@@ -67,6 +72,83 @@ func TestEvalMeasurementReferenceLimitsAreTyped(t *testing.T) {
 		"error:", "SI::'°C_abs': a measurement scale typed IntervalScale is not held as a value")
 	wants(t, run(t, s, "%eval m + m"), "error:", "operator '+' is not defined for a measurement reference")
 	wants(t, run(t, s, "%eval m * 3"), "error:", "operator '*' is not defined for a measurement reference and an Integer")
+}
+
+// A named unit answers its declaration's members, redefinitions and defaults followed, from
+// the object %features shows, and keeps that object across an unrelated declaration.
+func TestEvalMeasurementReferenceDeclarationMembers(t *testing.T) {
+	s := measurementRefSession(t)
+	wants(t, run(t, s, "%eval SI::km.unitConversion.conversionFactor"), "= 1000.0")
+	wants(t, run(t, s, "%eval km.unitConversion.referenceUnit"), "= m")
+	wants(t, run(t, s, "%eval km.unitConversion.isExact"), "= true")
+	wants(t, run(t, s, "%eval QuantityCalculations::ConvertQuantity(field.width, km.unitConversion.referenceUnit)"), "= 3000.0 [m]")
+	wants(t, run(t, s, "%eval m.quantityDimension.quantityPowerFactors#(1).exponent"), "= 1")
+	wants(t, run(t, s, "%eval m.unitPowerFactors#(1).unit"), "= m")
+	wants(t, run(t, s, "%eval K.definitionalQuantityValues#(1).num"), "= [273.16]")
+	wants(t, run(t, s, "%eval m.isBound"), "= false")
+	wants(t, run(t, s, "%eval m.unitConversion"), "= []")
+
+	// The %instantiate is a second object of the declaration, which the name now
+	// denotes; a member read at the prompt reaches that object, the one %features shows.
+	created := run(t, s, "%instantiate SI::km")
+	wants(t, created, "✓ Created instance of SI::kilometre")
+	km := "SI::kilometre (ID: " + idIn(t, created, `ID: (\d+)`) + ")"
+	listing := run(t, s, "%features SI::km")
+	wantsInOrder(t, listing,
+		"unitConversion = Instance(ID: ", "prefix = Instance(ID: ", `longName = "kilo"`,
+		"referenceUnit = m", "conversionFactor = 1000.0", "isExact = true",
+		"quantityDimension = Instance(ID: ", "exponent = 1",
+		"unitPowerFactors = Instance(ID: ", "unit = km", "exponent = 1",
+		"isBound = false", "mRefs = [km]", "definitionalQuantityValues = []")
+	conversionID := idIn(t, listing, `unitConversion = Instance\(ID: (\d+)\)`)
+	conversion := "Instance(ID: " + conversionID + ")"
+	wants(t, run(t, s, "%eval SI::km.unitConversion"), "= "+conversion)
+	wants(t, run(t, s, "%features SI::km.unitConversion"), "Instance: SI::kilometre.unitConversion (ID: "+conversionID+")", "conversionFactor = 1000.0")
+
+	// An unrelated declaration leaves the object, and the records it holds, as they were.
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("unrelated declaration reported %v", res.Notices)
+	}
+	wants(t, run(t, s, "%instances"), km)
+	wants(t, run(t, s, "%eval SI::km.unitConversion"), "= "+conversion)
+	wants(t, run(t, s, "%eval SI::km.unitConversion.conversionFactor"), "= 1000.0")
+	wants(t, run(t, s, "%features SI::km"), "Instance: "+km, "unitConversion = "+conversion)
+}
+
+// A model's own object typed by a library record carries the record's members, redefinitions
+// and defaults followed; a model's own reference answers the inherited `isBound default false`.
+func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Lab {
+		private import ISQ::*;
+		private import SI::*;
+		private import MeasurementReferences::*;
+		attribute myConv : ConversionByPrefix { :>> prefix = kilo; :>> referenceUnit = m; }
+		attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }
+		attribute stressRef : TensorMeasurementReference { :>> mRefs = (Pa, Pa); :>> dimensions = (2); }
+	}`)
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%instantiate Lab::myConv")
+	wantsInOrder(t, run(t, s, "%features Lab::myConv"),
+		"prefix = Instance(ID: ", `longName = "kilo"`, "referenceUnit = m", "conversionFactor = 1000.0", "isExact = true")
+	wants(t, run(t, s, "%eval Lab::myConv.conversionFactor"), "= 1000.0")
+	wants(t, run(t, s, "%eval Lab::furlong.unitConversion.conversionFactor"), "= 201.168")
+	wants(t, run(t, s, "%eval QuantityCalculations::ConvertQuantity(2 [Lab::furlong], m)"), "= 402.336 [m]")
+	wants(t, run(t, s, "%eval Lab::stressRef.isBound"), "= false")
+	run(t, s, "%instantiate Lab::stressRef")
+	wantsInOrder(t, run(t, s, "%features Lab::stressRef"), "mRefs = [Pa, Pa]", "dimensions = [2]", "isBound = false")
+}
+
+// idIn is the identity the first match of pattern in out captures.
+func idIn(t *testing.T, out, pattern string) string {
+	t.Helper()
+	m := regexp.MustCompile(pattern).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("no %s in output:\n%s", pattern, out)
+	}
+	return m[1]
 }
 
 // %features lists the reference an attribute holds beside the quantities.

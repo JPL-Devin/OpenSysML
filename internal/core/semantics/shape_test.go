@@ -129,3 +129,117 @@ func TestFeatureTypesFollowRedefinitionPastTheImplicitBase(t *testing.T) {
 		t.Errorf("ScalarSymbol(unknown) = %v, want nil", got)
 	}
 }
+
+// A library attribute definition is held as a value by specialization — a scalar, a
+// TensorQuantityValue or a TensorMeasurementReference, so the scales and coordinate frames
+// descending from VectorMeasurementReference stay values — and any other is a record.
+func TestValueHeldIsDecidedBySpecialization(t *testing.T) {
+	m, idx := shapeModel(t, `package T {
+		private import ScalarValues::*;
+		private import MeasurementReferences::*;
+		attribute def Conv :> UnitConversion { attribute note : String; }
+		attribute def Ref :> ScalarMeasurementReference;
+		enum def Color { red; green; }
+	}`)
+	for _, c := range []struct {
+		fqn  string
+		want bool
+	}{
+		{"ScalarValues::Real", true},
+		{"ScalarValues::Boolean", true},
+		{"Quantities::TensorQuantityValue", true},
+		{"Quantities::ScalarQuantityValue", true},
+		{"ISQ::LengthValue", true},
+		{"MeasurementReferences::TensorMeasurementReference", true},
+		{"MeasurementReferences::ScalarMeasurementReference", true},
+		{"MeasurementReferences::MeasurementUnit", true},
+		{"MeasurementReferences::IntervalScale", true},
+		{"MeasurementReferences::CoordinateFrame", true},
+		{"Time::TimeScale", true},
+		{"T::Ref", true},
+		{"T::Color", true},
+		{"MeasurementReferences::UnitConversion", false},
+		{"MeasurementReferences::ConversionByPrefix", false},
+		{"MeasurementReferences::UnitPrefix", false},
+		{"Quantities::QuantityDimension", false},
+		{"Quantities::QuantityPowerFactor", false},
+		{"MeasurementReferences::UnitPowerFactor", false},
+		{"MeasurementReferences::DefinitionalQuantityValue", false},
+		{"MeasurementReferences::QuantityValueMapping", false},
+		{"T::Conv", false},
+	} {
+		if got := m.ValueHeld(dimensionSymbol(t, idx, c.fqn)); got != c.want {
+			t.Errorf("ValueHeld(%s) = %v, want %v", c.fqn, got, c.want)
+		}
+	}
+	if m.ValueHeld(nil) {
+		t.Error("ValueHeld(nil) = true, want false")
+	}
+}
+
+// Of a value-held type's members, only those the value carries itself stay out of the
+// shape (`num`, `mRef`, `mRefs`, a constraint); a stated (`isBound default false`,
+// `mRefs = self`) or record-typed one (`unitConversion`) is the declaration's object's,
+// and a model's restatement of a carried member states a value.
+func TestHeldByValueKeepsTheValuesOwnMembersOutOfTheShape(t *testing.T) {
+	m, idx := shapeModel(t, `package T {
+		private import MeasurementReferences::*;
+		attribute stressRef : TensorMeasurementReference {
+			:>> mRefs = (SI::Pa, SI::Pa);
+			:>> dimensions = (2);
+		}
+		attribute conv : ConversionByPrefix { :>> prefix = SI::kilo; :>> referenceUnit = SI::m; }
+	}`)
+	for _, c := range []struct {
+		fqn  string
+		want bool
+	}{
+		{"Quantities::TensorQuantityValue::num", true},
+		{"Quantities::TensorQuantityValue::isBound", true},
+		{"Quantities::TensorQuantityValue::mRef", true},
+		{"MeasurementReferences::TensorMeasurementReference::mRefs", true},
+		{"MeasurementReferences::TensorMeasurementReference::isBound", false},
+		{"MeasurementReferences::ScalarMeasurementReference::mRefs", false},
+		{"MeasurementReferences::ScalarMeasurementReference::quantityDimension", false},
+		{"MeasurementReferences::MeasurementUnit::unitConversion", false},
+		{"MeasurementReferences::MeasurementUnit::unitPowerFactors", false},
+		{"MeasurementReferences::TensorMeasurementReference::definitionalQuantityValues", false},
+		{"MeasurementReferences::UnitConversion::conversionFactor", false},
+		{"MeasurementReferences::ConversionByPrefix::prefix", false},
+		{"T::stressRef::mRefs", false},
+		{"T::conv::prefix", false},
+	} {
+		sym := dimensionSymbol(t, idx, c.fqn)
+		if got := m.HeldByValue(sym); got != c.want {
+			t.Errorf("HeldByValue(%s) = %v, want %v", c.fqn, got, c.want)
+		}
+		if got := m.FrameFeature(sym); got != c.want {
+			t.Errorf("FrameFeature(%s) = %v, want %v", c.fqn, got, c.want)
+		}
+	}
+	for _, c := range []struct {
+		fqn  string
+		want bool
+	}{
+		{"T::stressRef::mRefs", true},
+		{"T::conv::prefix", false},
+	} {
+		if got := m.RestatesHeldByValue(dimensionSymbol(t, idx, c.fqn)); got != c.want {
+			t.Errorf("RestatesHeldByValue(%s) = %v, want %v", c.fqn, got, c.want)
+		}
+	}
+	for _, c := range []struct {
+		fqn  string
+		want bool
+	}{
+		{"Base::Anything::self", true},
+		{"Base::DataValue::self", true},
+		{"Clocks::Clock::thisClock", true},
+		{"MeasurementReferences::ScalarMeasurementReference::mRefs", false},
+		{"T::conv::prefix", false},
+	} {
+		if got := m.IsSelf(dimensionSymbol(t, idx, c.fqn)); got != c.want {
+			t.Errorf("IsSelf(%s) = %v, want %v", c.fqn, got, c.want)
+		}
+	}
+}

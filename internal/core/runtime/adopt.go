@@ -223,6 +223,18 @@ func (ctx *Context) connectorFeatureValue(s *FeatureValue) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
 
+// HoldsObject reports whether the value is, or carries, an object of this context:
+// one a reader can inspect, so the value is only meaningful in the context it came from.
+func (ctx *Context) HoldsObject(val Value) bool {
+	found := false
+	ctx.walkValue(val, func(v Value) {
+		if _, ok := carriedObject(v); ok {
+			found = true
+		}
+	})
+	return found
+}
+
 // walkValue visits a value and everything nested in it.
 func (ctx *Context) walkValue(val Value, visit func(Value)) {
 	visit(val)

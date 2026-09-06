@@ -560,6 +560,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if name == thatName && ec.self != nil {
 			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
 		}
+		// Then `self`, the thing being evaluated, read as its value.
+		if ec.self != nil && ec.namesSelf(name) {
+			return ec.ctx.objectValue(ec.self)
+		}
 		// Then `this`, the context occurrence of what is being evaluated: the
 		// object owning the performance, which is the bound instance.
 		if name == thisName && ec.namesOccurrenceThis(name) {
@@ -838,6 +842,16 @@ func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
 	return sequenceOf(nil), true
 }
 
+// namesSelf reports whether the name resolves, where the expression was written,
+// to the `self` feature every thing has of itself or a restatement of it.
+func (ec *EvalContext) namesSelf(name string) bool {
+	if ec.scope == nil {
+		return false
+	}
+	sym, ok := ec.ctx.resolver.LookupName(ec.scope, name)
+	return ok && ec.ctx.model.IsSelf(sym)
+}
+
 // namesOccurrenceThis reports whether the name resolves to the library's
 // context occurrence feature `this` where the expression was written.
 func (ec *EvalContext) namesOccurrenceThis(name string) bool {
@@ -927,7 +941,12 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
 		}
-		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
+		// The object reads as its value, whose own members it answers before the object's.
+		val, err := ec.ctx.objectValue(inst)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(val, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)

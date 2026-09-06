@@ -129,7 +129,25 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 		return false
 	}
 	inst, ok := ctx.instances[val.Instance]
-	return ok && len(inst.FeatureValues) == 0 && semantics.IsValueType(inst.Type)
+	return ok && semantics.IsValueType(inst.Type) && !ctx.shapeHoldsValue(inst.Type)
+}
+
+// shapeHoldsValue reports whether an object of typ carries a value of its own: a record's
+// features, or a model restatement (`:>> mRefs = (m, m)`) of what a value-held type carries.
+func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
+	features := ctx.FeaturesOf(typ)
+	if len(features) == 0 {
+		return false
+	}
+	if !ctx.model.ValueHeld(typ) {
+		return true
+	}
+	for _, feat := range features {
+		if !ctx.libraryDeclared(feat.Symbol) && ctx.model.RestatesHeldByValue(feat.Symbol) {
+			return true
+		}
+	}
+	return false
 }
 
 // noValueError reports the read of node, which found the unset value val, naming
@@ -166,7 +184,7 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	// reaches this object; a failed start abandons the occurrence with it.
 	inst.explicit = true
 	prior, hadPrior := ctx.occurrences[sym]
-	if ctx.namesOneObject(sym) {
+	if ctx.registersOccurrence(sym) {
 		ctx.occurrences[sym] = inst.ID
 	}
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
@@ -373,6 +391,15 @@ func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
 	return isOccurrenceUsage(sym) || ctx.namesStructuredValue(sym)
 }
 
+// registersOccurrence reports whether an object materialized for a usage is the one a
+// later read reaches: the object it denotes, or a unit's, read through the unit's reference.
+func (ctx *Context) registersOccurrence(sym *symbols.Symbol) bool {
+	if ctx.namesOneObject(sym) {
+		return true
+	}
+	return ctx.declaresUnit(sym) && ctx.occursOnce(sym)
+}
+
 // namesStructuredValue reports whether a usage carrying no value of its own is
 // typed by a structured value — a non-scalar `attribute def` with features — so
 // it holds those features rather than one scalar value.
@@ -385,7 +412,7 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 	if typ == nil || ctx.model.PrimTypeOf(typ) != semantics.PrimUnknown {
 		return false
 	}
-	return len(ctx.FeaturesOf(sym)) > 0
+	return ctx.shapeHoldsValue(sym)
 }
 
 // occursOnce reports whether a usage names at most one occurrence; several
@@ -641,8 +668,9 @@ func (inst *Instance) materializeIntrinsic(ctx *Context, fv *FeatureValue, name 
 	}
 
 	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
-	// optional one demands none: each, a connector included, holds only contributions.
-	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+	// optional one demands none: each, a connector included, holds only contributions —
+	// unless the declaration's body binds a feature of the one object it then holds.
+	if fv.Feature.HoldsOnlyContributions() && !ctx.bodyBindsAFeature(fv.Feature) && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
 		return inst.holdContributions(ctx, fv, name)
 	}
 
@@ -918,6 +946,33 @@ func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 		}
 	}
 	return ""
+}
+
+// bodyBindsAFeature reports whether feat's declaration, or one it redefines, binds a
+// feature of what it holds (`:>> unitConversion { :>> prefix = kilo; }`): one object, not none.
+func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
+		return false
+	}
+	if bindsAFeature(feat.Symbol) {
+		return true
+	}
+	for _, redefined := range ctx.redefinedFeatures(feat.Symbol, feat.OwnerType) {
+		if bindsAFeature(redefined) {
+			return true
+		}
+	}
+	return false
+}
+
+// bindsAFeature reports whether a declaration's own body binds a value to a feature.
+func bindsAFeature(sym *symbols.Symbol) bool {
+	for _, member := range declMembers(sym.Decl) {
+		if usage, ok := member.(*ast.Usage); ok && usage.Value != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // valuesAFeature reports whether a usage states a value: its own, or one its

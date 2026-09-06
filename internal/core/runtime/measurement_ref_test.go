@@ -126,6 +126,7 @@ func TestMeasurementRefValues(t *testing.T) {
 		{"m.elements", "[m]"},
 		{"m.mRefs", "[m]"},
 		{"m.isBound", "false"},
+		{"m.order", "0"},
 		{"m.isOrthogonal", "true"},
 		{"side.mRef.isBound", "false"},
 	}
@@ -139,6 +140,66 @@ func TestMeasurementRefValues(t *testing.T) {
 				t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
 			}
 		})
+	}
+}
+
+// TestMeasurementRefDeclarationMembers: a reference naming a declaration answers
+// that declaration's members from its materialized object, following the
+// record's redefinitions (`conversionFactor = prefix.conversionFactor`) and
+// defaults (`isExact default true`); a member the library states no value for
+// is empty, as the pilot leaves it, and a member the value carries (isBound,
+// mRefs) is answered by the value whether or not the declaration restates it.
+func TestMeasurementRefDeclarationMembers(t *testing.T) {
+	ctx, scope := measurementRefContext(t)
+
+	cases := []struct{ src, want string }{
+		{"km.unitConversion.conversionFactor", "1000.0"},
+		{"km.unitConversion.referenceUnit", "m"},
+		{"km.unitConversion.isExact", "true"},
+		{"km.unitConversion.prefix.longName", `"kilo"`},
+		{"km.unitConversion.prefix.conversionFactor", "1000.0"},
+		{"side.mRef.unitConversion.conversionFactor", "1000.0"},
+		{"ConvertQuantity(1 [km], km.unitConversion.referenceUnit)", "1000.0 [m]"},
+		{"halfMetre.unitConversion.conversionFactor", "0.5"},
+		{"demiMetre.unitConversion.conversionFactor", "0.5"},
+		{"halfMetre.unitConversion.isExact", "true"},
+		{"Imperial::m.unitConversion.conversionFactor", "1609.344"},
+		{"m.unitConversion", "[]"},
+		{"m.quantityDimension.quantityPowerFactors#(1).exponent", "1"},
+		{"SI::'m/s'.quantityDimension.quantityPowerFactors#(2).exponent", "-1"},
+		{"m.unitPowerFactors#(1).unit", "m"},
+		{"m.unitPowerFactors#(1).exponent", "1"},
+		{"km.unitPowerFactors#(1).unit", "km"},
+		{"SI::'m/s'.unitPowerFactors", "[]"},
+		{"K.definitionalQuantityValues#(1).num", "[273.16]"},
+		{"K.definitionalQuantityValues#(1).definition", `"temperature in kelvin of pure water at the triple point"`},
+		{"K.temperatureOfWaterAtTriplePointInK.num", "[273.16]"},
+		{"m.definitionalQuantityValues", "[]"},
+		{"SI::'m/s'.isBound", "false"},
+		{"SI::'m/s'.mRefs", "['m/s']"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if rendered := FormatValue(got); rendered != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
+			}
+		})
+	}
+
+	first, err := evalIn(t, ctx, scope, "km.unitConversion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := evalIn(t, ctx, scope, "km.unitConversion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Kind != ValInstance || first.Instance != again.Instance {
+		t.Errorf("km.unitConversion = %s then %s, want one object", FormatValue(first), FormatValue(again))
 	}
 }
 
@@ -281,10 +342,12 @@ func TestMeasurementRefReport(t *testing.T) {
 		{"m ** s", ErrTypeMismatch, "operator '**' is not defined for a measurement reference and a measurement reference"},
 		{"-m", ErrTypeMismatch, "unary '-' requires numeric operand, got measurement reference"},
 		{"m < s", nil, "comparison operands must be constants, got measurement reference and measurement reference"},
-		{"m.unitConversion", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::unitConversion: a measurement reference value holds the unit m and its reduction metre, not the declaration's member unitConversion"},
-		{"m.quantityDimension", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::quantityDimension: a measurement reference value holds the unit m"},
-		{"m.definitionalQuantityValues", ErrUnevaluableLibraryFunction, "not the declaration's member definitionalQuantityValues"},
-		{"(m / s).quantityDimension", ErrUnevaluableLibraryFunction, "a measurement reference value holds the unit m/s and its reduction metre·second^-1"},
+		{"(m / s).quantityDimension", ErrUnevaluableLibraryFunction, "MeasurementReferences::DerivedUnit::quantityDimension: m/s is a MeasurementReferences::DerivedUnit reducing to metre·second^-1, which names no declaration whose member quantityDimension could be read"},
+		{"(m / s).unitConversion", ErrUnevaluableLibraryFunction, "MeasurementReferences::DerivedUnit::unitConversion: m/s is a MeasurementReferences::DerivedUnit reducing to metre·second^-1"},
+		{"(m / s).unitPowerFactors", ErrUnevaluableLibraryFunction, "MeasurementReferences::DerivedUnit::unitPowerFactors: m/s is a MeasurementReferences::DerivedUnit reducing to metre·second^-1"},
+		{"(m ** exponent).definitionalQuantityValues", ErrUnevaluableLibraryFunction, "MeasurementReferences::DerivedUnit::definitionalQuantityValues: m**2 is a MeasurementReferences::DerivedUnit reducing to metre^2"},
+		{"m.hasValidUnitPowerFactors", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::hasValidUnitPowerFactors: a measurement reference value holds the unit m and its reduction metre, not the declaration's member hasValidUnitPowerFactors"},
+		{"(m / s).foo", ErrTypeMismatch, "measurement reference has no feature foo"},
 		{"m.foo", ErrTypeMismatch, "measurement reference has no feature foo"},
 		{"side.isBound", ErrUnevaluableLibraryFunction, "Quantities::ScalarQuantityValue::isBound: a scalar quantity value holds its num and mRef, not whether the quantity is bound"},
 		{"side.quantityDimension", ErrTypeMismatch, "a quantity in km has no feature quantityDimension"},

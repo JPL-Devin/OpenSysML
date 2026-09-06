@@ -1,0 +1,43 @@
+// A measurement reference that names a declaration answers that declaration's
+// members from its materialized object: `SI::km`'s unitConversion is a
+// ConversionByPrefix whose conversionFactor follows the redefinition
+// `= prefix.conversionFactor` and whose isExact follows UnitConversion's
+// `default true`; `SI::m`'s quantityDimension and unitPowerFactors read through
+// LengthUnit and SimpleUnit (`unit = self`, `exponent = 1`); a unit's
+// definitionalQuantityValues are quantities. Members the value itself carries
+// (isBound, mRefs, isOrthogonal, dimensions) are answered by the value, and a
+// model-owned TensorMeasurementReference stating no isBound inherits the
+// library's `default false`. A reference read from a quantity's mRef names its
+// declaration too, so a conversion can follow the declared reference unit.
+package test {
+	public import ISQ::*;
+	public import SI::*;
+	public import MeasurementReferences::*;
+	public import QuantityCalculations::*;
+	private import ScalarValues::*;
+
+	attribute stressRef : TensorMeasurementReference {
+		:>> mRefs = (Pa, Pa, Pa, Pa);
+		:>> dimensions = (2, 2);
+	}
+
+	part def Survey {
+		attribute side : LengthValue = 3 [km];
+		attribute factor : Real = SI::km.unitConversion.conversionFactor;
+		attribute reference : LengthUnit = SI::km.unitConversion.referenceUnit;
+		attribute exact : Boolean = SI::km.unitConversion.isExact;
+		attribute prefixName : String = SI::km.unitConversion.prefix.longName;
+		attribute fromSide : Real = side.mRef.unitConversion.conversionFactor;
+		attribute inReference : LengthValue = ConvertQuantity(side, km.unitConversion.referenceUnit);
+		attribute exponent : Real = SI::m.quantityDimension.quantityPowerFactors#(1).exponent;
+		attribute derivedExponent : Real = SI::'m/s'.quantityDimension.quantityPowerFactors#(2).exponent;
+		attribute factorUnit : MeasurementUnit = SI::m.unitPowerFactors#(1).unit;
+		attribute factorExponent : Real = SI::m.unitPowerFactors#(1).exponent;
+		attribute triplePoint : Real = SI::K.definitionalQuantityValues#(1).num;
+		attribute bound : Boolean = SI::m.isBound;
+		attribute orthogonal : Boolean = SI::m.isOrthogonal;
+		attribute axes : MeasurementUnit[*] = SI::m.mRefs;
+		attribute noConversion : UnitConversion[0..1] = SI::m.unitConversion;
+		attribute stressBound : Boolean = stressRef.isBound;
+	}
+}
