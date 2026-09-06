@@ -23,8 +23,10 @@ const (
 type ComposedFrame struct {
 	Dimensions    []int64
 	HasDimensions bool
-	// AxisDimensions is nil when the axes are not statically known.
+	// AxisDimensions is one per axis, or the one every axis measures in when Uniform;
+	// nil when the axes are not statically known.
 	AxisDimensions []UnitTerm
+	Uniform        bool
 }
 
 // IsCoordinateFrame reports whether typ is CoordinateFrame or a specialization:
@@ -159,8 +161,12 @@ func (m *Model) ComposedFrameConforms(f ComposedFrame, want *symbols.Symbol) Con
 			if got.Commensurable(axis) {
 				continue
 			}
-			c.Found = fmt.Sprintf("a coordinate frame whose axis %d measures in dimension %s, where %s admits %s",
-				i+1, Dimension{Term: got}, leafName(want.Name), Dimension{Term: axis})
+			which := fmt.Sprintf("axis %d measures", i+1)
+			if f.Uniform {
+				which = "axes measure"
+			}
+			c.Found = fmt.Sprintf("a coordinate frame whose %s in dimension %s, where %s admits %s",
+				which, Dimension{Term: got}, leafName(want.Name), Dimension{Term: axis})
 			return c
 		}
 	}
@@ -204,7 +210,7 @@ func (m *Model) composedFrameExpr(scope *symbols.Scope, e *ast.OperatorExpr) (Co
 	if !ok {
 		return ComposedFrame{}, false
 	}
-	composed := ComposedFrame{Dimensions: base.Dimensions, HasDimensions: base.HasDimensions}
+	composed := ComposedFrame{Dimensions: base.Dimensions, HasDimensions: base.HasDimensions, Uniform: base.Uniform}
 	unitDim, ok := m.dimensionOfUnitTerm(unit)
 	if !ok || base.AxisDimensions == nil {
 		return composed, true
@@ -244,21 +250,15 @@ func (m *Model) frameOperand(scope *symbols.Scope, node ast.Node) (ComposedFrame
 }
 
 // declaredFrame is the frame a feature of a frame type holds, as far as declarations
-// fix it: its dimensions, and one axis dimension per element when the type fixes one.
+// fix it: its dimensions, and the one dimension of every axis when the type fixes it.
 func (m *Model) declaredFrame(sym, typ *symbols.Symbol) ComposedFrame {
 	f := ComposedFrame{}
 	f.Dimensions, f.HasDimensions = m.FixedDimensions(sym)
 	if !f.HasDimensions {
 		f.Dimensions, f.HasDimensions = m.FixedDimensions(typ)
 	}
-	axis, ok := m.axisDimension(typ)
-	if !ok || !f.HasDimensions {
-		return f
+	if axis, ok := m.axisDimension(typ); ok {
+		f.AxisDimensions, f.Uniform = []UnitTerm{axis}, true
 	}
-	size := int64(1)
-	for _, d := range f.Dimensions {
-		size *= d
-	}
-	f.AxisDimensions = slices.Repeat([]UnitTerm{axis}, int(size))
 	return f
 }

@@ -59,7 +59,7 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		if statesNoMeasurement(element) {
 			continue
 		}
-		if ec.judgedAsMeasurementRef(valueScope, declared, element) || !known {
+		if ec.judgedAsMeasurementRef(valueScope, declared, element) || ec.judgedAsFramedQuantity(valueScope, declared, element) || !known {
 			continue
 		}
 		got, ok := ec.model.DimensionOfExpr(valueScope, element)
@@ -83,6 +83,24 @@ func (ec *exprChecker) judgedAsMeasurementRef(scope *symbols.Scope, declared *sy
 	if !ok {
 		c, ok = ec.model.CoordinateFrameExprConformance(scope, e, declared)
 	}
+	if !ok {
+		return false
+	}
+	if c.Known && !c.Holds {
+		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s", c.Found, declared.Name)
+	}
+	return true
+}
+
+// judgedAsFramedQuantity judges numbers written in a coordinate frame, named or
+// composed (`(1, 2, 3) [spatialCF / s]`), as the VectorQuantityValue they are;
+// false for a literal in a scalar unit, which is judged by dimension.
+func (ec *exprChecker) judgedAsFramedQuantity(scope *symbols.Scope, declared *symbols.Symbol, element ast.Node) bool {
+	n, ok := element.(*ast.IndexExpr)
+	if !ok {
+		return false
+	}
+	c, ok := ec.model.FramedQuantityConformance(scope, n, declared)
 	if !ok {
 		return false
 	}

@@ -205,10 +205,18 @@ func TestBoundComposedCoordinateFrame(t *testing.T) {
 	wantNoDimensionDiags(t, frames+`attribute cf : VectorMeasurementReference = spatialCF / s;`)
 	wantNoDimensionDiags(t, frames+`attribute p : Position3dVector = (1.0, 2.0, 3.0) [spatialCF];`)
 	wantNoDimensionDiags(t, frames+`attribute v : Quantities::VectorQuantityValue = (1.0, 2.0, 3.0) [velocityCF];`)
+	wantNoDimensionDiags(t, frames+`attribute v : CartesianVelocity3dVector = (1.0, 2.0, 3.0) [spatialCF / s];`)
+	wantNoDimensionDiags(t, frames+`attribute a : CartesianAcceleration3dVector = (1.0, 2.0, 3.0) [velocityCF / s];`)
+	wantOneDimensionError(t, frames+`attribute bad : CartesianPosition3dVector = (1.0, 2.0, 3.0) [velocityCF];`,
+		"cannot bind a vector quantity in velocityCF (a CartesianVelocity3dCoordinateFrame) to a feature typed by CartesianPosition3dVector")
+	wantOneDimensionError(t, frames+`attribute bad : CartesianPosition3dVector = (1.0, 2.0, 3.0) [spatialCF / s];`,
+		"cannot bind a vector quantity in spatialCF/s, a coordinate frame whose axes measure in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L to a feature typed by CartesianPosition3dVector")
+	wantOneDimensionError(t, frames+`attribute bad : SpeedValue = (1.0, 2.0, 3.0) [spatialCF / s];`,
+		"cannot bind a vector quantity in spatialCF/s, a coordinate frame composed from another's axes to a feature typed by SpeedValue")
 	wantOneDimensionError(t, frames+`attribute bad : CartesianSpatial3dCoordinateFrame = spatialCF / s;`,
-		"cannot bind a coordinate frame whose axis 1 measures in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L to a feature typed by CartesianSpatial3dCoordinateFrame")
+		"cannot bind a coordinate frame whose axes measure in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L to a feature typed by CartesianSpatial3dCoordinateFrame")
 	wantOneDimensionError(t, frames+`attribute bad : CartesianAcceleration3dCoordinateFrame = spatialCF / s;`,
-		"cannot bind a coordinate frame whose axis 1 measures in dimension L·T^-1, where CartesianAcceleration3dCoordinateFrame admits L·T^-2 to a feature typed by CartesianAcceleration3dCoordinateFrame")
+		"cannot bind a coordinate frame whose axes measure in dimension L·T^-1, where CartesianAcceleration3dCoordinateFrame admits L·T^-2 to a feature typed by CartesianAcceleration3dCoordinateFrame")
 	wantOneDimensionError(t, frames+`attribute bad : Time::TimeScale = spatialCF / s;`,
 		"cannot bind a coordinate frame of dimensions [3], where TimeScale fixes dimensions [] to a feature typed by TimeScale")
 	wantOneDimensionError(t, frames+`attribute bad : LengthUnit = spatialCF / s;`,

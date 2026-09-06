@@ -8,25 +8,30 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// frameIndex evaluates the index of `num [ref]` when it names a coordinate frame
-// or measurement scale rather than a unit; false for any other index.
+// frameIndex evaluates the index of `num [ref]` when it names or composes a
+// coordinate frame or measurement scale rather than a unit; false for any other index.
 func (ec *EvalContext) frameIndex(index ast.Node) (*CoordinateFrame, bool, error) {
-	switch index.(type) {
+	switch n := index.(type) {
 	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
+		if ec.ctx.resolver == nil {
+			return nil, false, nil
+		}
+		sym, ok := ec.ctx.resolver.ResolveTarget(ec.scope, index)
+		if !ok || sym == nil {
+			return nil, false, nil
+		}
+		if alias, ok := ec.ctx.resolver.ResolveAliasTarget(sym); ok {
+			sym = alias
+		}
+		if !ec.ctx.isFrameType(ec.ctx.extractType(sym)) {
+			return nil, false, nil
+		}
+	case *ast.OperatorExpr:
+		// `spatialCF / s`: a frame the checker proves 'CoordinateFrame/' composes.
+		if ec.ctx.model.CoordinateFrameExprType(ec.scope, n) == nil {
+			return nil, false, nil
+		}
 	default:
-		return nil, false, nil
-	}
-	if ec.ctx.resolver == nil {
-		return nil, false, nil
-	}
-	sym, ok := ec.ctx.resolver.ResolveTarget(ec.scope, index)
-	if !ok || sym == nil {
-		return nil, false, nil
-	}
-	if alias, ok := ec.ctx.resolver.ResolveAliasTarget(sym); ok {
-		sym = alias
-	}
-	if !ec.ctx.isFrameType(ec.ctx.extractType(sym)) {
 		return nil, false, nil
 	}
 	val, err := ec.Eval(index)
@@ -53,8 +58,12 @@ func (ec *EvalContext) framedQuantity(n *ast.IndexExpr, frame *CoordinateFrame) 
 	}
 	elements, ok := numericElements(magnitude)
 	if !ok {
+		size, sized := frame.FlattenedSize()
+		if !sized {
+			return Value{}, frame.flattenedSizeError(frame.Name())
+		}
 		return Value{}, fmt.Errorf("%w: magnitude of a quantity over the coordinate frame %s is %s, want %d numbers, one per axis",
-			ErrNotAQuantity, frame.Name(), describeValue(magnitude), frame.FlattenedSize())
+			ErrNotAQuantity, frame.Name(), describeValue(magnitude), size)
 	}
 	return ec.ctx.framedVectorQuantity(elements, frame)
 }
@@ -85,10 +94,14 @@ func numericElements(val Value) ([]semantics.Value, bool) {
 // framedVectorQuantity builds the vector quantity of num over frame, which
 // VectorCalculations::'[' sizes as `n = mRef.flattenedSize`.
 func (ctx *Context) framedVectorQuantity(num []semantics.Value, frame *CoordinateFrame) (Value, error) {
-	if int64(len(num)) != frame.FlattenedSize() {
+	size, ok := frame.FlattenedSize()
+	if !ok {
+		return Value{}, frame.flattenedSizeError("VectorCalculations::'[': " + frame.Name())
+	}
+	if int64(len(num)) != size {
 		return Value{}, fmt.Errorf(
 			"%w: VectorCalculations::'[': %d elements over the coordinate frame %s, whose flattenedSize is %d; elements: Number[1..n] with n = mRef.flattenedSize",
-			ErrMultiplicityViolation, len(num), frame.Name(), frame.FlattenedSize())
+			ErrMultiplicityViolation, len(num), frame.Name(), size)
 	}
 	checked, err := ctx.checkedComponents(num)
 	if err != nil {
@@ -205,19 +218,41 @@ func (ctx *Context) transformationValueType(t *CoordinateTransformation) (*symbo
 // it has one, else as the checker judges `cf / u` — a CoordinateFrame whose
 // dimensions and axes the feature's type may constrain.
 func (ctx *Context) frameConforms(frame *CoordinateFrame, declared *symbols.Symbol) (bool, string, error) {
-	if frame.Type != nil {
-		if ctx.model.Conforms(frame.Type, declared) {
-			return true, "", nil
-		}
-		return false, fmt.Sprintf("cannot write the coordinate frame %s, a %s, to a feature typed by %s",
-			frame, symbolText(frame.Type), symbolText(declared)), nil
-	}
-	c := ctx.model.ComposedFrameConforms(ctx.composedFrame(frame), declared)
-	if !c.Known || c.Holds {
+	found, refused := ctx.frameRefusal(frame, declared)
+	if !refused {
 		return true, "", nil
 	}
 	return false, fmt.Sprintf("cannot write the coordinate frame %s, %s, to a feature typed by %s",
-		frame, c.Found, symbolText(declared)), nil
+		frame, found, symbolText(declared)), nil
+}
+
+// frameRefusal says what a frame is that no feature of the declared type may hold:
+// its type, or what the checker knows of a composed frame; false where it conforms.
+func (ctx *Context) frameRefusal(frame *CoordinateFrame, declared *symbols.Symbol) (string, bool) {
+	if frame.Type != nil {
+		if ctx.model.Conforms(frame.Type, declared) {
+			return "", false
+		}
+		return "a " + symbolText(frame.Type), true
+	}
+	c := ctx.model.ComposedFrameConforms(ctx.composedFrame(frame), declared)
+	if !c.Known || c.Holds {
+		return "", false
+	}
+	return c.Found, true
+}
+
+// framedQuantityConforms judges a vector quantity written over a frame against the
+// frames the declared type's `mRef` admits, as the checker judges `(1, 2, 3) [cf]`.
+func (ctx *Context) framedQuantityConforms(value Value, declared *symbols.Symbol) (bool, string) {
+	frame := value.VectorQuantity().Frame
+	for _, admitted := range ctx.model.AdmittedMeasurementRefs(declared) {
+		if found, refused := ctx.frameRefusal(frame, admitted); refused {
+			return false, fmt.Sprintf("cannot write %s (a vector quantity over the coordinate frame %s, %s) to a feature typed by %s, whose mRef admits %s",
+				FormatValue(value), frame, found, symbolText(declared), symbolText(admitted))
+		}
+	}
+	return true, ""
 }
 
 // composedFrame is what the checker knows of a frame `cf * u` composes: its
@@ -270,7 +305,11 @@ func (ctx *Context) frameFeature(val Value, name string) (Value, bool, error) {
 	case arrayRankFeature:
 		return integerValue(int64(len(frame.Dimensions))), true, nil
 	case arrayFlattenedSizeFeature:
-		return integerValue(frame.FlattenedSize()), true, nil
+		size, ok := frame.FlattenedSize()
+		if !ok {
+			return Value{}, true, frame.flattenedSizeError(frame.Name())
+		}
+		return integerValue(size), true, nil
 	case arrayElementsFeature, mRefMRefsFeature:
 		if frame.IsScale() {
 			return ctx.answerSequence([]Value{val})

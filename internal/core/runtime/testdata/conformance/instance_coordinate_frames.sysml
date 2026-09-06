@@ -41,6 +41,10 @@ package test {
 		attribute halvedFrame : Boolean = (p / 2).mRef == spatialCF and (-p).mRef == spatialCF;
 		attribute rate : Quantities::VectorQuantityValue = p / 1 [s];
 		attribute rateFrame : Boolean = rate.mRef == velocityCF;
+		attribute composedV : CartesianVelocity3dVector = (1.0, 2.0, 3.0) [spatialCF / s];
+		attribute composedVFrame : Boolean = composedV.mRef == velocityCF;
+		attribute composedVEqual : Boolean = composedV == rate;
+		attribute composedSpeed : SpeedValue = 3.0 [m / s];
 		attribute mixedFrames : Position3dVector = p + (1.0, 2.0, 3.0) [datum];
 		attribute framedPlusUniform : Position3dVector = p + uniform;
 		attribute framedIsUniform : Boolean = p == uniform;
@@ -135,7 +139,7 @@ package test {
 			:>> mRefs = (mm, m, m);
 			:>> transformation : CoordinateFramePlacement { :>> source = mixed; :>> origin = (1.0, 2.0, 3.0) [mixed]; }
 		}
-		attribute mixedMoved : Position3dVector = transform(mixedShifted.transformation, (11.0, 22.0, 33.0) [mixed]);
+		attribute mixedMoved : Quantities::VectorQuantityValue = transform(mixedShifted.transformation, (11.0, 22.0, 33.0) [mixed]);
 
 		attribute celsius : IntervalScale = SI::'°C_abs';
 		attribute celsiusUnit : TemperatureUnit = celsius.unit;

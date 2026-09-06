@@ -296,9 +296,13 @@ func (ctx *Context) readFrameAxes(what string, inst *Instance, frame *Coordinate
 			frame.Dimensions = []int64{int64(len(refs))}
 		}
 	}
-	if frame.FlattenedSize() != int64(len(refs)) {
+	size, ok := frame.FlattenedSize()
+	if !ok {
+		return frame.flattenedSizeError(what)
+	}
+	if size != int64(len(refs)) {
 		return fmt.Errorf("%w: %s states %d mRefs for dimensions %v, whose flattenedSize is %d",
-			ErrMultiplicityViolation, what, len(refs), frame.Dimensions, frame.FlattenedSize())
+			ErrMultiplicityViolation, what, len(refs), frame.Dimensions, size)
 	}
 	return nil
 }

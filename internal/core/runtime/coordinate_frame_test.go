@@ -22,6 +22,8 @@ package Demo {
 	attribute alsoPlaced : CoordinateFramePlacement { :>> source = datum; :>> target = lifted; :>> origin = (0.0, 0.0, 5.0) [datum]; }
 	attribute trs : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Translation((0.0, 0.0, 5.0) [datum]); }
 	attribute alsoTrs : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Translation((0.0, 0.0, 5.0) [datum]); }
+	attribute turned : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Rotation((0.0, 0.0, 1.0) [datum], 90 ['°']); }
+	attribute alsoTurned : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Rotation((0.0, 0.0, 1.0) [datum], 1.5707961 [rad]); }
 	attribute def Bespoke :> CoordinateTransformation;
 	attribute bespoke : Bespoke { :>> source = datum; :>> target = lifted; }
 	attribute alsoBespoke : Bespoke { :>> source = datum; :>> target = lifted; }
@@ -143,6 +145,9 @@ func TestCoordinateTransformationHashesAsItCompares(t *testing.T) {
 	sameAndHashed(eval("placed"), eval("alsoPlaced"), true)
 	sameAndHashed(eval("trs"), eval("alsoTrs"), true)
 	sameAndHashed(eval("trs"), eval("lifted.transformation"), false)
+	sameAndHashed(eval("90 ['°']"), eval("1.5707961 [rad]"), true)
+	sameAndHashed(eval("turned"), eval("alsoTurned"), true)
+	sameAndHashed(eval("turned"), eval("trs"), false)
 	sameAndHashed(eval("bespoke"), eval("bespoke"), true)
 	sameAndHashed(eval("bespoke"), eval("alsoBespoke"), false)
 

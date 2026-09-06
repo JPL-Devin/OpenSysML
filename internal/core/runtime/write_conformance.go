@@ -256,6 +256,11 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 				return ok, refusal, err
 			}
 		}
+		if vq.Frame != nil {
+			if ok, refusal := ctx.framedQuantityConforms(value, declared); !ok {
+				return false, refusal, nil
+			}
+		}
 	case ValTensorQuantity:
 		return ctx.tensorQuantityConforms(value.TensorQuantity(), declared)
 	}

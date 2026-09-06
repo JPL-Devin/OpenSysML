@@ -40,6 +40,14 @@
       {"type": "Quantity", "value": 3.0, "unit": "m/s"}
     ]},
     "rateFrame": {"type": "Boolean", "value": true},
+    "composedV": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "m/s"},
+      {"type": "Quantity", "value": 2.0, "unit": "m/s"},
+      {"type": "Quantity", "value": 3.0, "unit": "m/s"}
+    ]},
+    "composedVFrame": {"type": "Boolean", "value": true},
+    "composedVEqual": {"type": "Boolean", "value": true},
+    "composedSpeed": {"type": "Quantity", "value": 3.0, "unit": "m/s"},
     "mixedFrames": {"error": "type mismatch: function VectorFunctions::'+' combines vectors over the coordinate frames spatialCF and datum; transform one into the other's frame first"},
     "framedPlusUniform": {"error": "type mismatch: function VectorFunctions::'+' combines a vector over the coordinate frame spatialCF with one over no frame; write both over the frame (`(x, y, z) [spatialCF]`)"},
     "framedIsUniform": {"type": "Boolean", "value": false},

@@ -625,26 +625,40 @@ func (ctx *Context) objectValue(inst *Instance) (Value, error) {
 	return Value{Kind: ValInstance, Instance: inst.ID}, nil
 }
 
-// structuredKey is the content hash a structured value's valueKey carries.
-func structuredKey(v Value) uint64 {
-	h := fnv.New64a()
+// keyBytes serializes a valueKey, so values valueEqual holds equal serialize alike.
+func keyBytes(k valueKey) []byte {
 	flag := func(b bool) uint64 {
 		if b {
 			return 1
 		}
 		return 0
 	}
+	// #nosec G115 -- the two's-complement bits are what the hash wants.
+	buf := binary.LittleEndian.AppendUint64(nil, uint64(k.kind))
+	// #nosec G115 -- see above.
+	buf = binary.LittleEndian.AppendUint64(buf, uint64(k.intVal))
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.realVal))
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.imagVal))
+	buf = binary.LittleEndian.AppendUint64(buf, flag(k.boolVal)<<1|flag(k.infVal))
+	buf = binary.LittleEndian.AppendUint64(buf, k.colHash)
+	return append(buf, k.strVal...)
+}
+
+// valueHash is the content hash of a value's key, for the key of a value holding it:
+// a quantity hashes by its base magnitude and dimension, as its equality compares.
+func valueHash(v Value) uint64 {
+	h := fnv.New64a()
+	// #nosec G104 -- hash.Hash.Write is documented never to return an error.
+	h.Write(keyBytes(valueKeyFunc(v)))
+	return h.Sum64()
+}
+
+// structuredKey is the content hash a structured value's valueKey carries.
+func structuredKey(v Value) uint64 {
+	h := fnv.New64a()
 	write := func(k valueKey) {
-		// #nosec G115 -- the two's-complement bits are what the hash wants.
-		buf := binary.LittleEndian.AppendUint64(nil, uint64(k.kind))
-		// #nosec G115 -- see above.
-		buf = binary.LittleEndian.AppendUint64(buf, uint64(k.intVal))
-		buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.realVal))
-		buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.imagVal))
-		buf = binary.LittleEndian.AppendUint64(buf, flag(k.boolVal)<<1|flag(k.infVal))
-		buf = binary.LittleEndian.AppendUint64(buf, k.colHash)
 		// #nosec G104 -- hash.Hash.Write is documented never to return an error.
-		h.Write(append(buf, k.strVal...))
+		h.Write(keyBytes(k))
 	}
 	switch v.Kind {
 	case ValArray:

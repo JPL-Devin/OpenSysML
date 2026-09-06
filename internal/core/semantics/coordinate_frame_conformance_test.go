@@ -31,11 +31,17 @@ func coordinateFrameModel(t *testing.T) (*semantics.Model, *symbols.Index) {
 		attribute plain : CoordinateFrame = spatialCF / s;
 		attribute p : Position3dVector = (1.0, 2.0, 3.0) [spatialCF];
 		attribute v = (1.0, 2.0, 3.0) [velocityCF];
+		attribute composedV : CartesianVelocity3dVector = (1.0, 2.0, 3.0) [spatialCF / s];
+		attribute speed = 3.0 [m / s];
 		attribute length = 3.0 [m];
 		attribute utc : TimeScale = UTC;
 		attribute sum = spatialCF + s;
 		attribute byNumber = spatialCF / 2;
 		attribute byFrame = s / spatialCF;
+		attribute vast : CoordinateFrame { :>> dimensions = 4611686018427387904; :>> mRefs = m; }
+		attribute vastVelocity = vast / s;
+		attribute overflowing : CoordinateFrame { :>> dimensions : Positive[2] = (4611686018427387904, 4); :>> mRefs = m; }
+		attribute overflowingVelocity = overflowing / s;
 	}`))).ParseFile())
 	idx.ExpandWildcardImports()
 	return semantics.NewModel(resolve.New(idx)), idx
@@ -70,8 +76,8 @@ func TestCoordinateFrameExpr(t *testing.T) {
 		{"T::velocityCF", "MeasurementReferences::CoordinateFrame", true, ""},
 		{"T::velocityCF", "MeasurementReferences::VectorMeasurementReference", true, ""},
 		{"T::velocityCF", "MeasurementReferences::TensorMeasurementReference", true, ""},
-		{"T::velocityCF", "ISQSpaceTime::CartesianSpatial3dCoordinateFrame", false, "axis 1 measures in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L"},
-		{"T::velocityCF", "ISQSpaceTime::CartesianAcceleration3dCoordinateFrame", false, "axis 1 measures in dimension L·T^-1, where CartesianAcceleration3dCoordinateFrame admits L·T^-2"},
+		{"T::velocityCF", "ISQSpaceTime::CartesianSpatial3dCoordinateFrame", false, "axes measure in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L"},
+		{"T::velocityCF", "ISQSpaceTime::CartesianAcceleration3dCoordinateFrame", false, "axes measure in dimension L·T^-1, where CartesianAcceleration3dCoordinateFrame admits L·T^-2"},
 		{"T::velocityCF", "ISQBase::LengthUnit", false, "a coordinate frame composed from another's axes"},
 		{"T::velocityCF", "ISQSpaceTime::SpeedUnit", false, "a coordinate frame composed from another's axes"},
 		{"T::velocityCF", "MeasurementReferences::ScalarMeasurementReference", false, "a coordinate frame composed from another's axes"},
@@ -79,10 +85,14 @@ func TestCoordinateFrameExpr(t *testing.T) {
 		{"T::velocityCF", "ISQSpaceTime::SpeedValue", false, "a coordinate frame composed from another's axes"},
 		{"T::velocityCF", "ScalarValues::Real", false, "a coordinate frame composed from another's axes"},
 		{"T::accelerationCF", "ISQSpaceTime::CartesianAcceleration3dCoordinateFrame", true, ""},
-		{"T::accelerationCF", "ISQSpaceTime::CartesianVelocity3dCoordinateFrame", false, "axis 1 measures in dimension L·T^-2"},
-		{"T::scaled", "ISQSpaceTime::CartesianSpatial3dCoordinateFrame", false, "axis 1 measures in dimension L·T, where CartesianSpatial3dCoordinateFrame admits L"},
+		{"T::accelerationCF", "ISQSpaceTime::CartesianVelocity3dCoordinateFrame", false, "axes measure in dimension L·T^-2"},
+		{"T::scaled", "ISQSpaceTime::CartesianSpatial3dCoordinateFrame", false, "axes measure in dimension L·T, where CartesianSpatial3dCoordinateFrame admits L"},
 		{"T::scaled", "MeasurementReferences::CoordinateFrame", true, ""},
 		{"T::plain", "MeasurementReferences::CoordinateFrame", true, ""},
+		{"T::vastVelocity", "MeasurementReferences::CoordinateFrame", true, ""},
+		{"T::vastVelocity", "ISQSpaceTime::CartesianVelocity3dCoordinateFrame", false, "dimensions [4611686018427387904], where CartesianVelocity3dCoordinateFrame fixes dimensions [3]"},
+		{"T::overflowingVelocity", "MeasurementReferences::CoordinateFrame", true, ""},
+		{"T::overflowingVelocity", "ISQSpaceTime::CartesianVelocity3dCoordinateFrame", false, "dimensions [4611686018427387904 4], where CartesianVelocity3dCoordinateFrame fixes dimensions [3]"},
 	} {
 		t.Run(tc.feature+" : "+tc.want, func(t *testing.T) {
 			scope, e := boundOperatorExpr(t, idx, tc.feature)
@@ -176,6 +186,15 @@ func TestComposedFrameConforms(t *testing.T) {
 	if c := m.ComposedFrameConforms(unknown, spatial); !c.Known || !c.Holds {
 		t.Errorf("axes of unknown dimension against a spatial frame: %+v", c)
 	}
+	uniform := semantics.ComposedFrame{Dimensions: []int64{3}, HasDimensions: true, AxisDimensions: []semantics.UnitTerm{length.Term}, Uniform: true}
+	if c := m.ComposedFrameConforms(uniform, spatial); !c.Known || !c.Holds {
+		t.Errorf("axes uniformly of length against a spatial frame: %+v", c)
+	}
+	velocity := dimensionSymbol(t, idx, "ISQSpaceTime::CartesianVelocity3dCoordinateFrame")
+	c = m.ComposedFrameConforms(uniform, velocity)
+	if !c.Known || c.Holds || !strings.Contains(c.Found, "whose axes measure in dimension L, where CartesianVelocity3dCoordinateFrame admits L·T^-1") {
+		t.Errorf("axes uniformly of length against a velocity frame: %+v", c)
+	}
 	if c := m.ComposedFrameConforms(three, dimensionSymbol(t, idx, "ISQBase::LengthValue")); !c.Known || c.Holds {
 		t.Errorf("a frame against a quantity value: %+v", c)
 	}
@@ -198,6 +217,13 @@ func TestFrameQuantityConformance(t *testing.T) {
 		{"T::p", "Quantities::ScalarQuantityValue", false, "a vector quantity in spatialCF"},
 		{"T::v", "Quantities::VectorQuantityValue", true, ""},
 		{"T::v", "ISQSpaceTime::Position3dVector", false, "a vector quantity in velocityCF"},
+		{"T::composedV", "ISQSpaceTime::CartesianVelocity3dVector", true, ""},
+		{"T::composedV", "Quantities::VectorQuantityValue", true, ""},
+		{"T::composedV", "ISQSpaceTime::CartesianPosition3dVector", false, "a vector quantity in spatialCF/s, a coordinate frame whose axes measure in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L"},
+		{"T::composedV", "ISQSpaceTime::SpeedValue", false, "a vector quantity in spatialCF/s"},
+		{"T::composedV", "Quantities::ScalarQuantityValue", false, "a vector quantity in spatialCF/s"},
+		{"T::speed", "ISQSpaceTime::SpeedValue", true, ""},
+		{"T::speed", "ISQSpaceTime::CartesianVelocity3dVector", false, ""},
 		{"T::length", "ISQBase::LengthValue", true, ""},
 		{"T::length", "Quantities::VectorQuantityValue", true, ""},
 		{"T::length", "ISQSpaceTime::Position3dVector", false, "a quantity in metre (a LengthUnit)"},

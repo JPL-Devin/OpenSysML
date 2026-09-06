@@ -89,13 +89,15 @@ func NewCoordinateTransformationValue(t *CoordinateTransformation) Value {
 func (f *CoordinateFrame) IsScale() bool { return f != nil && f.Scale != nil }
 
 // FlattenedSize is the number of axes the dimensions shape: their product, 1 for
-// a scalar reference's empty dimensions.
-func (f *CoordinateFrame) FlattenedSize() int64 {
-	size := int64(1)
-	for _, d := range f.Dimensions {
-		size *= d
-	}
-	return size
+// a scalar reference's empty dimensions; false when it does not fit an Integer.
+func (f *CoordinateFrame) FlattenedSize() (int64, bool) {
+	return flattenedSize(f.Dimensions)
+}
+
+// flattenedSizeError is the typed refusal of dimensions whose product overflows.
+func (f *CoordinateFrame) flattenedSizeError(what string) error {
+	return fmt.Errorf("%w: %s: flattenedSize of dimensions %s exceeds the Integer range",
+		semantics.ErrArithmeticOverflow, what, FormatValue(intSequence(f.Dimensions)))
 }
 
 // Name is how the frame is referred to in diagnostics: its declared name, else
@@ -193,8 +195,8 @@ func (f *CoordinateFrame) key() string {
 	if f.Scale != nil {
 		b.WriteString("|scale:" + (&MeasurementRef{Unit: f.Scale.Unit}).key())
 		if f.Scale.Mapping != nil {
-			b.WriteString("|map:" + strconv.FormatUint(structuredKey(NewQuantityValue(&f.Scale.Mapping.Mapped)), 10))
-			b.WriteString("," + strconv.FormatUint(structuredKey(NewQuantityValue(&f.Scale.Mapping.Reference)), 10))
+			b.WriteString("|map:" + strconv.FormatUint(valueHash(NewQuantityValue(&f.Scale.Mapping.Mapped)), 10))
+			b.WriteString("," + strconv.FormatUint(valueHash(NewQuantityValue(&f.Scale.Mapping.Reference)), 10))
 		}
 	}
 	if f.Transformation != nil {
@@ -323,19 +325,19 @@ func (t *CoordinateTransformation) key() string {
 	b.WriteString(t.shapeName() + "|src:" + t.Source.key() + "|tgt:" + t.Target.key())
 	switch {
 	case t.Placement != nil:
-		b.WriteString("|o:" + strconv.FormatUint(valueKeyFunc(t.Placement.Origin).colHash, 10))
+		b.WriteString("|o:" + strconv.FormatUint(valueHash(t.Placement.Origin), 10))
 		for _, dir := range t.Placement.BasisDirections {
-			b.WriteString("|b:" + strconv.FormatUint(valueKeyFunc(dir).colHash, 10))
+			b.WriteString("|b:" + strconv.FormatUint(valueHash(dir), 10))
 		}
 	case t.Sequence != nil:
 		for _, step := range t.Sequence {
 			if step.Translation != nil {
-				b.WriteString("|t:" + strconv.FormatUint(valueKeyFunc(*step.Translation).colHash, 10))
+				b.WriteString("|t:" + strconv.FormatUint(valueHash(*step.Translation), 10))
 				continue
 			}
-			b.WriteString("|r:" + strconv.FormatUint(valueKeyFunc(*step.Axis).colHash, 10) +
+			b.WriteString("|r:" + strconv.FormatUint(valueHash(*step.Axis), 10) +
 				"," + strconv.FormatBool(step.Intrinsic) +
-				"," + strconv.FormatFloat(step.Angle.Num.AsReal(), 'g', -1, 64) + step.Angle.Unit.Term.String())
+				"," + strconv.FormatUint(valueHash(NewQuantityValue(step.Angle)), 10))
 		}
 	case t.Affine != nil:
 		b.WriteString(fmt.Sprintf("|m:%v%v", t.Affine.Rotation, t.Affine.Translation))
