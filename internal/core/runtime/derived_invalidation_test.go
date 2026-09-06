@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 )
@@ -15,6 +16,7 @@ const derivedInvalidationModel = `
 		private import SI::*;
 		private import ISQ::*;
 		private import NumericalFunctions::*;
+		private import ControlFunctions::*;
 
 		part def MassedComponent {
 			part subcomponents : MassedComponent [*] default null;
@@ -47,9 +49,26 @@ const derivedInvalidationModel = `
 			attribute alt :> ISQ::length = 100 [cm];
 			attribute twice :> ISQ::length = len * 2;
 		}
+		part def Host {
+			attribute a : Integer default 3;
+			attribute d : Integer = a + writer.n;
+		}
+		part def Writer {
+			attribute n : Integer = 1;
+			perform action set { action go { assign host.a := 9; } first go; }
+		}
+		part def Bin {
+			attribute weights [*] default null;
+			attribute grams :> ISQ::mass [*] = (1 [g])->select {in x; false};
+			attribute kilos :> ISQ::mass [*] = (1 [kg])->select {in x; false};
+			attribute total = sum(weights);
+		}
 
 		part box : Box;
 		part rod : Rod;
+		part bin : Bin;
+		part host : Host;
+		part writer : Writer;
 		part stack : Stack;
 		part bare : Bare;
 		part rig : Rig;
@@ -168,6 +187,65 @@ func TestWriteOfAnEqualQuantityInAnotherUnitRecomputesDerivedValues(t *testing.T
 	}
 	if twice := rod.FeatureValues["twice"]; !twice.Materialized {
 		t.Fatal("writing len's own value again unmaterialized twice")
+	}
+}
+
+// TestWriteOfAnEmptyCollectionInAnotherUnitRecomputesDerivedValues: an empty
+// collection measures its elements in a unit, which the zero its sum yields is in.
+func TestWriteOfAnEmptyCollectionInAnotherUnitRecomputesDerivedValues(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, derivedInvalidationModel))
+	bin := instantiateNamed(t, ctx, idx, "test::bin")
+	if got := readFormatted(t, ctx, bin, "total"); got != "0" {
+		t.Fatalf("total = %s before any write, want 0", got)
+	}
+	emptyIn := func(name, unit string) Value {
+		fv, err := bin.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if got, ok := fv.HeldValue().Sequence().ElementUnit(); !ok || got.Text != unit {
+			t.Fatalf("%s = %s measured in %q, %t; want an empty sequence in %s", name, FormatValue(fv.HeldValue()), got.Text, ok, unit)
+		}
+		return fv.HeldValue()
+	}
+	grams, kilos := emptyIn("grams", "g"), emptyIn("kilos", "kg")
+	for _, step := range []struct {
+		val  Value
+		want string
+	}{{grams, "0 [g]"}, {kilos, "0 [kg]"}} {
+		if err := bin.SetFeatureValue(ctx, "weights", step.val); err != nil {
+			t.Fatalf("SetFeatureValue(weights): %v", err)
+		}
+		if got := readFormatted(t, ctx, bin, "total"); got != step.want {
+			t.Fatalf("total = %s after weights := %s, want %s", got, FormatValue(step.val), step.want)
+		}
+	}
+	if err := bin.SetFeatureValue(ctx, "weights", kilos); err != nil {
+		t.Fatalf("SetFeatureValue(weights) again: %v", err)
+	}
+	if total := bin.FeatureValues["total"]; !total.Materialized {
+		t.Fatal("writing weights' own value again unmaterialized total")
+	}
+}
+
+// TestWriteUnderADerivationDerivesItAgain: a read a derivation makes starts a
+// behavior (here, of the occurrence a package-level part denotes) that writes a
+// value the derivation read before; its result is derived over again, not committed.
+func TestWriteUnderADerivationDerivesItAgain(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, derivedInvalidationModel))
+	host := instantiateNamed(t, ctx, idx, "test::host")
+	if d, a := readInt(t, ctx, host, "d"), readInt(t, ctx, host, "a"); d != 10 || a != 9 {
+		t.Fatalf("d, a = %d, %d after the first read of d, want 10, 9: writer's run wrote a under d", d, a)
+	}
+	if len(ctx.deriving) != 0 {
+		t.Fatalf("%d derivations still under way", len(ctx.deriving))
+	}
+	if a, d := host.FeatureValues["a"], host.FeatureValues["d"]; !slices.Contains(a.dependents, d) {
+		t.Fatal("d is no longer listed as a dependent of a")
+	}
+	setInt(t, ctx, host, "a", 20)
+	if d := readInt(t, ctx, host, "d"); d != 21 {
+		t.Fatalf("d = %d after a := 20, want 21", d)
 	}
 }
 

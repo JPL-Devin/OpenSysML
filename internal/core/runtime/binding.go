@@ -185,14 +185,23 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
-	if target.BindingDerived && ctx.CompositeTypeOf(target.Feature) == nil {
-		ctx.noteProbeWrite(target)
-		target.Value = Value{}
-		target.Values = Value{}
-		target.Materialized = false
-		target.BindingDerived = false
+	if !target.BindingDerived || ctx.CompositeTypeOf(target.Feature) != nil {
+		return ctx.resolveBindings(inst, target, name, key)
 	}
+	// A value a binding gave is resolved afresh: clearing it and binding it again is one write.
+	before := ctx.beforeWrite(target)
+	ctx.noteProbeWrite(target)
+	target.Value = Value{}
+	target.Values = Value{}
+	target.Materialized = false
+	target.BindingDerived = false
+	val, found, err := ctx.resolveBindings(inst, target, name, key)
+	ctx.afterWrite(target, before)
+	return val, found, err
+}
 
+// resolveBindings is what the bindings of the target's owners, innermost first, determine it holds.
+func (ctx *Context) resolveBindings(inst *Instance, target *FeatureValue, name string, key featureValueRef) (Value, bool, error) {
 	// A binding linking one unspecified value determines nothing, so it is reported
 	// only once no binding at any level determines the feature.
 	var undetermined *UndeterminedBindingError
@@ -838,12 +847,10 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 	}
 	loc := endpoint.locations[0]
 	fv := loc.instance.FeatureValues[loc.name]
-	prior, had := ctx.priorValue(fv)
-	if err := ctx.assignBindingValue(loc.instance, fv, loc.name, val); err != nil {
-		return err
-	}
-	ctx.noteChanged(fv, prior, had)
-	return nil
+	before := ctx.beforeWrite(fv)
+	err := ctx.assignBindingValue(loc.instance, fv, loc.name, val)
+	ctx.afterWrite(fv, before)
+	return err
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {

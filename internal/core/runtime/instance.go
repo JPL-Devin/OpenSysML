@@ -85,6 +85,9 @@ type FeatureValue struct {
 	// dependents are the derived values that read this one, to unmaterialize when
 	// it changes; nil until one does (see dependents.go).
 	dependents []*FeatureValue
+	// changing is set while a write to this value is under way, so a write nested
+	// in it counts as part of it (see beforeWrite).
+	changing bool
 }
 
 // HeldValue is the value the feature value reads as: its collection when the feature is
@@ -495,7 +498,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 		return err
 	}
 	ctx.noteProbeWrite(fv)
-	prior, had := ctx.priorValue(fv)
+	before := ctx.beforeWrite(fv)
 	if fv.Feature.Scalar() {
 		fv.Value = value
 		fv.Values = Value{}
@@ -505,7 +508,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	}
 	fv.Materialized, fv.Written = true, true
 	fv.BindingDerived = false
-	ctx.noteChanged(fv, prior, had)
+	ctx.afterWrite(fv, before)
 	return nil
 }
 
@@ -515,34 +518,40 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 	defer ctx.beginRun()()
 
 	fv := inst.FeatureValues[name]
-	prior, had := ctx.priorValue(fv)
-
-	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+	before := ctx.beforeWrite(fv)
+	err := inst.materializeBoundOrIntrinsic(ctx, fv, name)
+	ctx.afterWrite(fv, before)
+	if err != nil {
 		return nil, err
-	} else if found {
-		if err := ctx.assignBindingValue(inst, fv, name, val); err != nil {
-			return nil, err
-		}
-	} else if !fv.Materialized {
-		if _, err := inst.materializeFeatureValueIntrinsic(ctx, name); err != nil {
-			return nil, err
-		}
 	}
-	// Prior predates resolving the binding, which may have cleared a stale bound value.
-	ctx.noteChanged(fv, prior, had)
 	ctx.noteRead(fv)
 	return fv, nil
+}
+
+// materializeBoundOrIntrinsic gives fv the value a binding determines, else the one
+// its feature states, once.
+func (inst *Instance) materializeBoundOrIntrinsic(ctx *Context, fv *FeatureValue, name string) error {
+	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+		return err
+	} else if found {
+		return ctx.assignBindingValue(inst, fv, name, val)
+	} else if !fv.Materialized {
+		_, err := inst.materializeFeatureValueIntrinsic(ctx, name)
+		return err
+	}
+	return nil
 }
 
 // materializeFeatureValueIntrinsic evaluates a feature without following
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
-	prior, had := ctx.priorValue(fv)
-	if _, err := inst.materializeIntrinsic(ctx, fv, name); err != nil {
+	before := ctx.beforeWrite(fv)
+	_, err := inst.materializeIntrinsic(ctx, fv, name)
+	ctx.afterWrite(fv, before)
+	if err != nil {
 		return nil, err
 	}
-	ctx.noteChanged(fv, prior, had)
 	return fv, nil
 }
 

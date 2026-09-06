@@ -9,14 +9,37 @@ func (ctx *Context) derivable(fv *FeatureValue) bool {
 	return !fv.Written && !fv.BindingDerived && !fv.Feature.DefaultIsFallback()
 }
 
-// deriveFeatureValue evaluates fv's `=` expression, recording what it reads.
+// derivation is a `=` value being derived; stale once a value it read was written
+// under it (by a behavior a read started), so its result is derived again.
+type derivation struct {
+	fv    *FeatureValue
+	stale bool
+}
+
+// deriveFeatureValue evaluates fv's `=` expression, recording what it reads, over
+// again while a read wrote under it; the step limit bounds a run that never settles.
 func (ctx *Context) deriveFeatureValue(inst *Instance, fv *FeatureValue, name string) (Value, error) {
 	if !ctx.derivable(fv) {
 		return ctx.evalFeatureValueDefault(inst, fv, name)
 	}
-	ctx.deriving = append(ctx.deriving, fv)
-	defer func() { ctx.deriving = ctx.deriving[:len(ctx.deriving)-1] }()
-	return ctx.evalFeatureValueDefault(inst, fv, name)
+	for {
+		val, stale, err := ctx.deriveOnce(inst, fv, name)
+		if err != nil || !stale {
+			return val, err
+		}
+	}
+}
+
+// deriveOnce derives fv under a frame of its own, reporting whether it went stale.
+func (ctx *Context) deriveOnce(inst *Instance, fv *FeatureValue, name string) (val Value, stale bool, err error) {
+	top := len(ctx.deriving)
+	ctx.deriving = append(ctx.deriving, derivation{fv: fv})
+	defer func() {
+		stale = ctx.deriving[top].stale
+		ctx.deriving = ctx.deriving[:top]
+	}()
+	val, err = ctx.evalFeatureValueDefault(inst, fv, name)
+	return val, false, err
 }
 
 // noteRead lists the value being derived, if any, as a dependent of the fv just read.
@@ -24,7 +47,7 @@ func (ctx *Context) noteRead(fv *FeatureValue) {
 	if len(ctx.deriving) == 0 {
 		return
 	}
-	dep := ctx.deriving[len(ctx.deriving)-1]
+	dep := ctx.deriving[len(ctx.deriving)-1].fv
 	if dep == fv {
 		return
 	}
@@ -37,33 +60,73 @@ func (ctx *Context) noteRead(fv *FeatureValue) {
 	fv.dependents = append(fv.dependents, dep)
 }
 
-// priorValue is what fv holds before a write, and whether anything depends on it.
-func (ctx *Context) priorValue(fv *FeatureValue) (Value, bool) {
-	if len(fv.dependents) == 0 {
-		return Value{}, false
-	}
-	return fv.HeldValue(), true
+// held is what a feature value held before a write, with what depended on it then.
+type held struct {
+	val          Value
+	materialized bool
+	taken        bool
+	dependents   []*FeatureValue
 }
 
-// noteChanged unmaterializes what depended on fv before a write, unless fv still
-// holds prior; a dependent recorded during the write read what fv holds now.
-func (ctx *Context) noteChanged(fv *FeatureValue, prior Value, had bool) {
-	if !had || len(fv.dependents) == 0 || (fv.Materialized && heldSame(prior, fv.HeldValue())) {
+// beforeWrite takes what fv holds, setting its dependents aside until afterWrite: the
+// writes on the way (a binding cleared and bound again) count as one, by the result.
+func (ctx *Context) beforeWrite(fv *FeatureValue) held {
+	if fv.changing || (len(fv.dependents) == 0 && len(ctx.deriving) == 0) {
+		return held{}
+	}
+	ctx.noteProbeWrite(fv)
+	p := held{val: fv.HeldValue(), materialized: fv.Materialized, taken: true, dependents: fv.dependents}
+	fv.dependents, fv.changing = nil, true
+	return p
+}
+
+// afterWrite unmaterializes what depended on fv before the write unless fv holds
+// what it held; what read fv during the write read what it holds now and stays listed.
+func (ctx *Context) afterWrite(fv *FeatureValue, p held) {
+	if !p.taken {
 		return
 	}
-	ctx.invalidateDependents(fv)
+	ctx.noteProbeWrite(fv)
+	fv.changing = false
+	if p.dependents == nil {
+		return
+	}
+	if p.materialized != fv.Materialized || (fv.Materialized && !heldSame(p.val, fv.HeldValue())) {
+		p.dependents = ctx.invalidate(p.dependents)
+	}
+	fv.dependents = listDependents(fv.dependents, p.dependents)
+}
+
+// listDependents lists each of more not already listed, without copying when nothing is.
+func listDependents(listed, more []*FeatureValue) []*FeatureValue {
+	if len(listed) == 0 {
+		return more
+	}
+next:
+	for _, dep := range more {
+		for _, have := range listed {
+			if have == dep {
+				continue next
+			}
+		}
+		listed = append(listed, dep)
+	}
+	return listed
 }
 
 // heldSame reports whether now is prior as a derivation reads it: `===`, and for a
 // quantity the same unit too, which an operation over it carries into its result.
 func heldSame(prior, now Value) bool {
 	if isEmptyValue(prior) || isEmptyValue(now) {
-		return isEmptyValue(prior) && isEmptyValue(now)
+		return isEmptyValue(prior) && isEmptyValue(now) && emptyUnitSame(prior, now)
 	}
 	if prior.Kind != now.Kind {
 		return false
 	}
 	switch prior.Kind {
+	case ValInvalid:
+		// Holding nothing, as an optional part with no object does.
+		return true
 	case ValQuantity:
 		return prior.Quantity().Unit.Product.Equal(now.Quantity().Unit.Product) && valueIdentical(prior, now)
 	case ValVectorQuantity:
@@ -76,6 +139,17 @@ func heldSame(prior, now Value) bool {
 		return setHeldSame(prior.Set(), now.Set())
 	}
 	return valueIdentical(prior, now)
+}
+
+// emptyUnitSame reports whether two empty values type the zero a sum of them
+// yields alike: both in one unit, or neither in any.
+func emptyUnitSame(prior, now Value) bool {
+	pu, pok := prior.Sequence().ElementUnit()
+	nu, nok := now.Sequence().ElementUnit()
+	if pok != nok {
+		return false
+	}
+	return !pok || pu.Product.Equal(nu.Product)
 }
 
 func vectorQuantityHeldSame(prior, now *VectorQuantity) bool {
@@ -123,9 +197,8 @@ func setHeldSame(prior, now *Set) bool {
 	return true
 }
 
-// invalidateDependents unmaterializes what was derived from fv, transitively. Each
-// list is detached before it is walked, so a cycle ends the walk; a value being
-// derived right now stays listed, as fv changed under it.
+// invalidateDependents unmaterializes what was derived from fv, transitively. The
+// list is detached before it is walked, so a cycle ends the walk.
 func (ctx *Context) invalidateDependents(fv *FeatureValue) {
 	if len(fv.dependents) == 0 {
 		return
@@ -133,10 +206,15 @@ func (ctx *Context) invalidateDependents(fv *FeatureValue) {
 	ctx.noteProbeWrite(fv)
 	dependents := fv.dependents
 	fv.dependents = nil
-	var deriving []*FeatureValue
+	fv.dependents = ctx.invalidate(dependents)
+}
+
+// invalidate unmaterializes the dependents, transitively, returning those being
+// derived right now: each stays listed, its derivation stale as its source changed under it.
+func (ctx *Context) invalidate(dependents []*FeatureValue) (deriving []*FeatureValue) {
 	for _, dep := range dependents {
 		switch {
-		case ctx.isDeriving(dep):
+		case ctx.markStale(dep):
 			deriving = append(deriving, dep)
 		case dep.Written || dep.BindingDerived:
 			// Assigned or bound since: its value is no longer derived from fv.
@@ -148,13 +226,14 @@ func (ctx *Context) invalidateDependents(fv *FeatureValue) {
 			ctx.invalidateDependents(dep)
 		}
 	}
-	fv.dependents = deriving
+	return deriving
 }
 
-// isDeriving reports whether fv is being derived right now.
-func (ctx *Context) isDeriving(fv *FeatureValue) bool {
-	for _, deriving := range ctx.deriving {
-		if deriving == fv {
+// markStale reports whether fv is being derived right now, marking that derivation stale.
+func (ctx *Context) markStale(fv *FeatureValue) bool {
+	for i := range ctx.deriving {
+		if ctx.deriving[i].fv == fv {
+			ctx.deriving[i].stale = true
 			return true
 		}
 	}
