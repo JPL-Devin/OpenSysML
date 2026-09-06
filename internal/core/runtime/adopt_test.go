@@ -1182,6 +1182,48 @@ func TestAdoptRebindsTheUnitsAWrittenValueNames(t *testing.T) {
 	}
 }
 
+// A value measured in a unit the re-analysis redefined (same name, other
+// reduction) is refused rather than carried over with a stale conversion.
+func TestAdoptRefusesAUnitWhoseReductionChanged(t *testing.T) {
+	src := strings.Replace(adoptUnitSrc,
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute pos : Quantities::VectorQuantityValue; }", 1)
+	changed := libraryContextOver(t, strings.Replace(src, "conversionFactor = 201.168", "conversionFactor = 220", 1))
+	for feature, value := range map[string]string{
+		"width": "3 [furlong]",
+		"unit":  "furlong",
+		"pos":   "VectorFunctions::VectorOf((1.0, 2.0)) [furlong]",
+	} {
+		prev := libraryContextOver(t, src)
+		scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+		field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+		if err != nil {
+			t.Fatalf("Instantiate: %v", err)
+		}
+		val, err := evalIn(t, prev, scope, value)
+		if err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+		shapes := prev.ShapesOf(field)
+
+		same := libraryContextOver(t, src+"\npart def Widget;")
+		if _, err := same.Adopt(prev, shapes, field); err != nil {
+			t.Fatalf("Adopt of %s into a re-analysis with the same furlong: %v", feature, err)
+		}
+		var adoptErr *AdoptError
+		_, err = changed.Adopt(prev, shapes, field)
+		if !errors.As(err, &adoptErr) {
+			t.Fatalf("Adopt of %s into a re-analysis redefining furlong: %v, want an AdoptError", feature, err)
+		}
+		if !strings.Contains(err.Error(), "the unit furlong it is measured in now reduces to 220·metre, not 201.168·metre") {
+			t.Errorf("Adopt of %s refused for %q, want the changed reduction named", feature, err)
+		}
+	}
+}
+
 const adoptWrittenSrc = `package Demo {
 	private import ScalarValues::*;
 	part def Holder { attribute n : Integer; }

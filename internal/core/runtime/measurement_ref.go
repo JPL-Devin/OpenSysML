@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -68,12 +69,14 @@ func (r *MeasurementRef) equal(other *MeasurementRef) bool {
 	return true
 }
 
-// key identifies the reference the way equal compares it, for a set or map.
+// key identifies the reference the way equal compares it, for a set or map: the
+// scale as one number, so `0.5` and `1/2` key alike as they compare alike.
 func (r *MeasurementRef) key() string {
 	if r == nil {
 		return ""
 	}
-	key := r.Unit.Term.DimensionKey() + "@" + r.Unit.Term.Scale.String()
+	scale := r.Unit.Term.Scale
+	key := r.Unit.Term.DimensionKey() + "@" + strconv.FormatFloat(scale.Num/scale.Den, 'g', -1, 64)
 	if r.Unit.Term.Dimensionless() {
 		key += "|" + r.Unit.Product.String()
 	}

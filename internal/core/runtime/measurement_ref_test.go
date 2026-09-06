@@ -20,6 +20,9 @@ func measurementRefContext(t *testing.T) (*Context, *symbols.Scope) {
 			public import ScalarValues::*;
 			public import QuantityCalculations::*;
 			public import MeasurementRefCalculations::*;
+			private import MeasurementReferences::*;
+			attribute halfMetre : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 0.5; } }
+			attribute demiMetre : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1/2; } }
 			attribute side : LengthValue = 3 [km];
 			attribute unit : LengthUnit = m;
 			attribute area : AreaUnit = m * m;
@@ -142,6 +145,9 @@ func TestMeasurementRefEquality(t *testing.T) {
 		{"m", "1 [m]", false},
 		{"vq.mRef", "m", true},
 		{"(1 [m]).mRef", "(2 [m]).mRef", true},
+		{"halfMetre", "demiMetre", true},
+		{"halfMetre", "m", false},
+		{"halfMetre / s", "demiMetre / s", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.left+" == "+tc.right, func(t *testing.T) {

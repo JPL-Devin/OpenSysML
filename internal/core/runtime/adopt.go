@@ -612,15 +612,35 @@ func unitsOf(v Value) []Unit {
 	return nil
 }
 
-// planUnit rebinds every unit declaration a unit product names.
+// planUnit rebinds every unit declaration a unit product names, and refuses a
+// unit whose reduction the re-analysis changed (its magnitude would read wrong).
 func (a *adoption) planUnit(unit Unit) error {
+	if unit.Product.IsEmpty() {
+		return nil
+	}
+	term := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
 	for _, power := range unit.Product.Powers {
-		if power.Unit == nil {
-			continue
+		what := "the unit " + power.Name + " it is measured in"
+		var reduces semantics.UnitTerm
+		switch {
+		case power.Unit != nil:
+			found, err := a.rebind(power.Unit, what)
+			if err != nil {
+				return err
+			}
+			if reduces, err = a.ctx.model.UnitTermOf(found); err != nil {
+				return &AdoptError{Type: a.ctx.fqnOf(found), Reason: what + " no longer reduces: " + err.Error()}
+			}
+		case power.Reduces != nil:
+			reduces = *power.Reduces
+		default:
+			return nil
 		}
-		if _, err := a.rebind(power.Unit, "the unit "+power.Name+" it is measured in"); err != nil {
-			return err
-		}
+		term = term.Times(reduces.Pow(power.Exponent))
+	}
+	if !term.Same(unit.Term) {
+		return &AdoptError{Reason: "the unit " + unit.Product.String() + " it is measured in now reduces to " +
+			term.String() + ", not " + unit.Term.String()}
 	}
 	return nil
 }

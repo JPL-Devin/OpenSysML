@@ -828,9 +828,12 @@ the flat sequence of its elements:
   `m.definitionalQuantityValues`) are `ErrUnevaluableLibraryFunction`: the
   value carries the unit and its reduction, not the library object's features. A
   reference embedded in a written value is rebound across re-analysis like the
-  objects behind an array are (`adopt.go` `unitsOf`, `rewriteUnit`: a model's own
-  `furlong` follows the re-read declaration, and a unit the new model no longer
-  declares refuses adoption by name); the solver refuses to pin one
+  objects behind an array are (`adopt.go` `unitsOf`, `planUnit`, `rewriteUnit`: a
+  model's own `furlong` follows the re-read declaration; a unit the new model no
+  longer declares, or reduces differently — `furlong` re-declared as `220 m` — refuses
+  adoption naming the unit and both reductions, since a magnitude written under
+  the old factor would read as another quantity under the new;
+  `TestAdoptRefusesAUnitWhoseReductionChanged`); the solver refuses to pin one
   (`ErrNotPinnable`), a document query binds a single unit but not an operator
   over units, and over gRPC it crosses as an unsupported null naming the value
   (`unsupported: measurement reference m`; `TestMeasurementRefCrossesAsUnsupported`):
