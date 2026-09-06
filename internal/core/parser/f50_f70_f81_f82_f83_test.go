@@ -20,61 +20,91 @@ func TestF50F70F81F82F83AndF62F63Parse(t *testing.T) {
 		name string
 		src  string
 		want string
+		// file overrides the default `<name>.sysml`, for KerML-only notation.
+		file string
 	}{
 		{
 			"variable_and_member",
 			"package P { classifier C; classifier D { abstract var feature x [0..*]; member abstract feature y [0..*] featured by C; } }",
 			"variable=true",
+			"",
 		},
 		{
 			"variable_before_modifier",
 			"package P { classifier D { var abstract feature x; } }",
 			"variable=true",
+			"",
 		},
 		{
 			"representation_keywords_as_names",
 			"package P { classifier D { feature rep; feature language; } }",
 			`name="language"`,
+			"",
 		},
 		{
 			"textual_representation",
 			"package P { classifier C { inv check { rep inOCL language \"ocl\" /* body */ } } }",
 			`TextualRepresentation language="\"ocl\"" name="inOCL"`,
+			"",
 		},
 		{
 			"differences",
 			"package P { classifier A; classifier B; classifier D differences A, B; }",
 			`kind="differences"`,
+			"",
 		},
+		// A keyword-first Disjoining is a KerML member of its own
+		// (KerML.xtext:426) with ordered ends; SysML.xtext has no such member.
 		{
 			"namespace_disjoint",
 			"package P { classifier A; classifier B; disjoint B from A; }",
-			`kind="disjoint"`,
+			`(RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="B" target="A"`,
+			"namespace_disjoint.kerml",
+		},
+		{
+			"global_disjoint_end",
+			"package P { classifier A; classifier B; disjoint $::P::A from B; }",
+			`(RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="$::P::A" target="B"`,
+			"global_disjoint_end.kerml",
+		},
+		{
+			"keyword_named_disjoint_end",
+			"package P { classifier B; feature part : B; disjoining part disjoint part from B; }",
+			`(RelationshipMember visibility="default" kind="disjoint" name="part" keyword="disjoint" source="part" target="B"`,
+			"keyword_named_disjoint_end.kerml",
 		},
 		{
 			"classifier_multiplicity",
 			"package P { classifier A; classifier B [1] specializes A; }",
 			"(Multiplicity",
+			"",
 		},
 		{
 			"metaclass_multiplicity",
 			"package P { classifier A; metaclass S [1] specializes A; }",
 			`(Definition kind="metaclass"`,
+			"",
 		},
 		{
 			"exhibit_chain",
 			"package P { state def S { state on; } part vehicle : S { exhibit vehicleStates.on; } }",
 			"FeatureChainExpr",
+			"",
 		},
 		{
 			"reference_body",
 			"package P { part medicalDevice { ref patient { event occurrence therapyDelayed; } } }",
 			`name="patient"`,
+			"",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root, diags := parseFeatureFix(t, tt.name+".sysml", tt.src)
+			file := tt.file
+			if file == "" {
+				file = tt.name + ".sysml"
+			}
+			root, diags := parseFeatureFix(t, file, tt.src)
 			if root == nil {
 				t.Fatal("ParseFile returned nil")
 			}
@@ -104,6 +134,15 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 		{"representation", "package P { classifier D { inv c { rep language; } } }", ""},
 		{"differences", "package P { classifier D differences ; }", ""},
 		{"disjoint", "package P { disjoint from A; }", ""},
+		{"disjoint_missing_end", "package P { disjoint from A; }", "disjoint_missing_end.kerml"},
+		{"disjoint_missing_from", "package P { disjoint B A; }", "disjoint_missing_from.kerml"},
+		{"disjoint_missing_target", "package P { disjoint B from ; }", "disjoint_missing_target.kerml"},
+		{"disjoining_without_disjoint", "package P { disjoining D B from A; }", "disjoining_without_disjoint.kerml"},
+		// SysML.xtext declares no keyword-first Disjoining, so the member is
+		// refused there as `subtype A specializes B;` is.
+		{"sysml_disjoint_member", "package P { part def A; part def B; disjoint B from A; }", ""},
+		{"sysml_disjoint_body_member", "package P { part def A; part def B; part def C { disjoint B from A; } }", ""},
+		{"sysml_subset_body_member", "package P { part def A; part def C { part x : A; part y : A; subset x subsets y; } }", ""},
 		{"multiplicity", "package P { classifier B [ specializes A; }", ""},
 		{"sysml_definition_multiplicity", "package P { part def P [1] :> A; }", ""},
 		{"sysml_attribute_definition_multiplicity", "package P { attribute def A [1]; }", ""},

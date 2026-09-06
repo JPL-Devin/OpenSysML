@@ -361,7 +361,7 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
-		text, err := d.expressionNodeText(triple.Object, el)
+		text, err := d.expressionOperand(triple.Object, el, positionBinding(strings.TrimPrefix(triple.Predicate.Value, rdf.SysML)))
 		if err != nil {
 			return err
 		}
@@ -503,6 +503,38 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
+	form, err := d.expressionForm(node, in)
+	return form.text, err
+}
+
+// expressionOperand writes an expression node where the notation must bind at
+// least as tightly as min, enclosed in parentheses where its form binds less.
+func (d *decoder) expressionOperand(node rdf.Term, in *element, min int) (string, error) {
+	if min == bindConditional {
+		return d.expressionNodeText(node, in)
+	}
+	form, err := d.operandForm(node, in)
+	if err != nil {
+		return "", err
+	}
+	return form.at(min), nil
+}
+
+// operandForm is an expression node as notation, kept or rebuilt, with how
+// tightly that notation binds.
+func (d *decoder) operandForm(node rdf.Term, in *element) (operand, error) {
+	if text, ok := d.expressionText(node); ok {
+		return operand{text: text, binding: notationBinding(text)}, nil
+	}
+	return d.expressionForm(node, in)
+}
+
+// expressionForm rebuilds an expression node from its structure, with how
+// tightly the notation binds; the notation it kept is not consulted here.
+func (d *decoder) expressionForm(node rdf.Term, in *element) (operand, error) {
+	primary := func(text string, err error) (operand, error) {
+		return operand{text: text, binding: bindPrimary}, err
+	}
 	metaclass := d.metaclass(node)
 	unsupported := func(note string) error {
 		return &UnsupportedError{
@@ -513,91 +545,91 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 	switch metaclass {
 	case mLiteralBoolean:
 		if !d.graph.HasProperty(node, rdf.SysML+pValue) {
-			return "", unsupported(literalStatesValue)
+			return primary("", unsupported(literalStatesValue))
 		}
-		return strconv.FormatBool(d.graph.BoolValue(node, rdf.SysML+pValue)), nil
+		return primary(strconv.FormatBool(d.graph.BoolValue(node, rdf.SysML+pValue)), nil)
 	case mLiteralInteger:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported(literalStatesValue)
+			return primary("", unsupported(literalStatesValue))
 		}
 		if !lexer.IsDecimalValue(value) {
-			return "", unsupported(fmt.Sprintf("the notation spells an integer literal as digits alone, not %q; a sign is an OperatorExpression applied to it", value))
+			return primary("", unsupported(fmt.Sprintf("the notation spells an integer literal as digits alone, not %q; a sign is an OperatorExpression applied to it", value)))
 		}
-		return value, nil
+		return primary(value, nil)
 	case mLiteralRational:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported(literalStatesValue)
+			return primary("", unsupported(literalStatesValue))
 		}
 		text, ok := realValueText(value)
 		if !ok {
-			return "", unsupported(fmt.Sprintf("the notation spells a rational literal as an unsigned finite number, not %q; a sign is an OperatorExpression applied to it", value))
+			return primary("", unsupported(fmt.Sprintf("the notation spells a rational literal as an unsigned finite number, not %q; a sign is an OperatorExpression applied to it", value)))
 		}
-		return text, nil
+		return primary(text, nil)
 	case mLiteralString:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported(literalStatesValue)
+			return primary("", unsupported(literalStatesValue))
 		}
-		return lexer.StringText(value), nil
+		return primary(lexer.StringText(value), nil)
 	case mLiteralInfinity:
-		return "*", nil
+		return primary("*", nil)
 	case mNullExpression:
-		return "null", nil
+		return primary("null", nil)
 	case mFeatureReference:
-		return d.expressionReference(node, rdf.SysML+pReferent, in,
-			"a feature reference names the feature it reads")
+		return primary(d.expressionReference(node, rdf.SysML+pReferent, in,
+			"a feature reference names the feature it reads"))
 	case mMetadataAccess:
 		name, err := d.expressionReference(node, rdf.SysML+pReferencedElement, in,
 			"a metadata access names the element it reads the metadata of")
 		if err != nil {
-			return "", err
+			return primary("", err)
 		}
-		return name + ".metadata", nil
+		return primary(name+".metadata", nil)
 	case mFeatureChain:
-		operands, err := d.expressionArguments(node, in)
+		operands, err := d.expressionArguments(node, in, bindPrimary)
 		if err != nil {
-			return "", err
+			return primary("", err)
 		}
 		object, ok := d.graph.Object(node, rdf.SysML+pTargetFeature)
 		if !ok {
-			return "", unsupported("a feature chain names the feature it reaches")
+			return primary("", unsupported("a feature chain names the feature it reaches"))
 		}
 		member, err := d.segmentName(node, object, in)
 		if err != nil {
-			return "", err
+			return primary("", err)
 		}
 		if len(operands) != 1 {
-			return "", unsupported("a feature chain applies to exactly one operand")
+			return primary("", unsupported("a feature chain applies to exactly one operand"))
 		}
-		return operands[0] + "." + member, nil
+		return primary(operands[0]+"."+member, nil)
 	case mCollect, mSelect:
-		operands, err := d.expressionArguments(node, in)
+		operands, err := d.expressionArguments(node, in, bindPrimary)
 		if err != nil {
-			return "", err
+			return primary("", err)
 		}
 		if len(operands) != 2 {
-			return "", unsupported("a collect or select expression applies a body to one operand")
+			return primary("", unsupported("a collect or select expression applies a body to one operand"))
 		}
 		separator := "."
 		if metaclass == mSelect {
 			separator = ".?"
 		}
-		return operands[0] + separator + operands[1], nil
+		return primary(operands[0]+separator+operands[1], nil)
 	case mOperator:
-		return d.operatorText(node, in)
+		return d.operatorForm(node, in)
 	case mInvocation:
-		return d.invocationText(node, in)
+		return primary(d.invocationText(node, in))
 	case mExpression:
 		if d.graph.BoolValue(node, rdf.OpenSysML+xHasBody) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyParameter) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyMember) {
-			return d.expressionBodyText(node, in)
+			return primary(d.expressionBodyText(node, in))
 		}
 	}
-	return "", unsupported("this expression states no notation and no structure to write one from; " + rdfLimitationsNote)
+	return primary("", unsupported("this expression states no notation and no structure to write one from; "+rdfLimitationsNote))
 }
 
 // expressionBodyText rebuilds an expression body: its declarations and its
@@ -656,7 +688,7 @@ func (d *decoder) bodyParameterText(param rdf.Term, in *element) (string, error)
 		if !ok {
 			continue
 		}
-		text, err := d.expressionNodeText(object, in)
+		text, err := d.expressionOperand(object, in, positionBinding(property))
 		if err != nil {
 			return "", err
 		}
@@ -751,47 +783,59 @@ func (d *decoder) bodyMemberText(member rdf.Term, in *element) (string, error) {
 	return strings.TrimSpace(text), nil
 }
 
-// operatorText rebuilds an operator expression, parenthesized so the notation
-// means the tree the graph states without recording precedence.
-func (d *decoder) operatorText(node rdf.Term, in *element) (string, error) {
+// operatorForm rebuilds an operator expression. Each operand is enclosed in
+// parentheses only where its own form binds too loosely for its position.
+func (d *decoder) operatorForm(node rdf.Term, in *element) (operand, error) {
 	operator, ok := d.graph.Lexical(node, rdf.SysML+pOperator)
 	if !ok {
-		return "", &UnsupportedError{
+		return operand{}, &UnsupportedError{
 			What: fmt.Sprintf("the expression <%s>", node.Value),
 			Note: "an operator expression states the operator it applies",
 		}
 	}
-	args, err := d.expressionArguments(node, in)
+	args, err := d.expressionOperands(node, in)
 	if err != nil {
-		return "", err
+		return operand{}, err
 	}
 	typeArgument, hasType, err := d.expressionTypeArgument(node, in)
 	if err != nil {
-		return "", err
+		return operand{}, err
 	}
+	primary := func(text string) (operand, error) {
+		return operand{text: text, binding: bindPrimary}, nil
+	}
+	infix, isInfix := infixBinding[operator]
 	switch {
 	case operator == opSequence:
-		return "(" + strings.Join(args, ", ") + ")", nil
+		return primary("(" + joinOperands(args, bindConditional) + ")")
 	case operator == opIf && len(args) == 3:
-		return "if " + args[0] + " ? " + args[1] + " else " + args[2], nil
+		// The condition is read below the conditional form; either branch may be one.
+		text := "if " + args[0].at(bindNullCoalesce) + " ? " + args[1].at(bindConditional) + " else " + args[2].at(bindConditional)
+		return operand{text: text, binding: bindConditional}, nil
 	case operator == opIndex && len(args) == 2:
-		return args[0] + "[" + args[1] + "]", nil
+		return primary(args[0].at(bindPrimary) + "[" + args[1].text + "]")
 	case operator == opAt && len(args) == 2:
-		return args[0] + "#(" + args[1] + ")", nil
-	case hasType && len(args) == 1:
-		return "(" + args[0] + " " + operator + " " + typeArgument + ")", nil
+		return primary(args[0].at(bindPrimary) + "#(" + args[1].text + ")")
+	case hasType && len(args) == 1 && isInfix:
+		return operand{text: args[0].at(infix) + " " + operator + " " + typeArgument, binding: infix}, nil
 	case hasType && len(args) == 0:
 		multiplicity, err := d.expressionMultiplicityText(node, in)
 		if err != nil {
-			return "", err
+			return operand{}, err
 		}
-		return "(" + operator + " " + typeArgument + multiplicity + ")", nil
-	case len(args) == 1:
-		return "(" + operator + " " + args[0] + ")", nil
-	case len(args) == 2:
-		return "(" + args[0] + " " + operator + " " + args[1] + ")", nil
+		return primary("(" + operator + " " + typeArgument + multiplicity + ")")
+	case len(args) == 1 && prefixOperators[operator]:
+		return operand{text: operator + " " + args[0].at(bindUnary), binding: bindUnary}, nil
+	case len(args) == 2 && isInfix:
+		// Operands group to the left, so an equal binding on the right is enclosed;
+		// exponentiation groups to the right.
+		left, right := infix, infix+1
+		if infix == bindExponent {
+			left, right = infix+1, infix
+		}
+		return operand{text: args[0].at(left) + " " + operator + " " + args[1].at(right), binding: infix}, nil
 	}
-	return "", &UnsupportedError{
+	return operand{}, &UnsupportedError{
 		What: fmt.Sprintf("the expression <%s>", node.Value),
 		Note: fmt.Sprintf("the operator %q is written with %d operand(s), which has no notation", operator, len(args)),
 	}
@@ -803,7 +847,7 @@ func (d *decoder) invocationText(node rdf.Term, in *element) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	args, err := d.expressionArguments(node, in)
+	args, err := d.expressionArguments(node, in, bindConditional)
 	if err != nil {
 		return "", err
 	}
@@ -811,51 +855,71 @@ func (d *decoder) invocationText(node rdf.Term, in *element) (string, error) {
 	if d.graph.BoolValue(node, rdf.OpenSysML+xIsConstructor) {
 		call = "new " + call
 	}
-	if operand, ok := d.graph.Object(node, rdf.SysML+pOperand); ok {
-		receiver, err := d.expressionNodeText(operand, in)
+	if receiver, ok := d.graph.Object(node, rdf.SysML+pOperand); ok {
+		text, err := d.expressionOperand(receiver, in, bindPrimary)
 		if err != nil {
 			return "", err
 		}
-		return receiver + "->" + call, nil
+		return text + "->" + call, nil
 	}
 	return call, nil
 }
 
-// expressionArguments writes the operands in the order sysx:argumentIndex records.
-func (d *decoder) expressionArguments(node rdf.Term, in *element) ([]string, error) {
+// expressionOperands rebuilds the operands in the order sysx:argumentIndex records.
+func (d *decoder) expressionOperands(node rdf.Term, in *element) ([]operand, error) {
 	type argument struct {
 		index int
-		text  string
-		name  string
+		form  operand
 	}
 	objects := d.graph.Objects(node, rdf.SysML+pArgument)
 	args := make([]argument, 0, len(objects))
 	for i, object := range objects {
-		text, err := d.expressionNodeText(object, in)
+		form, err := d.operandForm(object, in)
 		if err != nil {
 			return nil, err
 		}
-		arg := argument{index: i, text: text}
+		arg := argument{index: i, form: form}
 		if written, ok := d.graph.Lexical(object, rdf.OpenSysML+xArgumentIndex); ok {
 			if parsed, err := strconv.Atoi(written); err == nil {
 				arg.index = parsed
 			}
 		}
 		if name, ok := d.graph.Lexical(object, rdf.OpenSysML+xArgumentName); ok {
-			arg.name = qualifiedNameText(name)
+			// A named argument is delimited by the invocation it is written in.
+			arg.form = operand{text: qualifiedNameText(name) + " = " + form.text, binding: bindPrimary}
 		}
 		args = append(args, arg)
 	}
 	sort.SliceStable(args, func(i, j int) bool { return args[i].index < args[j].index })
-	out := make([]string, 0, len(args))
+	out := make([]operand, 0, len(args))
 	for _, arg := range args {
-		if arg.name != "" {
-			out = append(out, arg.name+" = "+arg.text)
-			continue
-		}
-		out = append(out, arg.text)
+		out = append(out, arg.form)
 	}
 	return out, nil
+}
+
+// expressionArguments writes the operands in order, each where it must bind at
+// least as tightly as min.
+func (d *decoder) expressionArguments(node rdf.Term, in *element, min int) ([]string, error) {
+	args, err := d.expressionOperands(node, in)
+	if err != nil {
+		return nil, err
+	}
+	return splitOperands(args, min), nil
+}
+
+// splitOperands writes each operand where it must bind at least as tightly as min.
+func splitOperands(args []operand, min int) []string {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		out = append(out, arg.at(min))
+	}
+	return out
+}
+
+// joinOperands writes the operands comma-separated, each at min.
+func joinOperands(args []operand, min int) string {
+	return strings.Join(splitOperands(args, min), ", ")
 }
 
 // expressionReference names the element an expression property points at.
@@ -879,7 +943,7 @@ func (d *decoder) expressionMultiplicityText(node rdf.Term, in *element) (string
 		if !ok {
 			continue
 		}
-		text, err := d.expressionNodeText(object, in)
+		text, err := d.expressionOperand(object, in, positionBinding(property))
 		if err != nil {
 			return "", err
 		}

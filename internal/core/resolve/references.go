@@ -24,6 +24,9 @@ type refCollector struct {
 	condition bool
 	// member is the declaration whose text is being walked.
 	member ast.Node
+	// head is set while a head relationship of a declaration with a scope of
+	// its own is walked (Reference.Head).
+	head *HeadRelationship
 }
 
 // push records a reference, marking it as a filter condition's own name when one
@@ -31,6 +34,11 @@ type refCollector struct {
 func (c *refCollector) push(ref Reference) {
 	ref.Condition = c.condition
 	ref.Member = c.member
+	ref.Head = c.head
+	// The outermost chain member is the name decided on.
+	if ref.Head != nil && ref.Head.Member == ref.QN {
+		ref.Head = &HeadRelationship{Scope: ref.Head.Scope, Kind: ref.Head.Kind}
+	}
 	c.refs = append(c.refs, ref)
 }
 
@@ -225,17 +233,19 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
 		c.prefixes(scope, d, d.Prefixes)
-		c.relationships(scope, d, d.Relationships)
-		if child := c.childScope(scope, d); child != nil {
+		child := c.childScope(scope, d)
+		c.headerRelationships(scope, child, d, d.Relationships)
+		if child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Usage:
 		c.prefixes(scope, d, d.Prefixes)
-		c.relationships(scope, d, d.Relationships)
+		child := c.childScope(scope, d)
+		c.headerRelationships(scope, child, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		if d.CrossFeature != nil {
-			c.crossFeature(scope, d)
+			c.crossFeature(scope, child, d)
 		}
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
@@ -245,7 +255,6 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		} else {
 			c.expr(scope, d.Value)
 		}
-		child := c.childScope(scope, d)
 		for _, end := range d.ConnectorEnds {
 			if end == nil {
 				continue
@@ -464,6 +473,35 @@ func (c *refCollector) trigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
+// headerRelationships collects the head relationships of decl, whose own scope
+// is header, where a target may resolve first (resolveHeaderRelationships).
+func (c *refCollector) headerRelationships(scope, header *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
+	if header == nil || header == scope {
+		c.relationships(scope, decl, rels)
+		return
+	}
+	prev := c.head
+	defer func() { c.head = prev }()
+	for _, rel := range rels {
+		if rel == nil {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		switch target := target.(type) {
+		case *ast.QualifiedName:
+			c.head = &HeadRelationship{Scope: header, Kind: rel.Kind}
+		case *ast.FeatureChainExpr:
+			c.head = &HeadRelationship{Scope: header, Kind: rel.Kind, Member: target.Member}
+		default:
+			c.head = nil
+		}
+		c.relationships(scope, decl, []*ast.Relationship{rel})
+	}
+}
+
 // relationships collects the targets of typings, specializations, subsettings
 // and redefinitions (`: T`, `:> T`, `:>> T`) owned by decl. A reference
 // subsetting records decl as the referrer, so it resolves past decl's own
@@ -550,11 +588,11 @@ func (c *refCollector) prefixes(scope *symbols.Scope, decl ast.Node, prefixes []
 
 // crossFeature collects the references the cross feature an end declares ahead
 // of itself writes, as that feature's; they resolve where the end's do.
-func (c *refCollector) crossFeature(scope *symbols.Scope, u *ast.Usage) {
+func (c *refCollector) crossFeature(scope, header *symbols.Scope, u *ast.Usage) {
 	prev := c.member
 	c.member = u.CrossFeature
 	defer func() { c.member = prev }()
-	c.relationships(scope, u.CrossFeature, u.CrossFeature.Relationships)
+	c.headerRelationships(scope, header, u.CrossFeature, u.CrossFeature.Relationships)
 	c.multiplicity(scope, u.CrossFeature.Multiplicity)
 }
 

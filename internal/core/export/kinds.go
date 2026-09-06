@@ -1,6 +1,9 @@
 package export
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/ast"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+)
 
 // The tables below are the single source of truth for the correspondence
 // between a SysML declaration keyword, the AST kind the parser produced for it,
@@ -94,12 +97,37 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageBool:             "BooleanUsage",
 }
 
+// kermlTypeUsage marks the usage kinds the parser records a KerML type
+// declaration under: their metaclass names a Type the ontology does not declare.
+var kermlTypeUsage = map[ast.UsageKind]bool{
+	ast.UsageClass:       true,
+	ast.UsageStruct:      true,
+	ast.UsageAssoc:       true,
+	ast.UsageBehavior:    true,
+	ast.UsagePredicate:   true,
+	ast.UsageInteraction: true,
+}
+
+// isType reports whether a metaclass is a Type, by the ontology or by kermlTypeUsage.
+func isType(metaclass string) bool {
+	return ontology.IsAncestorOrSelf(metaclass, "Type") || kermlTypeUsage[metaclassUsage[metaclass]]
+}
+
 // keywordMetaclass names the metaclass a keyword builds where several spellings
 // share one AST kind (KerML.xtext:788, :924; SysML.xtext:632).
 var keywordMetaclass = map[string]string{
 	"datatype": "DataType",
 	"function": "Function",
 	"ref":      "ReferenceUsage",
+}
+
+// crossFeatureMetaclass is what an end's head-written cross feature builds: a bare
+// Feature in KerML, a ReferenceUsage in SysML (SysML.xtext OwnedCrossFeature).
+func crossFeatureMetaclass(kerml bool) string {
+	if kerml {
+		return "Feature"
+	}
+	return keywordMetaclass["ref"]
 }
 
 // The metaclasses an `event` or `assert` declaration builds: the keyword is a
@@ -223,6 +251,7 @@ var relationshipElementForm = map[ast.RelationshipKind]relationshipEndForm{
 	ast.RelRedefines:   {"Redefinition", "redefiningFeature", "redefinedFeature"},
 	ast.RelInverseOf:   {"FeatureInverting", "invertingFeature", "featureInverted"},
 	ast.RelFeaturedBy:  {"TypeFeaturing", "featureOfType", "featuringType"},
+	ast.RelDisjoint:    {"Disjoining", "typeDisjoined", "disjoiningType"},
 }
 
 // conjugationForm is the form a `conjugate x conjugates y` member takes, which
@@ -242,6 +271,7 @@ var relationshipMemberSyntax = map[string]struct {
 	"conjugate":     {"conjugatedType", "originalType", "conjugates"},
 	"inverse":       {"invertingFeature", "featureInverted", "of"},
 	"featuring":     {"featureOfType", "featuringType", "by"},
+	"disjoint":      {"typeDisjoined", "disjoiningType", "from"},
 }
 
 // relationshipSyntax gives the source syntax that introduces a relationship

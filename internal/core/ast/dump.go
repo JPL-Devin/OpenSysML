@@ -298,8 +298,8 @@ func dumpNamespaceMember(b *strings.Builder, n Node, depth int) bool {
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))
 		return true
 	case *RelationshipMember:
-		fmt.Fprintf(b, `(RelationshipMember kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
-			v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
+		fmt.Fprintf(b, `(RelationshipMember visibility=%q kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
+			visibilityString(v.Visibility), v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
 		writeChildren(b, depth, v.Members)
 		return true
 	case *Comment:

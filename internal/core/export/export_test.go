@@ -506,13 +506,13 @@ func TestChainSegmentIsSpelledToReachTheGraphsTarget(t *testing.T) {
 	// for the one relinked to B::x, which is spelled to reach its own element.
 	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	repeated := relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1))
-	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = (a.x + a.B::x);") {
+	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = a.x + a.B::x;") {
 		t.Errorf("each repeated chain should be spelled for its own element\n%s", back)
 	}
 	// Both relinked, neither occurrence reads as A::x any more.
 	first := "    sysml:argument expr:P__w_pvalue_pa0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	both := relinked(t, repeated, first, strings.Replace(first, "A__x", "B__x", 1))
-	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = (a.B::x + a.B::x);") {
+	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = a.B::x + a.B::x;") {
 		t.Errorf("both relinked chains should be spelled qualified\n%s", back)
 	}
 }
@@ -3561,8 +3561,8 @@ func TestShadowingParametersStayNames(t *testing.T) {
 	}
 	back := backFromTheGraphAlone(t, turtle)
 	for _, want := range []string{
-		"accept setSpeed(value) if (value > 0) then fast;",
-		"accept w : Speed if (w > 0) then idle;",
+		"accept setSpeed(value) if value > 0 then fast;",
+		"accept w : Speed if w > 0 then idle;",
 		"attribute cur = value;",
 	} {
 		if !strings.Contains(back, want) {

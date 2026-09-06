@@ -511,7 +511,7 @@ func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, 
 		if preceding != nil {
 			e.preceding[node] = preceding
 		}
-		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
+		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i, isTypeFeatureMember(member)); err != nil {
 			return err
 		}
 		if ast.IsSuccessionSource(node) {
@@ -560,6 +560,9 @@ type memberHead struct {
 	metaclass  rdf.Term
 	lines      region
 	inline     bool
+	// typeFeature marks a KerML `member` (TypeFeatureMember): a feature its type
+	// owns through a plain OwningMembership rather than a FeatureMembership.
+	typeFeature bool
 }
 
 func (e *encoder) head(subject rdf.Term, h memberHead) {
@@ -590,7 +593,7 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
 		}
 		_, crossing := node.(*ast.CrossFeatureMember)
-		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm), crossing)
+		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm), crossing || h.typeFeature)
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {
 		// The membership states the visibility a member is declared with; a
@@ -604,8 +607,9 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 }
 
 // encodeMember maps one member: node is the declaration inside its membership
-// wrapper, and lines the text of the member, wrapper and all, unless inline.
-func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int) error {
+// wrapper, and lines the text of the member, wrapper and all, unless inline;
+// typeFeature marks a wrapper declared `member` (KerML TypeFeatureMember).
+func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int, typeFeature bool) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject, err := e.mint(node, fqn)
@@ -616,7 +620,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	result := ast.IsExpression(node)
 	head := func(metaclass rdf.Term) {
 		e.head(subject, memberHead{node: node, visibility: visibility, fqn: fqn, owner: ownerTerm,
-			index: index, metaclass: metaclass, lines: lines, inline: inline})
+			index: index, metaclass: metaclass, lines: lines, inline: inline, typeFeature: typeFeature})
 	}
 
 	switch n := node.(type) {
@@ -931,8 +935,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 // its membership, so a compact owner triple alone leaves a client walking down
 // from a root with nothing to follow. result marks a body's result expression,
 // which a ResultExpressionMembership owns; variant a usage a VariantMembership
-// owns; crossing the cross feature an end owns through a plain OwningMembership.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant, crossing bool) rdf.Term {
+// owns; plain a feature its type owns through a plain OwningMembership rather
+// than a FeatureMembership: an end's cross feature, or a KerML `member` feature.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant, plain bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	// A metadata usage annotates its owner through an OwningMembership whatever
 	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
@@ -958,7 +963,7 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	// A type owns a feature through a FeatureMembership, which is the membership
 	// the API's payloads carry for it; anything else, a metadata usage included,
 	// through an OwningMembership.
-	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type") && !metadata
+	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && isType(ownerClass) && !metadata
 	membership := rdf.OwningMembershipIRIOf(member)
 	// The membership shares the element namespace, so its IRI is reserved too.
 	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
@@ -973,8 +978,9 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 
 	// A variant is a member of its variation, not a feature of it: the metamodel
 	// owns it through a VariantMembership, which is an OwningMembership. An end's
-	// cross feature is owned the same way (KerML.xtext OwnedCrossingFeatureMember).
-	if variant || crossing {
+	// cross feature (KerML.xtext OwnedCrossingFeatureMember) and a `member`
+	// feature (KerML.xtext TypeFeatureMember) are owned the same way.
+	if variant || plain {
 		feature = false
 	}
 	metaclass := mOwningMembership
@@ -1317,10 +1323,7 @@ func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error
 	if err != nil {
 		return err
 	}
-	metaclass := "Feature"
-	if e.file.Kind() != source.KindKerML {
-		metaclass = keywordMetaclass["ref"]
-	}
+	metaclass := crossFeatureMetaclass(e.file.Kind() == source.KindKerML)
 	// The cross feature is written in the end's head, so its text is the end's.
 	e.head(crossSubject, memberHead{node: cross, visibility: ast.VisibilityDefault, fqn: crossFQN,
 		owner: subject, index: e.crossFeatureIndex(n), metaclass: rdf.SysMLTerm(metaclass), inline: true})
@@ -1662,6 +1665,13 @@ func spacedWords(name string) string {
 func (e *encoder) where(node ast.Node) string {
 	pos := e.file.Lines().PosAt(node.Span().Offset)
 	return fmt.Sprintf("%s:%d:%d", e.file.Name(), pos.Line, pos.Col)
+}
+
+// isTypeFeatureMember reports whether a membership wrapper was declared
+// `member` (KerML.xtext TypeFeatureMember).
+func isTypeFeatureMember(member ast.Node) bool {
+	m, ok := member.(*ast.Membership)
+	return ok && m.IsTypeFeature
 }
 
 // unwrapMember returns the declaration inside a membership wrapper together

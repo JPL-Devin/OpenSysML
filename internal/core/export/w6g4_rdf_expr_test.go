@@ -228,7 +228,7 @@ func TestForeignExpressionTreeIsWrittenFromItsStructure(t *testing.T) {
 		t.Fatalf("convert: %v", err)
 	}
 	got := strings.Join(strings.Fields(string(out)), " ")
-	want := "package P { attribute a : Integer; attribute total : Integer = (a + 1); }"
+	want := "package P { attribute a : Integer; attribute total : Integer = a + 1; }"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
