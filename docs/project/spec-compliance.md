@@ -391,7 +391,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | `import QuantityCalculations::*;` — which the ISQ examples do — leaves `(1 [m], 2 [m])->sum()` computing `3 [m]`: the runtime's registration answers the library declaration before its vendored body, whose private `zero` the library constrains but never values, is reached; without that import the bare `sum` is whichever `sum` the model does import (`NumericalFunctions::sum` sums quantities too), and a model importing neither is told the name is unresolved, as the checker tells it | `runtime/quantity_functions.go` `registerQuantityCalculations`, `runtime/library_functions.go` `libraryFunctionFor` | `calc_quantity_sum_imported.sysml`, `calc_quantity_sum_unimported.sysml`, `runtime/quantity_functions_test.go:TestQuantitySumWithAndWithoutImport` | ✅ Faithful |
 | An empty collection of quantities sums to the zero of its declared kind: `sum(subcomponents.totalMass)` over no subcomponents is `0 [kg]` where `totalMass :> ISQ::mass`, `sum(lengths)` over none is `0 [m]`, so `mass + sum(subcomponents.totalMass)` on a leaf is `mass`. `NumericalFunctions::sum` is declared over `ScalarValue[0..*]` and `QuantityCalculations::sum` folds from a `zero : ScalarQuantityValue` it constrains to `isZero` but never values, so the identity's kind is the runtime's decision, and it takes the collection's declared kind. The zero is in the kind's coherent SI unit — the `SI::si.baseUnits` raised to the dimension's exponents — and is an Integer magnitude from `sum` and a Real one from `RealFunctions::sum`; it adds to and compares with any quantity of that dimension by the ordinary unit conversion (`500 [g] + sum(masses)` is `500.0 [g]`, `sum(lengths) == 0 [mm]`). A product of none stays the number `1` (no unit is a multiplicative identity), `size`/`#` stay counts, `sum0`/`product1` keep the identity written, and nothing else relaxes: `10 [kg] + 0 [m]`, `10 [kg] + 5`, `10 [kg] + sum(lengths)` and `10 [kg] + sum(counts)` are incommensurable as before. The kind is read statically: an empty feature, chain or default-`null` collection is an empty sequence carrying its declared element unit (`Sequence.ElementUnit`, set by `eval.go` `declaredElements` from `semantics.Model.DimensionOfExpr` + `CoherentUnit`), `select`/`reject` of nothing keep it, and `collect`/`.{…}` of nothing take the unit the body's result declares in the body's scope (`emptyMapping`) | `runtime/collections.go` `aggregate` (the `ElementUnit` branch), `typedZero`, `filter`, `emptyMapping`; `runtime/eval.go` `declaredElements`, `Context.emptyOfDeclared`; `runtime/value.go` `NewEmptySequenceOf`, `Sequence.ElementUnit`; `semantics/coherent_unit.go` `Model.CoherentUnit`, `systemBaseUnits` | `runtime/empty_aggregate_test.go` (`TestEmptyQuantityAggregateKeepsTheDeclaredKind` over masses, lengths, forces, speeds, temperatures, chains, filters, mapped bodies, `sum0`/`product1`; `TestEmptyQuantitySumMagnitudeKind`; `TestEmptyAggregateIdentityIsNotLenientAddition`; `TestEmptySequenceKeepsItsElementUnitOnlyWhileEmpty`), `quantity_functions_test.go:TestQuantityCalculations` (`none->sum()` is `0 [m]`, `none->product()` is `1`), conformance `instance_empty_aggregate_subsetting_rollup`, `queryexec/derived_test.go:TestExecuteProjectsEmptyQuantitySumsAndDefaultedSubsettedParts`, `docrender/markdown_test.go:TestMarkdownRollupReport`, `grpc/instance_graph_test.go:TestInstantiate_RollsUpMassesOverDefaultedSubsettedParts`, pilot-exec-diff `w6d:sum-empty-quantity`, `:add-empty-quantity-sum` (`pilot-unevaluated`: the reference answers the unevaluated `InvocationExpression sum`/`OperatorExpression +`, as for every unit-carrying value, so the kind and unit of an empty quantity sum have no reference verdict), `:sum-empty` (still agrees: `sum(())` is the number `0`) | ⚠️ Approximate (self-assessed; the kind is the declared one, so a collection whose element type fixes no dimension — `Real[*]`, `ScalarQuantityValue[*]`, a body parameter written without a type, `->collect{in l; l * l}` — still sums to the number `0`; a body written ad hoc at the REPL prompt owns no scope in the index, so its parameters are not typed there either, and its empty mapping is a bare `0` where the same body declared in the model is typed) |
 | `TrigFunctions::sin`/`cos`/`tan`/`cot` accept an angle **quantity**, converting through the unit's declared scale to radians — `sin(90 ['°'])`, `cos(0 [rad])` — and reject a quantity of another dimension (`sin(90 [m])`, `ErrTypeMismatch`) or of dimension one that is no angle — `sin(1 [bit])`, `tan(1 [sr])`, `cot(1 [MeasurementReferences::one])` — the unit being asked whether it conforms to `ISQSpaceTime::AngularMeasureUnit` (`Model.IsAngularMeasureUnit`); a ratio that has cancelled to a number (`sin(1 [m] / 2 [m])`) is radians, as a bare number is. Only these four angle functions do: every other numeric library function (`arcsin`, `IntegerFunctions::abs`, `RealFunctions::sqrt`, `OpenSysMLMathFunctions::exp`, …) declares a number and rejects a quantity, dimension one included (`IntegerFunctions::abs(1 [rad])` is `ErrTypeMismatch`). `sin(30 ['°'])` is `0.49999993…`, not `0.5`, because the vendored `SI::'°'` declares `conversionFactor = 1.745329E-02` (its own comment says it "should become pi/180") | `runtime/quantity_functions.go` `registerAngleFunction`, `angleScalars`, `angleArgument`, `isAngleUnit`; `semantics/units.go` `IsAngularMeasureUnit`; `runtime/library_functions.go` `numericScalars` | `instance_quantity_trigonometry.sysml`, `runtime/quantity_functions_test.go:TestQuantityCalculations`, `TestTrigFunctionsTakeAngles` | ✅ Faithful |
-| `VectorCalculations` over the vector value the Kernel `VectorFunctions` answer (`ValVector`; a sequence of numbers written for one is read as one, a sequence with a unit-bearing element is `ErrTypeMismatch`, never a vector stripped of its units): `isZeroVectorQuantity`, `isUnitVectorQuantity`, `'+'`, `'-'`, `scalarVectorMult`, `vectorScalarMult`, `vectorScalarDiv`, `inner`, `norm`, `angle` compute — over vector quantities too, where `inner`/`norm`/`angle` answer the **Number** they declare (`return : Number[1]`, the checker's type as well): the magnitude in the unit the axes compose by the scalar rule (`inner(⟨1.0, 2.0⟩ [m], ⟨3.0, 4.0⟩ [m])` is `11.0`, in m²; `norm(⟨3.0, 4.0⟩ [m])` is `5.0`, in m), the unit implied by the operands rather than carried, as `QuantityCalculations::ToReal` strips it; the quantity-scaled forms `scalarQuantityVectorMult`, `vectorScalarQuantityMult`, `vectorScalarQuantityDiv` — and the `*`/`/` operators between a scalar quantity and a vector — answer a **vector quantity** (`ValVectorQuantity`, `⟨2.0, 4.0⟩ [m]`) whose unit each component composes by `scaleQuantities`, the scalar rule (`2 [m] * ⟨1.0, 2.0⟩ [m]` is `⟨2.0, 4.0⟩ [m**2]`, `⟨2.0, 4.0⟩ [m] / 2 [s]` is `⟨1.0, 2.0⟩ [m/s]`), a division by zero reported; `outer`, `transform`, and every `MeasurementRefCalculations` and `TensorCalculations` declaration report themselves by name (`ErrUnevaluableLibraryFunction`) with the reason — the runtime has no tensor value kind and the library no bodies to compute one by, a measurement reference or coordinate frame is a library declaration and not a value | `runtime/quantity_functions.go` `registerMeasurementRefCalculations`, `registerVectorCalculations`, `registerTensorCalculations`; `runtime/vector_functions.go` `scaleVectorQuantity`, `scaleVectorByQuantity` | `runtime/quantity_functions_test.go:TestVectorCalculations`, `TestQuantityCalculationsReport`, `TestQuantityCalculationsAreAllDispatchable` (every declaration of the four packages either computes or names itself, parameters by effective name in declared order: an `in : Type` parameter takes the name of the general's parameter it implicitly redefines, and with no general is anonymous), `TestAnonymousLibraryParametersBindByPositionOnly` (an anonymous parameter binds by position only, a named call is `ErrUnknownParameter`, `LibraryFunctionParams` publishes no name for it) | ⚠️ Approximate (see the domain-library rows under *KerML Function Library*) |
+| `VectorCalculations` over the vector value the Kernel `VectorFunctions` answer (`ValVector`; a sequence of numbers written for one is read as one, a sequence with a unit-bearing element is `ErrTypeMismatch`, never a vector stripped of its units): `isZeroVectorQuantity`, `isUnitVectorQuantity`, `'+'`, `'-'`, `scalarVectorMult`, `vectorScalarMult`, `vectorScalarDiv`, `inner`, `norm`, `angle` compute — over vector quantities too, where `inner`/`norm`/`angle` answer the **Number** they declare (`return : Number[1]`, the checker's type as well): the magnitude in the unit the axes compose by the scalar rule (`inner(⟨1.0, 2.0⟩ [m], ⟨3.0, 4.0⟩ [m])` is `11.0`, in m²; `norm(⟨3.0, 4.0⟩ [m])` is `5.0`, in m), the unit implied by the operands rather than carried, as `QuantityCalculations::ToReal` strips it; the quantity-scaled forms `scalarQuantityVectorMult`, `vectorScalarQuantityMult`, `vectorScalarQuantityDiv` — and the `*`/`/` operators between a scalar quantity and a vector — answer a **vector quantity** (`ValVectorQuantity`, `⟨2.0, 4.0⟩ [m]`) whose unit each component composes by `scaleQuantities`, the scalar rule (`2 [m] * ⟨1.0, 2.0⟩ [m]` is `⟨2.0, 4.0⟩ [m**2]`, `⟨2.0, 4.0⟩ [m] / 2 [s]` is `⟨1.0, 2.0⟩ [m/s]`), a division by zero reported; `'['` over a coordinate frame (`(1.0, 2.0, 3.0) [spatialCF]`) and `transform` compute over the frame value (*Structured values* below); `outer` and every `TensorCalculations` declaration report themselves by name (`ErrUnevaluableLibraryFunction`) with the reason — the runtime has no tensor value kind and the library no bodies to compute one by | `runtime/quantity_functions.go` `registerMeasurementRefCalculations`, `registerVectorCalculations`, `registerTensorCalculations`; `runtime/vector_functions.go` `scaleVectorQuantity`, `scaleVectorByQuantity` | `runtime/quantity_functions_test.go:TestVectorCalculations`, `TestQuantityCalculationsReport`, `TestQuantityCalculationsAreAllDispatchable` (every declaration of the four packages either computes or names itself, parameters by effective name in declared order: an `in : Type` parameter takes the name of the general's parameter it implicitly redefines, and with no general is anonymous), `TestAnonymousLibraryParametersBindByPositionOnly` (an anonymous parameter binds by position only, a named call is `ErrUnknownParameter`, `LibraryFunctionParams` publishes no name for it) | ⚠️ Approximate (see the domain-library rows under *KerML Function Library*) |
 | An execution trace of a unit-carrying value renders the magnitude and the unit (`5.0 [m/s]`), as the REPL prints a quantity | `runtime/trace.go` `FormatTraceValue` | `action_quantity_assign.trace.golden`, `runtime/quantity_test.go:TestFormatTraceValueQuantity` | ✅ Faithful |
 | Incommensurable units are a typed error (`ErrIncommensurableUnits`), never a comparison of bare magnitudes that would equate `1.5 [m/s]` with `1.5 [km/h]` | `runtime/errors.go` `ErrIncommensurableUnits`, `quantity.go` `convertTo` | `runtime/robustness_test.go` `quantity_incommensurable_comparison`, `runtime/quantity_test.go:TestQuantityIncommensurable` | ✅ Faithful |
 | **Statically detectable incommensurability is diagnosed before evaluation.** SysML v2 §9.8.9.1 requires addition and subtraction operands and result to have the same quantity dimension and top-level quantity type, and says an invalid operation should raise a warning or error. A comparison or a sum whose operands' quantity dimensions are both statically determined and incommensurable (`mass < 1000.0 [m]`) is reported as a *warning* at the type tier, naming both units and both dimensions; the dimension comes from the stdlib `QuantityDimension` power factors (ISQ's L, M, T, …) and commensurability from the same `UnitTerm.Commensurable` the runtime applies, so the two cannot drift. Evaluation remains the hard error, and a warning changes no exit code | `semantics/dimension.go` `DimensionOfExpr`, `dimensionOf`; `passes/typecheck_dimension.go` `checkDimensions` | `model/dimension_check_test.go`, `model/typecheck_expr_corpus_test.go`; differential row `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | ⚠️ Approximate (static only — see below; the specification-grounded Turbojet warning is an adjudicated divergence from pilot silence) |
@@ -783,10 +783,13 @@ the flat sequence of its elements:
   (`vectorQuantityValue`, `scaleVectorQuantity`; conformance
   `calc_library_vector_quantity_empty`) rather than a unitless empty value. Its `mRef`
   answers the one measurement reference every axis shares (`(2 [m] * VectorOf((1.0, 2.0))).mRef`
-  is `m`); the library declares it a `VectorMeasurementReference` with a
-  `CoordinateFrame`, which the runtime does not hold (below), so `mRef` over
-  axes in *different* units — a frame is the only value that could carry them —
-  is `ErrUnevaluableLibraryFunction` naming `VectorQuantityValue::mRef`, never a
+  is `m`); a vector written over a coordinate frame (`(1.0, 2.0, 3.0) [spatialCF]`,
+  `VectorCalculations::'['`) carries the frame and answers **it** as `mRef`
+  (`p.mRef == spatialCF`; `ValCoordinateFrame`, below), so axes in *different*
+  units are answered by the frame that declares them; a vector whose axes differ
+  and whose frame is not held — the components of a `transform` result are
+  always in a frame, so only a value the wire or a client assembled — is
+  `ErrUnevaluableLibraryFunction` naming `VectorQuantityValue::mRef`, never a
   unit dressed up as a frame.
 - **`ValMeasurementRef`** (`measurement_ref.go`) is a **measurement reference as
   a value**: the unit a quantity is measured in, on its own. It carries the same
@@ -830,13 +833,14 @@ the flat sequence of its elements:
   scale of the same dimension being another kind of reference) are refused by
   both. A measurement scale itself — `Time::UTC`, `SI::'°C_abs'`, a
   `ScalarMeasurementReference` that is not a `MeasurementUnit`
-  (`Model.IsMeasurementScale`) — evaluates to no value: the runtime holds a
-  unit and its reduction, not a scale's origin, definitional points or mapping,
-  so `Time::UTC`, `3 [Time::UTC]` and `ConvertQuantity(300 [K], SI::'°C_abs')`
-  are `ErrUnevaluableLibraryFunction` naming the declaration and its scale type
-  (`measurementScaleValue`; `TestMeasurementRefReport`, `TestBoundMeasurementScale`),
-  while the checker binds one to its declared type (`t : Time::TimeScale = Time::UTC`)
-  and refuses it elsewhere (`SI::'°C_abs'` to `ThermodynamicTemperatureUnit`).
+  (`Model.IsMeasurementScale`) — is a **`ValCoordinateFrame`** of one axis
+  (below): `MeasurementReferences::IntervalScale :> MeasurementScale,
+  CoordinateFrame`, so the value carries the scale's `unit`, its `transformation`
+  placing it on another reference and its `quantityValueMapping`, and
+  `Time::UTC`, `3 [Time::UTC]`, `UTC.unit` and `ConvertQuantity(300.0 [K],
+  SI::'°C_abs')` evaluate; the checker binds one to its declared type
+  (`t : Time::TimeScale = Time::UTC`) and refuses it elsewhere (`SI::'°C_abs'`
+  to `ThermodynamicTemperatureUnit`), as the runtime does.
   A quantity written to a unit-typed feature
   (`hp : PowerUnit = 745.7 [W]` in the OMG individuals example) is not judged,
   as the pilot implementation accepts it; the feature then holds the quantity,
@@ -847,8 +851,8 @@ the flat sequence of its elements:
   the two reductions; `ConvertQuantity(3 [m], s)` is `ErrIncommensurableUnits`),
   `MeasurementRefCalculations::'*'`, `'/'`, `'**'`, `'^'` and `ToString`
   (`"m/s"`); a vector quantity's `mRef` reads when its axes share one unit
-  (`VectorOf((1.0, 2.0)) [m]` answers `m`) and names the declaration when they
-  do not, no frame being held to answer with. Arithmetic
+  (`VectorOf((1.0, 2.0)) [m]` answers `m`) or when it was written over a frame
+  (`((1.0, 2.0, 3.0) [spatialCF]).mRef` answers `spatialCF`). Arithmetic
   the library does not declare — `m * 3`, `m + m`, `-m`, `m < s`,
   `m ** m` — is `ErrTypeMismatch`, not a quantity of magnitude 1. The
   declaration's own members (`m.unitConversion`, `m.quantityDimension`,
@@ -871,6 +875,119 @@ the flat sequence of its elements:
   (`unsupported: measurement reference m`; `TestMeasurementRefCrossesAsUnsupported`):
   the wire `Value` names a unit only inside a `Quantity`, and has no arm for a
   bare reference yet.
+- **`ValCoordinateFrame`** (`coordinate_frame.go`, `frame.go`, `frame_read.go`)
+  is a **coordinate frame or a measurement scale as a value**. The OMG corpus
+  this project pins populates frames — Annex A's SimpleVehicleModel
+  (`attribute spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }`,
+  `velocityCF = spatialCF/s`), the geometry example's `datum` with
+  `(x, y, z)[datum]` literals and a `TranslationRotationSequence`, the
+  validation suite's `MissionElapsedTimeScale` — and the library itself places
+  `SI::'°C_abs' : IntervalScale` on `K`. A model-owned usage typed
+  `CoordinateFrame` (or a subtype) with its `:>> mRefs` evaluates to the frame it
+  declares (`referenceValueOfObject`, `readFrame`): the value carries the
+  declaration, its type, the `dimensions` the type fixes (`'3dCoordinateFrame'`
+  states `3`; a scalar reference `()`, one axis), one `ValMeasurementRef` per
+  axis read from `mRefs` (the flattened size of `dimensions` gates the count: a
+  frame stating no `mRefs` is `ErrNoValue` naming
+  `TensorMeasurementReference::mRefs[1..*]`, a count off the flattened size
+  `ErrMultiplicityViolation`), and the `transformation` the usage states (below).
+  A scale is the one-axis case: `IntervalScale :> MeasurementScale, CoordinateFrame`,
+  so `SI::'°C_abs'`, `Time::UTC` and a model's `TimeScale` carry their `unit` as
+  the one axis, plus the `quantityValueMapping` and the placement on another
+  reference when the declaration states them (`readScale`). A frame prints as
+  its name followed by its axis units — `spatialCF [m, m, m]`, `velocityCF
+  [m/s, m/s, m/s]`, a composed one as the expression that made it, `datum / s
+  [mm/s, mm/s, mm/s]` — a scale as its name, `SI::'°C_abs'`; `describe` says
+  *coordinate frame* or *measurement scale*; `%features` shows `mRefs`,
+  `dimensions`, `transformation`, and for a scale `unit`,
+  `transformation.origin` (`structuredFeature`). It conforms to its declared
+  type and that type's generals (`CartesianSpatial3dCoordinateFrame`,
+  `'3dCoordinateFrame'`, `CoordinateFrame`, `VectorMeasurementReference`,
+  `TensorMeasurementReference`; a scale to `IntervalScale`, `MeasurementScale`,
+  `ScalarMeasurementReference`), judged alike by the checker and the runtime
+  (`semantics/coordinate_frame.go`; `passes/typecheck_dimension.go`
+  `judgedAsMeasurementRef`; `TestCoordinateFrameExpr`, `TestComposedFrameConforms`,
+  `TestBoundComposedCoordinateFrame`). Two frames are equal, and hash alike,
+  when they are the same object — the frame a usage declares is one object,
+  however many times it is read — or, for a composed frame, when their
+  dimensions, axes, scale and transformation agree (`spatialCF / s == velocityCF`;
+  `CoordinateFrame.equal`, `key`). Frame arithmetic:
+  `MeasurementRefCalculations::'CoordinateFrame*'`/`'CoordinateFrame/'`, and the
+  `*`/`/` operators over a frame and a unit, compose every axis with the unit
+  (`spatialCF / s` is a frame of axes `m/s, m/s, m/s`, dimensions unchanged),
+  typed by the calc's `CoordinateFrame` — so `velocityCF :
+  CartesianVelocity3dCoordinateFrame[1] = spatialCF / s` binds, as the pilot's
+  checker accepts it; a scale composes with nothing (`'°C_abs' * s` is
+  `ErrUnevaluableLibraryFunction`: its points are on the scale, not in a unit
+  to compose). A vector
+  literal over a frame, `VectorCalculations::'['((1.0, 2.0, 3.0), spatialCF)`,
+  is a `ValVectorQuantity` with the frame's unit per axis and **the frame as
+  `mRef`** (`p.mRef == spatialCF`, `p.num` the three numbers); an element count
+  off `mRef.flattenedSize` is `ErrMultiplicityViolation`. A quantity on a
+  scale, `21.5 [SI::'°C_abs']` or `0 [Time::UTC]`, is a scalar quantity whose
+  magnitude is in the scale's unit and whose `mRef` is the scale.
+  `ConvertQuantity` converts **through the scale's placement**: a scale `S`
+  with `transformation : CoordinateFramePlacement { source = R; origin = o }`
+  maps `x [S]` to `x · f + o` on `R` and `q` on `R` to `(q − o) / f` on `S`,
+  `f` the factor of `S.unit` relative to `R.unit` and `o` converted to
+  `R.unit`, so `ConvertQuantity(300.0 [K], SI::'°C_abs')` is `26.85 ['°C_abs']`
+  (`26.850000000000023` in binary64, as `300.0 - 273.15` is) and
+  `ConvertQuantity(26.85 [SI::'°C_abs'], K)` is `300.0 [K]`; two scales
+  convert through a common source (`scale_conversion.go`). Where the scale
+  also states a `quantityValueMapping` (`°C_abs`: `0.01 ['°C']` ↔
+  `273.16 [K]`) the mapping must agree with the placement, and a disagreement
+  is a typed error naming both offsets rather than a choice between them. A
+  scale that states neither (`Time::UTC`, every `OrdinalScale`,
+  `CyclicRatioScale`, `LogarithmicScale`) is a value, but converting to or from
+  it is `ErrUnevaluableLibraryFunction` naming the scale and the missing
+  transformation or mapping; a placement whose `origin` is not a quantity on
+  the source (the validation suite's `definitionalEpochInUTC`, an
+  `Iso8601DateTime`), or whose `basisDirections` is not the identity `1 [R]`,
+  is a typed error naming that. `transform(transformation, sourceVector)`
+  (`frame_transform.go`) re-expresses a vector quantity over a frame in the
+  transformation's target: `sourceVector.mRef` must be the transformation's
+  `source` (`ErrTypeMismatch` naming both otherwise, a uniform-unit vector with
+  no frame included), and the result is a vector quantity over the target with
+  the target's axis units. The library fixes a placement's `origin` as *the
+  location of the origin of the target frame as a vector in the source frame*
+  and `basisDirections` as the target's basis in the source, so a placement
+  maps target coordinates into source ones, `v_source = origin + B v_target`,
+  and `transform` applies the **inverse**, `B⁻¹ (v − origin)`, with the
+  directions normalized (they are *directions*; a zero or a linearly
+  dependent direction is a typed error). A `TranslationRotationSequence`
+  applies its `elements` in order, a `Translation` shifting the origin by its
+  `translationVector` converted to the source axis units
+  (`ErrIncommensurableUnits` otherwise) and a `Rotation` turning about
+  `axisDirection` by `angle` — an angular measure converted through its unit,
+  `90 ['°']` and `1.5707963267948966 [rad]` agreeing to the library's seven-digit
+  degree — intrinsically (about the axis as the earlier elements moved it, the
+  default) or extrinsically (`isIntrinsic = false`, about the axis fixed in the
+  source); an `AffineTransformationMatrix3d` applies its `rotationMatrix` and
+  `translationVector` in the 4×4 layout its documentation gives; a
+  `NullTransformation` is the identity. A transformation of any other type is
+  `ErrUnevaluableLibraryFunction` naming the declaration and the four shapes; a
+  frame whose axes are in different units reoriented by a rotation or a basis
+  is `ErrIncommensurableUnits`, the axes having nothing to mix in. Two
+  transformations are equal when they are the same object or
+  when source, target and steps agree (`lbcf.transformation == trs` in the
+  geometry example). The solver refuses to pin a frame (`ErrNotPinnable`), a
+  document query traverses one to its declaration, and across re-analysis a
+  written frame follows the re-read declaration, its units and objects as a
+  unit does (`adopt_frame.go`; `TestAdoptRebindsTheFramesAWrittenValueNames`).
+  Over gRPC a frame or a transformation crosses as an unsupported null naming
+  the value (`unsupported: coordinate frame spatialCF [m, m, m]`;
+  `TestCoordinateFrameCrossesAsUnsupported`): the wire `Value` has no arm for one.
+  Pilot referee: the pinned pilot evaluates none of `CoordinateFrame/`, `'['`
+  over a frame, `ConvertQuantity` or `transform`, so the probes in
+  `cmd/pilot-exec-diff/testdata/cases/coordinate_frames.cases` are
+  pilot-unevaluated and the vendored library text is the authority; every
+  reading made — transform direction, normalized directions, intrinsic
+  rotations about the moved axes — is drafted in [omg-issues.md](omg-issues.md).
+- **`ValCoordinateTransformation`** is the `transformation` a frame or a scale
+  states, held as a value of its own so `shifted.transformation` reads,
+  compares (`turned.transformation == trs`) and is what `transform` takes; it
+  prints as its name with source and target, describes as a *coordinate
+  transformation*, and is refused by the solver and the wire as a frame is.
 
 Every structured value is compared and hashed by content (`value_equality.go`
 `structuredKey`), described (`describe.go`), traced (`trace.go`), rendered by
@@ -899,15 +1016,12 @@ maps them to.
 Not represented, and reported by name rather than approximated: a **tensor**
 (`TensorCalculations`, `VectorCalculations::outer`) — the library gives its
 calculations no bodies and no Kernel function defines them, and the value would
-need a basis and covariance the runtime does not carry; and a **coordinate
-frame** — `MeasurementReferences` declares `CoordinateFrame` with an optional
-`transformation`, and `CoordinateFramePlacement` with `origin` and
-`basisDirections`, but no model in the vendored libraries populates one, a
-vector quantity carries a unit per axis and no frame, and
-`VectorCalculations::transform` has no body applying them; so `transform`,
-`MeasurementRefCalculations::'CoordinateFrame*'`/`'CoordinateFrame/'` and
-`VectorQuantityValue::mRef` over axes in different units name the declaration
-and what it lacks. The unit text of a quantity is never promoted to a frame.
+need a basis and covariance the runtime does not carry. A coordinate frame and
+a measurement scale *are* represented (`ValCoordinateFrame` above); what they
+cannot honestly compute — a scale with no placement and no mapping, a
+transformation of a shape the library gives no meaning, a placement origin that
+is not a quantity — names the declaration and what it lacks, and the unit text
+of a quantity is never promoted to a frame.
 
 A library **feature** — a named constant a library declares and gives no
 evaluable value — takes its value from a seam of its own: `libraryFeatures` maps
@@ -938,7 +1052,7 @@ restores library symbols without their AST).
 | The operators `StringFunctions` declares evaluate over two String operands: `'+'` concatenates, and `'<'`, `'>'`, `'<='`, `'>='` order strings by character (UTF-8 orders bytes as it orders code points, so a byte comparison *is* code-point order). An operand of another type is reported, naming the operator and both operand types, and neither operand is coerced | `runtime/eval.go` `evalArithmetic` (`ast.OpAdd` over two `ValString`), `evalComparison` (`OperandTypeError`) | `TestStringOperators`, `TestStringOperatorErrors`, `robustness_test.go:testStringOperandOfTheWrongKind`; conformance `string_operators`, `string_comparison`, `string_compared_with_a_number` (+ golden traces) | ✅ Faithful |
 | `StringFunctions::'=='` specializes `DataFunctions::'=='`, which is equality over any two values, so the `==` *operator* answers `false` for a String and an Integer rather than reporting; the explicit call `StringFunctions::'=='(s, 3)` reports the non-String argument, as every String-declared signature does. Two strings are equal by their characters, which is also what a collection membership test asks | `runtime/eval.go` `evalEquality` → `runtime/value_equality.go` `valueEqual`, `valueKey` (`ValString`); `runtime/library_functions.go` `stringEquals` | `TestStringOperators` (`s == three` is false, `("a", "b")->includes("b")`), `TestStringFunctionErrors` | ✅ Faithful |
 | **Domain library** `QuantityCalculations` (28 declarations): every one computes over the quantity value — unit-aware `sqrt`, `abs`, `floor`, `round`, `max`/`min`, `sum`/`product`, the operators, comparisons, predicates and conversions (see *Requirement*, the quantity rows), and `'['` and `ConvertQuantity` over a measurement reference value (`'['(3.0, SI::m)` is `3.0 [m]`; *Structured values* above) | `runtime/quantity_functions.go` `registerQuantityCalculations`; `runtime/measurement_ref_functions.go` `quantityOf`, `convertQuantity` | `TestQuantityCalculations`, `TestQuantityCalculationsReport`, `TestQuantityCalculationsAreAllDispatchable`, `TestMeasurementRef*`; conformance `instance_quantity_calculations`, `instance_quantity_calculation_failures`, `instance_quantity_trigonometry`, `instance_measurement_references`, `instance_measurement_reference_failures`, `calc_quantity_sum_imported`, `calc_quantity_sum_unimported` | ✅ Faithful |
-| **Domain library** `VectorCalculations` (16): the ten over a numeric vector compute as their `VectorFunctions` counterparts (`inner`, `norm`, `angle` over vector quantities answer the declared `Number`, the magnitude over the `num` components with the unit dropped by declaration — drafted in `omg-issues.md`), and `scalarQuantityVectorMult`, `vectorScalarQuantityMult`, `vectorScalarQuantityDiv` answer a **vector quantity** (`ValVectorQuantity`, `⟨2.0, 4.0⟩ [m]`) whose unit is composed by the scalar quantities' own rule; the five `MeasurementRefCalculations` over a scalar unit (`'*'`, `'/'`, `'**'`, `'^'`, `ToString`) compute over the measurement reference value; `'['`, `outer` and `transform`, the two `CoordinateFrame` operators and `TensorCalculations` (13) report themselves by name, each with the reason (*Structured values* above) | `runtime/quantity_functions.go` `registerVectorCalculations`, `registerMeasurementRefCalculations`, `registerTensorCalculations`; `runtime/measurement_ref_functions.go`; `runtime/vector_functions.go` `scaleVectorQuantity` over `quantity.go` `scaleQuantities` | `TestVectorCalculations`, `TestQuantityCalculationsReport`, `TestQuantityCalculationsAreAllDispatchable`, `TestMeasurementRef*`; conformance `calc_library_vector_quantity`, `calc_library_vector_quantity_norm`, `instance_measurement_references`, `calc_library_unevaluable_function` (`TensorCalculations::isZeroTensorQuantity`); robustness `library_function_errors` (vector-quantity rows), `measurement_reference_failure_modes` | ⚠️ Approximate (below) |
+| **Domain library** `VectorCalculations` (16): the ten over a numeric vector compute as their `VectorFunctions` counterparts (`inner`, `norm`, `angle` over vector quantities answer the declared `Number`, the magnitude over the `num` components with the unit dropped by declaration — drafted in `omg-issues.md`), and `scalarQuantityVectorMult`, `vectorScalarQuantityMult`, `vectorScalarQuantityDiv` answer a **vector quantity** (`ValVectorQuantity`, `⟨2.0, 4.0⟩ [m]`) whose unit is composed by the scalar quantities' own rule; the five `MeasurementRefCalculations` over a scalar unit (`'*'`, `'/'`, `'**'`, `'^'`, `ToString`) compute over the measurement reference value, and `'CoordinateFrame*'`/`'CoordinateFrame/'`, `VectorCalculations::'['` and `transform` over the coordinate frame value; `outer` and `TensorCalculations` (13) report themselves by name, each with the reason (*Structured values* above) | `runtime/quantity_functions.go` `registerVectorCalculations`, `registerMeasurementRefCalculations`, `registerTensorCalculations`; `runtime/measurement_ref_functions.go`; `runtime/vector_functions.go` `scaleVectorQuantity` over `quantity.go` `scaleQuantities` | `TestVectorCalculations`, `TestQuantityCalculationsReport`, `TestQuantityCalculationsAreAllDispatchable`, `TestMeasurementRef*`; conformance `calc_library_vector_quantity`, `calc_library_vector_quantity_norm`, `instance_measurement_references`, `calc_library_unevaluable_function` (`TensorCalculations::isZeroTensorQuantity`); robustness `library_function_errors` (vector-quantity rows), `measurement_reference_failure_modes` | ⚠️ Approximate (below) |
 | A declaration this runtime has no representation for the values of reports itself by name (`ErrUnevaluableLibraryFunction`), never a wrong result | `runtime/library_functions.go` `registerUnevaluable` | `TestUnevaluableLibraryFunctionsNameThemselves`, `TestVendoredFunctionsAreAllDispatchable` (every vendored declaration of these packages either computes or names itself); conformance `calc_library_unevaluable_function` | ✅ Faithful |
 | **Every declaration of every vendored Kernel Function Library package is dispatchable by name** — the 17 packages `BaseFunctions`, `BooleanFunctions`, `CollectionFunctions`, `ComplexFunctions`, `ControlFunctions`, `DataFunctions`, `IntegerFunctions`, `NaturalFunctions`, `NumericalFunctions`, `OccurrenceFunctions`, `RationalFunctions`, `RealFunctions`, `ScalarFunctions`, `SequenceFunctions`, `StringFunctions`, `TrigFunctions`, `VectorFunctions`, and `OpenSysMLMathFunctions`. Each calc or function declaration, operator-named ones included, is registered as a value function (with the declared parameter names in declared order), as a builtin, or as unevaluable by its own name with a reason; no package and no name is skipped | `runtime/library_functions.go` `libraryFunctions`, `runtime/builtins.go` `builtins`, `runtime/library_unevaluable.go` | `TestVendoredFunctionsAreAllDispatchable` (reads the vendored `.kerml`, so a declaration the library adds fails the gate until it is registered) | ✅ Faithful |
 | Conversions: `BaseFunctions::ToString` (`x: Anything[0..1]`: the notation a value is written with — a Boolean, number or String literal, `*` for the unbounded value, an enumeration literal by name, a quantity with its unit as `1.5 [m]`; an omitted or null `x` reads `"null"`; two or more values are `ErrMultiplicityViolation`; an instance, a variant or a body has no notation and is `ErrTypeMismatch`; a Complex stays unevaluable, see below), `BooleanFunctions::ToString`/`ToBoolean`, `IntegerFunctions::ToString`/`ToInteger`/`ToNatural`, `NaturalFunctions::ToString`/`ToNatural`, `RationalFunctions::ToString`/`ToInteger`/`ToRational`, `RealFunctions::ToString`/`ToInteger`/`ToRational`/`ToReal`. A String is parsed as the type's literal notation — decimal digits for an Integer, `true`/`false` for a Boolean, a decimal with an optional fraction and exponent for a Real or Rational — and a String that is no such notation is `ErrInvalidNotation`, never 0 or a panic (`"NaN"`, `"Inf"`, a hex float and a padded `" 1.5 "` are refused too — the notation is the whole String, nothing is trimmed). A negative given to `ToNatural` is `semantics.ErrArithmeticDomain`; a magnitude outside the Integer range, or a Real notation float64 cannot hold — one that overflows to an infinity (`"1e400"`) or a nonzero one that underflows to zero (`"1e-400"`), as a literal or a String — is `semantics.ErrArithmeticOverflow`, never `0.0`. `ToInteger` of a Real or Rational truncates toward zero: the vendored declarations carry no body and the library declares `floor` and `round` beside them, so a rounding conversion would duplicate one of those. `RealFunctions::ToRational` of a number answers the Real its `x: Real` parameter binds it as, an Integer widened like every `RealFunctions` form (`ToRational(2) === 2.0`), a Rational being a float64 here; `RationalFunctions::ToInteger` of an Integer keeps it | `semantics/eval.go` `ParseReal` (decimal notation only — `isRealNotation`, any other text `semantics.ErrRealNotation` — shared by the Real literal in `runtime/eval.go` `evalLiteralReal`, `runtime/compile.go`, `codegen/compile.go` and the model-level folder); `runtime/library_conversions.go` `registerConversionFunctions`, `parseReal`, `parseInteger` | `semantics/eval_test.go:TestParseReal`, `:TestParseRealRejectsNonDecimalNotation`; `TestConversionFunctionValues`, `TestConversionFunctionErrors`, `TestRealToStringRoundTrips`; conformance `calc_library_conversions`, `calc_library_to_real_invalid_string`, `calc_library_to_natural_negative`; robustness `named_library_call_that_has_no_value`, `real_literal_that_underflows` | ✅ Faithful |
@@ -968,8 +1082,8 @@ reports itself by name rather than answering:
 | `BaseFunctions::'['` | Declared abstract, and the operator notation `a[i, j]` is the quantity notation `num [unit]` to the parser and the evaluator (`evalIndexExpr`): over an operand whose bracket names no unit the error (`ErrNotAQuantity`, `notAQuantityError`) says so, and when the operand is declared an Array, a vector or a feature of more than one value (`declaredCollection`, from the declaration alone — the operand is not evaluated to diagnose it) points at `a#(i, j)`, which `CollectionFunctions::'array#'` and `BaseFunctions::'#'` evaluate. Reading `a[i, j]` as indexing by the operand's static type would be a checker rule as well as a runtime one, and is not made here. |
 | `BaseFunctions::all`, `as`, `meta`, `istype`, `hastype`, `'@'`, `'@@'`; `ControlFunctions::'.'` | The operator notations `x istype T`, `x @ M`, `x.f` **are** evaluated, from their own expression nodes (`istype`/`hastype`/`@`/`@@` take a *type*, which the function form would have to receive as a value); `as` needs the type a value was cast to, which `runtime.Value` does not carry; `all` needs the extent of a type, which the runtime does not enumerate. The function forms report themselves rather than pretend. |
 | `DataFunctions::'~'`, `ScalarFunctions::'~'` | Declared abstract and specialized by no concrete library function, so the complement denotes no operation on any value type — reported as the `~` operator is. |
-| `MeasurementRefCalculations::'CoordinateFrame*'`/`'CoordinateFrame/'`, `VectorCalculations::'['`, `VectorQuantityValue::mRef` over axes in different units | Each takes or answers a **`VectorMeasurementReference`** — a `CoordinateFrame` — as a value: `MeasurementReferences` declares it with `mRefs` per axis and an optional `transformation` (`CoordinateFramePlacement`: `origin`, `basisDirections`), but no vendored model populates one and a vector quantity carries a unit per axis and no frame, so there is no frame value to compute with; the reason names the declaration and says so. A scalar unit (`SI::m`, `m / s`) *is* a value (`ValMeasurementRef`, *Structured values* above), so the scalar `'['`, `ConvertQuantity`, the five unit `MeasurementRefCalculations` and a scalar or uniform-vector `mRef` compute. |
-| `VectorCalculations::transform` | `transform(x, cf)` re-expresses a vector quantity in a `CoordinateFrame`: the frame is the value the row above lacks, and `transform` has no body applying a `CoordinateFramePlacement`'s `origin` and `basisDirections`; the reason names both. |
+| `QuantityCalculations::ConvertQuantity` to or from a measurement scale that states neither a `CoordinateFramePlacement` nor a `quantityValueMapping` — `Time::UTC`, every `OrdinalScale`, `CyclicRatioScale`, `LogarithmicScale` in the vendored library | The scale is a value (`ValCoordinateFrame`, *Structured values* above) and a quantity on it reads, but the library gives its points no relation to any other reference, so a conversion has nothing to compute by; the reason names the scale and the missing transformation or mapping. `SI::'°C_abs'`, placed on `K`, converts. |
+| `VectorCalculations::transform` over a `CoordinateTransformation` that is none of `CoordinateFramePlacement`, `TranslationRotationSequence`, `AffineTransformationMatrix3d`, `NullTransformation` | Those four are the shapes the library documents; a user-defined subtype states no origin, basis, steps or matrix the runtime could apply, so the reason names the declaration and the four shapes. |
 | `VectorCalculations::outer`, all of `TensorCalculations` | The runtime has no tensor value kind — a tensor quantity needs a basis and a covariance the value kinds do not carry — and `TensorCalculations` gives its calculations no bodies, nor the Kernel `VectorFunctions` semantics, to compute one by; the reason says so. Not invented. |
 
 ### Sequence Indexing and Collection Operations (KerML §9.3 `SequenceFunctions`, `CollectionFunctions`, `ControlFunctions`)

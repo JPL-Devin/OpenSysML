@@ -403,7 +403,7 @@ func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
 	default:
 		return false
 	}
-	if ctx.extractDefaultValue(sym) != nil {
+	if ctx.extractDefaultValue(sym) != nil || bodyDescribesObject(sym, ctx.extractType(sym)) {
 		return false
 	}
 	lower := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym)).Lower
@@ -455,6 +455,7 @@ func (ctx *Context) admitted(feat *EffectiveFeature, val Value, how admission) (
 		if err := ctx.classifyHeld(feat.heldBy(), val); err != nil {
 			return Value{}, err
 		}
+		val = ctx.classifiedFrame(feat.Symbol, val)
 	}
 	return val, nil
 }
@@ -744,13 +745,22 @@ func (inst *Instance) materializeIntrinsic(ctx *Context, fv *FeatureValue, name 
 
 // HoldsOnlyContributions reports whether a feature of known multiplicity
 // materializes no object of its own: it is abstract, or a scalar whose lower
-// bound demands none.
+// bound demands none and whose own body describes none.
 func (f *EffectiveFeature) HoldsOnlyContributions() bool {
 	mult := f.Multiplicity
 	if !mult.Lower.Known || !mult.Upper.Known {
 		return false
 	}
-	return symbols.IsAbstract(f.Symbol) || (!mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar())
+	if symbols.IsAbstract(f.Symbol) {
+		return true
+	}
+	return !mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar() && !bodyDescribesObject(f.Symbol, f.Type)
+}
+
+// bodyDescribesObject reports whether a usage's own body restates or adds features
+// of a concrete type: an optional feature written so states the one object it describes.
+func bodyDescribesObject(sym, typ *symbols.Symbol) bool {
+	return sym != nil && typ != nil && !symbols.IsAbstract(typ) && declaresFeatures(sym)
 }
 
 // holdContributions fills an abstract or optional feature with the values the

@@ -1529,7 +1529,7 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
 		}
 	}
-	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorCalculations::transform", "ComplexFunctions::ToString"} {
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "TensorCalculations::transform", "ComplexFunctions::ToString"} {
 		if b, ok := listed[absent]; ok {
 			t.Errorf("%s is listed as %+v, want it left out", absent, b)
 		}

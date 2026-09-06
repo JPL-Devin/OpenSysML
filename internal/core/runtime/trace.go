@@ -363,6 +363,16 @@ func FormatTraceValue(v Value) string {
 			return v.Kind.String()
 		}
 		return v.MeasurementRef().String()
+	case ValCoordinateFrame:
+		if v.CoordinateFrame() == nil {
+			return v.Kind.String()
+		}
+		return v.CoordinateFrame().String()
+	case ValCoordinateTransformation:
+		if v.CoordinateTransformation() == nil {
+			return v.Kind.String()
+		}
+		return v.CoordinateTransformation().String()
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr()))
 	default:

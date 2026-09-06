@@ -189,6 +189,38 @@ func TestBoundMeasurementScale(t *testing.T) {
 		"cannot bind a value of type IntervalScale to a feature typed by ThermodynamicTemperatureUnit")
 }
 
+// TestBoundComposedCoordinateFrame: a frame divided or multiplied by a unit is the
+// CoordinateFrame the frame calcs compose, so it binds to a frame type whose axes
+// measure in the composed dimension (Annex A's `velocityCF = spatialCF / s`), is
+// refused by one of another dimension or dimensions, and by any non-frame type;
+// numbers written in a frame are a vector quantity of the frame's kind.
+func TestBoundComposedCoordinateFrame(t *testing.T) {
+	const frames = `private import ISQSpaceTime::*;
+		private import MeasurementReferences::*;
+		attribute spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }
+		attribute velocityCF : CartesianVelocity3dCoordinateFrame[1] = spatialCF / s;
+		`
+	wantNoDimensionDiags(t, frames+`attribute accelerationCF : CartesianAcceleration3dCoordinateFrame[1] = velocityCF / s;`)
+	wantNoDimensionDiags(t, frames+`attribute cf : CoordinateFrame = spatialCF * s;`)
+	wantNoDimensionDiags(t, frames+`attribute cf : VectorMeasurementReference = spatialCF / s;`)
+	wantNoDimensionDiags(t, frames+`attribute p : Position3dVector = (1.0, 2.0, 3.0) [spatialCF];`)
+	wantNoDimensionDiags(t, frames+`attribute v : Quantities::VectorQuantityValue = (1.0, 2.0, 3.0) [velocityCF];`)
+	wantOneDimensionError(t, frames+`attribute bad : CartesianSpatial3dCoordinateFrame = spatialCF / s;`,
+		"cannot bind a coordinate frame whose axis 1 measures in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L to a feature typed by CartesianSpatial3dCoordinateFrame")
+	wantOneDimensionError(t, frames+`attribute bad : CartesianAcceleration3dCoordinateFrame = spatialCF / s;`,
+		"cannot bind a coordinate frame whose axis 1 measures in dimension L·T^-1, where CartesianAcceleration3dCoordinateFrame admits L·T^-2 to a feature typed by CartesianAcceleration3dCoordinateFrame")
+	wantOneDimensionError(t, frames+`attribute bad : Time::TimeScale = spatialCF / s;`,
+		"cannot bind a coordinate frame of dimensions [3], where TimeScale fixes dimensions [] to a feature typed by TimeScale")
+	wantOneDimensionError(t, frames+`attribute bad : LengthUnit = spatialCF / s;`,
+		"cannot bind a coordinate frame composed from another's axes to a feature typed by LengthUnit")
+	wantOneDimensionError(t, frames+`attribute bad : SpeedUnit = spatialCF / s;`,
+		"cannot bind a coordinate frame composed from another's axes to a feature typed by SpeedUnit")
+	wantOneDimensionError(t, frames+`attribute bad : SpeedValue = spatialCF / s;`,
+		"cannot bind a coordinate frame composed from another's axes to a feature typed by SpeedValue")
+	wantOneDimensionError(t, frames+`attribute bad : ScalarValues::Real = spatialCF / s;`,
+		"cannot bind a coordinate frame composed from another's axes to a feature typed by Real")
+}
+
 // TestComposedMeasurementUnitAsAnArgument: an operator expression over units is
 // a measurement reference where an overload is chosen by argument type, so
 // ToString(m / s) selects MeasurementRefCalculations::ToString and a quantity

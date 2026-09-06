@@ -39,7 +39,9 @@ func (m *Model) ShapeFeatures(typ *symbols.Symbol) []ShapeFeature {
 	if cached, ok := m.shapes[typ]; ok {
 		return cached
 	}
-	out := m.shapeFeatures(typ, func(member *symbols.Symbol) bool { return !m.FrameFeature(member) })
+	out := m.shapeFeatures(typ, func(member *symbols.Symbol) bool {
+		return !m.FrameFeature(member) || m.DescribesReference(typ, member)
+	})
 	if m.MemberSourcesStable(typ) && m.computingRedefinedFeatures == 0 {
 		m.shapes[typ] = out
 	}
@@ -227,6 +229,57 @@ func IsValueType(sym *symbols.Symbol) bool {
 	default:
 		return false
 	}
+}
+
+// describedReferenceRoots are the value types whose library members describe
+// the value an object of them is: a frame's axes and transformation, a scale's
+// unit and mapping, a transformation's placement. A unit stays a scalar value.
+var describedReferenceRoots = []string{
+	"MeasurementReferences::VectorMeasurementReference",
+	"MeasurementReferences::CoordinateTransformation",
+	"MeasurementReferences::TranslationOrRotation",
+	"MeasurementReferences::QuantityValueMapping",
+	"MeasurementReferences::DefinitionalQuantityValue",
+}
+
+// IsDescribedReference reports whether objects of typ carry their library
+// members: a coordinate frame, a measurement scale, a coordinate transformation
+// or a definitional value, but not a measurement unit.
+func (m *Model) IsDescribedReference(typ *symbols.Symbol) bool {
+	if m == nil || typ == nil {
+		return false
+	}
+	if unit := m.libSymbol(fqnMeasurementUnit); unit != nil && m.Conforms(typ, unit) {
+		return false
+	}
+	for _, fqn := range describedReferenceRoots {
+		if root := m.libSymbol(fqn); root != nil && m.Conforms(typ, root) {
+			return true
+		}
+	}
+	return false
+}
+
+// DescribesReference reports whether member, a library attribute of a described
+// reference type, is kept in typ's shape although a value type declares it.
+func (m *Model) DescribesReference(typ, member *symbols.Symbol) bool {
+	if member == nil || member.Kind != symbols.SymbolAttributeUsage || IsParameter(member) {
+		return false
+	}
+	if m.restatesFrameRoot(member) {
+		return false
+	}
+	// A usage nested in a described reference (a transformation's rotationMatrix)
+	// describes it too.
+	for cur := typ; cur != nil; cur = ownerOf(cur) {
+		if m.IsDescribedReference(cur) {
+			return true
+		}
+		if cur.Kind != symbols.SymbolAttributeUsage {
+			return false
+		}
+	}
+	return false
 }
 
 // FrameFeature reports whether a library-declared member frames the object

@@ -12,6 +12,7 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 | Library file | Declaration | What the vendored body says | What we implement | Why |
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
+| `Domain Libraries/Quantities and Units/MeasurementReferences.sysml`, `VectorCalculations.sysml` | `attribute def CoordinateFramePlacement`, `attribute def Rotation`, `calc def transform` | `origin specifies the location of the origin of the target frame as a vector in the source frame`; `basisDirections specifies the orientation of the target frame by specifying the directions of the respective basis vectors of the target frame via direction vectors in the source frame`; `transform` has no body — the text fixes what a placement *states* but not which way `transform` applies it, whether a direction vector's magnitude matters, or which axes an intrinsic rotation turns about | a placement maps target coordinates into source ones (`v_source = origin + B v_target`), so `transform(source→target)` applies the inverse `B⁻¹ (v − origin)`; basis directions are normalized; an intrinsic rotation turns about the axis as the earlier elements of the sequence moved it, an extrinsic one about the axis fixed in the source; a `NullTransformation` is the identity | The pinned pilot evaluates `transform` for no input, so the library text is the only authority and each reading is drafted below for clarification rather than asserted as the specification's |
 | `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
 | `Domain Libraries/Geometry/ShapeItems.sysml` | `item def CuboidOrTriangularPrism` (`Cuboid`, `RectangularCuboid`, `Box`) | `item tfe [2] :> edges;` … `binding [1] bind [0..1] tf.edges = [0..1] tfe;` `binding [1] bind [0..1] ff.edges = [0..1] tfe;` — every named edge group and vertex group (`tfe`…`urre`, `tflv`…`brrv`) is valued only by bindings whose ends link *one unspecified* value each; and `item :>> vertices; assert constraint { size(vertices) == size(edges) }` beside `Quadrilateral`'s `item :>> vertices [8];` and `StructuredSpaceObject`'s `faces.vertices subsets vertices` | the groups and everything read through them (`box.tfe`, `box.tflv`, `box.tfe.length`, `box.vertices`) are the typed `ErrBindingEnd` naming the binding; the runtime never picks a member (`runtime/binding.go` `UndeterminedBindingError`) | No conjunction of the bindings, the `MatesWith` connections and the `size(...)` assertions identifies which of a face's four edges a group holds, so no evaluator can name `tfe`; and a `Cuboid`'s `vertices` cannot be both a superset of its six faces' 48 vertex objects and 24 long. The draft below records both |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
@@ -134,6 +135,112 @@ number computed over the vector's `num` components — `norm(⟨3.0, 4.0⟩ [m])
 declaration (`runtime/vector_functions.go`; conformance
 `calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
 results as declared (`runtime/quantity_functions.go`).
+
+## `CoordinateFramePlacement`, `Rotation`, `VectorCalculations::transform` — the direction of a transformation, the magnitude of a direction, and the axes of an intrinsic rotation
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/MeasurementReferences.sysml`:
+
+```sysml
+	attribute def CoordinateFramePlacement :> CoordinateTransformation {
+    	doc
+    	/*
+    	 * CoordinateFramePlacement is a CoordinateTransformation by placement of the target frame in the source frame.
+    	 *
+    	 * Attribute origin specifies the location of the origin of the target frame as a vector in the source frame.
+    	 *
+    	 * Attribute basisDirections specifies the orientation of the target frame by specifying the directions of
+    	 * the respective basis vectors of the target frame via direction vectors in the source frame. An empty sequence of
+    	 * basisDirections signifies no change of orientation of the target coordinate frame.
+    	 */
+		attribute origin : VectorQuantityValue[1];
+		attribute basisDirections : VectorQuantityValue[0..*] ordered nonunique;
+```
+
+```sysml
+	attribute def Rotation :> TranslationOrRotation {
+		/*
+		 * Attribute isIntrinsic asserts whether the intermediate coordinate frame moves with the rotation or not,
+		 * i.e. whether an instrinsic or extrinsic rotation is specified.
+		 *
+		 * See https://en.wikipedia.org/wiki/Davenport_chained_rotations for details.
+		 */
+		attribute axisDirection : VectorQuantityValue[1];
+		attribute angle :>> angularMeasure;
+		attribute isIntrinsic : Boolean[1] default true;
+	}
+```
+
+and from `VectorCalculations.sysml` in the same directory:
+
+```sysml
+	calc def transform {
+	    in transformation : CoordinateTransformation;
+	    in sourceVector : VectorQuantityValue { :>> mRef = transformation.source; }
+	    return targetVector : VectorQuantityValue { :>> mRef = transformation.target { ... } }
+	}
+```
+
+````markdown
+**Clarification request:** `VectorCalculations::transform` re-expresses a vector
+quantity written over `transformation.source` as one over `transformation.target`,
+and `CoordinateFramePlacement` describes the target frame from within the source
+(`origin` is "the location of the origin of the target frame as a vector in the
+source frame"; `basisDirections` are "the directions of the respective basis
+vectors of the target frame via direction vectors in the source frame"). Three
+things the text leaves to the reader decide the numbers `transform` answers:
+
+1. **Direction.** Read literally, a placement maps *target* coordinates into
+   *source* coordinates: a point at target coordinates `t` sits at
+   `origin + B t` in the source, `B` the matrix whose columns are the basis
+   directions. `transform(source → target)` must then apply the **inverse**,
+   `B⁻¹ (v − origin)`, and a `Translation` in a `TranslationRotationSequence`
+   *subtracts* its `translationVector` from the source coordinates. Is that the
+   intent, or does a placement state the mapping `transform` applies directly
+   (`v_target = origin + B v_source`)? The two readings agree only for the
+   `NullTransformation`.
+2. **Magnitude of a direction.** `basisDirections` are "direction vectors", which
+   suggests only their direction is meaningful and `B` is built from the
+   normalized vectors; but a `VectorQuantityValue` carries a magnitude, and
+   `(0, 2, 0)[datum]` as a basis direction could equally state a target axis of
+   twice the source unit. Should a non-unit direction be normalized, scale the
+   axis, or be a violation?
+3. **Intrinsic rotations.** For a `Rotation` with `isIntrinsic = true` (the
+   default), the Davenport reference the doc cites turns about the axis of the
+   *intermediate* frame, i.e. `axisDirection` as the earlier elements of the
+   sequence have moved it, and an extrinsic one about `axisDirection` fixed in
+   the source; the composition order of the two therefore differs. Is
+   `axisDirection` written in the source frame in both cases, and does a
+   `Translation` between two rotations move the intermediate frame's origin
+   without affecting the axes?
+
+A fourth, smaller point: `MeasurementScale`s that specialize `CoordinateFrame`
+(`IntervalScale`) state `basisDirections` in one dimension (`1 [UTC]` in the
+validation suite's `MissionElapsedTimeScale`). A magnitude of 1 is the identity;
+is a magnitude other than 1 a scale factor between the two scales' units, or is
+the unit's own `unitConversion` the only factor a scale may apply?
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates none of `transform`, `MeasurementRefCalculations::'CoordinateFrame/'`,
+`VectorCalculations::'['` over a frame or `ConvertQuantity` to a scale
+(`cmd/pilot-exec-diff/testdata/cases/coordinate_frames.cases` pins the probes as
+pilot-unevaluated), so it offers no reference answer for any of the four.
+
+OpenSysML follows the literal reading of each: a placement maps target
+coordinates into the source and `transform` applies the inverse (a
+`TranslationRotationSequence` of a translation and a rotation followed by its
+inverse sequence round-trips, conformance `instance_coordinate_frames`); basis
+directions are normalized, a zero or a linearly dependent direction being a typed
+error; an intrinsic rotation turns about the axis as the earlier elements moved
+it and an extrinsic one about the axis fixed in the source; and a one-dimensional
+basis direction of magnitude 1 is the identity while any other magnitude is a
+typed error naming it, the library giving a scale no other basis
+(`runtime/frame_transform.go`, `runtime/scale_conversion.go`; the compliance
+record's *Structured values* section names each decision).
 
 ## `ShapeItems::CuboidOrTriangularPrism` — edge and vertex groups fixed only by `[0..1]` bindings, and a vertex count its faces exceed
 

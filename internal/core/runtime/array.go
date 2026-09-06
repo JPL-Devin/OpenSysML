@@ -145,11 +145,20 @@ func (v *Vector) format(element func(semantics.Value) string) string {
 type VectorQuantity struct {
 	Num   []semantics.Value
 	Units []Unit
+	// Frame is the coordinate frame the vector was written over (`(1, 2, 3) [datum]`),
+	// whose axes Units are; nil for one written over a scalar unit.
+	Frame *CoordinateFrame
 }
 
 // NewVectorQuantityValue wraps a vector quantity; num and units are the same length.
 func NewVectorQuantityValue(num []semantics.Value, units []Unit) Value {
 	return Value{Kind: ValVectorQuantity, ref: &VectorQuantity{Num: num, Units: units}}
+}
+
+// NewFramedVectorQuantityValue wraps a vector quantity over a coordinate frame,
+// one component per axis.
+func NewFramedVectorQuantityValue(num []semantics.Value, frame *CoordinateFrame) Value {
+	return Value{Kind: ValVectorQuantity, ref: &VectorQuantity{Num: num, Units: frame.Axes, Frame: frame}}
 }
 
 // Dimension is the number of components.
@@ -177,9 +186,16 @@ func (vq *VectorQuantity) sharedUnit() (Unit, bool) {
 	return vq.Units[0], true
 }
 
-// format renders `⟨1.0, 2.0⟩ [m]`, or `⟨1.0 [m], 2.0 [rad]⟩` when the axes differ.
+// format renders `⟨1.0, 2.0⟩ [m]`, `⟨1.0, 2.0, 3.0⟩ [datum]` over a frame, or
+// `⟨1.0 [m], 2.0 [rad]⟩` when the axes differ and no frame names them.
 func (vq *VectorQuantity) format(element func(semantics.Value) string) string {
 	parts := make([]string, len(vq.Num))
+	if vq.Frame != nil {
+		for i, n := range vq.Num {
+			parts[i] = element(n)
+		}
+		return "⟨" + strings.Join(parts, ", ") + "⟩ [" + vq.Frame.Name() + "]"
+	}
 	if unit, ok := vq.sharedUnit(); ok {
 		for i, n := range vq.Num {
 			parts[i] = element(n)
@@ -257,6 +273,10 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 		return ctx.quantityFeature(val, name)
 	case ValMeasurementRef:
 		return ctx.measurementRefFeature(val, name)
+	case ValCoordinateFrame:
+		return ctx.frameFeature(val, name)
+	case ValCoordinateTransformation:
+		return ctx.transformationFeature(val, name)
 	}
 	return Value{}, false, nil
 }
@@ -365,6 +385,10 @@ func backingObject(value Value) int64 {
 		return value.Array().Object
 	case ValVector:
 		return value.Vector().Object
+	case ValCoordinateFrame:
+		return value.CoordinateFrame().Object
+	case ValCoordinateTransformation:
+		return value.CoordinateTransformation().Object
 	}
 	return 0
 }
@@ -458,7 +482,7 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 		return Value{}, true, err
 	}
 	if !dimsStated {
-		if fixed, ok := ctx.fixedDimensions(inst); ok {
+		if fixed, ok := ctx.model.FixedDimensions(ctx.objectType(inst)); ok {
 			dimensions = fixed
 		}
 	}
@@ -468,24 +492,6 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	}
 	val.Array().Object = inst.ID
 	return ctx.vectorOfObject(inst, val)
-}
-
-// fixedDimensions is the dimensions an object's type fixes by a constant on
-// `dimensions` or a redefinition of it (`ThreeVectorValue::dimension = 3`).
-func (ctx *Context) fixedDimensions(inst *Instance) ([]int64, bool) {
-	typ := ctx.objectType(inst)
-	for _, member := range ctx.model.MembersOfIncludingRedefined(typ) {
-		if !semantics.IsShapeFeature(member) {
-			continue
-		}
-		if base, ok := ctx.arrayFeatureOf(member); !ok || base != arrayDimensionsFeature {
-			continue
-		}
-		if fixed, ok := ctx.constantIntegers(member, typ); ok {
-			return fixed, true
-		}
-	}
-	return nil, false
 }
 
 // vectorOfObject is the vector a NumericalVectorValue object of one dimension is;
@@ -562,6 +568,9 @@ func (ctx *Context) declaredArrayValue(sym *symbols.Symbol) (Value, bool, error)
 	if err != nil {
 		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
 	}
+	if val, ok, err := ctx.referenceValueOfObject(inst); ok {
+		return val, true, err
+	}
 	return ctx.arrayOfObject(inst)
 }
 
@@ -584,9 +593,13 @@ func (ctx *Context) objectFeatureElements(inst *Instance, name string) ([]Value,
 	return elementsOf(val), stated, nil
 }
 
-// objectValue is what a name denoting an object evaluates to: the Array a shaped
+// objectValue is what a name denoting an object evaluates to: the frame, scale or
+// transformation a MeasurementReferences object is, the Array a shaped
 // Collections::Array object is, else the object itself.
 func (ctx *Context) objectValue(inst *Instance) (Value, error) {
+	if val, ok, err := ctx.referenceValueOfObject(inst); ok {
+		return val, err
+	}
 	if val, ok, err := ctx.arrayOfObject(inst); ok {
 		return val, err
 	}

@@ -13,9 +13,8 @@ import (
 const (
 	noTensorQuantity = "a tensor quantity has no representation: the runtime has no tensor value kind, " +
 		"and TensorCalculations gives its calculations no bodies to compute one by"
-	noCoordinateTransformation = "a CoordinateTransformation has no representation: the runtime holds a scalar " +
-		"measurement reference but no coordinate frame with an origin and basisDirections, a vector quantity " +
-		"carries a unit per axis and no source frame, and transform has no body applying one"
+	noTensorTransform = "a tensor quantity has no representation to transform: the runtime applies a " +
+		"CoordinateTransformation to a vector quantity (VectorCalculations::transform) and holds no tensor"
 )
 
 // init registers the Quantities and Units domain library's calculation packages:
@@ -61,14 +60,14 @@ func registerQuantityCalculations() {
 }
 
 // registerMeasurementRefCalculations registers MeasurementRefCalculations over
-// the measurement reference value; the two over a CoordinateFrame are named.
+// the measurement reference and coordinate frame values.
 func registerMeasurementRefCalculations() {
 	registerValueFunction("MeasurementRefCalculations::*", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpMul))
 	registerValueFunction("MeasurementRefCalculations::/", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpDiv))
 	registerValueFunction("MeasurementRefCalculations::**", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
 	registerValueFunction("MeasurementRefCalculations::^", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame*", []declaredParam{param("x"), param("y")}, noCoordinateFrameValue)
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame/", []declaredParam{param("x"), param("y")}, noCoordinateFrameValue)
+	registerValueFunction("MeasurementRefCalculations::CoordinateFrame*", []string{"x", "y"}, 2, frameArithmetic(ast.OpMul))
+	registerValueFunction("MeasurementRefCalculations::CoordinateFrame/", []string{"x", "y"}, 2, frameArithmetic(ast.OpDiv))
 	registerValueFunction("MeasurementRefCalculations::ToString", []string{"x"}, 1, measurementRefToString)
 }
 
@@ -76,11 +75,11 @@ func registerMeasurementRefCalculations() {
 const anonymous = ""
 
 // registerVectorCalculations registers VectorCalculations over vectors and vector
-// quantities; those needing a measurement reference value or a tensor are named.
+// quantities; those needing a tensor are named.
 // A parameter declared `in : Type` under a VectorFunctions general takes that
 // general's parameter name (KerML implicit redefinition); otherwise it is anonymous.
 func registerVectorCalculations() {
-	registerUnevaluable("VectorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noVectorMeasurementRef)
+	registerValueFunction("VectorCalculations::[", []string{"elements", "mRef"}, 2, vectorQuantityOf)
 	registerValueFunction("VectorCalculations::isZeroVectorQuantity", []string{"v"}, 1, vectorIsZero)
 	registerValueFunction("VectorCalculations::isUnitVectorQuantity", []string{anonymous}, 1, vectorIsUnit)
 	registerValueFunction("VectorCalculations::+", []string{"v", "w"}, 2, vectorAdd)
@@ -95,8 +94,7 @@ func registerVectorCalculations() {
 	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
 	registerValueFunction("VectorCalculations::norm", []string{"v"}, 1, vectorNorm)
 	registerValueFunction("VectorCalculations::angle", []string{"v", "w"}, 2, vectorAngle)
-	registerUnevaluable("VectorCalculations::transform",
-		[]declaredParam{param("transformation"), param("sourceVector")}, noCoordinateTransformation)
+	registerValueFunction("VectorCalculations::transform", []string{"transformation", "sourceVector"}, 2, transformVector)
 }
 
 // registerTensorCalculations registers TensorCalculations as unevaluable: the
@@ -115,7 +113,7 @@ func registerTensorCalculations() {
 	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
 	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
 	registerUnevaluable("TensorCalculations::transform",
-		[]declaredParam{param("transformation"), param("sourceTensor")}, noCoordinateTransformation)
+		[]declaredParam{param("transformation"), param("sourceTensor")}, noTensorTransform)
 }
 
 // registerAngleFunction adds a trigonometric function of an angle in radians,

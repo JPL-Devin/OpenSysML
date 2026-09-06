@@ -1,10 +1,10 @@
 // What the runtime cannot compute about a measurement reference fails by name.
 // A conversion between dimensions is incommensurable; a reference is neither a
 // number nor an addend; a declaration's own members (unitConversion,
-// quantityDimension) are not what the value holds; a vector quantity whose axes
-// differ has no single reference; and the coordinate frames and tensors the
-// library declares have no runtime value, so `transform` and `outer` are not
-// evaluable.
+// quantityDimension) are not what the value holds; a vector literal takes a
+// coordinate frame, not a sequence of units; `transform` takes a transformation,
+// not a vector; and the tensors the library declares have no runtime value, so
+// `outer` is not evaluable.
 package test {
 	public import ISQ::*;
 	public import SI::*;

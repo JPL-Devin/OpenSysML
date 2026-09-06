@@ -172,6 +172,10 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return ctx.structuredConforms(scope, *value, declared, how)
 	case ValMeasurementRef:
 		return ctx.measurementRefConforms(value.MeasurementRef(), declared)
+	case ValCoordinateFrame:
+		return ctx.frameConforms(value.CoordinateFrame(), declared)
+	case ValCoordinateTransformation:
+		return ctx.transformationConforms(value.CoordinateTransformation(), declared)
 	}
 	if id, ok := value.Object(); ok {
 		// An object, a selected variant's included, is what its usage is; declared as a

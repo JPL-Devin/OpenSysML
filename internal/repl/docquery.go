@@ -277,6 +277,17 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
 		}
 		return nil, fmt.Errorf("the measurement reference %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
+	case runtime.ValCoordinateFrame:
+		// A declared frame or scale is that element; one composed by arithmetic names none.
+		if decl := value.CoordinateFrame().Decl; decl != nil && value.CoordinateFrame().Object != 0 {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the coordinate frame %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
+	case runtime.ValCoordinateTransformation:
+		if decl := value.CoordinateTransformation().Decl; decl != nil {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the coordinate transformation %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}

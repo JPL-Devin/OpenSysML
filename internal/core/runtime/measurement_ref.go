@@ -3,7 +3,6 @@ package runtime
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -93,8 +92,8 @@ func (r *MeasurementRef) namesDimensionOne() bool {
 // MeasurementUnitValue is the reference a measurement-unit declaration names
 // (true for one). A library unit is the declaration whatever defines it (`'m/s'
 // = m/s`); a model feature typed by a unit and given a value holds that value
-// instead (false). A measurement scale (`UTC`, `'°C_abs'`) is a reference the
-// runtime holds no value for, a typed error naming it.
+// instead (false). A measurement scale (`UTC`, `'°C_abs'`) is the one-axis
+// frame its declaration describes.
 func (ctx *Context) MeasurementUnitValue(sym *symbols.Symbol) (Value, bool, error) {
 	if sym == nil || ctx.model == nil {
 		return Value{}, false, nil
@@ -114,8 +113,8 @@ func (ctx *Context) MeasurementUnitValue(sym *symbols.Symbol) (Value, bool, erro
 	return NewMeasurementRefValue(Unit{Text: name, Product: product, Term: term}), true, nil
 }
 
-// measurementScaleValue is the typed refusal a measurement scale declaration
-// evaluates to: no value holds a scale's origin, points or mapping.
+// measurementScaleValue is the scale a measurement scale declaration (`SI::'°C_abs'`,
+// `Time::UTC`) evaluates to: its object, read as the one-axis frame it is.
 func (ctx *Context) measurementScaleValue(sym *symbols.Symbol) (Value, bool, error) {
 	if !ctx.model.IsMeasurementScale(sym) {
 		return Value{}, false, nil
@@ -123,10 +122,15 @@ func (ctx *Context) measurementScaleValue(sym *symbols.Symbol) (Value, bool, err
 	if !ctx.libraryDeclared(sym) && ctx.extractDefaultValue(sym) != nil {
 		return Value{}, false, nil
 	}
-	return Value{}, true, fmt.Errorf(
-		"%w: %s: a measurement scale typed %s is not held as a value; the runtime holds a measurement unit and its reduction, not a scale's origin, points or mapping",
-		ErrUnevaluableLibraryFunction, ctx.qualifiedUnitName(sym), scaleTypeNames(ctx.model.DeclaredFeatureTypes(sym)),
-	)
+	inst, err := ctx.occurrenceOf(sym)
+	if err != nil {
+		return Value{}, true, fmt.Errorf("measurement scale %s: %w", ctx.qualifiedUnitName(sym), err)
+	}
+	frame, err := ctx.readFrame(inst)
+	if err != nil {
+		return Value{}, true, err
+	}
+	return NewCoordinateFrameValue(frame), true, nil
 }
 
 // qualifiedUnitName names a reference declaration as it is written (`SI::'°C_abs'`,
@@ -137,15 +141,6 @@ func (ctx *Context) qualifiedUnitName(sym *symbols.Symbol) string {
 		return name
 	}
 	return ctx.qualifiedSymbolName(sym.OwnerScope.Owner()) + "::" + name
-}
-
-// scaleTypeNames lists a scale's declared types as its declaration does (`IntervalScale`).
-func scaleTypeNames(types []*symbols.Symbol) string {
-	names := make([]string, 0, len(types))
-	for _, t := range types {
-		names = append(names, lexer.NameText(t.Name))
-	}
-	return strings.Join(names, ", ")
 }
 
 // unitSymbolName is the symbol a unit is written by (`km`), its name otherwise.
@@ -216,6 +211,14 @@ func (ctx *Context) measurementRefFeature(val Value, name string) (Value, bool, 
 	if !ctx.measurementRefDeclares(ref, name) {
 		return Value{}, false, nil
 	}
+	// A member the unit's own declaration states (`K.temperatureOfWaterAtTriplePointInK`)
+	// is read as a declaration of its own.
+	if decl := ref.Declaration(); decl != nil {
+		if member, ok := ctx.ownMember(decl, name); ok {
+			val, err := ctx.declaredMemberValue(member)
+			return val, true, err
+		}
+	}
 	return Value{}, true, fmt.Errorf(
 		"%w: %s::%s: a measurement reference value holds the unit %s and its reduction %s, not the declaration's member %s",
 		ErrUnevaluableLibraryFunction, scalarMRefTypeFQN, name, ref, ref.Unit.Term, name,
@@ -238,6 +241,28 @@ func (ctx *Context) measurementRefDeclares(ref *MeasurementRef, name string) boo
 	return ok
 }
 
+// ownMember is the member decl's own body declares, not one its type contributes.
+func (ctx *Context) ownMember(decl *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	member, ok := ctx.model.LookupMember(decl, name)
+	if !ok || member.OwnerScope == nil || member.OwnerScope.Owner() != decl {
+		return nil, false
+	}
+	return member, true
+}
+
+// declaredMemberValue reads a declaration as a name of it does: the one object
+// its body describes, else the value it binds.
+func (ctx *Context) declaredMemberValue(member *symbols.Symbol) (Value, error) {
+	if ctx.namesOneObject(member) {
+		inst, err := ctx.occurrenceOf(member)
+		if err != nil {
+			return Value{}, fmt.Errorf("usage %s: %w", symbolText(member), err)
+		}
+		return ctx.objectValue(inst)
+	}
+	return ctx.EvalDeclaredValue(member)
+}
+
 // quantityFeature answers a scalar quantity's `num`, `mRef` and the tensor and
 // Array features a scalar fixes (order 0, one element); isBound is not held.
 func (ctx *Context) quantityFeature(val Value, name string) (Value, bool, error) {
@@ -246,6 +271,13 @@ func (ctx *Context) quantityFeature(val Value, name string) (Value, bool, error)
 	case vectorQuantityNumFeature:
 		return Value{Kind: ValConst, Const: q.Num}, true, nil
 	case vectorQuantityMRefFeature:
+		// A point on a scale (`3 [UTC]`) is over the scale, not a unit.
+		if scale, ok, err := ctx.scaleOfUnit(q.Unit); ok || err != nil {
+			if err != nil {
+				return Value{}, true, err
+			}
+			return NewCoordinateFrameValue(scale), true, nil
+		}
 		return measurementRefOf(q.Unit), true, nil
 	case arrayDimensionsFeature:
 		return ctx.answerSequence(nil)
@@ -264,9 +296,13 @@ func (ctx *Context) quantityFeature(val Value, name string) (Value, bool, error)
 	return Value{}, false, nil
 }
 
-// vectorQuantityMRef is the one reference a vector quantity's axes share, however
-// spelt; axes in different units have no scalar reference faithful to all, a typed error.
+// vectorQuantityMRef is the frame a vector quantity was written over, else the one
+// reference its axes share, however spelt; axes in different units over no frame
+// have no reference faithful to all, a typed error.
 func vectorQuantityMRef(vq *VectorQuantity) (Value, error) {
+	if vq.Frame != nil {
+		return NewCoordinateFrameValue(vq.Frame), nil
+	}
 	unit, ok := vq.sharedUnit()
 	if !ok {
 		return Value{}, fmt.Errorf(

@@ -41,6 +41,12 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	if !n.Bracket {
 		return ec.evalSequenceIndex(n)
 	}
+	// A frame or scale in unit position is the VectorCalculations::'[' case.
+	if frame, ok, err := ec.frameIndex(n.Index); err != nil {
+		return Value{}, err
+	} else if ok {
+		return ec.framedQuantity(n, frame)
+	}
 	term, err := ec.ctx.model.UnitTermOfExpr(ec.scope, n.Index)
 	if err != nil {
 		return Value{}, ec.notAQuantityError(n, err)

@@ -67,13 +67,17 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 }
 
 // judgedAsMeasurementRef judges a unit composed by `*`, `/` or `**` as the DerivedUnit
-// it evaluates to (`m * s` refused by AreaUnit, `m * m` by AreaValue); false otherwise.
+// it evaluates to (`m * s` refused by AreaUnit, `m * m` by AreaValue), and a frame
+// composed by `*` or `/` as the CoordinateFrame it evaluates to; false otherwise.
 func (ec *exprChecker) judgedAsMeasurementRef(scope *symbols.Scope, declared *symbols.Symbol, element ast.Node) bool {
 	e, ok := element.(*ast.OperatorExpr)
 	if !ok {
 		return false
 	}
 	c, ok := ec.model.MeasurementRefExprConformance(scope, e, declared)
+	if !ok {
+		c, ok = ec.model.CoordinateFrameExprConformance(scope, e, declared)
+	}
 	if !ok {
 		return false
 	}

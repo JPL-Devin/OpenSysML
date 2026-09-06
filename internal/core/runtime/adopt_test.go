@@ -1485,3 +1485,85 @@ func TestAdoptOfASourceLeavesItsDependentsBehind(t *testing.T) {
 		t.Error("the reader was carried over with the source it read")
 	}
 }
+
+const adoptFrameSrc = `package Demo {
+	private import ISQ::*;
+	private import ISQSpaceTime::*;
+	private import SI::*;
+	private import MeasurementReferences::*;
+	attribute datum : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); }
+	attribute placed : CartesianSpatial3dCoordinateFrame {
+		:>> mRefs = (mm, mm, mm);
+		:>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (10.0, 0.0, 0.0) [datum]; }
+	}
+	part def Body { attribute frame : CoordinateFrame; attribute velocity : CoordinateFrame; attribute pos : Quantities::VectorQuantityValue; attribute placement : CoordinateTransformation; }
+	part body : Body;
+}`
+
+// A frame a run wrote, one composed from it, a vector over it and its placement
+// all name declarations; each is rebound so the frame keeps its identity and its
+// axes their units, and a re-analysis without the frame refuses the carry-over.
+func TestAdoptRebindsTheFramesAWrittenValueNames(t *testing.T) {
+	prev := libraryContextOver(t, adoptFrameSrc)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	body, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::body"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for feature, src := range map[string]string{
+		"frame": "datum", "velocity": "datum / s", "pos": "(1.0, 2.0, 3.0) [datum]", "placement": "placed.transformation",
+	} {
+		val, err := evalIn(t, prev, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if err := body.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(body)
+
+	ctx := libraryContextOver(t, adoptFrameSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, body); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	datum := lookupOne(t, ctx.resolver.Index(), "Demo::datum")
+	frame, err := body.GetFeatureValue(ctx, "frame")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(frame): %v", err)
+	}
+	if decl := frame.Value.CoordinateFrame().Decl; decl != datum {
+		t.Errorf("frame names %p, want the datum declared by the re-analysis %p", decl, datum)
+	}
+	pos, err := body.GetFeatureValue(ctx, "pos")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(pos): %v", err)
+	}
+	if decl := pos.Value.VectorQuantity().Frame.Decl; decl != datum {
+		t.Errorf("pos is over %p, want the datum declared by the re-analysis %p", decl, datum)
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"body.frame":          "datum [mm, mm, mm]",
+		"body.frame == datum": "true",
+		"body.frame istype CartesianSpatial3dCoordinateFrame": "true",
+		"body.velocity":                                           "datum / s [mm/s, mm/s, mm/s]",
+		"body.velocity == datum / s":                              "true",
+		"body.pos.mRef == body.frame":                             "true",
+		"body.placement == placed.transformation":                 "true",
+		"VectorCalculations::transform(body.placement, body.pos)": "⟨-9.0, 2.0, 3.0⟩ [placed]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+
+	gone := libraryContextOver(t, strings.Replace(adoptFrameSrc, "attribute datum : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); }", "", 1))
+	var adoptErr *AdoptError
+	if _, err := gone.Adopt(prev, shapes, body); !errors.As(err, &adoptErr) {
+		t.Fatalf("Adopt into a re-analysis without the frame: %v, want an AdoptError", err)
+	} else if !strings.Contains(err.Error(), "the coordinate frame datum it holds is no longer declared") {
+		t.Errorf("Adopt refused for %q, want the missing frame named", err)
+	}
+}

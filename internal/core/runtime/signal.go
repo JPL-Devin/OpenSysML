@@ -1129,14 +1129,12 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 // The occurrence is constructed at the send, so an argument no feature admits, or
 // one beyond the features, is rejected there whether or not an accept consumes it.
 func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
-	signal, err := e.constructedType(scope, constructor.Type)
+	signal, err := e.constructedType(scope, constructor.Type, "send")
 	if err != nil {
 		return Message{}, err
 	}
-	if e.ctx.model != nil {
-		if n := len(e.ctx.model.ConstructibleFeatures(signal)); len(constructor.Args) > n {
-			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
-		}
+	if err := e.checkConstructorArity(signal, constructor, "send "+signal.Name); err != nil {
+		return Message{}, err
 	}
 	msg, err := e.buildTypedMessage(scope, signal.Name, signal, target,
 		messageArgs{typeRef: constructor.Type, args: constructor.Args, named: constructor.NamedArgs})
@@ -1151,25 +1149,65 @@ func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor 
 	return msg, nil
 }
 
+// evalConstructor evaluates `new T(…)` as a value: the object of T whose
+// constructible features the arguments bind, read as what it denotes.
+func (e *EvalContext) evalConstructor(constructor *ast.ConstructorExpr) (Value, error) {
+	typ, err := e.constructedType(e.scope, constructor.Type, "")
+	if err != nil {
+		return Value{}, err
+	}
+	what := "new " + typ.Name
+	if err := e.checkConstructorArity(typ, constructor, what); err != nil {
+		return Value{}, err
+	}
+	msg, err := e.buildTypedMessage(e.scope, typ.Name, typ, "",
+		messageArgs{typeRef: constructor.Type, args: constructor.Args, named: constructor.NamedArgs, written: what})
+	if err != nil {
+		return Value{}, err
+	}
+	value, err := e.ctx.materializeMessage(msg)
+	if err != nil {
+		return Value{}, fmt.Errorf("%s: %w", what, err)
+	}
+	return e.ctx.objectValue(e.ctx.instances[value.Instance])
+}
+
+// checkConstructorArity rejects positional arguments beyond the constructed
+// type's constructible features.
+func (e *EvalContext) checkConstructorArity(typ *symbols.Symbol, constructor *ast.ConstructorExpr, what string) error {
+	if e.ctx.model == nil {
+		return nil
+	}
+	if n := len(e.ctx.model.ConstructibleFeatures(typ)); len(constructor.Args) > n {
+		return fmt.Errorf("%s: new %s takes %d argument(s), found %d", what, typ.Name, n, len(constructor.Args))
+	}
+	return nil
+}
+
 // constructedType resolves the type `new T(…)` instantiates: a definition, or a
-// usage, which is a type too. A name that resolves to nothing or to no type is an error.
-func (e *EvalContext) constructedType(scope *symbols.Scope, typeRef *ast.QualifiedName) (*symbols.Symbol, error) {
+// usage, which is a type too. A name that resolves to nothing or to no type is
+// an error, reported under the statement (`send`) the constructor is written in.
+func (e *EvalContext) constructedType(scope *symbols.Scope, typeRef *ast.QualifiedName, statement string) (*symbols.Symbol, error) {
 	name := ast.QualifiedText(typeRef)
+	prefix := "new"
+	if statement != "" {
+		prefix = statement + " new"
+	}
 	if name == "" {
-		return nil, fmt.Errorf("send: the constructor names no type")
+		return nil, fmt.Errorf("%s: the constructor names no type", prefix)
 	}
 	if scope == nil || e.ctx == nil || e.ctx.resolver == nil {
-		return nil, fmt.Errorf("send new %s: no scope resolves the type", name)
+		return nil, fmt.Errorf("%s %s: no scope resolves the type", prefix, name)
 	}
 	sym, ok := e.ctx.resolver.ResolveQualified(scope, typeRef)
 	if !ok || sym == nil {
-		return nil, fmt.Errorf("send new %s: unresolved reference: %s", name, name)
+		return nil, fmt.Errorf("%s %s: unresolved reference: %s", prefix, name, name)
 	}
 	switch sym.Decl.(type) {
 	case *ast.Definition, *ast.Usage:
 		return sym, nil
 	}
-	return nil, fmt.Errorf("send new %s: %s is a %s, not a type", name, name, sym.Kind)
+	return nil, fmt.Errorf("%s %s: %s is a %s, not a type", prefix, name, name, sym.Kind)
 }
 
 // messageType names the type of an invoked message and resolves it to the
@@ -1191,15 +1229,21 @@ func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedNa
 // (`argN` where the type has none), a label the feature it names. Binding one feature
 // twice, by position and label or by two labels, is an error rather than the last
 // value. With loneValue a lone positional argument is also the message's Value.
+// Errors name the construct as written, `send T` unless stated otherwise.
 type messageArgs struct {
 	typeRef   *ast.QualifiedName
 	args      []ast.Node
 	named     []ast.NamedArg
 	loneValue bool
+	written   string
 }
 
 func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, signalType string, signal *symbols.Symbol, target string, in messageArgs) (Message, error) {
 	typeRef, args, named, loneValue := in.typeRef, in.args, in.named, in.loneValue
+	written := in.written
+	if written == "" {
+		written = "send " + signalType
+	}
 	msg := Message{SignalType: signalType, Signal: signal, Target: target,
 		Payload: make(map[string]Value, len(args)+len(named))}
 	var slots []*symbols.Symbol
@@ -1210,7 +1254,7 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, signalType string,
 	for i, arg := range args {
 		value, err := e.Eval(arg)
 		if err != nil {
-			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
+			return Message{}, fmt.Errorf("eval argument %d of %s: %w", i+1, written, err)
 		}
 		name := fmt.Sprintf("arg%d", i+1)
 		if i < len(slots) {
@@ -1225,18 +1269,18 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, signalType string,
 	for _, arg := range named {
 		label := ast.QualifiedText(arg.Name)
 		if label == "" {
-			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
+			return Message{}, fmt.Errorf("%s: an argument is named by nothing", written)
 		}
 		name, err := e.constructorLabel(scope, signal, typeRef, arg.Name, bound)
 		if err != nil {
-			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
+			return Message{}, fmt.Errorf("%s: %w", written, err)
 		}
 		if _, twice := msg.Payload[name]; twice {
-			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, label)
+			return Message{}, fmt.Errorf("%s: %s is bound twice", written, label)
 		}
 		value, err := e.Eval(arg.Value)
 		if err != nil {
-			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", label, signalType, err)
+			return Message{}, fmt.Errorf("eval argument %s of %s: %w", label, written, err)
 		}
 		msg.Payload[name] = value
 	}

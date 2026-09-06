@@ -59,6 +59,13 @@ func describeOperand(val Value) string {
 		return "a vector quantity"
 	case ValMeasurementRef:
 		return "a measurement reference"
+	case ValCoordinateFrame:
+		if val.CoordinateFrame().IsScale() {
+			return "a measurement scale"
+		}
+		return "a coordinate frame"
+	case ValCoordinateTransformation:
+		return "a coordinate transformation"
 	}
 	return "a value"
 }

@@ -1,0 +1,94 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Rig",
+  "slots": {
+    "spatialCF": {"type": "CoordinateFrame", "text": "spatialCF [m, m, m]"},
+    "velocityCF": {"type": "CoordinateFrame", "text": "velocityCF [m/s, m/s, m/s]"},
+    "accelerationCF": {"type": "CoordinateFrame", "text": "accelerationCF [m/s**2, m/s**2, m/s**2]"},
+    "velocityAxes": {"type": "Sequence", "elements": [
+      {"type": "MeasurementRef", "unit": "m/s"},
+      {"type": "MeasurementRef", "unit": "m/s"},
+      {"type": "MeasurementRef", "unit": "m/s"}
+    ]},
+    "scaledCF": {"type": "CoordinateFrame", "text": "scaledCF [m*s, m*s, m*s]"},
+    "sameCF": {"type": "Boolean", "value": true},
+
+    "p": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "m"},
+      {"type": "Quantity", "value": 2.0, "unit": "m"},
+      {"type": "Quantity", "value": 3.0, "unit": "m"}
+    ]},
+    "pFrame": {"type": "CoordinateFrame", "text": "spatialCF [m, m, m]"},
+    "pNums": {"type": "Sequence", "elements": [
+      {"type": "Real", "value": 1.0},
+      {"type": "Real", "value": 2.0},
+      {"type": "Real", "value": 3.0}
+    ]},
+    "pIsSpatial": {"type": "Boolean", "value": true},
+    "uniformUnit": {"type": "MeasurementRef", "unit": "m"},
+
+    "datum": {"type": "CoordinateFrame", "text": "datum [mm, mm, mm]"},
+    "shifted": {"type": "CoordinateFrame", "text": "shifted [mm, mm, mm]"},
+    "shifted.transformation": {"type": "CoordinateTransformation", "text": "transformation (datum → shifted)"},
+    "placed": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "mm"},
+      {"type": "Quantity", "value": -1.0, "unit": "mm"},
+      {"type": "Quantity", "value": 3.0, "unit": "mm"}
+    ]},
+    "placedFrame": {"type": "Boolean", "value": true},
+    "wrongSource": {"error": "type mismatch: function VectorCalculations::transform: sourceVector.mRef is metres, not datum, the source of transformation"},
+
+    "qTurned": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "mm"},
+      {"type": "Quantity", "value": -1.0, "unit": "mm"},
+      {"type": "Quantity", "value": 5.0, "unit": "mm"}
+    ]},
+    "qBack": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 101.0, "unit": "mm"},
+      {"type": "Quantity", "value": 1.0, "unit": "mm"},
+      {"type": "Quantity", "value": 5.0, "unit": "mm"}
+    ]},
+    "qBackFrame": {"type": "Boolean", "value": true},
+    "trs": {"type": "CoordinateTransformation", "text": "trs (datum → turned)"},
+    "sameTransformation": {"type": "Boolean", "value": true},
+    "otherTransformation": {"type": "Boolean", "value": false},
+    "degreesAgree": {"type": "Boolean", "value": true},
+    "qExtrinsic": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 3.0, "unit": "mm"},
+      {"type": "Quantity", "value": -1.0, "unit": "mm"},
+      {"type": "Quantity", "value": -2.0, "unit": "mm"}
+    ]},
+    "qIntrinsic": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "mm"},
+      {"type": "Quantity", "value": 3.0, "unit": "mm"},
+      {"type": "Quantity", "value": 1.0, "unit": "mm"}
+    ]},
+    "qAffine": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "mm"},
+      {"type": "Quantity", "value": -1.0, "unit": "mm"},
+      {"type": "Quantity", "value": 5.0, "unit": "mm"}
+    ]},
+    "qNull": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 101.0, "unit": "mm"},
+      {"type": "Quantity", "value": 1.0, "unit": "mm"},
+      {"type": "Quantity", "value": 5.0, "unit": "mm"}
+    ]},
+    "qNullFrame": {"type": "Boolean", "value": true},
+
+    "celsius": {"type": "CoordinateFrame", "text": "'°C_abs' ['°C']"},
+    "celsiusUnit": {"type": "MeasurementRef", "unit": "'°C'"},
+    "warm": {"type": "Quantity", "value": 26.85, "unit": "'°C_abs'"},
+    "warmBack": {"type": "Quantity", "value": 300.0, "unit": "K"},
+    "freezing": {"type": "Quantity", "value": 273.15, "unit": "K"},
+    "onScale": {"type": "Quantity", "value": 21.5, "unit": "'°C_abs'"},
+    "onScaleRef": {"type": "CoordinateFrame", "text": "'°C_abs' ['°C']"},
+    "onScaleIsCelsius": {"type": "Boolean", "value": true},
+    "utc": {"type": "CoordinateFrame", "text": "UTC [s]"},
+    "utcUnit": {"type": "MeasurementRef", "unit": "s"},
+    "epoch": {"type": "Quantity", "value": 0, "unit": "UTC"},
+    "utcToSeconds": {"error": "library function is not evaluable: Time::UTC states neither a transformation placing it on another reference nor a quantityValueMapping, so its magnitudes convert to no other reference"},
+    "secondsToUtc": {"error": "library function is not evaluable: Time::UTC states neither a transformation placing it on another reference nor a quantityValueMapping"},
+    "utcLabel": {"type": "String", "value": "UTC"}
+  }
+}

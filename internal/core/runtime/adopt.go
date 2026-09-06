@@ -223,25 +223,56 @@ func (ctx *Context) connectorFeatureValue(s *FeatureValue) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
 
-// walkValue visits a value and everything nested in it.
+// walkValue visits a value and everything nested in it: the elements of a
+// collection, the frame a vector is over, the frames and placement values a
+// transformation relates.
 func (ctx *Context) walkValue(val Value, visit func(Value)) {
+	ctx.walkValueFrom(val, visit, make(map[*CoordinateFrame]bool))
+}
+
+// walkValueFrom is walkValue past the frames already visited, which a frame's own
+// transformation names again as its target.
+func (ctx *Context) walkValueFrom(val Value, visit func(Value), seen map[*CoordinateFrame]bool) {
 	visit(val)
 	switch val.Kind {
+	case ValVectorQuantity:
+		if frame := val.VectorQuantity().Frame; frame != nil && !seen[frame] {
+			ctx.walkValueFrom(NewCoordinateFrameValue(frame), visit, seen)
+		}
+	case ValCoordinateFrame:
+		frame := val.CoordinateFrame()
+		if seen[frame] {
+			return
+		}
+		seen[frame] = true
+		if frame.Transformation != nil {
+			ctx.walkValueFrom(NewCoordinateTransformationValue(frame.Transformation), visit, seen)
+		}
+	case ValCoordinateTransformation:
+		t := val.CoordinateTransformation()
+		for _, frame := range []*CoordinateFrame{t.Source, t.Target} {
+			if frame != nil && !seen[frame] {
+				ctx.walkValueFrom(NewCoordinateFrameValue(frame), visit, seen)
+			}
+		}
+		for _, held := range t.placementValues() {
+			ctx.walkValueFrom(held, visit, seen)
+		}
 	case ValSequence:
 		if val.Sequence() != nil {
 			for _, elem := range val.Sequence().Elements() {
-				ctx.walkValue(elem, visit)
+				ctx.walkValueFrom(elem, visit, seen)
 			}
 		}
 	case ValSet:
 		if val.Set() != nil {
 			for _, elem := range val.Set().Elements() {
-				ctx.walkValue(elem, visit)
+				ctx.walkValueFrom(elem, visit, seen)
 			}
 		}
 	case ValArray:
 		for _, elem := range val.Array().Elements {
-			ctx.walkValue(elem, visit)
+			ctx.walkValueFrom(elem, visit, seen)
 		}
 	}
 }
@@ -591,6 +622,15 @@ func (a *adoption) planValue(owner string, val Value) error {
 			if err = a.planUnit(unit); err != nil {
 				return
 			}
+		}
+		switch v.Kind {
+		case ValCoordinateFrame:
+			err = a.planFrame(v.CoordinateFrame())
+		case ValCoordinateTransformation:
+			err = a.planTransformation(v.CoordinateTransformation())
+		}
+		if err != nil {
+			return
 		}
 		if id, ok := carriedObject(v); ok {
 			err = a.planHeld(owner, id)
@@ -988,7 +1028,14 @@ func (a *adoption) rewrite(val Value) Value {
 		for i, unit := range vq.Units {
 			units[i] = a.rewriteUnit(unit)
 		}
+		if vq.Frame != nil {
+			return NewFramedVectorQuantityValue(vq.Num, a.rewriteFrame(vq.Frame, map[*CoordinateFrame]*CoordinateFrame{}))
+		}
 		return NewVectorQuantityValue(vq.Num, units)
+	case ValCoordinateFrame:
+		return NewCoordinateFrameValue(a.rewriteFrame(val.CoordinateFrame(), map[*CoordinateFrame]*CoordinateFrame{}))
+	case ValCoordinateTransformation:
+		return NewCoordinateTransformationValue(a.rewriteTransformation(val.CoordinateTransformation(), map[*CoordinateFrame]*CoordinateFrame{}))
 	default:
 		return val
 	}

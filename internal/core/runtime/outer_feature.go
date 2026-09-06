@@ -21,6 +21,13 @@ func (ec *EvalContext) outerFeatureValue(sym *symbols.Symbol) (Value, bool, erro
 			return Value{}, true, err
 		}
 		val, err := ec.ctx.readFeatureValue(fv, name)
+		if err != nil {
+			return val, true, err
+		}
+		// An object the feature holds is read as what it denotes, as a chain reads it.
+		if held, ok := ec.ctx.instances[val.Instance]; ok && val.Kind == ValInstance {
+			val, err = ec.ctx.objectValue(held)
+		}
 		return val, true, err
 	}
 	return Value{}, false, nil

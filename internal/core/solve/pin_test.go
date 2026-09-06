@@ -303,3 +303,29 @@ func TestPinRefusesAMeasurementReference(t *testing.T) {
 		t.Errorf("refusal %+v does not say the value is a measurement reference", refusal)
 	}
 }
+
+// TestPinRefusesACoordinateFrame: a frame and the transformation placing it are
+// not numbers either; each refusal is typed and says what the value is.
+func TestPinRefusesACoordinateFrame(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	length := quantityValue(t, ctx, idx, "test::Panel::clearance")
+	sym := symbolNamed(t, idx, "test::Panel::fits")
+	width := symbolNamed(t, idx, "test::Panel::width")
+	frame := &runtime.CoordinateFrame{Dimensions: []int64{2}, Axes: []runtime.Unit{length.Quantity().Unit, length.Quantity().Unit}, Text: "panelCF"}
+	for _, tc := range []struct {
+		value runtime.Value
+		what  string
+	}{
+		{runtime.NewCoordinateFrameValue(frame), "is a coordinate frame"},
+		{runtime.NewCoordinateTransformationValue(&runtime.CoordinateTransformation{Source: frame, Target: frame}), "is a coordinate transformation"},
+	} {
+		_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{Feature: width, Name: "width", Value: tc.value, Source: PinChosen}})
+		var refusal *PinError
+		if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+			t.Fatalf("error %v, want a typed refusal to fix %s", err, runtime.FormatValue(tc.value))
+		}
+		if !strings.Contains(refusal.Reason, tc.what) {
+			t.Errorf("refusal %+v does not say the value %s", refusal, tc.what)
+		}
+	}
+}

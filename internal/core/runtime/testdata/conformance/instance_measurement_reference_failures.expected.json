@@ -10,8 +10,8 @@
     "conversion": {"error": "not evaluable: MeasurementReferences::ScalarMeasurementReference::unitConversion: a measurement reference value holds the unit m and its reduction metre, not the declaration's member unitConversion"},
     "dimension": {"error": "not evaluable: MeasurementReferences::ScalarMeasurementReference::quantityDimension"},
     "notAUnit": {"error": "parameter \"targetMRef\" requires a measurement reference such as SI::m, got an Integer"},
-    "mixed": {"error": "not evaluable: VectorCalculations::'[': a VectorMeasurementReference is a CoordinateFrame, whose mRefs and basisDirections the runtime holds no value of"},
-    "turned": {"error": "not evaluable: VectorCalculations::transform: a CoordinateTransformation has no representation"},
+    "mixed": {"error": "type mismatch: function VectorCalculations::'[' parameter \"mRef\" requires a coordinate frame, a usage typed CoordinateFrame with its mRefs, got sequence"},
+    "turned": {"error": "type mismatch: function VectorCalculations::transform parameter \"transformation\" requires a coordinate transformation, got vector quantity"},
     "spread": {"error": "not evaluable: VectorCalculations::outer: a tensor quantity has no representation: the runtime has no tensor value kind"}
   }
 }
