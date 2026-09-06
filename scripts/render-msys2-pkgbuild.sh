@@ -34,11 +34,13 @@ OUT="$(mktemp)"
 cleanup() { rm -f "$OUT" "${TMP_SRC:-}"; }
 trap cleanup EXIT
 
-VERSION="${TAG#v}"
+TAGVER="${TAG#v}"
+# makepkg forbids hyphens in pkgver; 0.6.0-rc1 -> 0.6.0rc1 (sorts before 0.6.0 for vercmp).
+VERSION="${TAGVER//-/}"
 
 if [[ -z "$SRC" ]]; then
   TMP_SRC="$(mktemp)"
-  URL="https://github.com/Open-MBEE/OpenSysML/archive/${TAG}/opensysml-${VERSION}.tar.gz"
+  URL="https://github.com/Open-MBEE/OpenSysML/archive/${TAG}/opensysml-${TAGVER}.tar.gz"
   echo "Fetching ${URL}" >&2
   curl -fsSL --proto '=https' --proto-redir '=https' "$URL" -o "$TMP_SRC"
   SRC="$TMP_SRC"
@@ -47,6 +49,7 @@ SOURCE_SHA256="$(sha256sum "$SRC" | awk '{print $1}')"
 
 sed \
   -e "s|__VERSION__|${VERSION}|g" \
+  -e "s|__TAGVER__|${TAGVER}|g" \
   -e "s|__SHA256_SOURCE__|${SOURCE_SHA256}|g" \
   "$TEMPLATE" |
   awk 'started || /^_realname=/{ started = 1; print } !started && /^# Maintainer:/{ print; print "" }' > "$OUT" # keep the Maintainer line, drop the template note
