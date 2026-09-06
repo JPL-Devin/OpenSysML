@@ -606,18 +606,19 @@ What the runtime cannot turn into a value is reported, never guessed:
   value the model does declare, and a `??` default does not cover it — the
   feature is present, not absent.
 
-One shape the runtime does not evaluate yet, in the query or in the REPL: a
-quantity summed with the total of an **empty** collection. `sum` over no
-elements is the dimensionless `0.0`, so `mass + sum(subcomponents.totalMass)`
-on a component whose `subcomponents : MassedComponent [*] default null` holds
-nothing is an `incommensurable units` error rather than `mass` — the typed
-error above, reported for that row. Bind at least one element, or write the
-leaf's total without the sum (`attribute :>> totalMass = mass;` on the leaf
-definition, with the roll-up declared `default =`), until `sum` learns the
-unit of an empty quantity collection. Note also that the runtime reads a
-`default null` collection as empty even where nested parts subset it
-(`part b1 : Bolt :> subcomponents;`); declare the collection without the
-default and the subsetting parts are what `sum` and `->collect` see.
+The roll-up a library writes over a possibly empty collection evaluates as
+written: `sum` over no quantities is the zero of the collection's declared
+kind, in its coherent SI unit, so `mass + sum(subcomponents.totalMass)` on a
+component whose `subcomponents : MassedComponent [*] default null` holds
+nothing is `mass` (`100 [kg] + 0 [kg]`), and a `default null` collection holds
+the parts that subset it (`part b1 : Bolt :> subcomponents;`, or with
+`subsets`) — the default is only its value where nothing populates it — so
+the sum rolls up through them recursively. The kind is the collection's
+declared one, and survives a `select`, `reject` or `collect` that leaves
+nothing: a collection typed `Real[*]`, or an empty one mapped through an
+untyped body parameter (`->collect { in x; x * x }`), still sums to the
+number `0`, and `10 [kg] + 0 [m]` or `10 [kg] + 5` remain the
+`incommensurable units` error above.
 
 ## Computed columns
 

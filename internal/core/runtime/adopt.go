@@ -839,6 +839,9 @@ func (a *adoption) rewrite(val Value) Value {
 		if val.Sequence() == nil {
 			return val
 		}
+		if unit, ok := val.Sequence().ElementUnit(); ok {
+			return NewEmptySequenceOf(unit)
+		}
 		seq := NewSequence()
 		for _, elem := range val.Sequence().Elements() {
 			seq.Append(a.rewrite(elem))

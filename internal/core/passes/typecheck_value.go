@@ -1,6 +1,8 @@
 package passes
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -14,48 +16,56 @@ import (
 // the expected and the actual property are known — so a partially typed model
 // never produces a false positive.
 func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
-	want := ec.declaredTypeSymbol(declScope, d.relationships)
-	if want == nil || ec.model.PrimTypeOf(want) != semantics.PrimUnknown {
-		// An untyped feature has nothing to conform to, and a scalar-typed one
-		// is the lattice rules' to report — in lattice terms (Natural vs
-		// Integer), which is the more precise message.
+	wants := ec.declaredTypeSymbols(declScope, d.relationships)
+	if len(wants) == 0 {
 		return
 	}
+	// A scalar value bound to a scalar-typed feature is the lattice rules' to
+	// report — in lattice terms (Natural vs Integer), the more precise message.
+	scalar := ec.anyScalar(wants)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, value := range valueElements(value) {
 		if feature := ec.valueFeature(valueScope, value); feature != nil {
-			got := ec.featureValueType(feature)
-			if got == nil {
+			gots := ec.featureValueTypes(feature)
+			if _, indexed := value.(*ast.IndexExpr); indexed {
+				// The value is the selected element, not the indexed feature.
+				gots = ec.model.ExprResultTypes(valueScope, value)
+			}
+			if len(gots) == 0 || (scalar && ec.anyScalar(gots)) {
 				continue
 			}
-			// A binding equates the two features, so conformance in either
-			// direction suffices; only unrelated types are rejected. The feature
-			// is judged as a whole: a variant is typed by its variation too.
-			if !ec.model.Conforms(feature, want) && !ec.model.Conforms(want, got) {
-				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
+			// A binding equates the two features, so one conforming pairing in
+			// either direction suffices; only unrelated types are rejected. The
+			// feature is judged as a whole: a variant is typed by its variation too.
+			if !ec.boundTypesConform(feature, gots, wants) {
+				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", typeNames(gots), typeNames(wants))
 			}
 			continue
 		}
-		if got := ec.invocationResultTypeSymbol(valueScope, value); got != nil {
-			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
-				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
+		if result := ec.invocationResultParameter(valueScope, value); result != nil {
+			gots := ec.featureValueTypes(result)
+			if len(gots) > 0 && !(scalar && ec.anyScalar(gots)) && !ec.boundTypesConform(result, gots, wants) {
+				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", typeNames(gots), typeNames(wants))
 			}
+			continue
+		}
+		if scalar {
 			continue
 		}
 		// The feature's type has no scalar ancestor, so no literal value can
 		// conform to it. Only literals and bodies are judged here: any other
 		// expression may produce an instance of the type.
 		if prim := literalPrimType(value); prim != semantics.PrimUnknown {
-			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", prim, want.Name)
+			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", prim, typeNames(wants))
 			continue
 		}
 		if _, ok := value.(*ast.BodyExpr); !ok {
 			continue
 		}
 		got := ec.model.ExprResultType(valueScope, value)
-		if got != nil && !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
-			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", semantics.PrimExpression, want.Name)
+		if got != nil && !ec.boundTypesConform(nil, []*symbols.Symbol{got}, wants) {
+			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", semantics.PrimExpression, typeNames(wants))
 		}
 	}
 }
@@ -179,15 +189,60 @@ func valueElements(value ast.Node) []ast.Node {
 
 // declaredTypeSymbol returns the symbol a usage is typed by, or nil.
 func (ec *exprChecker) declaredTypeSymbol(scope *symbols.Scope, rels []*ast.Relationship) *symbols.Symbol {
+	if types := ec.declaredTypeSymbols(scope, rels); len(types) > 0 {
+		return types[0]
+	}
+	return nil
+}
+
+// declaredTypeSymbols returns every resolved type a usage `x : A, B` is typed by.
+func (ec *exprChecker) declaredTypeSymbols(scope *symbols.Scope, rels []*ast.Relationship) []*symbols.Symbol {
+	var types []*symbols.Symbol
 	for _, rel := range rels {
 		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
 			continue
 		}
 		if sym := ec.resolveTarget(scope, rel.Target); sym != nil {
-			return sym
+			types = append(types, sym)
 		}
 	}
-	return nil
+	return types
+}
+
+// anyScalar reports whether one of the types has a scalar ancestor.
+func (ec *exprChecker) anyScalar(types []*symbols.Symbol) bool {
+	for _, t := range types {
+		if ec.model.PrimTypeOf(t) != semantics.PrimUnknown {
+			return true
+		}
+	}
+	return false
+}
+
+// boundTypesConform reports whether a bound feature, typed by gots, may be bound to
+// a feature typed by wants: the feature itself conforms to a want, or some got and
+// some want conform one way or the other (KerML 8.3.4.3, one compatible pairing).
+func (ec *exprChecker) boundTypesConform(feature *symbols.Symbol, gots, wants []*symbols.Symbol) bool {
+	for _, want := range wants {
+		if ec.model.Conforms(feature, want) {
+			return true
+		}
+		for _, got := range gots {
+			if ec.model.Conforms(got, want) || ec.model.Conforms(want, got) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// typeNames joins the names of types as a declaration lists them.
+func typeNames(types []*symbols.Symbol) string {
+	names := make([]string, 0, len(types))
+	for _, t := range types {
+		names = append(names, t.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // valueTypeSymbol returns the type of a bound value as a symbol, or nil when it
@@ -226,18 +281,32 @@ func (ec *exprChecker) valueFeature(scope *symbols.Scope, value ast.Node) *symbo
 // featureValueType returns the declared type of a usage, or the enumeration
 // owning an enumeration literal; nil when it declares none.
 func (ec *exprChecker) featureValueType(sym *symbols.Symbol) *symbols.Symbol {
-	u := sym.Decl.(*ast.Usage)
+	if types := ec.featureValueTypes(sym); len(types) > 0 {
+		return types[0]
+	}
+	return nil
+}
+
+// featureValueTypes returns every declared type of a usage, or the enumeration
+// owning an enumeration literal; none when it declares none.
+func (ec *exprChecker) featureValueTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	u, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return nil
+	}
 	// The type name resolves from the scope the usage was declared in, as
 	// generalization targets do elsewhere (semantics.DirectSupertypes, the
 	// subsetting conformance checks). Resolving from the scope the usage owns
 	// would let its own members shadow the type it names.
-	if typed := ec.declaredTypeSymbol(sym.OwnerScope, u.Relationships); typed != nil {
+	if typed := ec.declaredTypeSymbols(sym.OwnerScope, u.Relationships); len(typed) > 0 {
 		return typed
 	}
 	// An enumeration literal declares no type: it is a member of the
 	// enumeration that owns it, which is what it conforms to.
 	if u.Kind == ast.UsageEnumeration {
-		return ec.owningEnumeration(sym)
+		if enum := ec.owningEnumeration(sym); enum != nil {
+			return []*symbols.Symbol{enum}
+		}
 	}
 	return nil
 }
@@ -245,15 +314,7 @@ func (ec *exprChecker) featureValueType(sym *symbols.Symbol) *symbols.Symbol {
 // invocationResultTypeSymbol returns the type of the result parameter of the
 // behavior an invocation names, which is the type of the value it produces.
 func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
-	inv, ok := value.(*ast.InvocationExpr)
-	if !ok || inv.Type == nil {
-		return nil
-	}
-	sym := SelectInvocation(ec.resolver, ec.model, scope, inv, ec.performs(inv)).Selected
-	if sym == nil || !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
-		return nil
-	}
-	result := ec.model.ResultParameterOf(sym)
+	result := ec.invocationResultParameter(scope, value)
 	if result == nil {
 		return nil
 	}
@@ -262,6 +323,20 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 		return nil
 	}
 	return ec.declaredTypeSymbol(result.OwnerScope, u.Relationships)
+}
+
+// invocationResultParameter returns the result parameter of the behavior an
+// invocation names; nil for any other value or an unresolved invocation.
+func (ec *exprChecker) invocationResultParameter(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	inv, ok := value.(*ast.InvocationExpr)
+	if !ok || inv.Type == nil {
+		return nil
+	}
+	sym := SelectInvocation(ec.resolver, ec.model, scope, inv, ec.performs(inv)).Selected
+	if sym == nil || !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+		return nil
+	}
+	return ec.model.ResultParameterOf(sym)
 }
 
 // constructedTypeSymbol returns the type a constructor `new T(…)` instantiates,

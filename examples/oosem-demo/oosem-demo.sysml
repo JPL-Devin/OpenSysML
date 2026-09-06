@@ -198,6 +198,18 @@ package 'Wildfire Watch Mission' {
 				#operationalProcedure part triage : 'Alert Triage Procedure';
 			}
 		}
+
+		part logical : 'FireWatch Logical';
+		part physical : 'FireWatch Physical';
+
+		/* Logical-to-physical allocation and requirement satisfaction close the OOSEM traces. */
+		allocate logical.sensing to physical.space.camera;
+		allocate logical.detection to physical.space.computer.detector;
+		allocate logical.downlink to physical.space.transmitter;
+
+		satisfy 'System Requirements'::revisitTime by physical;
+		satisfy 'System Requirements'::alertDownlink by physical;
+		satisfy detectionTime by logical.detection;
 	}
 
 	@OOSEMPackage { kind = OOSEMPackageKind::tradeStudies; }
@@ -211,5 +223,27 @@ package 'Wildfire Watch Mission' {
 
 		part wideField : 'Wide Field Camera';
 		part narrowField : 'Narrow Field Camera';
+	}
+
+	/* The method's standard products over this model: `-render-all` draws each of them. */
+	package 'OOSEM Views' {
+		view enterpriseModel : EnterpriseModelView { expose 'Enterprise Model'::**; }
+		view systemContext : SystemContextView { expose 'System Requirements'::**; }
+		view systemUseCases : SystemUseCaseView { expose 'System Requirements'::**; }
+		view requirements : RequirementsView {
+			expose 'Stakeholder Needs'::*;
+			expose 'Mission Requirements'::*;
+			expose 'System Requirements'::*;
+			expose 'Logical Architecture'::*;
+		}
+		view measures : MeasuresView {
+			expose 'Stakeholder Needs'::**;
+			expose 'Mission Requirements'::**;
+			expose 'System Requirements'::**;
+			expose 'Logical Architecture'::**;
+		}
+		view logicalArchitecture : LogicalArchitectureView { expose 'Logical Architecture'::**; }
+		view logicalScenarios : LogicalScenarioView { expose 'Logical Architecture'::*; }
+		view physicalArchitecture : PhysicalArchitectureView { expose 'Physical Architecture'::**; }
 	}
 }

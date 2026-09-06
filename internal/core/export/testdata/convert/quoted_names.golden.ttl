@@ -181,7 +181,7 @@ expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa1
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:Quoted_20Names__Rover_20Model__is_20light
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Quoted Names::Rover Model::is light" ;
     sysml:elementId "Quoted_20Names__Rover_20Model__is_20light" ;
     sysx:memberIndex "2"^^xsd:integer ;
@@ -190,7 +190,6 @@ elmt:Quoted_20Names__Rover_20Model__is_20light
     sysml:owningRelationship elmt:Quoted_20Names__Rover_20Model__is_20light_om ;
     sysml:owningMembership elmt:Quoted_20Names__Rover_20Model__is_20light_om ;
     sysml:declaredName "is light" ;
-    sysx:declaredPrefix "assert" ;
     sysml:type elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        assert constraint 'is light' : 'mass limit';\n" .

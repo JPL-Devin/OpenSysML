@@ -62,6 +62,7 @@ const (
 	pIsImportAll               = "isImportAll"
 	pSourceFeature             = "sourceFeature"
 	pTargetFeature             = "targetFeature"
+	pPortionKind               = "portionKind"
 )
 
 // Property names in the OpenSysML extension namespace: declaration order,
@@ -250,6 +251,7 @@ func newEncoder(file *source.SourceFile, root *ast.RootNamespace) (*encoder, err
 		fqn:            map[ast.Node]string{},
 		links:          map[*ast.QualifiedName]*symbols.Symbol{},
 		preceding:      map[ast.Node]ast.Node{},
+		introduced:     map[ast.Node]ast.Node{},
 		ids:            ids,
 		subjects:       map[string]string{},
 		regions:        map[rdf.Term]region{},
@@ -288,6 +290,9 @@ type encoder struct {
 	// preceding is the member a `then` after each member sequences from: the last
 	// member before it that is not itself an edge, as the parser reads it.
 	preceding map[ast.Node]ast.Node
+	// introduced is the member a member-attached `then` sequences to: the one
+	// written right after the keyword, whose edge follows it in the body.
+	introduced map[ast.Node]ast.Node
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
 	ids *identityFacts
@@ -323,10 +328,7 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 	if written == "" || written == canonical {
 		return nil
 	}
-	// The keyword introduces a declaration whose subject is its name. Without
-	// one the keyword takes an inline reference instead (`perform a`), a shape
-	// rebuilt from the relationship rather than the head.
-	if named == "" && !(referenced && referenceMemberKeyword(written)) {
+	if named == "" {
 		// A shorter spelling of a multi-word kind keyword (`verification` for
 		// `verification case`) states the same kind, so it needs no name.
 		for _, word := range strings.Fields(canonical) {
@@ -334,9 +336,13 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 				return nil
 			}
 		}
-		return &UnsupportedError{
-			What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
-			Note: fmt.Sprintf("it names no element of its own, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", canonical),
+		// `perform a` takes the feature it names in place of a name; with
+		// neither, the keyword has nothing the decoder could write it before.
+		if referenceMemberKeyword(written) && !referenced {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
+				Note: fmt.Sprintf("it neither declares a name nor names the feature it refers to, the two shapes `%s` is written in, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", written, canonical),
+			}
 		}
 	}
 	e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(written))
@@ -487,20 +493,23 @@ func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.T
 
 func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
 	// last and beforeLast are the latest members a `then` sequences from; a
-	// member-attached `then` follows its target, so its source is beforeLast.
-	var last, beforeLast ast.Node
+	// member-attached `then` follows its target prev, so its source is the
+	// latest of them before prev.
+	var last, beforeLast, prev ast.Node
 	for i, member := range kept {
 		node, visibility := unwrapMember(member)
 		if node == nil {
 			continue
 		}
-		if preceding := last; preceding != nil {
-			if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied {
+		preceding := last
+		if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied && prev != nil {
+			e.introduced[node] = prev
+			if prev == last {
 				preceding = beforeLast
 			}
-			if preceding != nil {
-				e.preceding[node] = preceding
-			}
+		}
+		if preceding != nil {
+			e.preceding[node] = preceding
 		}
 		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
@@ -508,6 +517,7 @@ func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, 
 		if ast.IsSuccessionSource(node) {
 			last, beforeLast = node, last
 		}
+		prev = node
 	}
 	return nil
 }
@@ -684,9 +694,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 				return err
 			}
 		}
-		// The prefix a kind keyword was qualified with (`assert constraint c`)
-		// states what the usage is for, so it is part of the declaration.
-		if n.PrefixKeyword != "" {
+		// The prefix a kind keyword was qualified with (`assume constraint c`) is
+		// part of the declaration; `assert` is the AssertConstraintUsage metaclass.
+		if n.PrefixKeyword != "" && !assertedConstraint(n) {
 			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
 		}
 		e.flags(subject, []boolProperty{
@@ -699,10 +709,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isEnd", n.IsEnd},
 			{"isChain", n.IsChain},
 			{"isConstant", n.IsConstant},
-			{"isEvent", n.IsEvent},
+			{"isEvent", n.IsEvent && metaclass != mEventOccurrenceUsage},
 			{"isIndividual", n.IsIndividual},
-			{"isSnapshot", n.Portion == ast.PortionSnapshot},
-			{"isTimeslice", n.Portion == ast.PortionTimeslice},
 			{"isComposite", n.IsComposite},
 			{"isDerived", n.IsDerived},
 			{"isOrdered", n.IsOrdered},
@@ -717,6 +725,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
+		}
+		if portion := portionKeyword(n.Portion); portion != "" {
+			e.graph.Add(subject, e.sysml(pPortionKind), rdf.String(portion))
 		}
 		e.relationships(subject, owner, ast.OwnRelationships(n))
 		e.multiplicity(subject, owner, n.Multiplicity)

@@ -184,8 +184,8 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formThen))
 		}
 		if err := e.edgeEnds(subject, n, owner,
-			edgeEnd{name: n.Source, member: n.SourceMember, implied: implied},
-			edgeEnd{name: n.Target, member: n.TargetMember}); err != nil {
+			edgeEnd{name: n.Source, member: n.SourceMember, implied: implied, stands: e.preceding[n]},
+			edgeEnd{name: n.Target, member: n.TargetMember, implied: n.TargetImplied, stands: e.introduced[n]}); err != nil {
 			return true, err
 		}
 		if n.HasBody {
@@ -203,7 +203,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.graph.Add(subject, e.sysx(xIsElse), rdf.Bool(true))
 		}
 		return true, e.edgeEnds(subject, n, owner,
-			edgeEnd{name: n.Source, member: n.SourceMember, implied: impliedSource(n, n.Source)},
+			edgeEnd{name: n.Source, member: n.SourceMember, implied: impliedSource(n, n.Source), stands: e.preceding[n]},
 			edgeEnd{name: n.Target, member: n.TargetMember})
 
 	case *ast.WhileLoopActionNode:
@@ -403,8 +403,16 @@ type edgeEnd struct {
 	name   *ast.QualifiedName
 	member ast.Node
 	// implied marks an end the notation states no name for, whose name the
-	// parser took from the member before the edge.
+	// parser took from a member beside the edge; stands is that member.
 	implied bool
+	stands  ast.Node
+}
+
+// answersToFeature reports whether a member declares no name of its own and
+// answers to its naming feature's, a name other members of the body may share.
+func answersToFeature(member ast.Node) bool {
+	u, ok := member.(*ast.Usage)
+	return ok && ast.NamingFeature(u) != nil
 }
 
 // edgeEnds writes the ends of a succession: a name as a feature reference, an
@@ -430,6 +438,14 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			}
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
+		}
+		// A name the parser took from an unnamed member is its naming feature's,
+		// which another member may share: the end is that member itself.
+		if end.end.implied && answersToFeature(end.end.stands) {
+			if fqn, ok := e.fqn[end.end.stands]; ok {
+				e.graph.Add(subject, e.sysml(end.feature), e.ids.subjectForNode(end.end.stands, fqn))
+				continue
+			}
 		}
 		term := e.edgeReference(end.end.name)
 		e.graph.Add(subject, e.sysml(end.feature), term)
