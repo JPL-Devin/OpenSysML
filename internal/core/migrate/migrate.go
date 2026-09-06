@@ -683,7 +683,7 @@ func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, pre
 		return "port", "", ""
 	}
 	if owner == catConstraintDef {
-		return "attribute", "in ", ""
+		return "attribute", "", ""
 	}
 	if t == nil {
 		return "ref", "", "the untyped property is written as a reference usage"
@@ -721,6 +721,25 @@ func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, pre
 	return "part", "ref ", ""
 }
 
+// featureDirection is the direction prefix of a property: a port's, a flow
+// property's, or `in` for a constraint block's parameter.
+func featureDirection(p *xmi.Element, owner category) (dir, note string) {
+	switch {
+	case p.Type == "Port":
+		return portDirection(p)
+	case owner == catConstraintDef:
+		return "in ", ""
+	case owner == catPortDef:
+		if fp := stereo(p, "FlowProperty"); fp != nil {
+			switch fp.Tag("direction") {
+			case "in", "out", "inout":
+				return fp.Tag("direction") + " ", ""
+			}
+		}
+	}
+	return "", ""
+}
+
 // feature writes a property or port of the current scope.
 func (m *migration) feature(p *xmi.Element) {
 	ownerCat, _ := m.classify(m.scope)
@@ -739,23 +758,10 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("private ")
 		note = joinNotes(note, "package visibility is written as private")
 	}
-	// Modifiers follow SysML.xtext RefPrefix: direction, derived, abstract, constant.
-	if p.Type == "Port" {
-		dir, dnote := portDirection(p)
-		b.WriteString(dir)
-		note = joinNotes(note, dnote)
-	} else if ownerCat == catPortDef {
-		if fp := stereo(p, "FlowProperty"); fp != nil {
-			switch fp.Tag("direction") {
-			case "in":
-				b.WriteString("in ")
-			case "out":
-				b.WriteString("out ")
-			case "inout":
-				b.WriteString("inout ")
-			}
-		}
-	}
+	// Modifiers follow SysML.xtext RefPrefix: direction, derived, abstract, constant, then ref.
+	dir, dnote := featureDirection(p, ownerCat)
+	b.WriteString(dir)
+	note = joinNotes(note, dnote)
 	if p.Attrs["isDerived"] == "true" {
 		b.WriteString("derived ")
 	}

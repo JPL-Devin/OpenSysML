@@ -245,15 +245,22 @@ func TestModifiersFollowTheGrammarOrder(t *testing.T) {
       <ownedAttribute xmi:type="uml:Property" xmi:id="_d" name="d" isAbstract="true" isDerived="true">
         <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
       </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_cb" name="Limit">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_e" name="e" isReadOnly="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
     </packagedElement>`, `<sysml:InterfaceBlock xmi:id="_s1" base_Class="_ib"/>
   <sysml:FlowProperty xmi:id="_s2" base_Property="_in" direction="in"/>
   <sysml:FlowProperty xmi:id="_s3" base_Property="_out" direction="out"/>
   <sysml:FlowProperty xmi:id="_s4" base_Property="_inout" direction="inout"/>
-  <sysml:Block xmi:id="_s5" base_Class="_b"/>`)
+  <sysml:Block xmi:id="_s5" base_Class="_b"/>
+  <sysml:ConstraintBlock xmi:id="_s6" base_Class="_cb"/>`)
 	wantLine(t, r.Notation, "in constant attribute a : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "out derived constant attribute b : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "inout derived abstract constant attribute c : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "derived abstract attribute d : ScalarValues::Boolean;")
+	wantLine(t, r.Notation, "in constant attribute e : ScalarValues::Real;")
 	for _, d := range errors(t, "t.sysml", r.Notation) {
 		t.Errorf("%v", d)
 	}
