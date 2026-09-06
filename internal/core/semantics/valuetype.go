@@ -198,6 +198,9 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 			// `x as T` results in T (KerML checkCastExpressionResultSpecialization).
 			return m.namedType(scope, n.TypeRef)
 		}
+		if unit := m.MeasurementRefExprType(scope, n); unit != nil {
+			return unit
+		}
 		return m.libSymbol(operatorResultFQN(n.Operator))
 	case *ast.IndexExpr:
 		if n.Bracket {
@@ -285,6 +288,19 @@ func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	return m.inheritedResultType(sym, map[*symbols.Symbol]bool{})
+}
+
+// MeasurementRefFeatureType is the measurement unit type of a feature, declared or
+// taken from its value (`attribute area = m * m;` is a DerivedUnit); nil for any other.
+func (m *Model) MeasurementRefFeatureType(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil || m.resolver == nil || sym == nil {
+		return nil
+	}
+	typ := m.featureResultType(sym)
+	if typ == nil || !m.IsMeasurementUnit(typ) {
+		return nil
+	}
+	return typ
 }
 
 func (m *Model) inheritedResultType(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) *symbols.Symbol {
@@ -759,12 +775,27 @@ func (m *Model) MeasurementRefExprConformance(scope *symbols.Scope, e *ast.Opera
 
 // MeasurementRefExprType is the type of a product, quotient or power of measurement
 // units: DerivedUnit, a unit of powers of other units; nil for any other expression.
+// A power by a Real not known statically is one too, of a dimension the runtime finds.
 func (m *Model) MeasurementRefExprType(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.Symbol {
-	unit, _, ok := m.measurementRefExpr(scope, e)
-	if !ok {
-		return nil
+	if unit, _, ok := m.measurementRefExpr(scope, e); ok {
+		return unit
 	}
-	return unit
+	if m.measurementRefPower(scope, e) {
+		return m.libSymbol(fqnDerivedUnit)
+	}
+	return nil
+}
+
+// measurementRefPower reports whether e raises a measurement unit to an exponent
+// that is a Real but folds to no number.
+func (m *Model) measurementRefPower(scope *symbols.Scope, e *ast.OperatorExpr) bool {
+	if m == nil || e == nil || e.Operator != ast.OpPow || len(e.Operands) != 2 {
+		return false
+	}
+	if _, ok := m.measurementRefOperand(scope, e.Operands[0]); !ok {
+		return false
+	}
+	return m.operandConformsTo(scope, e.Operands[1], m.libSymbol(fqnReal))
 }
 
 // measurementRefExpr reduces `*`, `/` or `**` over measurement units to the unit it

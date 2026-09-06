@@ -214,3 +214,50 @@ func TestComposedMeasurementUnitAsAnArgument(t *testing.T) {
 	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
 		attribute q : LengthValue = ConvertQuantity(1 ** 2, m);`)
 }
+
+// TestMeasurementUnitPowerOfAnUnknownExponent: a unit raised to a Real the checker
+// cannot fold is a DerivedUnit whose dimension only the runtime knows, so it is an
+// argument for a measurement-reference parameter and refused by a quantity one,
+// while a binding to a unit definition is left to the runtime to judge.
+func TestMeasurementUnitPowerOfAnUnknownExponent(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : AreaUnit = m ** e;`)
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : LengthUnit = m ** e;`)
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : MeasurementReferences::DerivedUnit = m ** e;`)
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute text : ScalarValues::String = ToString(m ** e);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : AreaValue = ConvertQuantity(3 [m ** 2], m ** e);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : AreaValue = ConvertQuantity(m ** e, m ** 2);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : LengthValue = ConvertQuantity(2 ** e, m);`)
+}
+
+// TestInferredMeasurementUnitFeature: an untyped feature bound to a unit expression
+// is typed by its value, a DerivedUnit, so it passes for a measurement reference
+// and selects the overload taking one, and a quantity parameter refuses it by name.
+func TestInferredMeasurementUnitFeature(t *testing.T) {
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute area = m * m;
+		attribute q : AreaValue = ConvertQuantity(3 [m ** 2], area);`)
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute area = m * m;
+		attribute text : ScalarValues::String = ToString(area);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		private import MeasurementRefCalculations::*;
+		attribute area = m * m;
+		attribute again = area;
+		attribute text : ScalarValues::String = ToString(again);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute area = m * m;
+		attribute q : AreaValue = ConvertQuantity(area, m ** 2);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+}

@@ -33,6 +33,13 @@ func measurementRefModel(t *testing.T) (*semantics.Model, *symbols.Index) {
 		attribute square = 1 ** 2;
 		attribute twice = 2 * m;
 		attribute whole = m / 1;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute power = m ** e;
+		attribute cubedPower = (m ** 3) ** e;
+		attribute wrongPower = m ** "2";
+		attribute numberPower = 2 ** e;
+		attribute inferred = area;
+		attribute inferredSum = sum;
 	}`))).ParseFile())
 	idx.ExpandWildcardImports()
 	return semantics.NewModel(resolve.New(idx)), idx
@@ -149,13 +156,69 @@ func TestMeasurementRefExpr(t *testing.T) {
 			}
 		})
 	}
-	for _, feature := range []string{"T::sum", "T::one", "T::unity", "T::square", "T::twice", "T::whole"} {
+	for _, feature := range []string{"T::sum", "T::one", "T::unity", "T::square", "T::twice", "T::whole", "T::wrongPower", "T::numberPower"} {
 		scope, e := boundOperatorExpr(t, idx, feature)
 		if got := m.MeasurementRefExprType(scope, e); got != nil {
 			t.Errorf("%s typed %v, want no measurement reference", feature, got)
 		}
 		if _, ok := m.MeasurementRefExprConformance(scope, e, derivedUnit); ok {
 			t.Errorf("%s judged as a measurement reference", feature)
+		}
+	}
+}
+
+// TestMeasurementRefPowerOfUnknownExponent: a unit raised to a Real the checker
+// cannot fold is still a DerivedUnit, though of no dimension it can judge; the
+// runtime reduces it once the exponent is known.
+func TestMeasurementRefPowerOfUnknownExponent(t *testing.T) {
+	m, idx := measurementRefModel(t)
+	derivedUnit := dimensionSymbol(t, idx, "MeasurementReferences::DerivedUnit")
+	for _, feature := range []string{"T::power", "T::cubedPower"} {
+		scope, e := boundOperatorExpr(t, idx, feature)
+		if got := m.MeasurementRefExprType(scope, e); got != derivedUnit {
+			t.Errorf("type of %s = %v, want DerivedUnit", feature, got)
+		}
+		if got := m.ExprResultType(scope, e); got != derivedUnit {
+			t.Errorf("result type of %s = %v, want DerivedUnit", feature, got)
+		}
+		if _, ok := m.MeasurementRefExprConformance(scope, e, dimensionSymbol(t, idx, "ISQSpaceTime::AreaUnit")); ok {
+			t.Errorf("%s judged against a dimension its exponent does not fix", feature)
+		}
+	}
+}
+
+// TestMeasurementRefExprResultType: the result type of a unit expression, and so
+// of an untyped feature bound to one or to such a feature, is DerivedUnit; a number
+// composed with a number keeps the DataValue the Kernel function declares.
+func TestMeasurementRefExprResultType(t *testing.T) {
+	m, idx := measurementRefModel(t)
+	derivedUnit := dimensionSymbol(t, idx, "MeasurementReferences::DerivedUnit")
+	dataValue := dimensionSymbol(t, idx, "Base::DataValue")
+	for _, tc := range []struct {
+		feature string
+		want    *symbols.Symbol
+	}{
+		{"T::area", derivedUnit},
+		{"T::speed", derivedUnit},
+		{"T::cubed", derivedUnit},
+		{"T::power", derivedUnit},
+		{"T::inferred", derivedUnit},
+		{"T::inferredSum", dataValue},
+		{"T::sum", dataValue},
+		{"T::one", dataValue},
+		{"T::twice", dataValue},
+		{"T::numberPower", dataValue},
+	} {
+		sym := dimensionSymbol(t, idx, tc.feature)
+		u, ok := sym.Decl.(*ast.Usage)
+		if !ok || u.Value == nil {
+			t.Fatalf("%s is not a usage with a value", tc.feature)
+		}
+		if got := m.ExprResultType(sym.OwnerScope, u.Value); got != tc.want {
+			t.Errorf("result type of %s = %v, want %v", tc.feature, got, tc.want)
+		}
+		if got := m.ExprResultTypes(sym.OwnerScope, u.Value); len(got) != 1 || got[0] != tc.want {
+			t.Errorf("result types of %s = %v, want %v", tc.feature, got, tc.want)
 		}
 	}
 }

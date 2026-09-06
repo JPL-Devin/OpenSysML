@@ -35,6 +35,11 @@ func measurementRefContext(t *testing.T) (*Context, *symbols.Scope) {
 			attribute notAnInterval : IntervalScale = h * s / min;
 			attribute aDuration : DurationUnit = h * s / min;
 			attribute epoch : Time::TimeScale = Time::UTC;
+			attribute exponent : Real = 2.0;
+			attribute powered : AreaUnit = m ** exponent;
+			attribute misPowered : LengthUnit = m ** exponent;
+			attribute inferred = m * m;
+			attribute inferredAgain = inferred;
 			attribute celsius : IntervalScale = SI::'°C_abs';
 			attribute vq : Quantities::VectorQuantityValue = VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m];
 			attribute scaled = VectorFunctions::VectorOf((1.0, 2.0)) [m] * (2 [s]);
@@ -75,6 +80,16 @@ func TestMeasurementRefValues(t *testing.T) {
 		{"area", "m**2"},
 		{"speed", "km/h"},
 		{"aDuration", "h*s/min"},
+		{"m ** exponent", "m**2"},
+		{"powered", "m**2"},
+		{"MeasurementRefCalculations::'**'(m, exponent)", "m**2"},
+		{"ToString(m ** exponent)", `"m**2"`},
+		{"ConvertQuantity(1 [m*m], m ** exponent)", "1 [m**2]"},
+		{"inferred", "m**2"},
+		{"ToString(inferred)", `"m**2"`},
+		{"'['(2, inferred)", "2 [m**2]"},
+		{"ConvertQuantity(1 [km * km], inferred)", "1000000.0 [m**2]"},
+		{"ToString(inferredAgain)", `"m**2"`},
 		{"MeasurementRefCalculations::'*'(m, s)", "m*s"},
 		{"MeasurementRefCalculations::'/'(m, s)", "m/s"},
 		{"MeasurementRefCalculations::'**'(m, 2)", "m**2"},
@@ -247,6 +262,7 @@ func TestMeasurementRefReport(t *testing.T) {
 		{"wrongDimension", ErrTypeMismatch, "cannot write the measurement reference m*s, a measurement reference of dimension L·T, to a feature typed by AreaUnit"},
 		{"notAUnit", ErrTypeMismatch, "cannot write the measurement reference m, a measurement reference typed LengthUnit, to a feature typed by LengthValue"},
 		{"notAnArea", ErrTypeMismatch, "cannot write the measurement reference m**2, a measurement reference typed DerivedUnit, to a feature typed by AreaValue"},
+		{"misPowered", ErrTypeMismatch, "cannot write the measurement reference m**2, a measurement reference of dimension L^2, to a feature typed by LengthUnit"},
 		{"notAScale", ErrTypeMismatch, "cannot write the measurement reference h*s/min, a measurement reference typed DerivedUnit, to a feature typed by TimeScale"},
 		{"notAnInterval", ErrTypeMismatch, "cannot write the measurement reference h*s/min, a measurement reference typed DerivedUnit, to a feature typed by IntervalScale"},
 		{"Time::UTC", ErrUnevaluableLibraryFunction, "Time::UTC: a measurement scale typed TimeScale is not held as a value; the runtime holds a measurement unit and its reduction, not a scale's origin, points or mapping"},

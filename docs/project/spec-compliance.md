@@ -808,6 +808,16 @@ the flat sequence of its elements:
   to `AreaUnit`, `km / h` to `SpeedUnit`; `Model.MeasurementRefConforms`, judged
   the same by the checker — `judgedAsMeasurementRef`,
   `MeasurementRefExprConformance` — and the runtime's write conformance). A
+  unit raised to a Real the checker cannot fold (`m ** e`, `e : Real`) is a
+  `DerivedUnit` whose dimension only the runtime knows, so the checker binds it
+  to any unit definition and the runtime judges the written value (`m ** 2.0` to
+  `LengthUnit` is refused at the write; `Model.MeasurementRefExprType`,
+  `TestMeasurementUnitPowerOfAnUnknownExponent`); an untyped feature valued by
+  a unit expression (`attribute area = m * m;`) is typed by it
+  (`Model.ExprResultType`, `MeasurementRefFeatureType`), so `ToString(area)`
+  selects `MeasurementRefCalculations::ToString` and `ConvertQuantity(q, area)`
+  is accepted, by the checker and the runtime alike
+  (`TestInferredMeasurementUnitFeature`, `TestMeasurementRefValues`). A
   reference of another dimension (`m / s` to `LengthUnit`) or a number written to
   a unit-typed feature, a reference written to a quantity-typed one (`m` to
   `LengthValue`, `m * m` to `AreaValue` — the checker judges a composed unit as
