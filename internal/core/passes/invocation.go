@@ -114,13 +114,21 @@ func (ec *exprChecker) argument(scope *symbols.Scope, value ast.Node, name *ast.
 }
 
 // declaredValueType is the declared type of the feature value names, of the result
-// of the call it makes, or the Evaluation a body `{ … }` is; nil when none.
+// of the call it makes, the Evaluation a body `{ … }` is, or the DerivedUnit
+// a unit expression `m * s` composes, directly or as the value of an untyped
+// feature; nil when none.
 func (ec *exprChecker) declaredValueType(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
 	if _, ok := value.(*ast.BodyExpr); ok {
 		return ec.model.ScalarSymbol(semantics.PrimExpression)
 	}
+	if e, ok := value.(*ast.OperatorExpr); ok {
+		return ec.model.MeasurementRefExprType(scope, e)
+	}
 	if declared := ec.valueTypeSymbol(scope, value); declared != nil {
 		return declared
+	}
+	if feature := ec.valueFeature(scope, value); feature != nil {
+		return ec.model.MeasurementRefFeatureType(feature)
 	}
 	return ec.invocationResultTypeSymbol(scope, value)
 }

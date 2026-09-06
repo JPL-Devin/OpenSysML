@@ -275,6 +275,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_feature_value", testCyclicDerivedFeatureValue)
+	t.Run("write_into_cyclic_derived_feature_values", testWriteIntoCyclicDerivedFeatureValues)
 	t.Run("cyclic_subsetting_of_default_collections", testCyclicSubsettingOfDefaultCollections)
 	t.Run("derived_feature_value_over_missing_feature", testDerivedFeatureValueOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
@@ -330,6 +331,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
+	t.Run("measurement_reference_failure_modes", testMeasurementReferenceFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -1273,6 +1275,71 @@ func testQuantityWriteOfAnotherDimension(t *testing.T) {
 			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("ExecuteAction err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// testMeasurementReferenceFailureModes: a measurement reference the runtime
+// cannot honestly compute with is a typed error at the write or the call, never a
+// value: a unit of another dimension does not conform, a conversion between
+// dimensions is incommensurable, a number is not a reference, a reference is not
+// a number, a unit is not a scale, and the scales, frames and tensors the library
+// declares have no value.
+func testMeasurementReferenceFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		declared string
+		value    string
+		want     error
+	}{
+		{"speed unit into a length unit", "ISQ::LengthUnit", "SI::m / SI::s", ErrTypeMismatch},
+		{"dimensionless unit into a length unit", "ISQ::LengthUnit", "MeasurementReferences::one", ErrTypeMismatch},
+		{"unit into a length value", "ISQ::LengthValue", "SI::m", ErrTypeMismatch},
+		{"composed unit of the same dimension", "ISQ::AreaUnit", "SI::m * SI::m", nil},
+		{"composed unit as a derived unit", "MeasurementReferences::DerivedUnit", "SI::km / SI::L", nil},
+		{"another scale of the same dimension", "ISQ::LengthUnit", "SI::km", nil},
+		{"composed unit into a time scale", "Time::TimeScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
+		{"composed unit into an interval scale", "MeasurementReferences::IntervalScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
+		{"time scale as a value", "Time::TimeScale", "Time::UTC", ErrUnevaluableLibraryFunction},
+		{"interval scale as a value", "MeasurementReferences::IntervalScale", "SI::'°C_abs'", ErrUnevaluableLibraryFunction},
+		{"conversion to a scale", "ISQ::ThermodynamicTemperatureValue", "QuantityCalculations::ConvertQuantity(300.0 [SI::K], SI::'°C_abs')", ErrUnevaluableLibraryFunction},
+		{"incommensurable conversion", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], SI::s)", ErrIncommensurableUnits},
+		{"conversion to a number", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], 3)", ErrTypeMismatch},
+		{"reference scaled by a number", "ISQ::LengthUnit", "SI::m * 3", ErrTypeMismatch},
+		{"reference raised to a reference", "ISQ::LengthUnit", "SI::m ** SI::m", ErrTypeMismatch},
+		{"declaration member of a reference", "Quantities::QuantityDimension", "SI::m.quantityDimension", ErrUnevaluableLibraryFunction},
+		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrUnevaluableLibraryFunction},
+		{"coordinate transformation", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrUnevaluableLibraryFunction},
+		{"outer product", "Quantities::TensorQuantityValue", "VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+		{"tensor sum", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					part def Holder {
+						attribute value : %s = %s;
+					}
+				}
+			`, tc.declared, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+			if sym == nil {
+				t.Fatal("part def Holder not found")
+			}
+			inst, err := ctx.Instantiate(sym)
+			if err != nil {
+				t.Fatalf("Instantiate err = %v", err)
+			}
+			_, err = inst.GetFeatureValue(ctx, "value")
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("value err = %v, want the reference to be held", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("value err = %v, want %v", err, tc.want)
 			}
 		})
 	}
@@ -2315,6 +2382,58 @@ func testCyclicDerivedFeatureValue(t *testing.T) {
 
 	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
 		t.Fatalf("GetFeatureValue error = %v, want ErrCyclicFeatureValue", fvErr)
+	}
+}
+
+// testWriteIntoCyclicDerivedFeatureValues: a write into a pair of values derived
+// from each other neither hangs unmaterializing what read them nor unmaterializes
+// the written value; it breaks the cycle, and a later write to the other end
+// keeps the first write.
+func testWriteIntoCyclicDerivedFeatureValues(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Loop {
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Loop", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Loop part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "a"); !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("GetFeatureValue(a) error = %v, want ErrCyclicFeatureValue", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- inst.SetFeatureValue(ctx, "b", constReal(1)) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("SetFeatureValue(b): %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("SetFeatureValue(b) hung unmaterializing a cycle of derived values")
+	}
+	if b := inst.FeatureValues["b"]; !b.Materialized || !b.Written {
+		t.Fatalf("the write to b left it materialized %t, written %t", b.Materialized, b.Written)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "a")
+	if err != nil || !valueIdentical(fv.HeldValue(), constReal(2)) {
+		t.Fatalf("a after b := 1.0 = %v, %v; want 2.0", fv, err)
+	}
+
+	if err := inst.SetFeatureValue(ctx, "a", constReal(5)); err != nil {
+		t.Fatalf("SetFeatureValue(a): %v", err)
+	}
+	fv, err = inst.GetFeatureValue(ctx, "b")
+	if err != nil || !valueIdentical(fv.HeldValue(), constReal(1)) {
+		t.Fatalf("b after a := 5.0 = %v, %v; want the written 1.0", fv, err)
 	}
 }
 

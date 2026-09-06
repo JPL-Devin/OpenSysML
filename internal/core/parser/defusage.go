@@ -3447,38 +3447,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 
-	// Check for name-before-keyword pattern: <name> <keyword> { ... }
-	// Example: myConstraint constraint { ... }
-	if p.atName() {
-		next := p.peekN(1)
-		if next.Kind == lexer.Keyword {
-			_, isDef := p.definitionKind(next.KeywordID)
-			_, isUsage := p.usageKind(next.KeywordID)
-			if isDef || isUsage {
-				// Parse as named usage: consume name token, then proceed with keyword
-				var id ast.Identification
-				tok := p.advance()
-				id.Name = p.src.Text(tok.Span)
-				id.NameSpan = tok.Span
-				inner := p.parseDeclaration(start)
-				if u, ok := inner.(*ast.Usage); ok {
-					u.Ident = id
-				} else if d, ok := inner.(*ast.Definition); ok {
-					d.Ident = id
-				}
-				if inner == nil {
-					en := p.errorNodeSkip(start, msgExpectedBodyMember)
-					en.SetLeadingTrivia(trivia)
-					return en
-				}
-				mem := &ast.Membership{Visibility: vis, Member: inner}
-				mem.NodeSpan = p.spanFrom(start)
-				mem.SetLeadingTrivia(trivia)
-				return mem
-			}
-		}
-	}
-
 	inner := p.parseDeclaration(start)
 	if inner == nil {
 		en := p.errorNodeSkip(start, p.noBodyMemberMessage())

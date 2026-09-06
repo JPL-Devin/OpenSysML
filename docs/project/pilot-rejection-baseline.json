@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 258,
-        "digest": "sha256:d816ab013918c16c5f0f3d192971b14acae17510e8638fcac0ee5d15d2ead10e"
+        "files": 260,
+        "digest": "sha256:b24b6eab072321158f54428f22f4fa73e2f556d4b8110f13a1a3e860ba1f1099"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 258,
-    "bothReject": 249,
+    "cases": 260,
+    "bothReject": 251,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -56,8 +56,8 @@
     },
     {
       "source": "grammar",
-      "cases": 89,
-      "bothReject": 89,
+      "cases": 91,
+      "bothReject": 91,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -787,6 +787,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "grammar/g70-name-before-usage-keyword.sysml",
+      "source": "grammar",
+      "rule": "a usage's name follows its kind keyword; a name written ahead of the keyword begins no body item (SysML.xtext:752 AttributeUsage, :598 UsageDeclaration, :516 DefinitionBodyItem).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -965,6 +974,15 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 3
+    },
+    {
+      "path": "grammar/k21-name-before-feature-keyword.kerml",
+      "source": "grammar",
+      "rule": "a feature's name follows its kind keyword; a name written ahead of the keyword begins no body element (KerML.xtext:538 Feature, :548 FeatureDeclaration, :364 TypeBody).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/cn01-fork-two-incoming.sysml",
@@ -2475,8 +2493,8 @@
       }
     ],
     "totals": {
-      "cases": 258,
-      "bothReject": 249,
+      "cases": 260,
+      "bothReject": 251,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

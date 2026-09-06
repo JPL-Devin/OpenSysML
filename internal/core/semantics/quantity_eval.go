@@ -176,6 +176,20 @@ func AddQuantities(op ast.OperatorKind, left, right Quantity) (Quantity, error) 
 	return InUnit(num, left.Unit)
 }
 
+// ConvertQuantity expresses a quantity in a commensurable unit, keeping an
+// integral magnitude where the two units share one scale: `3 [km]` in `m` is `3000.0 [m]`.
+func ConvertQuantity(q Quantity, unit Unit) (Quantity, error) {
+	converted, err := q.ConvertTo(unit)
+	if err != nil {
+		return Quantity{}, err
+	}
+	num := Value{Kind: ValReal, Real: converted}
+	if q.Num.Kind == ValInt && q.Unit.Term.Scale == unit.Term.Scale {
+		num = q.Num
+	}
+	return InUnit(num, unit)
+}
+
 // ScaleQuantities is a product or quotient whose unit is the product or
 // quotient of the operands' units: `10 [m] / 2 [s]` is `5.0 [m/s]`.
 func ScaleQuantities(op ast.OperatorKind, left, right Quantity) (Quantity, error) {

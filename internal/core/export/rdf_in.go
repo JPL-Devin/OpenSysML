@@ -1232,7 +1232,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 		words = append(words, "variation")
 	}
 	if d.boolOf(el, rdf.SysML+"isConstant") {
-		words = append(words, "constant")
+		words = append(words, constantKeyword(d.kerml(el)))
 	}
 	if d.boolOf(el, rdf.SysML+"isEvent") {
 		words = append(words, "event")
@@ -1318,6 +1318,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if err := d.keywordTyped(el, keyword, portion, event); err != nil {
 		return "", err
 	}
+	kerml := d.kerml(el)
+	isPortion, err := d.portionPrefix(el, kerml, portion)
+	if err != nil {
+		return "", err
+	}
 	for _, flag := range []struct {
 		keyword string
 		set     bool
@@ -1326,9 +1331,12 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		// An enumerated value is a variant by what it is, not by a keyword
 		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
 		{"variant", d.boolOf(el, rdf.SysML+"isVariant") && !d.enumeratedValue(el)},
-		{"composite", d.boolOf(el, rdf.SysML+"isComposite")},
+		// `portion` is composite and stands in for `composite`
+		// (KerML.xtext BasicFeaturePrefix `isComposite ?= 'composite' | isPortion ?= 'portion'`).
+		{"portion", isPortion},
+		{"composite", d.boolOf(el, rdf.SysML+"isComposite") && !isPortion},
 		{"derived", d.boolOf(el, rdf.SysML+"isDerived")},
-		{"constant", d.boolOf(el, rdf.SysML+"isConstant")},
+		{constantKeyword(kerml), d.boolOf(el, rdf.SysML+"isConstant")},
 		{"individual", d.boolOf(el, rdf.SysML+"isIndividual")},
 		{"snapshot", portion == "snapshot"},
 		{"timeslice", portion == "timeslice"},
@@ -2015,6 +2023,49 @@ func (d *decoder) keywordTyped(el *element, keyword, portion string, event bool)
 	return &UnsupportedError{
 		What: fmt.Sprintf("the `%s` declaration <%s>", keyword, el.iri),
 		Note: fmt.Sprintf("it has %s, not %s, so the notation cannot be rebuilt without declaring something else", stated, expected),
+	}
+}
+
+// kerml reports whether el is written under KerML's grammar: the one its root
+// records, or SysML for a root recording none, which is how candidateName reads it.
+func (d *decoder) kerml(el *element) bool {
+	root := el
+	for root.owner != nil {
+		root = root.owner
+	}
+	language, _ := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+	return language == "kerml"
+}
+
+// constantKeyword spells isConstant for the grammar: KerML.xtext FeaturePrefix
+// `isConstant ?= 'const'`, SysML.xtext RefPrefix `isConstant ?= 'constant'`.
+func constantKeyword(kerml bool) string {
+	if kerml {
+		return "const"
+	}
+	return "constant"
+}
+
+// portionPrefix reports whether isPortion is written as KerML's `portion`; SysML has no
+// such prefix, so there the flag is carried by a portion kind and refused without one.
+func (d *decoder) portionPrefix(el *element, kerml bool, portion string) (bool, error) {
+	if !d.boolOf(el, rdf.SysML+"isPortion") {
+		return false, nil
+	}
+	switch {
+	case kerml && !d.boolOf(el, rdf.SysML+"isComposite"):
+		return false, &UnsupportedError{
+			What: fmt.Sprintf("the portion <%s>", el.iri),
+			Note: "it has sysml:isPortion without sysml:isComposite, and a portion is composite (KerML Feature::isPortion), so `portion` would declare more than the graph states",
+		}
+	case kerml:
+		return true, nil
+	case portion != "":
+		return false, nil
+	}
+	return false, &UnsupportedError{
+		What: fmt.Sprintf("the portion <%s>", el.iri),
+		Note: "it has sysml:isPortion and no sysml:" + pPortionKind + ", and SysML declares a portion only as `snapshot` or `timeslice`, so no valid declaration can be written for it",
 	}
 }
 

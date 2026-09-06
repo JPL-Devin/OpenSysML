@@ -244,6 +244,8 @@ Supported types:
 - `String`: JSON string
 - `Null`: JSON null
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
+- `MeasurementRef`: the `unit` a measurement reference names, and no `value`
+  (`{"type": "MeasurementRef", "unit": "m**2"}`)
 - `Complex`: JSON number, the real part, with the imaginary part as `im`
   (`{"type": "Complex", "value": 0.0, "im": 1.0}`)
 - `Sequence`: the `elements` it holds, in order, instead of `value` — for a

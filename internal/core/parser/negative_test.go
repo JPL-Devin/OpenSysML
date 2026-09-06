@@ -374,6 +374,10 @@ func TestNegative(t *testing.T) {
 		{"frame_no_concern", "viewpoint def V { frame; }"},
 		{"frame_concern_no_declaration", "viewpoint def V { frame concern }"},
 		{"render_no_rendering", "view def V { render; }"},
+		// A name follows its kind keyword, never precedes it (SysML.xtext
+		// DefinitionDeclaration, UsageDeclaration).
+		{"name_before_usage_keyword", "part def B { foo attribute bar : A; }"},
+		{"name_before_definition_keyword", "package P { x part def Q; }"},
 	}
 
 	for _, tt := range tests {
@@ -422,6 +426,60 @@ func TestRemovedSuccessionFormsProduceDiagnosticsAndErrorNodes(t *testing.T) {
 			}
 			if strings.Contains(dump, tt.forbiddenNode) {
 				t.Fatalf("unexpected %s for removed spelling:\n%s", tt.forbiddenNode, dump)
+			}
+		})
+	}
+}
+
+// A name written ahead of a kind keyword is no declaration: the stray name is
+// reported and skipped without naming anything, and the members after it parse.
+func TestNameBeforeKeywordIsNotADeclaration(t *testing.T) {
+	tests := []struct {
+		name       string
+		ext        string
+		src        string
+		stray      string
+		message    string
+		wantMember string
+	}{
+		{"body_usage", ".sysml", "package P { attribute def A; part def B { foo attribute bar : A; attribute ok : A; } }", "foo", msgExpectedBodyMember, `name="ok"`},
+		{"body_definition", ".sysml", "package P { part def B { foo part def Q; part def R; } }", "foo", msgExpectedBodyMember, `name="R"`},
+		{"body_usage_with_body", ".sysml", "package P { part def B { myConstraint constraint { 1 > 0 } part q; } }", "myConstraint", msgExpectedBodyMember, `name="q"`},
+		{"namespace_definition", ".sysml", "package P { x part def Q; part def R; }", "x", "expected a namespace member", `name="R"`},
+		{"kerml_body_feature", ".kerml", "package P { class A; class B { foo feature bar : A; feature ok : A; } }", "foo", msgExpectedBodyMember, `name="ok"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			sf := source.New(tt.name+tt.ext, []byte(tt.src))
+			p := New(sf)
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 1 {
+				t.Fatalf("want one diagnostic, got %v", p.Diagnostics)
+			}
+			d := p.Diagnostics[0]
+			if d.Message != tt.message {
+				t.Errorf("message = %q, want %q", d.Message, tt.message)
+			}
+			if got := sf.Text(d.Span); got != tt.stray {
+				t.Errorf("diagnostic points at %q, want the stray name %q", got, tt.stray)
+			}
+			dump := ast.Dump(root)
+			if !strings.Contains(dump, "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", dump)
+			}
+			if strings.Contains(dump, `name="`+tt.stray+`"`) {
+				t.Errorf("stray name %q became a declaration:\n%s", tt.stray, dump)
+			}
+			if !strings.Contains(dump, tt.wantMember) {
+				t.Errorf("member after the error was not parsed (want %s):\n%s", tt.wantMember, dump)
 			}
 		})
 	}

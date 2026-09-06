@@ -71,6 +71,8 @@ func valueKeyFunc(v Value) valueKey {
 		}
 	case ValArray, ValVector, ValVectorQuantity:
 		key.colHash = structuredKey(v)
+	case ValMeasurementRef:
+		key.strVal = v.MeasurementRef().key()
 	}
 	return key
 }

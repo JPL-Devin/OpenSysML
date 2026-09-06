@@ -712,6 +712,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isEvent", n.IsEvent && metaclass != mEventOccurrenceUsage},
 			{"isIndividual", n.IsIndividual},
 			{"isComposite", n.IsComposite},
+			// A snapshot or timeslice is a portion by its kind (OccurrenceUsage::portionKind).
+			{"isPortion", n.IsPortion || n.Portion != ast.PortionNone},
 			{"isDerived", n.IsDerived},
 			{"isOrdered", n.IsOrdered},
 			{"isNonunique", n.IsNonunique},
