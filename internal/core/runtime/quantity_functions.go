@@ -290,11 +290,15 @@ func quantityEquality(name string, _ *Context, args []Value) (Value, error) {
 
 // quantityExtremum is max (op '>') or min (op '<'): the winning operand as written,
 // `max(1 [m], 200 [cm])` being `200 [cm]`, and the first where the two are equal.
+// Its result names a unit, so unlike a comparison a bare zero adopts none here.
 func quantityExtremum(op ast.OperatorKind) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
 		x, y, err := quantityArgs(name, args)
 		if err != nil {
 			return Value{}, err
+		}
+		if _, err := y.ConvertTo(x.Unit); err != nil {
+			return Value{}, fmt.Errorf("function %s: %w", name, err)
 		}
 		yWins, err := compareQuantities(op, y, x)
 		if err != nil {
