@@ -192,6 +192,137 @@
       }
     },
     {
+      "id": "evaluate/an_array_arrives_with_its_shape",
+      "description": "An array travels as its dimensions and its row-major elements in one arm, so a client can rebuild the shape rather than receive a flat sequence.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "structured_values"
+      ],
+      "model": {
+        "fixture": "structured.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "S::grid"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "array": {
+              "dimensions": [
+                2,
+                3
+              ],
+              "elements": [
+                {
+                  "int_value": 1
+                },
+                {
+                  "int_value": 2
+                },
+                {
+                  "int_value": 3
+                },
+                {
+                  "int_value": 4
+                },
+                {
+                  "int_value": 5
+                },
+                {
+                  "int_value": 6
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_vector_arrives_with_numeric_components",
+      "description": "A vector travels as its components in one arm, each keeping its Integer or Real kind.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "structured_values"
+      ],
+      "model": {
+        "fixture": "structured.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "S::v"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "vector": {
+              "components": [
+                {
+                  "real_value": 3.0
+                },
+                {
+                  "real_value": 4.0
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_vector_quantity_arrives_with_a_unit_per_component",
+      "description": "A vector quantity travels as one Quantity per component, each carrying the unit as written and its reduction to base units.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "structured_values"
+      ],
+      "model": {
+        "fixture": "structured.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "S::d"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "vector_quantity": {
+              "components": [
+                {
+                  "real_magnitude": 3.0,
+                  "unit": "m",
+                  "unit_term": {
+                    "factors": [
+                      {
+                        "unit_id": "SI::metre",
+                        "exponent": 1
+                      }
+                    ],
+                    "scale_num": 1,
+                    "scale_den": 1
+                  }
+                },
+                {
+                  "real_magnitude": 4.0,
+                  "unit": "m",
+                  "unit_term": {
+                    "factors": [
+                      {
+                        "unit_id": "SI::metre",
+                        "exponent": 1
+                      }
+                    ],
+                    "scale_num": 1,
+                    "scale_den": 1
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "evaluate/an_unparsable_expression_is_reported_in_band",
       "description": "A bad expression is an answer about the expression, not a transport failure.",
       "rpc": "Evaluate",

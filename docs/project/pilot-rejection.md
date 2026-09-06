@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-260 case(s): 251 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+259 case(s): 250 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 89 | 89 | 0 | 0 | 0 |
-| semantic | 128 | 119 | 0 | 9 | 0 |
+| semantic | 127 | 118 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -192,8 +192,8 @@ an annotating element annotating itself, a three-ended binding, a conjugated fea
 without its type or default supertype, a chain through an alias to another type's feature, and
 an `end` with a direction or a derived/abstract modifier), all landing both-reject, and to 256 with the end-feature rules (`k50`, an end that declares its
 cross feature inline and also `crosses` another; `k51`, a `return` parameter owned by a classifier;
-`k52`, a type with two conjugators), and to 258 with `k53`/`s88` (a cross feature declared ahead of its end's
-kind keyword and typed more narrowly than the end).
+`k52`, a type with two conjugators), and to 257 with `k53` (a Boolean expression, a feature like any
+other, subsetting a data type).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor

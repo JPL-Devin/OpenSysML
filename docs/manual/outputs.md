@@ -123,13 +123,30 @@ renderer emits no `style` attributes to compete with.
 
 | Flag | Effect |
 |---|---|
-| `-html-default-css` | Write the default sheet and exit, to copy from |
+| `-html-theme <name>` | Layer a bundled theme over the default sheet: `default`, `modern`, `print` or `report` |
+| `-html-default-css` | Write the default sheet and exit, to copy from; with `-html-theme`, the theme's whole sheet |
 | `-html-css <file\|url>` | Add a sheet after the default one: a file is inlined, a URL is linked (repeatable, applied in order) |
 | `-html-no-default-css` | Leave the default sheet out |
 | `-html-fragment` | Write the `<article>` alone, with no page shell and no stylesheet |
 
+The bundled themes are written against the same tokens, inside the same
+layer, right after the default sheet — so a theme changes the look while your
+unlayered CSS still wins over both:
+
+| Theme | Look |
+|---|---|
+| `default` | The default sheet alone: system sans-serif, one navy accent, boxed tables |
+| `modern` | Clean corporate sans-serif: filled table headers, zebra rows, rounded surfaces for code and contents |
+| `report` | Formal technical report: serif body, wider measure, open tables ruled top and bottom, captions above |
+| `print` | Monochrome and compact for paper: black rules, no fills, tables and figures kept whole across page breaks, external links spelled out |
+
+A theme needs the default sheet under it, so it is refused with
+`-html-no-default-css`, and a fragment has no page to style, so it is refused
+with `-html-fragment`.
+
 A `-render-documents -doc-form html` set writes its stylesheets as files
-beside the pages — `sysml-document.css` and each `-html-css` file, under its
+beside the pages — `sysml-document.css` (default sheet, with the theme when
+one is named) and each `-html-css` file, under its
 own base name, escaped and shortened where a name is not a portable file name
 and distinguished where two sheets share one — and every page links them in
 order, so the styling of a whole set is edited in one place. A `-html-css` URL

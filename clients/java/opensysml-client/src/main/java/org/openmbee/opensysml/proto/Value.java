@@ -64,6 +64,9 @@ private static final long serialVersionUID = 0L;
     ENUM_LITERAL(9),
     UNSET(10),
     COMPLEX(11),
+    ARRAY(12),
+    VECTOR(13),
+    VECTOR_QUANTITY(14),
     KIND_NOT_SET(0);
     private final int value;
     private KindCase(int value) {
@@ -92,6 +95,9 @@ private static final long serialVersionUID = 0L;
         case 9: return ENUM_LITERAL;
         case 10: return UNSET;
         case 11: return COMPLEX;
+        case 12: return ARRAY;
+        case 13: return VECTOR;
+        case 14: return VECTOR_QUANTITY;
         case 0: return KIND_NOT_SET;
         default: return null;
       }
@@ -494,6 +500,135 @@ private static final long serialVersionUID = 0L;
     return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
   }
 
+  public static final int ARRAY_FIELD_NUMBER = 12;
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   * @return Whether the array field is set.
+   */
+  @java.lang.Override
+  public boolean hasArray() {
+    return kindCase_ == 12;
+  }
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   * @return The array.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.Array getArray() {
+    if (kindCase_ == 12) {
+       return (org.openmbee.opensysml.proto.Array) kind_;
+    }
+    return org.openmbee.opensysml.proto.Array.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.ArrayOrBuilder getArrayOrBuilder() {
+    if (kindCase_ == 12) {
+       return (org.openmbee.opensysml.proto.Array) kind_;
+    }
+    return org.openmbee.opensysml.proto.Array.getDefaultInstance();
+  }
+
+  public static final int VECTOR_FIELD_NUMBER = 13;
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   * @return Whether the vector field is set.
+   */
+  @java.lang.Override
+  public boolean hasVector() {
+    return kindCase_ == 13;
+  }
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   * @return The vector.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.Vector getVector() {
+    if (kindCase_ == 13) {
+       return (org.openmbee.opensysml.proto.Vector) kind_;
+    }
+    return org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.VectorOrBuilder getVectorOrBuilder() {
+    if (kindCase_ == 13) {
+       return (org.openmbee.opensysml.proto.Vector) kind_;
+    }
+    return org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+  }
+
+  public static final int VECTOR_QUANTITY_FIELD_NUMBER = 14;
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   * @return Whether the vectorQuantity field is set.
+   */
+  @java.lang.Override
+  public boolean hasVectorQuantity() {
+    return kindCase_ == 14;
+  }
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   * @return The vectorQuantity.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.VectorQuantity getVectorQuantity() {
+    if (kindCase_ == 14) {
+       return (org.openmbee.opensysml.proto.VectorQuantity) kind_;
+    }
+    return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.VectorQuantityOrBuilder getVectorQuantityOrBuilder() {
+    if (kindCase_ == 14) {
+       return (org.openmbee.opensysml.proto.VectorQuantity) kind_;
+    }
+    return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -545,6 +680,15 @@ private static final long serialVersionUID = 0L;
     }
     if (kindCase_ == 11) {
       output.writeMessage(11, (org.openmbee.opensysml.proto.Complex) kind_);
+    }
+    if (kindCase_ == 12) {
+      output.writeMessage(12, (org.openmbee.opensysml.proto.Array) kind_);
+    }
+    if (kindCase_ == 13) {
+      output.writeMessage(13, (org.openmbee.opensysml.proto.Vector) kind_);
+    }
+    if (kindCase_ == 14) {
+      output.writeMessage(14, (org.openmbee.opensysml.proto.VectorQuantity) kind_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -601,6 +745,18 @@ private static final long serialVersionUID = 0L;
     if (kindCase_ == 11) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(11, (org.openmbee.opensysml.proto.Complex) kind_);
+    }
+    if (kindCase_ == 12) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(12, (org.openmbee.opensysml.proto.Array) kind_);
+    }
+    if (kindCase_ == 13) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(13, (org.openmbee.opensysml.proto.Vector) kind_);
+    }
+    if (kindCase_ == 14) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(14, (org.openmbee.opensysml.proto.VectorQuantity) kind_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -663,6 +819,18 @@ private static final long serialVersionUID = 0L;
       case 11:
         if (!getComplex()
             .equals(other.getComplex())) return false;
+        break;
+      case 12:
+        if (!getArray()
+            .equals(other.getArray())) return false;
+        break;
+      case 13:
+        if (!getVector()
+            .equals(other.getVector())) return false;
+        break;
+      case 14:
+        if (!getVectorQuantity()
+            .equals(other.getVectorQuantity())) return false;
         break;
       case 0:
       default:
@@ -727,6 +895,18 @@ private static final long serialVersionUID = 0L;
       case 11:
         hash = (37 * hash) + COMPLEX_FIELD_NUMBER;
         hash = (53 * hash) + getComplex().hashCode();
+        break;
+      case 12:
+        hash = (37 * hash) + ARRAY_FIELD_NUMBER;
+        hash = (53 * hash) + getArray().hashCode();
+        break;
+      case 13:
+        hash = (37 * hash) + VECTOR_FIELD_NUMBER;
+        hash = (53 * hash) + getVector().hashCode();
+        break;
+      case 14:
+        hash = (37 * hash) + VECTOR_QUANTITY_FIELD_NUMBER;
+        hash = (53 * hash) + getVectorQuantity().hashCode();
         break;
       case 0:
       default:
@@ -878,6 +1058,15 @@ private static final long serialVersionUID = 0L;
       if (complexBuilder_ != null) {
         complexBuilder_.clear();
       }
+      if (arrayBuilder_ != null) {
+        arrayBuilder_.clear();
+      }
+      if (vectorBuilder_ != null) {
+        vectorBuilder_.clear();
+      }
+      if (vectorQuantityBuilder_ != null) {
+        vectorQuantityBuilder_.clear();
+      }
       kindCase_ = 0;
       kind_ = null;
       return this;
@@ -934,6 +1123,18 @@ private static final long serialVersionUID = 0L;
       if (kindCase_ == 11 &&
           complexBuilder_ != null) {
         result.kind_ = complexBuilder_.build();
+      }
+      if (kindCase_ == 12 &&
+          arrayBuilder_ != null) {
+        result.kind_ = arrayBuilder_.build();
+      }
+      if (kindCase_ == 13 &&
+          vectorBuilder_ != null) {
+        result.kind_ = vectorBuilder_.build();
+      }
+      if (kindCase_ == 14 &&
+          vectorQuantityBuilder_ != null) {
+        result.kind_ = vectorQuantityBuilder_.build();
       }
     }
 
@@ -996,6 +1197,18 @@ private static final long serialVersionUID = 0L;
         }
         case COMPLEX: {
           mergeComplex(other.getComplex());
+          break;
+        }
+        case ARRAY: {
+          mergeArray(other.getArray());
+          break;
+        }
+        case VECTOR: {
+          mergeVector(other.getVector());
+          break;
+        }
+        case VECTOR_QUANTITY: {
+          mergeVectorQuantity(other.getVectorQuantity());
           break;
         }
         case KIND_NOT_SET: {
@@ -1093,6 +1306,27 @@ private static final long serialVersionUID = 0L;
               kindCase_ = 11;
               break;
             } // case 90
+            case 98: {
+              input.readMessage(
+                  internalGetArrayFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 12;
+              break;
+            } // case 98
+            case 106: {
+              input.readMessage(
+                  internalGetVectorFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 13;
+              break;
+            } // case 106
+            case 114: {
+              input.readMessage(
+                  internalGetVectorQuantityFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 14;
+              break;
+            } // case 114
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2219,6 +2453,540 @@ private static final long serialVersionUID = 0L;
       kindCase_ = 11;
       onChanged();
       return complexBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Array, org.openmbee.opensysml.proto.Array.Builder, org.openmbee.opensysml.proto.ArrayOrBuilder> arrayBuilder_;
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     * @return Whether the array field is set.
+     */
+    @java.lang.Override
+    public boolean hasArray() {
+      return kindCase_ == 12;
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     * @return The array.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.Array getArray() {
+      if (arrayBuilder_ == null) {
+        if (kindCase_ == 12) {
+          return (org.openmbee.opensysml.proto.Array) kind_;
+        }
+        return org.openmbee.opensysml.proto.Array.getDefaultInstance();
+      } else {
+        if (kindCase_ == 12) {
+          return arrayBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.Array.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    public Builder setArray(org.openmbee.opensysml.proto.Array value) {
+      if (arrayBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        arrayBuilder_.setMessage(value);
+      }
+      kindCase_ = 12;
+      return this;
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    public Builder setArray(
+        org.openmbee.opensysml.proto.Array.Builder builderForValue) {
+      if (arrayBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        arrayBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 12;
+      return this;
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    public Builder mergeArray(org.openmbee.opensysml.proto.Array value) {
+      if (arrayBuilder_ == null) {
+        if (kindCase_ == 12 &&
+            kind_ != org.openmbee.opensysml.proto.Array.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.Array.newBuilder((org.openmbee.opensysml.proto.Array) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 12) {
+          arrayBuilder_.mergeFrom(value);
+        } else {
+          arrayBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 12;
+      return this;
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    public Builder clearArray() {
+      if (arrayBuilder_ == null) {
+        if (kindCase_ == 12) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 12) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        arrayBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    public org.openmbee.opensysml.proto.Array.Builder getArrayBuilder() {
+      return internalGetArrayFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.ArrayOrBuilder getArrayOrBuilder() {
+      if ((kindCase_ == 12) && (arrayBuilder_ != null)) {
+        return arrayBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 12) {
+          return (org.openmbee.opensysml.proto.Array) kind_;
+        }
+        return org.openmbee.opensysml.proto.Array.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * shape and elements, never a flat sequence
+     * </pre>
+     *
+     * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Array, org.openmbee.opensysml.proto.Array.Builder, org.openmbee.opensysml.proto.ArrayOrBuilder> 
+        internalGetArrayFieldBuilder() {
+      if (arrayBuilder_ == null) {
+        if (!(kindCase_ == 12)) {
+          kind_ = org.openmbee.opensysml.proto.Array.getDefaultInstance();
+        }
+        arrayBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.Array, org.openmbee.opensysml.proto.Array.Builder, org.openmbee.opensysml.proto.ArrayOrBuilder>(
+                (org.openmbee.opensysml.proto.Array) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 12;
+      onChanged();
+      return arrayBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Vector, org.openmbee.opensysml.proto.Vector.Builder, org.openmbee.opensysml.proto.VectorOrBuilder> vectorBuilder_;
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     * @return Whether the vector field is set.
+     */
+    @java.lang.Override
+    public boolean hasVector() {
+      return kindCase_ == 13;
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     * @return The vector.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.Vector getVector() {
+      if (vectorBuilder_ == null) {
+        if (kindCase_ == 13) {
+          return (org.openmbee.opensysml.proto.Vector) kind_;
+        }
+        return org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+      } else {
+        if (kindCase_ == 13) {
+          return vectorBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    public Builder setVector(org.openmbee.opensysml.proto.Vector value) {
+      if (vectorBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        vectorBuilder_.setMessage(value);
+      }
+      kindCase_ = 13;
+      return this;
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    public Builder setVector(
+        org.openmbee.opensysml.proto.Vector.Builder builderForValue) {
+      if (vectorBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        vectorBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 13;
+      return this;
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    public Builder mergeVector(org.openmbee.opensysml.proto.Vector value) {
+      if (vectorBuilder_ == null) {
+        if (kindCase_ == 13 &&
+            kind_ != org.openmbee.opensysml.proto.Vector.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.Vector.newBuilder((org.openmbee.opensysml.proto.Vector) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 13) {
+          vectorBuilder_.mergeFrom(value);
+        } else {
+          vectorBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 13;
+      return this;
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    public Builder clearVector() {
+      if (vectorBuilder_ == null) {
+        if (kindCase_ == 13) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 13) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        vectorBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    public org.openmbee.opensysml.proto.Vector.Builder getVectorBuilder() {
+      return internalGetVectorFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.VectorOrBuilder getVectorOrBuilder() {
+      if ((kindCase_ == 13) && (vectorBuilder_ != null)) {
+        return vectorBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 13) {
+          return (org.openmbee.opensysml.proto.Vector) kind_;
+        }
+        return org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * numeric components, never a sequence
+     * </pre>
+     *
+     * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Vector, org.openmbee.opensysml.proto.Vector.Builder, org.openmbee.opensysml.proto.VectorOrBuilder> 
+        internalGetVectorFieldBuilder() {
+      if (vectorBuilder_ == null) {
+        if (!(kindCase_ == 13)) {
+          kind_ = org.openmbee.opensysml.proto.Vector.getDefaultInstance();
+        }
+        vectorBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.Vector, org.openmbee.opensysml.proto.Vector.Builder, org.openmbee.opensysml.proto.VectorOrBuilder>(
+                (org.openmbee.opensysml.proto.Vector) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 13;
+      onChanged();
+      return vectorBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.VectorQuantity, org.openmbee.opensysml.proto.VectorQuantity.Builder, org.openmbee.opensysml.proto.VectorQuantityOrBuilder> vectorQuantityBuilder_;
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     * @return Whether the vectorQuantity field is set.
+     */
+    @java.lang.Override
+    public boolean hasVectorQuantity() {
+      return kindCase_ == 14;
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     * @return The vectorQuantity.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.VectorQuantity getVectorQuantity() {
+      if (vectorQuantityBuilder_ == null) {
+        if (kindCase_ == 14) {
+          return (org.openmbee.opensysml.proto.VectorQuantity) kind_;
+        }
+        return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+      } else {
+        if (kindCase_ == 14) {
+          return vectorQuantityBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    public Builder setVectorQuantity(org.openmbee.opensysml.proto.VectorQuantity value) {
+      if (vectorQuantityBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        vectorQuantityBuilder_.setMessage(value);
+      }
+      kindCase_ = 14;
+      return this;
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    public Builder setVectorQuantity(
+        org.openmbee.opensysml.proto.VectorQuantity.Builder builderForValue) {
+      if (vectorQuantityBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        vectorQuantityBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 14;
+      return this;
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    public Builder mergeVectorQuantity(org.openmbee.opensysml.proto.VectorQuantity value) {
+      if (vectorQuantityBuilder_ == null) {
+        if (kindCase_ == 14 &&
+            kind_ != org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.VectorQuantity.newBuilder((org.openmbee.opensysml.proto.VectorQuantity) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 14) {
+          vectorQuantityBuilder_.mergeFrom(value);
+        } else {
+          vectorQuantityBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 14;
+      return this;
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    public Builder clearVectorQuantity() {
+      if (vectorQuantityBuilder_ == null) {
+        if (kindCase_ == 14) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 14) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        vectorQuantityBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    public org.openmbee.opensysml.proto.VectorQuantity.Builder getVectorQuantityBuilder() {
+      return internalGetVectorQuantityFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.VectorQuantityOrBuilder getVectorQuantityOrBuilder() {
+      if ((kindCase_ == 14) && (vectorQuantityBuilder_ != null)) {
+        return vectorQuantityBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 14) {
+          return (org.openmbee.opensysml.proto.VectorQuantity) kind_;
+        }
+        return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * components each with their unit
+     * </pre>
+     *
+     * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.VectorQuantity, org.openmbee.opensysml.proto.VectorQuantity.Builder, org.openmbee.opensysml.proto.VectorQuantityOrBuilder> 
+        internalGetVectorQuantityFieldBuilder() {
+      if (vectorQuantityBuilder_ == null) {
+        if (!(kindCase_ == 14)) {
+          kind_ = org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
+        }
+        vectorQuantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.VectorQuantity, org.openmbee.opensysml.proto.VectorQuantity.Builder, org.openmbee.opensysml.proto.VectorQuantityOrBuilder>(
+                (org.openmbee.opensysml.proto.VectorQuantity) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 14;
+      onChanged();
+      return vectorQuantityBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:sysml.Value)
