@@ -1951,14 +1951,8 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 	// Check for requirement-specific keywords FIRST (before tryParseDeclaration)
 	// These keywords have special meaning in requirement context that differs from general usage
-	if p.bodyAdmitsMember("subject") && p.acceptKeyword("subject") {
-		return p.parseSubjectMember(start)
-	}
-	if p.acceptKeyword("assume") {
-		return p.parseAssumeMember(start)
-	}
-	if p.acceptKeyword("require") {
-		return p.parseRequireMember(start)
+	if node := p.parseKeywordedRequirementMember(start); node != nil {
+		return node
 	}
 
 	// Try general declaration (nested requirements, features, etc.)
@@ -2002,15 +1996,40 @@ func usageIsSubstantive(u *ast.Usage) bool {
 		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
-// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
-// [specializations] [value] (; | body)`, the value written with any value operator.
-func (p *Parser) parseSubjectMember(start int) ast.Node {
-	// 'subject' already consumed
-
-	// A subject takes prefix metadata after its keyword: `subject #B s;`
-	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
+// parseKeywordedRequirementMember parses a `subject`, `assume` or `require` member, reporting
+// prefix metadata written ahead of the keyword and reading it as if it followed; nil if neither.
+func (p *Parser) parseKeywordedRequirementMember(start int) ast.Node {
+	kw := p.peekN(p.prefixLookahead())
+	if kw.Kind != lexer.Keyword {
+		return nil
+	}
+	switch kw.KeywordID {
+	case "subject":
+		if !p.bodyAdmitsMember("subject") {
+			return nil
+		}
+	case "assume", "require":
+	default:
+		return nil
+	}
 	prefixes := p.parsePrefixMetadata()
+	if len(prefixes) > 0 {
+		p.reportMisplacedPrefixMetadata(prefixes, kw)
+	}
+	p.advance() // the keyword
+	prefixes = append(prefixes, p.parsePrefixMetadata()...)
+	switch kw.KeywordID {
+	case "subject":
+		return p.parseSubjectMember(start, prefixes)
+	case "assume":
+		return p.parseAssumeMember(start, prefixes)
+	}
+	return p.parseRequireMember(start, prefixes)
+}
 
+// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
+// [specializations] [value] (; | body)`; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseSubjectMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// A bare `subject;` declares the subject parameter without naming or typing
 	// it, as the OMG viewpoint examples write it.
 	if p.at(lexer.Semicolon) {
@@ -2083,12 +2102,9 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	return node
 }
 
-// parseAssumeMember parses: assume <expr>;
-func (p *Parser) parseAssumeMember(start int) ast.Node {
-	// 'assume' already consumed
-
+// parseAssumeMember parses: assume <expr>; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseAssumeMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
-	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
 		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
@@ -2133,12 +2149,9 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 	return node
 }
 
-// parseRequireMember parses: require <expr>;
-func (p *Parser) parseRequireMember(start int) ast.Node {
-	// 'require' already consumed
-
+// parseRequireMember parses: require <expr>; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseRequireMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
-	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
 		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")

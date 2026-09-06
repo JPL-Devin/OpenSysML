@@ -126,6 +126,7 @@ var (
 	htmlNoCSS     bool
 	htmlShowCSS   bool
 	htmlFragment  bool
+	htmlMermaid   string
 	strictMode    bool
 	modelChecks   checks
 	compileCalc   string
@@ -236,6 +237,10 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
 		return 2
 	}
+	if flagGiven("html-mermaid") && htmlMermaid == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -html-mermaid is empty; give it cdn or the URL of a Mermaid script")
+		return 2
+	}
 
 	// Get positional arguments (files to load)
 	args := flag.Args()
@@ -257,8 +262,7 @@ func runCLI() int {
 			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
 			return 2
-		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
-			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering || htmlFlagsGiven():
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
 			return 2
 		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||
@@ -273,8 +277,7 @@ func runCLI() int {
 	}
 
 	if renderDoc == "" && renderDocsDir == "" &&
-		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
-			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment) {
+		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering || htmlFlagsGiven()) {
 		fmt.Fprintln(os.Stderr, "sysml: -doc-form, the document options and the stylesheet options apply to -render-document and -render-documents; name the document to render")
 		return 2
 	}

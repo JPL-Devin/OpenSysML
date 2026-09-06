@@ -3,9 +3,11 @@ package parser
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -232,7 +234,18 @@ type featureMods struct {
 	isReadonly        bool
 	isOrdered         bool
 	isNonunique       bool
-	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
+	crossMultiplicity *ast.Multiplicity // the `[mult]` right after `end`: the end's crossing multiplicity
+}
+
+// anonymousCrossFeature wraps the `[mult]` written right after `end` as the
+// unnamed cross feature it declares (KerML.xtext OwnedCrossingFeature).
+func anonymousCrossFeature(mult *ast.Multiplicity) *ast.CrossFeatureMember {
+	if mult == nil {
+		return nil
+	}
+	cross := &ast.CrossFeatureMember{Multiplicity: mult}
+	cross.NodeSpan = mult.Span()
+	return cross
 }
 
 // applyFeatureMods transfers modifiers that were consumed before a declaration's
@@ -299,8 +312,8 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.visibility != ast.VisibilityDefault {
 			d.Visibility = mods.visibility
 		}
-		if mods.earlyMultiplicity != nil && d.Multiplicity == nil {
-			d.Multiplicity = mods.earlyMultiplicity
+		if mods.crossMultiplicity != nil && d.CrossFeature == nil {
+			d.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 		}
 		if mods.prefixKeyword != "" && d.PrefixKeyword == "" {
 			d.PrefixKeyword = mods.prefixKeyword
@@ -885,11 +898,10 @@ func (p *Parser) parseMoreFeatureModifiers(m *featureMods) {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
-			// Check for early multiplicity: end [mult] ref ...
-			// Peek ahead without advancing to see if next token is '['
+			// `end [mult] ref ...`: the multiplicity is the end's crossing one.
 			p.advance() // consume "end"
 			if p.at(lexer.LBracket) {
-				m.earlyMultiplicity = p.parseMultiplicity()
+				m.crossMultiplicity = p.parseMultiplicity()
 			}
 			continue
 		case "constant", "const":
@@ -1145,6 +1157,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
 		}
 
+		if len(prefixes) > 0 && prefixMetadataFollowsKeyword(kw) {
+			p.reportMisplacedPrefixMetadata(prefixes, t)
+		}
+
 		// A subject, actor, stakeholder, objective or rendering the body does
 		// not own is parsed as itself and then replaced by an ErrorNode.
 		if !p.bodyAdmitsMember(kw) {
@@ -1156,14 +1172,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// A subject, actor, stakeholder or objective takes prefix metadata after
-		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
-		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
-		// declaration after it: `variant #B part v;`, `assume #B constraint c;`
-		// (VariantUsageElement, RequirementConstraintUsage) — not `assert`, whose
-		// OccurrenceUsagePrefix puts them ahead of it: `#B assert not constraint c;`.
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kw == "assume" || kw == "require" {
+		if prefixMetadataFollowsKeyword(kw) {
 			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
@@ -1971,10 +1980,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		IsNonunique:   mods.isNonunique,
 	}
 
-	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
-	if mods.earlyMultiplicity != nil {
-		u.Multiplicity = mods.earlyMultiplicity
-	}
+	u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 
 	// Handle UsageSatisfy special syntax:
 	// Full form: satisfy [requirement] <name> by <name> { body }
@@ -2933,15 +2939,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
 			var cross *ast.CrossFeatureMember
-			var mult *ast.Multiplicity
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
 
 			if p.isKindKeyword(p.peek()) {
 				// `end [1] part bead : TireBead` — the kind keyword follows the
 				// modifiers directly, so there is no short name, and the
-				// multiplicity was already taken as an early one.
-				mult = mods.earlyMultiplicity
+				// crossing multiplicity was already taken with the modifiers.
 				hasDefKeyword = true
 			} else if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
@@ -3034,9 +3038,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 					if p.at(lexer.LBracket) {
 						cross.Multiplicity = p.parseMultiplicity()
-						// The bounds are also kept on the end, which is where the
-						// semantics reads an association end's multiplicity from.
-						mult = cross.Multiplicity
 					}
 					for p.atRelationshipKeyword() {
 						rels := p.parseRelationships(true)
@@ -3114,13 +3115,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 
 					if isDefKeyword {
-						mult = p.parseMultiplicity()
+						crossStart := p.peek().Span.Offset
+						cross = anonymousCrossFeature(p.parseMultiplicity())
 
 						// Parse optional relationship clauses before definition keyword
 						for p.atRelationshipKeyword() {
-							rel := p.parseRelationships(true)
-							endRels = append(endRels, rel...)
+							rels := p.parseRelationships(true)
+							cross.Relationships = append(cross.Relationships, rels...)
+							endRels = append(endRels, rels...)
 						}
+						cross.NodeSpan = p.spanFrom(crossStart)
 
 						hasDefKeyword = true
 					}
@@ -3137,9 +3141,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 				if u, ok := decl.(*ast.Usage); ok {
 					if cross != nil {
 						u.CrossFeature = cross
-					}
-					if mult != nil && u.Multiplicity == nil {
-						u.Multiplicity = mult
 					}
 					// Prepend relationships parsed before definition keyword
 					if len(endRels) > 0 {
@@ -3229,11 +3230,15 @@ func (p *Parser) parseBodyMember() ast.Node {
 				Keyword:      keyword,
 				Ident:        id,
 				Visibility:   mods.visibility,
+				IsAbstract:   mods.isAbstract,
+				IsVariation:  mods.isVariation,
+				IsVariant:    mods.isVariant,
 				IsReference:  mods.isReference,
 				IsIndividual: mods.isIndividual,
 				IsEvent:      mods.isEvent,
 				Portion:      mods.portion,
 				IsVariable:   mods.isVariable,
+				IsConstant:   mods.isConstant,
 				IsDerived:    mods.isDerived,
 				IsComposite:  mods.isComposite,
 				IsPortion:    mods.isPortion,
@@ -3258,10 +3263,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
-			if u.Multiplicity == nil {
-				// `end [1] rim : Rim` — the multiplicity was taken as an early one.
-				u.Multiplicity = mods.earlyMultiplicity
-			}
+			u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
 
 			// Parse post-multiplicity modifiers (ordered/nonunique)
 			postMods := p.parsePostModifiers()
@@ -3543,6 +3545,55 @@ func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
 	return false
 }
 
+// prefixMetadataFollowsKeyword reports whether kw takes its prefix metadata after itself
+// (`subject #M s;`, SysML.xtext `'keyword' UsageExtensionKeyword* …`), unlike `#B assert …`.
+func prefixMetadataFollowsKeyword(kw string) bool {
+	switch kw {
+	case "subject", "actor", "stakeholder", "objective", "variant", "assume", "require":
+		return true
+	}
+	return false
+}
+
+// reportMisplacedPrefixMetadata reports prefix metadata written ahead of the keyword
+// at the cursor that it must follow, with the edit that moves it there.
+func (p *Parser) reportMisplacedPrefixMetadata(prefixes []*ast.PrefixMetadata, kw lexer.Token) {
+	content := p.src.Bytes()
+	texts := make([]string, 0, len(prefixes))
+	edits := make([]quickfix.Edit, 0, len(prefixes)+1)
+	var span source.Span
+	for i, pm := range prefixes {
+		// A node span runs to the next token, past any comment; the name's does not.
+		sp := pm.Span()
+		end := sp.Offset + len(strings.TrimRight(p.src.Text(sp), " \t\r\n"))
+		if n := len(pm.Type.Parts); n > 0 {
+			end = pm.Type.Parts[n-1].Span.End()
+		}
+		texts = append(texts, p.src.Text(source.Span{Offset: sp.Offset, Len: end - sp.Offset}))
+		if i == 0 {
+			span.Offset = sp.Offset
+		}
+		span.Len = end - span.Offset
+		for end < kw.Span.Offset && (content[end] == ' ' || content[end] == '\t') {
+			end++
+		}
+		edits = append(edits, quickfix.Replace(source.Span{Offset: sp.Offset, Len: end - sp.Offset}, ""))
+	}
+	run := strings.Join(texts, " ")
+	edits = append(edits, quickfix.Insert(kw.Span.End(), " "+run))
+
+	example := kw.KeywordID + " " + run
+	switch next := p.peekN(1); next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+		example += " " + p.src.Text(next.Span)
+	}
+	p.errorWithFixes(span, "prefix metadata follows '"+kw.KeywordID+"': write `"+example+"`", quickfix.Fix{
+		Title:     "move the prefix metadata after '" + kw.KeywordID + "'",
+		Edits:     edits,
+		Preferred: true,
+	})
+}
+
 // parseReferenceMemberUsage parses the reference form that SysML.xtext spells
 // `ownedRelationship += OwnedReferenceSubsetting FeatureSpecializationPart?
 // ValuePart?` followed by the member's body: a performed action
@@ -3810,7 +3861,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		IsComposite:  mods.isComposite,
 		IsPortion:    mods.isPortion,
 		Direction:    mods.direction,
-		Multiplicity: mods.earlyMultiplicity,
+		CrossFeature: anonymousCrossFeature(mods.crossMultiplicity),
 	}
 	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)

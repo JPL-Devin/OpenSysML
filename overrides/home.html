@@ -129,8 +129,8 @@
     .osml-terminal .osml-ok     { color: #a5d6a7; }
     .osml-terminal .osml-dim    { opacity: .68; }
 
-    /* The numbers strip: what a real model costs, in one row, the last thing before
-       the documentation index. Each figure links to the measurement behind it. */
+    /* The numbers strip: what a real model costs, in one row, between the refereed
+       band and the feature cards. Each figure links to the measurement behind it. */
     .osml-numbers {
       border-bottom: 1px solid var(--md-default-fg-color--lightest);
       scroll-margin-top: 3rem;
@@ -424,6 +424,28 @@
   </div>
 </section>
 
+<section class="osml-numbers" id="numbers">
+  <div class="osml-numbers__inner">
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">8 ms</span>
+      <span class="osml-numbers__label">to parse the Apollo 11 model &mdash; 28 files, 7,200 lines &mdash; on one core.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">0.37 s</span>
+      <span class="osml-numbers__label">to load it with the standard library, resolve every name and validate it.</span>
+    </a>
+    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
+      <span class="osml-numbers__value">42 MB/s</span>
+      <span class="osml-numbers__label">of SysML v2 through the parser &mdash; 880 lines a millisecond.</span>
+    </a>
+    <p class="osml-numbers__source">
+      Measured on the public <a href="https://github.com/airbus/apollo-11-sysml-v2">Apollo 11 SysML v2 model</a>
+      (Airbus, MPL-2.0); the commands to repeat it are on
+      <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
+    </p>
+  </div>
+</section>
+
 <section class="osml-features">
   <h2>What it does</h2>
   <div class="osml-grid">
@@ -496,28 +518,6 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
       <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>
       <p>The roadmap lists what is missing, in the order it should be picked up.</p>
     </div>
-  </div>
-</section>
-
-<section class="osml-numbers" id="numbers">
-  <div class="osml-numbers__inner">
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
-      <span class="osml-numbers__value">8 ms</span>
-      <span class="osml-numbers__label">to parse the Apollo 11 model &mdash; 28 files, 7,200 lines &mdash; on one core.</span>
-    </a>
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
-      <span class="osml-numbers__value">0.37 s</span>
-      <span class="osml-numbers__label">to load it with the standard library, resolve every name and validate it.</span>
-    </a>
-    <a class="osml-numbers__figure" href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">
-      <span class="osml-numbers__value">42 MB/s</span>
-      <span class="osml-numbers__label">of SysML v2 through the parser &mdash; 880 lines a millisecond.</span>
-    </a>
-    <p class="osml-numbers__source">
-      Measured on the public <a href="https://github.com/airbus/apollo-11-sysml-v2">Apollo 11 SysML v2 model</a>
-      (Airbus, MPL-2.0); the commands to repeat it are on
-      <a href="{{ 'internals/performance/'|url }}#a-real-model-apollo-11">the performance page</a>.
-    </p>
   </div>
 </section>
 {% endblock %}

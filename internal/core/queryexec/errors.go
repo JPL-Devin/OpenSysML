@@ -54,7 +54,11 @@ type Error struct {
 	Expected  string
 	Actual    string
 	Origin    provenance.Origin
+	// Cause is the evaluator's reason an unevaluable feature could not be read.
+	Cause error
 }
+
+func (e *Error) Unwrap() error { return e.Cause }
 
 func (e *Error) Error() string {
 	switch e.Kind {
@@ -88,10 +92,14 @@ func (e *Error) Error() string {
 	case ErrorUnknownRelationship:
 		return fmt.Sprintf("query %s does not support relationship kind %q", e.Query, e.Actual)
 	case ErrorUnevaluableFeature:
+		message := fmt.Sprintf("query %s cannot evaluate feature %s", e.Query, e.Property)
 		if e.Target != "" {
-			return fmt.Sprintf("query %s cannot evaluate feature %s of %s", e.Query, e.Property, e.Target)
+			message += " of " + e.Target
 		}
-		return fmt.Sprintf("query %s cannot evaluate feature %s", e.Query, e.Property)
+		if e.Cause != nil {
+			message += ": " + e.Cause.Error()
+		}
+		return message
 	case ErrorUnknownInvocation:
 		return fmt.Sprintf("query %s invokes %s, which is not compiled into the plan", e.Query, e.Target)
 	case ErrorInvocationCycle:

@@ -54,7 +54,7 @@ func (c *multiplicityBoundsChecker) checkBound(scope *symbols.Scope, bound ast.N
 	if bound == nil {
 		return
 	}
-	if v, ok := w8cEvalConst(c.resolver, c.model, scope, bound, nil); ok {
+	if v, ok := c.model.EvalIn(scope, bound); ok {
 		if v.Kind == semantics.ValInfinity || (v.Kind == semantics.ValInt && v.Int >= 0) {
 			return
 		}

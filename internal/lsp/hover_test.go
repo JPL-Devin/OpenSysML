@@ -101,6 +101,27 @@ func hoverInSrc(t *testing.T, s *Server, name, src string, off int) *protocol.Ho
 	return res
 }
 
+// What follows `connector` in KerML is the connector's name only ahead of
+// `from`; otherwise it is the first end, itself or the end name it declares.
+func TestHoverKerMLBinaryConnectorFirstToken(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_first_end.kerml").Filename()
+	src := "package P {\n\tclass V {\n\t\tfeature eng;\n\t\tfeature t;\n\t\tconnector eng to t;\n\t\tconnector a ::> eng to t;\n\t\tconnector c from eng to t;\n\t}\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for probe, want := range map[string]string{
+		"connector eng": "feature eng",
+		"connector a":   "connector end a",
+		"connector c":   "connector c",
+	} {
+		res := hoverInSrc(t, s, name, src, strings.Index(src, probe)+len("connector "))
+		if !strings.Contains(res.Contents.Value, want) {
+			t.Errorf("%s: hover = %q, want %q", probe, res.Contents.Value, want)
+		}
+	}
+}
+
 func TestHoverRendersMarkdownWhenClientSupportsIt(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

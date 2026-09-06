@@ -161,6 +161,45 @@ func TestMarkdownQuantityReportGolden(t *testing.T) {
 	}
 }
 
+// TestMarkdownDerivedReportGolden locks a document whose table, list and
+// definitions read attributes derived from other features: sums of sibling
+// masses through type- and usage-level redefinitions, chains into owned parts,
+// a conditional and a computed column, each cell keeping its unit.
+func TestMarkdownDerivedReportGolden(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "derived_report.sysml"),
+		"Derived::MassReport")
+	golden := filepath.Join("testdata", "derived_report.golden.md")
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create): %v", err)
+	}
+	if got != string(want) {
+		t.Errorf("rendered Markdown differs from %s (run with -update after intentional changes)\ngot:\n%s", golden, got)
+	}
+	for _, want := range []string{
+		"| name | dryMass | mass | engines | class | perEngine |\n| --- | --- | --- | --- | --- | --- |\n",
+		"| s1 | 130000 \\[kg\\] | 2290000 \\[kg\\] | 5 | heavy | 458000 \\[kg\\] |\n",
+		"| s2 | 120000 \\[kg\\] | 2280000 \\[kg\\] | 3 | heavy | 760000 \\[kg\\] |\n",
+		"| s3 | 15000 \\[kg\\] | 119000 \\[kg\\] | 1 | light | 119000 \\[kg\\] |\n",
+		"- s1 2290000 \\[kg\\]\n",
+		"**rocket** — 4689000 \\[kg\\]\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "- s2") {
+		t.Errorf("list holds s2, whose derived mass is not above the threshold\n%s", got)
+	}
+}
+
 // TestMarkdownDefaultedQueryParameters renders content that omits defaulted
 // query parameters: element, inherited, and redefining defaults all apply.
 func TestMarkdownDefaultedQueryParameters(t *testing.T) {

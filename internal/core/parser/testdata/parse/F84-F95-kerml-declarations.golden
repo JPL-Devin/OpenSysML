@@ -29,7 +29,7 @@
           (Relationship kind="specializes" target=A
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="class" name="u" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="type"
+        (Usage kind="class" name="u" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="type" all=true
           (Relationship kind="specializes" target=A
             (*ast.QualifiedName))
           (Relationship kind="specializes" target=Base::things
@@ -128,7 +128,10 @@
       (Membership visibility="default"
         (Usage kind="assoc" name="AS" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assoc struct"
           (Membership visibility="default"
-            (Usage kind="attribute" name="e1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true))
+            (Usage kind="attribute" name="e1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (CrossFeatureMember name=""
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
           (Membership visibility="default"
             (Usage kind="attribute" name="e2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true))))
       (Membership visibility="default"
