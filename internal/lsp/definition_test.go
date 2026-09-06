@@ -318,3 +318,56 @@ package P {
 		}
 	}
 }
+
+// The feature a binding end references (`bind e1 ::> a = b;`) is defined by the
+// owner's feature, whether the end is named or bare; the end name itself is
+// the end's own declaration.
+func TestDefinitionBindingConnectorEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_binding_ends.sysml").Filename()
+	src := `package P {
+	part def V {
+		attribute a;
+		attribute b;
+		bind a = b;
+		bind e1 ::> a = e2 references b;
+		binding bb bind [1] e3 ::> a = b;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	for _, probe := range []string{"bind a = b", "e1 ::> a", "[1] e3 ::> a"} {
+		off := strings.Index(src, probe) + strings.LastIndex(probe, "a")
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", probe, len(locs))
+		}
+		// `attribute a;` is on line 2.
+		if locs[0].Range.Start.Line != 2 {
+			t.Errorf("%s: decl line = %d, want 2 (the attribute, not the binding)", probe, locs[0].Range.Start.Line)
+		}
+	}
+	off := strings.Index(src, "e2 references b") + len("e2 references ")
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("references b: Definition err = %v", err)
+	}
+	if len(locs) != 1 || locs[0].Range.Start.Line != 3 {
+		t.Errorf("references b: locations = %v, want the attribute b on line 3", locs)
+	}
+}

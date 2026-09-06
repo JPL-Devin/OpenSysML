@@ -237,19 +237,12 @@ func (c *w9cBindingChecker) report(span source.Span) {
 // bindingEnds resolves the two features a `bind a = b;` names.
 func (c *w9cBindingChecker) bindingEnds(sym *symbols.Symbol, u *ast.Usage) []*symbols.Symbol {
 	var out []*symbols.Symbol
-	for _, rel := range u.Relationships {
-		if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
-			continue
-		}
-		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), rel.Target)
-		if !ok || target == nil {
+	for _, end := range u.ConnectorEnds {
+		feature := end.AttachedTarget()
+		if feature == nil {
 			return nil
 		}
-		out = append(out, target)
-	}
-	// The right-hand side of `bind a = b` is the usage's value, not a second end.
-	if u.Value != nil {
-		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), u.Value)
+		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), feature)
 		if !ok || target == nil {
 			return nil
 		}

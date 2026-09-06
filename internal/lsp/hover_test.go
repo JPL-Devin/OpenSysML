@@ -284,3 +284,28 @@ func TestHoverMissWhenNoSymbol(t *testing.T) {
 		t.Errorf("expected nil hover for out-of-range position, got %+v", res)
 	}
 }
+
+// A binding's ends are connector ends (SysML.xtext:1000): a named end hovers as
+// the end it declares, the feature after `::>` as the feature it references.
+func TestHoverBindingConnectorEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_binding_ends.sysml").Filename()
+	src := "package P {\n\tpart def V {\n\t\tattribute a;\n\t\tattribute b;\n\t\tbind a = b;\n\t\tbind e1 ::> a = e2 references b;\n\t\tbinding bb bind e3 ::> a = b;\n\t}\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for _, tc := range []struct{ before, token, want string }{
+		{"bind ", "a = b", "attribute a"},
+		{"bind ", "e1 ::>", "connector end e1"},
+		{"::> ", "a = e2", "attribute a"},
+		{"= ", "e2 references", "connector end e2"},
+		{"binding ", "bb bind", "binding bb"},
+		{"bind ", "e3 ::>", "connector end e3"},
+	} {
+		off := strings.Index(src, tc.before+tc.token) + len(tc.before)
+		res := hoverInSrc(t, s, name, src, off)
+		if !strings.Contains(res.Contents.Value, tc.want) {
+			t.Errorf("%s: hover = %q, want %q", tc.token, res.Contents.Value, tc.want)
+		}
+	}
+}

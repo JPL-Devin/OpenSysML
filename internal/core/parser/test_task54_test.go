@@ -27,7 +27,7 @@ func TestBindingMultNameMult(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := New(source.New("test.kerml", []byte(tc.code)))
+			p := New(source.New("test.sysml", []byte(tc.code)))
 			_ = p.ParseFile()
 			if len(p.Diagnostics) > 0 {
 				for _, d := range p.Diagnostics {

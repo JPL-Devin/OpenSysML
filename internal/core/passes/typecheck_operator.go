@@ -96,10 +96,9 @@ func (ec *exprChecker) checkRelationshipBounds(scope *symbols.Scope, rels []*ast
 }
 
 // checkUsageBounds applies the operator rules to every multiplicity a usage
-// writes: its own, its value's, its relationships', its cross feature's and its ends'.
+// writes: its own, its relationships', its cross feature's and its ends'.
 func (ec *exprChecker) checkUsageBounds(scope *symbols.Scope, u *ast.Usage) {
 	ec.checkBoundOperators(scope, u.Multiplicity)
-	ec.checkBoundOperators(scope, u.ValueMultiplicity)
 	ec.checkRelationshipBounds(scope, u.Relationships)
 	inner := childScopeOr(scope, u)
 	if cross := u.CrossFeature; cross != nil {

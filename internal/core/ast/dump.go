@@ -940,9 +940,6 @@ func usageChildren(v *Usage) []Node {
 	if v.Value != nil {
 		kids = append(kids, v.Value)
 	}
-	if v.ValueMultiplicity != nil {
-		kids = append(kids, v.ValueMultiplicity)
-	}
 	for _, ce := range v.ConnectorEnds {
 		kids = append(kids, ce)
 	}

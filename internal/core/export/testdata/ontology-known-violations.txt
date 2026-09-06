@@ -16,7 +16,6 @@
 domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
 domain-mismatch ReferenceUsage value             # FeatureValue_value: same collapse on a kindless usage's value
 domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
-domain-mismatch BindingConnectorAsUsage value    # FeatureValue_value: same collapse on the end a `bind k = m` binds to
 domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch ReferenceUsage lowerBound        # MultiplicityRange_lowerBound: same collapse on a kindless usage
@@ -91,7 +90,6 @@ unknown-property ReferenceUsage redefines                    # redefinition is a
 unknown-property OccurrenceUsage redefines                   # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
-unknown-property BindingConnectorAsUsage references          # the feature a `bind` binds, referenced the same way
 unknown-property PartUsage references                        # a reference subsetting is a ReferenceSubsetting element, not a property
 unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
 unknown-property EventOccurrenceUsage references             # the occurrence an `event m.start` names, standardly its eventOccurrence through a ReferenceSubsetting
