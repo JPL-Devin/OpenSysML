@@ -30,6 +30,7 @@ const (
 	ValArray          // a Collections::Array: its dimensions and its row-major elements
 	ValVector         // a NumericalVectorValue: the numbers of its one dimension
 	ValVectorQuantity // a VectorQuantityValue: a vector with a measurement unit per axis
+	ValMeasurementRef // a ScalarMeasurementReference: a unit by declaration and reduction
 
 	// valueKindCount bounds the kinds; TestEveryValueKindIsDispatched walks them.
 	valueKindCount
@@ -85,6 +86,8 @@ func FormatValue(v Value) string {
 		return v.Vector().format(semantics.FormatConst)
 	case ValVectorQuantity:
 		return v.VectorQuantity().format(semantics.FormatConst)
+	case ValMeasurementRef:
+		return v.MeasurementRef().String()
 	case ValExpr:
 		return "<expression>"
 	default:
@@ -142,6 +145,8 @@ func (k ValueKind) String() string {
 		return "vector"
 	case ValVectorQuantity:
 		return "vector quantity"
+	case ValMeasurementRef:
+		return "measurement reference"
 	default:
 		return "invalid"
 	}
@@ -156,8 +161,8 @@ type Value struct {
 	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
 	// ref holds the kind-specific payload of the remaining kinds: a string
 	// (ValString), *Sequence, *Set, *exprValue (ValExpr), *Quantity, a complex128
-	// (ValComplex), *Array, *Vector, *VectorQuantity, or the *symbols.Symbol of
-	// a variant (ValVariant) or enumeration literal (ValEnumLiteral).
+	// (ValComplex), *Array, *Vector, *VectorQuantity, *MeasurementRef, or the
+	// *symbols.Symbol of a variant (ValVariant) or enumeration literal (ValEnumLiteral).
 	ref any
 }
 
@@ -301,6 +306,15 @@ func (v Value) VectorQuantity() *VectorQuantity {
 	}
 	vq, _ := v.ref.(*VectorQuantity)
 	return vq
+}
+
+// MeasurementRef is the payload of a ValMeasurementRef; nil for every other kind.
+func (v Value) MeasurementRef() *MeasurementRef {
+	if v.Kind != ValMeasurementRef {
+		return nil
+	}
+	ref, _ := v.ref.(*MeasurementRef)
+	return ref
 }
 
 // Complex is the number a ValComplex is; 0 for every other kind.

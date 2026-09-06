@@ -1110,6 +1110,247 @@ func TestShapeDigestExpandsALibraryOfUnknownText(t *testing.T) {
 	}
 }
 
+const adoptUnitSrc = `package Demo {
+	private import ISQ::*;
+	private import SI::*;
+	private import MeasurementReferences::*;
+	attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }
+	part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }
+	part field : Field;
+}`
+
+// A quantity or measurement reference a run wrote names unit declarations, which
+// are rebound to the declarations of the re-analysis like everything else the
+// object points at, so the reference still answers its declaration's type.
+func TestAdoptRebindsTheUnitsAWrittenValueNames(t *testing.T) {
+	prev := libraryContextOver(t, adoptUnitSrc)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for feature, src := range map[string]string{"width": "3 [furlong]", "unit": "furlong"} {
+		val, err := evalIn(t, prev, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, adoptUnitSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	furlong := lookupOne(t, ctx.resolver.Index(), "Demo::furlong")
+	unit, err := field.GetFeatureValue(ctx, "unit")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(unit): %v", err)
+	}
+	if decl := unit.Value.MeasurementRef().Declaration(); decl != furlong {
+		t.Errorf("unit names %p, want the furlong declared by the re-analysis %p", decl, furlong)
+	}
+	width, err := field.GetFeatureValue(ctx, "width")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(width): %v", err)
+	}
+	if decl := width.Value.Quantity().Unit.Product.Powers[0].Unit; decl != furlong {
+		t.Errorf("width is measured in %p, want the furlong declared by the re-analysis %p", decl, furlong)
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"field.unit":                                            "furlong",
+		"field.unit istype LengthUnit":                          "true",
+		"field.unit == furlong":                                 "true",
+		"field.width.mRef == field.unit":                        "true",
+		"QuantityCalculations::ConvertQuantity(field.width, m)": "603.504 [m]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+
+	gone := libraryContextOver(t, strings.Replace(adoptUnitSrc, "attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }", "", 1))
+	var adoptErr *AdoptError
+	if _, err := gone.Adopt(prev, shapes, field); !errors.As(err, &adoptErr) {
+		t.Fatalf("Adopt into a re-analysis without the unit: %v, want an AdoptError", err)
+	} else if !strings.Contains(err.Error(), "the unit furlong it is measured in is no longer declared") {
+		t.Errorf("Adopt refused for %q, want the missing unit named", err)
+	}
+}
+
+// A value measured in a unit the re-analysis redefined (same name, other
+// reduction) is refused rather than carried over with a stale conversion.
+func TestAdoptRefusesAUnitWhoseReductionChanged(t *testing.T) {
+	src := strings.Replace(adoptUnitSrc,
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute pos : Quantities::VectorQuantityValue; }", 1)
+	changed := libraryContextOver(t, strings.Replace(src, "conversionFactor = 201.168", "conversionFactor = 220", 1))
+	for feature, value := range map[string]string{
+		"width": "3 [furlong]",
+		"unit":  "furlong",
+		"pos":   "VectorFunctions::VectorOf((1.0, 2.0)) [furlong]",
+	} {
+		prev := libraryContextOver(t, src)
+		scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+		field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+		if err != nil {
+			t.Fatalf("Instantiate: %v", err)
+		}
+		val, err := evalIn(t, prev, scope, value)
+		if err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+		shapes := prev.ShapesOf(field)
+
+		same := libraryContextOver(t, src+"\npart def Widget;")
+		if _, err := same.Adopt(prev, shapes, field); err != nil {
+			t.Fatalf("Adopt of %s into a re-analysis with the same furlong: %v", feature, err)
+		}
+		var adoptErr *AdoptError
+		_, err = changed.Adopt(prev, shapes, field)
+		if !errors.As(err, &adoptErr) {
+			t.Fatalf("Adopt of %s into a re-analysis redefining furlong: %v, want an AdoptError", feature, err)
+		}
+		if !strings.Contains(err.Error(), "the unit furlong it is measured in now reduces to 220·metre, not 201.168·metre") {
+			t.Errorf("Adopt of %s refused for %q, want the changed reduction named", feature, err)
+		}
+	}
+}
+
+// A model's own base unit (no conversion to a library unit) reduces to itself,
+// so an unchanged one is carried over with its reduction rebound, not refused.
+func TestAdoptRebindsAModelsOwnBaseUnit(t *testing.T) {
+	src := `package Demo {
+	private import ISQ::*;
+	private import SI::*;
+	private import MeasurementReferences::*;
+	attribute chain : LengthUnit;
+	attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = chain; :>> conversionFactor = 10; } }
+	part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute len : LengthValue; }
+	part field : Field;
+}`
+	prev := libraryContextOver(t, src)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for feature, value := range map[string]string{"width": "3 [chain]", "unit": "chain", "len": "2 [furlong]"} {
+		val, err := evalIn(t, prev, scope, value)
+		if err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt into a re-analysis with the same units: %v", err)
+	}
+	chain := lookupOne(t, ctx.resolver.Index(), "Demo::chain")
+	for _, feature := range []string{"width", "unit", "len"} {
+		fv, err := field.GetFeatureValue(ctx, feature)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", feature, err)
+		}
+		for _, unit := range unitsOf(fv.Value) {
+			if got := unit.Term.Factors[0].Unit; got != chain {
+				t.Errorf("%s reduces over %p, want the chain declared by the re-analysis %p", feature, got, chain)
+			}
+		}
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"field.unit == chain":                                         "true",
+		"field.width == 3 [chain]":                                    "true",
+		"field.width.mRef == field.unit":                              "true",
+		"field.len == 20 [chain]":                                     "true",
+		"QuantityCalculations::ConvertQuantity(field.len, chain)":     "20.0 [chain]",
+		"QuantityCalculations::ConvertQuantity(field.width, furlong)": "0.3 [furlong]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+
+	gone := libraryContextOver(t, strings.Replace(src, "attribute chain : LengthUnit;", "attribute chain : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 20.1168; } }", 1))
+	var adoptErr *AdoptError
+	if _, err := gone.Adopt(prev, shapes, field); !errors.As(err, &adoptErr) {
+		t.Fatalf("Adopt into a re-analysis converting chain to metres: %v, want an AdoptError", err)
+	} else if !strings.Contains(err.Error(), "·metre, not ") || !strings.HasSuffix(err.Error(), "chain") {
+		t.Errorf("Adopt refused for %q, want the changed reduction named", err)
+	}
+}
+
+// An empty quantity collection remembers the unit its elements would measure in
+// (the zero its sum yields), so that unit is rebound and judged like a value's:
+// carried over with the same declaration, refused when it is gone or redefined.
+func TestAdoptRebindsTheUnitOfAnEmptyQuantitySequence(t *testing.T) {
+	src := strings.Replace(adoptUnitSrc,
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
+		"part def Field { attribute widths : LengthValue[*]; }", 1)
+	prev := libraryContextOver(t, src)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	furlong, err := evalIn(t, prev, scope, "furlong")
+	if err != nil {
+		t.Fatalf("furlong: %v", err)
+	}
+	if err := field.SetFeatureValue(prev, "widths", NewEmptySequenceOf(furlong.MeasurementRef().Unit)); err != nil {
+		t.Fatalf("write widths: %v", err)
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt into a re-analysis with the same furlong: %v", err)
+	}
+	widths, err := field.GetFeatureValue(ctx, "widths")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(widths): %v", err)
+	}
+	unit, ok := widths.Values.Sequence().ElementUnit()
+	if !ok {
+		t.Fatalf("widths after the carry-over = %s, want an empty sequence measured in furlong", FormatValue(widths.Values))
+	}
+	if decl, want := unit.Product.Powers[0].Unit, lookupOne(t, ctx.resolver.Index(), "Demo::furlong"); decl != want {
+		t.Errorf("widths is measured in %p, want the furlong declared by the re-analysis %p", decl, want)
+	}
+	if got, want := unit.Term.Factors[0].Unit, lookupOne(t, ctx.resolver.Index(), "SI::m"); got != want {
+		t.Errorf("widths reduces over %p, want the metre the re-analysis resolves %p", got, want)
+	}
+
+	for name, tc := range map[string]struct{ src, reason string }{
+		"gone": {strings.Replace(src, "attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }", "", 1),
+			"the unit furlong it is measured in is no longer declared"},
+		"redefined": {strings.Replace(src, "conversionFactor = 201.168", "conversionFactor = 220", 1),
+			"the unit furlong it is measured in now reduces to 220·metre, not 201.168·metre"},
+	} {
+		var adoptErr *AdoptError
+		_, err := libraryContextOver(t, tc.src).Adopt(prev, shapes, field)
+		if !errors.As(err, &adoptErr) {
+			t.Fatalf("Adopt into a re-analysis with furlong %s: %v, want an AdoptError", name, err)
+		}
+		if !strings.Contains(err.Error(), tc.reason) {
+			t.Errorf("Adopt into a re-analysis with furlong %s refused for %q, want %q", name, err, tc.reason)
+		}
+	}
+}
+
 const adoptWrittenSrc = `package Demo {
 	private import ScalarValues::*;
 	part def Holder { attribute n : Integer; }
@@ -1166,5 +1407,81 @@ func TestAdoptRebindsIntoTheScopeTreeTheCallerResolvesIn(t *testing.T) {
 	}
 	if n := len(ctx.instances); n != 1 {
 		t.Errorf("the context holds %d objects, want the carried one alone", n)
+	}
+}
+
+const adoptDependentSrc = `package Demo {
+	part def Source { attribute x default 3; }
+	part def Reader { attribute twice = src.x * 2; }
+	part src : Source;
+	part reader : Reader;
+}`
+
+// A value derived from another object's feature is listed as that feature's
+// dependent, an edge of the analysis both were read in: carrying either object over
+// drops it, and the value derived again there follows a write here.
+func TestAdoptDropsDependencyEdgesAndDerivesAgain(t *testing.T) {
+	prev := contextOver(t, adoptDependentSrc)
+	src := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::src")
+	reader := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::reader")
+	if got := readInt(t, prev, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d before the carry-over, want 6", got)
+	}
+	x := src.FeatureValues["x"]
+	if len(x.dependents) != 1 {
+		t.Fatalf("src.x lists %d dependents before the carry-over, want reader.twice", len(x.dependents))
+	}
+	srcShapes, readerShapes := prev.ShapesOf(src), prev.ShapesOf(reader)
+
+	ctx := contextOver(t, adoptDependentSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, readerShapes, reader); err != nil {
+		t.Fatalf("Adopt(reader): %v", err)
+	}
+	if len(x.dependents) != 0 {
+		t.Errorf("src.x, left behind, still lists %d dependents carried over", len(x.dependents))
+	}
+	if _, err := ctx.Adopt(prev, srcShapes, src); err != nil {
+		t.Fatalf("Adopt(src): %v", err)
+	}
+	if len(x.dependents) != 0 {
+		t.Errorf("src.x still lists %d dependents of the previous analysis", len(x.dependents))
+	}
+	if twice := reader.FeatureValues["twice"]; twice.Materialized {
+		t.Errorf("reader.twice still holds %s from the previous analysis", FormatValue(twice.HeldValue()))
+	}
+	if got := readInt(t, ctx, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d after the carry-over, want 6", got)
+	}
+	if err := src.SetFeatureValue(ctx, "x", constInt(9)); err != nil {
+		t.Fatalf("SetFeatureValue(x): %v", err)
+	}
+	if got := readInt(t, ctx, reader, "twice"); got != 18 {
+		t.Errorf("reader.twice = %d after x := 9, want 18 from the edge recorded here", got)
+	}
+}
+
+// Carrying one object over leaves what depended on it where it was: a write to
+// the carried object reaches nothing in the analysis it left.
+func TestAdoptOfASourceLeavesItsDependentsBehind(t *testing.T) {
+	prev := contextOver(t, adoptDependentSrc)
+	src := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::src")
+	reader := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::reader")
+	if got := readInt(t, prev, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d before the carry-over, want 6", got)
+	}
+	shapes := prev.ShapesOf(src)
+
+	ctx := contextOver(t, adoptDependentSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, src); err != nil {
+		t.Fatalf("Adopt(src): %v", err)
+	}
+	if err := src.SetFeatureValue(ctx, "x", constInt(9)); err != nil {
+		t.Fatalf("SetFeatureValue(x): %v", err)
+	}
+	if twice := reader.FeatureValues["twice"]; !twice.Materialized || FormatValue(twice.HeldValue()) != "6" {
+		t.Errorf("a write in the new context reached reader.twice left behind (materialized %t, %s)", twice.Materialized, FormatValue(twice.HeldValue()))
+	}
+	if _, found := ctx.Instance(reader.ID); found {
+		t.Error("the reader was carried over with the source it read")
 	}
 }

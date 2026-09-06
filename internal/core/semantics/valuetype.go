@@ -198,6 +198,9 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 			// `x as T` results in T (KerML checkCastExpressionResultSpecialization).
 			return m.namedType(scope, n.TypeRef)
 		}
+		if unit := m.MeasurementRefExprType(scope, n); unit != nil {
+			return unit
+		}
 		return m.libSymbol(operatorResultFQN(n.Operator))
 	case *ast.IndexExpr:
 		if n.Bracket {
@@ -285,6 +288,19 @@ func (m *Model) featureResultType(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	return m.inheritedResultType(sym, map[*symbols.Symbol]bool{})
+}
+
+// MeasurementRefFeatureType is the measurement unit type of a feature, declared or
+// taken from its value (`attribute area = m * m;` is a DerivedUnit); nil for any other.
+func (m *Model) MeasurementRefFeatureType(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil || m.resolver == nil || sym == nil {
+		return nil
+	}
+	typ := m.featureResultType(sym)
+	if typ == nil || !m.IsMeasurementUnit(typ) {
+		return nil
+	}
+	return typ
 }
 
 func (m *Model) inheritedResultType(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) *symbols.Symbol {
@@ -586,6 +602,9 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		if e.Operator == ast.OpAdd && m.operandsConformTo(scope, e, m.libSymbol(fqnString)) {
 			return m.typeConformance(m.libSymbol(fqnString), want)
 		}
+		if c, ok := m.MeasurementRefExprConformance(scope, e, want); ok {
+			return c
+		}
 		if found, ok := m.nonArithmeticOperand(scope, e); ok {
 			return Conformance{Known: true, Found: fmt.Sprintf("`%s` over %s, which no arithmetic function takes", e.Operator, found)}
 		}
@@ -710,6 +729,126 @@ func (m *Model) QuantityConforms(unit UnitTerm, want *symbols.Symbol) Conformanc
 		return Conformance{Known: true, Holds: true, Found: found}
 	}
 	return Conformance{Known: true, Holds: got.Term.Commensurable(wantDim.Term), Found: found}
+}
+
+// MeasurementRefConforms judges a measurement reference against a declared type:
+// by the type it is declared with (typ, DerivedUnit for a composed unit), or
+// else by dimension when want is a unit definition fixing one, as `m*m` is an AreaUnit.
+// A scale (TimeScale) fixes a dimension too, but no unit is a scale.
+func (m *Model) MeasurementRefConforms(typ *symbols.Symbol, unit UnitTerm, want *symbols.Symbol) Conformance {
+	if m == nil || typ == nil || want == nil {
+		return conformanceUnknown()
+	}
+	c := m.typeConformance(typ, want)
+	if !c.Known || c.Holds {
+		return c
+	}
+	c.Found = "a measurement reference typed " + c.Found
+	if !m.IsMeasurementUnit(want) {
+		return c
+	}
+	wantDim, ok := m.dimensionOf(want)
+	if !ok {
+		return c
+	}
+	got, ok := m.dimensionOfUnitTerm(unit)
+	if !ok {
+		return c
+	}
+	c.Found = "a measurement reference of dimension " + Dimension{Term: got}.String()
+	c.Holds = got.Commensurable(wantDim)
+	return c
+}
+
+// MeasurementRefExprConformance judges a product, quotient or power of measurement
+// units (`m * s`), the DerivedUnit such a composition is; false for any other expression.
+func (m *Model) MeasurementRefExprConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol) (Conformance, bool) {
+	if want == nil {
+		return conformanceUnknown(), false
+	}
+	unit, term, ok := m.measurementRefExpr(scope, e)
+	if !ok {
+		return conformanceUnknown(), false
+	}
+	return m.MeasurementRefConforms(unit, term, want), true
+}
+
+// MeasurementRefExprType is the type of a product, quotient or power of measurement
+// units: DerivedUnit, a unit of powers of other units; nil for any other expression.
+// A power by a Real not known statically is one too, of a dimension the runtime finds.
+func (m *Model) MeasurementRefExprType(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.Symbol {
+	if unit, _, ok := m.measurementRefExpr(scope, e); ok {
+		return unit
+	}
+	if m.measurementRefPower(scope, e) {
+		return m.libSymbol(fqnDerivedUnit)
+	}
+	return nil
+}
+
+// measurementRefPower reports whether e raises a measurement unit to an exponent
+// that is a Real but folds to no number.
+func (m *Model) measurementRefPower(scope *symbols.Scope, e *ast.OperatorExpr) bool {
+	if m == nil || e == nil || e.Operator != ast.OpPow || len(e.Operands) != 2 {
+		return false
+	}
+	if _, ok := m.measurementRefOperand(scope, e.Operands[0]); !ok {
+		return false
+	}
+	return m.operandConformsTo(scope, e.Operands[1], m.libSymbol(fqnReal))
+}
+
+// measurementRefExpr reduces `*`, `/` or `**` over measurement units to the unit it
+// composes, with the DerivedUnit type; false when e is not such an expression.
+func (m *Model) measurementRefExpr(scope *symbols.Scope, e *ast.OperatorExpr) (*symbols.Symbol, UnitTerm, bool) {
+	if m == nil || e == nil {
+		return nil, UnitTerm{}, false
+	}
+	unit := m.libSymbol(fqnDerivedUnit)
+	if unit == nil {
+		return nil, UnitTerm{}, false
+	}
+	term, ok := m.measurementRefOperand(scope, e)
+	if !ok {
+		return nil, UnitTerm{}, false
+	}
+	return unit, term, true
+}
+
+// measurementRefOperand reduces a unit's name, `*`/`/` of two such, or `**` of one
+// by a number; a number itself (`1 * 1`) is none, though unit notation reads `1`.
+func (m *Model) measurementRefOperand(scope *symbols.Scope, node ast.Node) (UnitTerm, bool) {
+	switch n := node.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName:
+		term, err := m.UnitTermOfExpr(scope, n)
+		return term, err == nil
+	case *ast.OperatorExpr:
+		if len(n.Operands) != 2 {
+			return UnitTerm{}, false
+		}
+		base, ok := m.measurementRefOperand(scope, n.Operands[0])
+		if !ok {
+			return UnitTerm{}, false
+		}
+		switch n.Operator {
+		case ast.OpMul, ast.OpDiv:
+			other, ok := m.measurementRefOperand(scope, n.Operands[1])
+			if !ok {
+				return UnitTerm{}, false
+			}
+			if n.Operator == ast.OpMul {
+				return base.Times(other), true
+			}
+			return base.DividedBy(other), true
+		case ast.OpPow:
+			exp, ok := m.Eval(n.Operands[1])
+			if !ok || !exp.IsNumeric() {
+				return UnitTerm{}, false
+			}
+			return base.Pow(exp.AsReal()), true
+		}
+	}
+	return UnitTerm{}, false
 }
 
 // incommensurableSum finds, in quantity arithmetic, a sum or difference of

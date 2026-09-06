@@ -1,0 +1,5 @@
+# The Z3 release bundled by the optional "SMT solver (Z3)" MSI feature.
+# Sourced by scripts/build-msi.sh; see README.md ("Updating the Z3 pin").
+Z3_VERSION=5.1.0
+Z3_ZIP=z3-5.1.0-x64-win.zip
+Z3_SHA256=6ff368eaa2f9dc18acf244e736a074df877026bfc83abede6f327ebb95680535

@@ -735,10 +735,10 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	s := quantitySession(t)
 	wants(t, run(t, s, "%eval 1.0 [m/s]"), "= 1.0 [m/s]")
 	wants(t, run(t, s, "%eval 2.0 [km] + 500.0 [m]"), "= 2.5 [km]")
-	// The unit itself is a declaration the imports make visible: it resolves,
-	// and reports that it holds no value rather than that it is unknown.
-	wants(t, run(t, s, "%eval m"), "has no value to evaluate")
-	rejects(t, run(t, s, "%eval m"), "unresolved reference")
+	// The unit itself is a declaration the imports make visible: it resolves
+	// to the measurement reference it declares.
+	wants(t, run(t, s, "%eval m"), "= m")
+	rejects(t, run(t, s, "%eval m"), "unresolved reference", "has no value to evaluate")
 	// A name nothing declares still reports that it is unknown.
 	wants(t, run(t, s, "%eval nosuch"), `unresolved reference: nosuch`)
 

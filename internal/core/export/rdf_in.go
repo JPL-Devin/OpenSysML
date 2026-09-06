@@ -1232,7 +1232,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 		words = append(words, "variation")
 	}
 	if d.boolOf(el, rdf.SysML+"isConstant") {
-		words = append(words, "constant")
+		words = append(words, constantKeyword(d.kerml(el)))
 	}
 	if d.boolOf(el, rdf.SysML+"isEvent") {
 		words = append(words, "event")
@@ -1318,6 +1318,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if err := d.keywordTyped(el, keyword, portion, event); err != nil {
 		return "", err
 	}
+	kerml := d.kerml(el)
+	isPortion, err := d.portionPrefix(el, kerml, portion)
+	if err != nil {
+		return "", err
+	}
 	for _, flag := range []struct {
 		keyword string
 		set     bool
@@ -1326,10 +1331,12 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		// An enumerated value is a variant by what it is, not by a keyword
 		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
 		{"variant", d.boolOf(el, rdf.SysML+"isVariant") && !d.enumeratedValue(el)},
-		{"composite", d.boolOf(el, rdf.SysML+"isComposite") && !d.portionSubsumes(el, "isComposite")},
-		{"portion", d.boolOf(el, rdf.SysML+"isPortion")},
+		// `portion` is composite and stands in for `composite`
+		// (KerML.xtext BasicFeaturePrefix `isComposite ?= 'composite' | isPortion ?= 'portion'`).
+		{"portion", isPortion},
+		{"composite", d.boolOf(el, rdf.SysML+"isComposite") && !isPortion},
 		{"derived", d.boolOf(el, rdf.SysML+"isDerived")},
-		{"constant", d.boolOf(el, rdf.SysML+"isConstant")},
+		{constantKeyword(kerml), d.boolOf(el, rdf.SysML+"isConstant")},
 		{"individual", d.boolOf(el, rdf.SysML+"isIndividual")},
 		{"snapshot", portion == "snapshot"},
 		{"timeslice", portion == "timeslice"},
@@ -2019,6 +2026,49 @@ func (d *decoder) keywordTyped(el *element, keyword, portion string, event bool)
 	}
 }
 
+// kerml reports whether el is written under KerML's grammar: the one its root
+// records, or SysML for a root recording none, which is how candidateName reads it.
+func (d *decoder) kerml(el *element) bool {
+	root := el
+	for root.owner != nil {
+		root = root.owner
+	}
+	language, _ := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+	return language == "kerml"
+}
+
+// constantKeyword spells isConstant for the grammar: KerML.xtext FeaturePrefix
+// `isConstant ?= 'const'`, SysML.xtext RefPrefix `isConstant ?= 'constant'`.
+func constantKeyword(kerml bool) string {
+	if kerml {
+		return "const"
+	}
+	return "constant"
+}
+
+// portionPrefix reports whether isPortion is written as KerML's `portion`; SysML has no
+// such prefix, so there the flag is carried by a portion kind and refused without one.
+func (d *decoder) portionPrefix(el *element, kerml bool, portion string) (bool, error) {
+	if !d.boolOf(el, rdf.SysML+"isPortion") {
+		return false, nil
+	}
+	switch {
+	case kerml && !d.boolOf(el, rdf.SysML+"isComposite"):
+		return false, &UnsupportedError{
+			What: fmt.Sprintf("the portion <%s>", el.iri),
+			Note: "it has sysml:isPortion without sysml:isComposite, and a portion is composite (KerML Feature::isPortion), so `portion` would declare more than the graph states",
+		}
+	case kerml:
+		return true, nil
+	case portion != "":
+		return false, nil
+	}
+	return false, &UnsupportedError{
+		What: fmt.Sprintf("the portion <%s>", el.iri),
+		Note: "it has sysml:isPortion and no sysml:" + pPortionKind + ", and SysML declares a portion only as `snapshot` or `timeslice`, so no valid declaration can be written for it",
+	}
+}
+
 // portionKind reads the portion a usage is declared as, `snapshot` or
 // `timeslice`; any other value has no notation and is refused.
 func (d *decoder) portionKind(el *element) (string, error) {
@@ -2259,7 +2309,11 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 			Note: "it declares neither a name nor a multiplicity part, and one or the other introduces a cross feature ahead of its end",
 		}
 	}
-	words = append(d.crossFeaturePrefixWords(cross), words...)
+	prefix, err := d.crossFeaturePrefixWords(cross)
+	if err != nil {
+		return nil, err
+	}
+	words = append(prefix, words...)
 	typed, err := d.referenceList(cross, rdf.SysML+relationshipProperty[ast.RelTyping])
 	if err != nil {
 		return nil, err
@@ -2275,23 +2329,29 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 }
 
 // crossFeaturePrefixWords writes the prefix a cross feature owns ahead of its name
-// (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix, SysML.xtext BasicUsagePrefix).
-func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
+// (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix, SysML.xtext BasicUsagePrefix),
+// its flags spelled in the grammar of its root as a usage head's are.
+func (d *decoder) crossFeaturePrefixWords(cross *element) ([]string, error) {
+	kerml := d.kerml(cross)
+	isPortion, err := d.portionPrefix(cross, kerml, "")
+	if err != nil {
+		return nil, err
+	}
 	var words []string
 	if direction, ok := d.stringOf(cross, rdf.SysML+pDirection); ok {
 		words = append(words, direction)
 	}
 	for _, flag := range []struct {
-		property string
-		keyword  string
+		keyword string
+		set     bool
 	}{
-		{"isDerived", "derived"},
-		{"isAbstract", "abstract"},
-		{"isVariation", "variation"},
-		{"isComposite", "composite"},
-		{"isPortion", "portion"},
+		{"derived", d.boolOf(cross, rdf.SysML+"isDerived")},
+		{"abstract", d.boolOf(cross, rdf.SysML+"isAbstract")},
+		{"variation", d.boolOf(cross, rdf.SysML+"isVariation")},
+		{"portion", isPortion},
+		{"composite", d.boolOf(cross, rdf.SysML+"isComposite") && !isPortion},
 	} {
-		if d.boolOf(cross, rdf.SysML+flag.property) && !d.portionSubsumes(cross, flag.property) {
+		if flag.set {
 			words = append(words, flag.keyword)
 		}
 	}
@@ -2299,23 +2359,17 @@ func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
 		words = append(words, prefix)
 	}
 	for _, flag := range []struct {
-		property string
-		keyword  string
+		keyword string
+		set     bool
 	}{
-		{"isConstant", "constant"},
-		{"isReference", "ref"},
+		{constantKeyword(kerml), d.boolOf(cross, rdf.SysML+"isConstant")},
+		{"ref", d.boolOf(cross, rdf.SysML+"isReference")},
 	} {
-		if d.boolOf(cross, rdf.SysML+flag.property) {
+		if flag.set {
 			words = append(words, flag.keyword)
 		}
 	}
-	return words
-}
-
-// portionSubsumes reports whether `portion` stands in for the flag: a portion is
-// composite, and the notation spells that `portion` alone (KerML.xtext BasicFeaturePrefix).
-func (d *decoder) portionSubsumes(el *element, property string) bool {
-	return property == "isComposite" && d.boolOf(el, rdf.SysML+"isPortion")
+	return words, nil
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the

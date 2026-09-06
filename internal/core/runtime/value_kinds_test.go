@@ -48,6 +48,7 @@ func kindSamples() map[ValueKind][2]Value {
 			NewVectorQuantityValue([]semantics.Value{integerValue(1).Const, integerValue(2).Const}, []Unit{metre, metre}),
 			NewVectorQuantityValue([]semantics.Value{integerValue(1).Const, integerValue(2).Const}, []Unit{second, second}),
 		},
+		ValMeasurementRef: {NewMeasurementRefValue(metre), NewMeasurementRefValue(second)},
 	}
 }
 

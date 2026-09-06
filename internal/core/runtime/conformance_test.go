@@ -28,7 +28,8 @@ type ExpectedValue struct {
 	Value interface{} `json:"value"`
 	// Unit is the measurement unit a Quantity is expressed in, as written
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
-	// survived the computation rather than only the magnitude.
+	// survived the computation rather than only the magnitude. A MeasurementRef
+	// is that unit alone, with no value.
 	Unit string `json:"unit,omitempty"`
 	// Im is the imaginary part of a Complex, whose value is its real part.
 	Im *float64 `json:"im,omitempty"`
@@ -1242,6 +1243,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "EnumLiteral":
 		t.Fatalf("an enumeration literal is declared by the model, so it cannot be built from a case value")
+	case "MeasurementRef":
+		t.Fatalf("a measurement reference names a unit the model declares, so it cannot be built from a case value")
 	case "Complex":
 		v, ok := ev.Value.(float64)
 		if !ok || ev.Im == nil {
@@ -1410,6 +1413,14 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 			}
 		default:
 			t.Errorf("%s: magnitude kind = %v, want a number", name, got.Kind)
+		}
+	case "MeasurementRef":
+		if actual.Kind != ValMeasurementRef || actual.MeasurementRef() == nil {
+			t.Errorf("%s: type = %v, want MeasurementRef", name, actual.Kind)
+			return
+		}
+		if got := actual.MeasurementRef().Unit.String(); got != expected.Unit {
+			t.Errorf("%s: unit = %q, want %q", name, got, expected.Unit)
 		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)

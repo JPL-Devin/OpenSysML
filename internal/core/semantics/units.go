@@ -35,6 +35,7 @@ var (
 // Quantities and Units domain library).
 const (
 	fqnMeasurementUnit    = "MeasurementReferences::MeasurementUnit"
+	fqnDerivedUnit        = "MeasurementReferences::DerivedUnit"
 	fqnDimensionOneUnit   = "MeasurementReferences::DimensionOneUnit"
 	fqnAngularMeasureUnit = "ISQSpaceTime::AngularMeasureUnit"
 
@@ -289,6 +290,16 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 		return sym.Facts != nil && sym.Facts.Unit != nil
 	}
 	return m.Conforms(sym, unitDef)
+}
+
+// IsMeasurementScale reports whether sym is a feature typed by a measurement
+// scale (`Time::UTC`, `SI::'°C_abs'`): a scalar reference that is not a unit.
+func (m *Model) IsMeasurementScale(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	scale := m.libSymbol(fqnMeasurementScale)
+	return scale != nil && m.Conforms(sym, scale)
 }
 
 // MeasurementUnitOf is the measurement unit sym names: sym itself, or the unit

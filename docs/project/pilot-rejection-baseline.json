@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 263,
-        "digest": "sha256:a22197b6d0ed123412218ade43a632a563eb15096207270ac432bdc3ae4c750e"
+        "files": 265,
+        "digest": "sha256:27d5f7e16135c539d878b36819cf949e6a46e3dbb5bad7c1229f81fde03f2ae9"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 263,
-    "bothReject": 254,
+    "cases": 265,
+    "bothReject": 256,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -56,8 +56,8 @@
     },
     {
       "source": "grammar",
-      "cases": 89,
-      "bothReject": 89,
+      "cases": 91,
+      "bothReject": 91,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -787,6 +787,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "grammar/g70-name-before-usage-keyword.sysml",
+      "source": "grammar",
+      "rule": "a usage's name follows its kind keyword; a name written ahead of the keyword begins no body item (SysML.xtext:752 AttributeUsage, :598 UsageDeclaration, :516 DefinitionBodyItem).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -965,6 +974,15 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 3
+    },
+    {
+      "path": "grammar/k21-name-before-feature-keyword.kerml",
+      "source": "grammar",
+      "rule": "a feature's name follows its kind keyword; a name written ahead of the keyword begins no body element (KerML.xtext:538 Feature, :548 FeatureDeclaration, :364 TypeBody).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/cn01-fork-two-incoming.sysml",
@@ -1549,7 +1567,7 @@
       "pilotErrors": 3
     },
     {
-      "path": "semantic/k53-cross-feature-typed-narrower-than-end.kerml",
+      "path": "semantic/k54-cross-feature-typed-narrower-than-end.kerml",
       "source": "semantic",
       "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
       "mode": "default",
@@ -2520,8 +2538,8 @@
       }
     ],
     "totals": {
-      "cases": 263,
-      "bothReject": 254,
+      "cases": 265,
+      "bothReject": 256,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

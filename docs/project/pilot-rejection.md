@@ -45,10 +45,10 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (89 cases: 20 original, 45 added along the *unreached* axis
+1. **`grammar/` — grammar mutation** (91 cases: 20 original, 45 added along the *unreached* axis
    described below, 13 from a second sweep, 7 body-position cases
-   `g61`–`g67` from the constraint census described under `semantic/`, and the two second-result-expression
-   bodies `g69`/`k20`). For productions our corpus exercises in the
+   `g61`–`g67` from the constraint census described under `semantic/`, the two second-result-expression
+   bodies `g69`/`k20`, and the two name-before-keyword members `g70`/`k21`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -111,7 +111,7 @@ systematically from four sources, one subdirectory each:
    pilot's grammar rejects before its validator would), and a constructed payload whose `new`
    names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 239
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 265
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -159,14 +159,14 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-263 case(s): 254 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+265 case(s): 256 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 89 | 89 | 0 | 0 | 0 |
+| grammar | 91 | 91 | 0 | 0 | 0 |
 | semantic | 131 | 122 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
@@ -192,8 +192,18 @@ an annotating element annotating itself, a three-ended binding, a conjugated fea
 without its type or default supertype, a chain through an alias to another type's feature, and
 an `end` with a direction or a derived/abstract modifier), all landing both-reject, and to 256 with the end-feature rules (`k50`, an end that declares its
 cross feature inline and also `crosses` another; `k51`, a `return` parameter owned by a classifier;
-`k52`, a type with two conjugators), and to 257 with `k53` (a Boolean expression, a feature like any
-other, subsetting a data type).
+`k52`, a type with two conjugators), to 257 with `k53` (a Boolean expression, a feature like any
+other, subsetting a data type), and to 259 with `g70`/`k21` (a name written ahead of a usage or
+feature keyword, `foo attribute bar : A;`: no production puts a name before its kind keyword, so the
+pilot stops at the keyword, `no viable alternative at input 'attribute'`, while we report the stray
+name as `expected a body member` — a shape the parser once accepted silently as a member named
+`foo`, dropping `bar`), and to 263 with the inherited case-role cases (`s89`/`s90`, a case or
+requirement definition specializing two generals that each declare an objective or subject;
+`s91`/`s92`, one that references a second objective or subject through a referenced usage — all
+four both-reject, the pilot's `Only one objective/subject is allowed` counting inherited roles),
+and to 265 with `k54`/`s88` (a cross feature declared ahead of its end's kind keyword and typed
+by a subtype of the end's type: `validateFeatureCrossFeatureType` asks for the same type, so both
+reject).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
@@ -236,7 +246,7 @@ when it was first written, six were closed by the validation work itself — `p0
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 239 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 265 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 

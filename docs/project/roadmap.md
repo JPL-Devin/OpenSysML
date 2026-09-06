@@ -214,6 +214,16 @@ setup, the `SIGNPATH_*` secret and variables in GitHub, and one manual approval 
 until then the workflow builds and stops. Procedure: `docs/project/releasing.md`, "Windows
 Authenticode signing".
 
+Windows packaging is in place on the same workflow: a WiX v5 MSI (`packaging/msi`,
+`scripts/build-msi.sh`) installing the three executables to `Program Files\OpenSysML` on `PATH`,
+with the Z3 solver as an optional feature pinned by hash, published unsigned as
+`opensysml-<x.y.z>-windows-amd64.msi` and, once SignPath is configured, rebuilt from the signed
+executables and itself signed as `*-signed.msi` (Z3 stays unsigned by SignPath's terms). Scoop,
+winget and MSYS2 manifests that depend on Z3 rather than bundle it are maintained as templates
+under `packaging/` with render scripts; what remains there is a maintainer submitting each to
+its external repository (and, for winget, confirming the `OpenMBEE.OpenSysML` identifier and a
+Z3 package to depend on). Procedure: `docs/project/releasing.md`, "The Windows installer".
+
 ## R5 — the VS Code extension is not released
 
 `editors/vscode` builds only as a PR CI artifact: no `.vsix` is attached to a release and there

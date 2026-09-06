@@ -271,6 +271,12 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 			elements[i] = runtime.Value{Kind: runtime.ValConst, Const: c}
 		}
 		return queryValueList(elements)
+	case runtime.ValMeasurementRef:
+		// A reference to one declared unit is that element; a composed unit names none.
+		if decl := value.MeasurementRef().Declaration(); decl != nil {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the measurement reference %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}
