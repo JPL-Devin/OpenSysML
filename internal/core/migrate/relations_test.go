@@ -473,3 +473,93 @@ func TestConnectionEndYieldsItsNameToAMember(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestExternalSpecializationsAreNotWritten covers a property redefining or
+// subsetting a feature of another document: the clause is omitted with a note
+// rather than written as a reference nothing declares.
+func TestExternalSpecializationsAreNotWritten(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_h" name="H">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p1" name="a">
+        <redefinedProperty href="other.xmi#_ext_a"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p2" name="b">
+        <subsettedProperty href="other.xmi#_ext_b"/>
+      </ownedAttribute>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_h"/>`)
+	wantLine(t, r.Notation, "ref a;")
+	wantLine(t, r.Notation, "ref b;")
+	if strings.Contains(string(r.Notation), ":>>") || strings.Contains(string(r.Notation), ":> ") {
+		t.Errorf("notation specializes an external feature:\n%s", r.Notation)
+	}
+	for id, want := range map[string]string{
+		"_p1": "redefinedProperty (other.xmi#_ext_a) is not written",
+		"_p2": "subsettedProperty (other.xmi#_ext_b) is not written",
+	} {
+		es := entriesFor(r, id)
+		if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, want) {
+			t.Errorf("entries for %s = %+v, want one approximation noting %q", id, es, want)
+		}
+	}
+	for _, d := range errors(t, "external.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
+
+// TestBrokenNestedPathFailsTheConnector covers a NestedConnectorEnd whose
+// property path names an element the document lacks, first, in the middle or
+// last: the connector and the item flow it realizes are unmapped, never a
+// shortened path to some other feature.
+func TestBrokenNestedPathFailsTheConnector(t *testing.T) {
+	for _, tc := range []struct{ name, path string }{
+		{"first", `<propertyPath xmi:idref="_missing"/><propertyPath xmi:idref="_p_car"/><propertyPath xmi:idref="_p_engine"/>`},
+		{"middle", `<propertyPath xmi:idref="_p_car"/><propertyPath xmi:idref="_missing"/><propertyPath xmi:idref="_p_engine"/>`},
+		{"last", `<propertyPath xmi:idref="_p_car"/><propertyPath xmi:idref="_p_engine"/><propertyPath xmi:idref="_missing"/>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_fuel" name="Fuel"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_piston" name="Piston">
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_in" name="in" type="_fuel"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_engine" name="Engine">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p_piston" name="piston" type="_piston" aggregation="composite"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_car" name="Car">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p_engine" name="engine" type="_engine" aggregation="composite"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_fleet" name="Fleet">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p_car" name="car" type="_car" aggregation="composite"/>
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_out" name="out" type="_fuel"/>
+      <ownedConnector xmi:type="uml:Connector" xmi:id="_conn" name="feed">
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e1" role="_pt_out"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e2" role="_pt_in"/>
+      </ownedConnector>
+      <packagedElement xmi:type="uml:InformationFlow" xmi:id="_if" informationSource="_pt_out" informationTarget="_pt_in" conveyed="_fuel" realizingConnector="_conn"/>
+    </packagedElement>`, `
+  <sysml:InterfaceBlock xmi:id="_s1" base_Class="_fuel"/>
+  <sysml:Block xmi:id="_s2" base_Class="_piston"/>
+  <sysml:Block xmi:id="_s3" base_Class="_engine"/>
+  <sysml:Block xmi:id="_s4" base_Class="_car"/>
+  <sysml:Block xmi:id="_s5" base_Class="_fleet"/>
+  <sysml:NestedConnectorEnd xmi:id="_nce" base_ConnectorEnd="_e2">`+tc.path+`</sysml:NestedConnectorEnd>
+  <sysml:ItemFlow xmi:id="_st_if" base_InformationFlow="_if"/>`)
+			if strings.Contains(string(r.Notation), "connect ") || strings.Contains(string(r.Notation), "flow ") {
+				t.Errorf("notation writes the connector over a broken path:\n%s", r.Notation)
+			}
+			for id, want := range map[string]string{
+				"_conn": "property path names _missing, which is not in the document",
+				"_if":   "its realizing connector is not migrated",
+			} {
+				es := entriesFor(r, id)
+				if len(es) != 1 || es[0].Verdict != migrate.Unmapped || !strings.Contains(es[0].Note, want) {
+					t.Errorf("entries for %s = %+v, want one unmapped entry noting %q", id, es, want)
+				}
+			}
+			for _, d := range errors(t, "nested.sysml", r.Notation) {
+				t.Errorf("%v", d)
+			}
+		})
+	}
+}

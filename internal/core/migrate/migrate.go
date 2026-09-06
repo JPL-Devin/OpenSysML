@@ -781,11 +781,18 @@ func (m *migration) feature(p *xmi.Element) {
 	mult, mnote := m.multiplicity(p)
 	b.WriteString(mult)
 	note = joinNotes(note, mnote)
-	for _, r := range m.model.Refs(p, "redefinedProperty") {
-		b.WriteString(" :>> " + m.featureRef(r))
-	}
-	for _, r := range m.model.Refs(p, "subsettedProperty") {
-		b.WriteString(" :> " + m.featureRef(r))
+	for _, role := range []string{"redefinedProperty", "subsettedProperty"} {
+		op := " :>> "
+		if role == "subsettedProperty" {
+			op = " :> "
+		}
+		for _, r := range m.model.Refs(p, role) {
+			if !m.written(r) {
+				note = joinNotes(note, role+" "+describe(r)+" is not written: it has no v2 declaration in the document")
+				continue
+			}
+			b.WriteString(op + m.featureRef(r))
+		}
 	}
 	note = joinNotes(note, m.dangling(p, "redefinedProperty", "subsettedProperty"))
 
@@ -977,6 +984,9 @@ func (m *migration) connector(c *xmi.Element) {
 		path, note := m.endPath(end)
 		if path == "" {
 			m.unmapped(c, note)
+			for _, f := range m.flows[c] {
+				m.unmapped(f, "its realizing connector is not migrated")
+			}
 			return
 		}
 		paths[i] = path
@@ -1012,9 +1022,11 @@ func (m *migration) endPath(end *xmi.Element) (string, string) {
 	var segs []*xmi.Element
 	if nce := end.Stereotype("NestedConnectorEnd"); nce != nil {
 		for _, id := range nce.Tags["propertyPath"] {
-			if p := m.model.Lookup(id); p != nil {
-				segs = append(segs, p)
+			p := m.model.Lookup(id)
+			if p == nil {
+				return "", "the nested connector end's property path names " + id + ", which is not in the document"
 			}
+			segs = append(segs, p)
 		}
 	} else if pwp := m.model.Ref(end, "partWithPort"); pwp != nil {
 		segs = append(segs, pwp)
