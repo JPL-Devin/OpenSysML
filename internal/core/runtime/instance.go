@@ -966,7 +966,7 @@ func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
 }
 
 // bindsAFeature reports whether a declaration's body binds a value to a feature, directly
-// or under a nested member that exists whenever it does (not under an optional one).
+// or under a nested member that exists whenever it does (not an optional or abstract one).
 func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
 	if sym == nil || sym.Scope == nil {
 		return false
@@ -979,7 +979,7 @@ func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
 		if usage.Value != nil {
 			return true
 		}
-		if !ctx.optionalValueless(member) && ctx.bindsAFeature(member) {
+		if !symbols.IsAbstract(member) && !ctx.optionalValueless(member) && ctx.bindsAFeature(member) {
 			return true
 		}
 	}

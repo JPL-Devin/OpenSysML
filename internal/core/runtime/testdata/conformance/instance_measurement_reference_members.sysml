@@ -10,7 +10,8 @@
 // library's `default false`. A reference read from a quantity's mRef names its
 // declaration too, so a conversion can follow the declared reference unit. An
 // optional record whose body binds a feature only at depth (`:>> conv { :>>
-// prefix { :>> conversionFactor = 1000.0; } }`) is one object, not none.
+// prefix { :>> conversionFactor = 1000.0; } }`) is one object, not none; one whose only
+// binding sits under an abstract member stays none, as the abstract member holds nothing.
 package test {
 	public import ISQ::*;
 	public import SI::*;
@@ -25,6 +26,7 @@ package test {
 
 	attribute def Box { attribute conv : ConversionByPrefix[0..1]; }
 	attribute deep : Box { :>> conv { :>> prefix { :>> conversionFactor = 1000.0; } } }
+	attribute hollow : Box { :>> conv { abstract attribute extra : UnitPrefix { :>> conversionFactor = 1000.0; } } }
 
 	part def Survey {
 		attribute side : LengthValue = 3 [km];
@@ -46,5 +48,6 @@ package test {
 		attribute stressBound : Boolean = stressRef.isBound;
 		attribute deepPrefixFactor : Real = deep.conv.prefix.conversionFactor;
 		attribute deepFactor : Real = deep.conv.conversionFactor;
+		attribute hollowConv : ConversionByPrefix[0..1] = hollow.conv;
 	}
 }

@@ -130,6 +130,7 @@ func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
 		attribute def Box { attribute conv : ConversionByPrefix[0..1]; }
 		attribute deep : Box { :>> conv { :>> prefix { :>> conversionFactor = 1000.0; } } }
 		attribute bare : Box;
+		attribute hollow : Box { :>> conv { abstract attribute extra : UnitPrefix { :>> conversionFactor = 1000.0; } } }
 	}`)
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
@@ -143,6 +144,7 @@ func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
 	wants(t, run(t, s, "%eval Lab::deep.conv.prefix.conversionFactor"), "= 1000.0")
 	wants(t, run(t, s, "%eval Lab::deep.conv.conversionFactor"), "= 1000.0")
 	wants(t, run(t, s, "%eval Lab::bare.conv"), "= []")
+	wants(t, run(t, s, "%eval Lab::hollow.conv"), "= []")
 	wants(t, run(t, s, "%eval Lab::stressRef.isBound"), "= false")
 	run(t, s, "%instantiate Lab::stressRef")
 	wantsInOrder(t, run(t, s, "%features Lab::stressRef"), "mRefs = [Pa, Pa]", "dimensions = [2]", "isBound = false")
