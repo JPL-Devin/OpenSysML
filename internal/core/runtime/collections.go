@@ -126,6 +126,33 @@ func (ctx *Context) newSequence(elements []Value) (Value, error) {
 	return sequenceOf(elements), nil
 }
 
+// sequenceFrom is the sequence of kept drawn from sources: empty, it keeps the
+// unit the sources' elements measure in, so an aggregate of it keeps their kind.
+func (ec *EvalContext) sequenceFrom(kept []Value, sources ...Value) (Value, error) {
+	if len(kept) == 0 {
+		if unit, ok := elementUnitOf(sources...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
+	}
+	return ec.newSequence(kept)
+}
+
+// elementUnitOf is the unit the first source with one measures its elements in:
+// the unit an empty sequence declares, or that of a quantity it holds.
+func elementUnitOf(sources ...Value) (Unit, bool) {
+	for _, source := range sources {
+		if unit, ok := source.Sequence().ElementUnit(); ok {
+			return unit, true
+		}
+		for _, elem := range elementsOf(source) {
+			if q := elem.Quantity(); q != nil {
+				return q.Unit, true
+			}
+		}
+	}
+	return Unit{}, false
+}
+
 // integerValue wraps a count as an Integer value, which is what the library's
 // Natural-returning functions (size) and Positive parameters (index) carry.
 func integerValue(n int64) Value {
@@ -559,7 +586,7 @@ func (ec *EvalContext) concatSequences(first, second Value) (Value, error) {
 	joined := make([]Value, 0, len(seq1)+len(seq2))
 	joined = append(joined, seq1...)
 	joined = append(joined, seq2...)
-	return ec.newSequence(joined)
+	return ec.sequenceFrom(joined, first, second)
 }
 
 // builtinSequenceIntersection is SequenceFunctions::intersection, the elements
@@ -576,7 +603,7 @@ func builtinSequenceIntersection(ec *EvalContext, args []Value) (Value, error) {
 			common = append(common, elem)
 		}
 	}
-	return ec.newSequence(common)
+	return ec.sequenceFrom(common, args[0])
 }
 
 // builtinSequenceIncluding is SequenceFunctions::including, the sequence with
@@ -602,7 +629,7 @@ func builtinSequenceExcluding(ec *EvalContext, args []Value) (Value, error) {
 			kept = append(kept, elem)
 		}
 	}
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
 }
 
 // builtinSequenceIncludingAt inserts values before the 1-based index, shifting
@@ -661,13 +688,13 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 			ErrIndexOutOfRange, start, len(elements))
 	}
 	if start > end {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
 	if end > int64(len(elements)) {
 		return Value{}, fmt.Errorf("%w: SequenceFunctions::subsequence end index %d is outside 1..%d",
 			ErrIndexOutOfRange, end, len(elements))
 	}
-	return ec.newSequence(elements[start-1 : end])
+	return ec.sequenceFrom(elements[start-1:end], args[0])
 }
 
 // builtinSequenceExcludingAt is SequenceFunctions::excludingAt, the sequence
@@ -702,7 +729,7 @@ func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 	kept := make([]Value, 0, len(elements)-int(end-start+1))
 	kept = append(kept, elements[:start-1]...)
 	kept = append(kept, elements[end:]...)
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
 }
 
 // builtinSequenceHead is SequenceFunctions::head, `seq#(1)`: the first element,
@@ -722,9 +749,9 @@ func builtinSequenceTail(ec *EvalContext, args []Value) (Value, error) {
 	}
 	elements := elementsOf(args[0])
 	if len(elements) == 0 {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
-	return ec.newSequence(elements[1:])
+	return ec.sequenceFrom(elements[1:], args[0])
 }
 
 // builtinSequenceLast is SequenceFunctions::last, `seq#(size(seq))`.
@@ -779,8 +806,9 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 	if err != nil {
 		return Value{}, err
 	}
+	// A filter keeps the elements' type (KerML checkSelectExpressionResultSpecialization).
 	if !applied {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
 	var kept []Value
 	for _, elem := range elements {
@@ -792,7 +820,24 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 			kept = append(kept, elem)
 		}
 	}
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
+}
+
+// emptyMapping is the result of mapping no element through body: empty, and
+// typed by the dimension the body's result declares where its parameters fix one.
+func (ec *EvalContext) emptyMapping(val Value) Value {
+	body, ok := val.Expr().(*ast.BodyExpr)
+	if !ok || body.Result == nil {
+		return sequenceOf(nil)
+	}
+	env := val.exprEnv(ec)
+	if env.scope == nil {
+		return sequenceOf(nil)
+	}
+	if typed, ok := ec.ctx.emptyOfDeclared(symbols.BodyExprScope(env.scope, body), body.Result); ok {
+		return typed
+	}
+	return sequenceOf(nil)
 }
 
 // builtinControlSelectOne is ControlFunctions::selectOne, the first element the
@@ -821,10 +866,10 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	// The mapper returns `Anything[0..*]`, so a mapper answering several values
 	// contributes them all: the collected sequence is flat, as every KerML
 	// sequence is.
-	if !applied {
-		return sequenceOf(nil), nil
+	if !applied || len(elements) == 0 {
+		return ec.emptyMapping(args[1]), nil
 	}
-	var mapped []Value
+	var mapped, answers []Value
 	for _, elem := range elements {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
@@ -837,6 +882,13 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 			return Value{}, err
 		}
 		mapped = append(mapped, contributed...)
+		answers = append(answers, val)
+	}
+	if len(mapped) == 0 {
+		if unit, ok := elementUnitOf(answers...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
+		return ec.emptyMapping(args[1]), nil
 	}
 	return sequenceOf(mapped), nil
 }
@@ -1013,12 +1065,18 @@ func builtinRealProduct(ec *EvalContext, args []Value) (Value, error) {
 
 // aggregate folds the collection's numeric elements with op, starting from its
 // identity element: 0 for a sum, 1 for a product, a Real where real says so.
-// A non-numeric element is reported rather than skipped or coerced.
+// A non-numeric element is reported rather than skipped or coerced. The sum of
+// no elements read from a quantity-typed declaration is that quantity's zero.
 func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (Value, error) {
 	if err := checkArity(op, args, 1); err != nil {
 		return Value{}, err
 	}
 	elements := elementsOf(args[0])
+	if operator == ast.OpAdd && len(elements) == 0 {
+		if unit, ok := args[0].Sequence().ElementUnit(); ok {
+			return typedZero(unit, real), nil
+		}
+	}
 	// A quantity carries its unit through an aggregation as through the folded
 	// operator, so a collection of measured values aggregates to one.
 	for _, elem := range elements {
@@ -1049,6 +1107,16 @@ func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (V
 		acc = next
 	}
 	return Value{Kind: ValConst, Const: acc}, nil
+}
+
+// typedZero is the additive identity of the quantities measured in unit: an
+// Integer 0 in that unit, or a Real one where real says so.
+func typedZero(unit Unit, real bool) Value {
+	num := semantics.Value{Kind: semantics.ValInt, Int: 0}
+	if real {
+		num = semantics.Value{Kind: semantics.ValReal, Real: 0}
+	}
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit})
 }
 
 // aggregateQuantities folds a collection holding a quantity in the unit of its

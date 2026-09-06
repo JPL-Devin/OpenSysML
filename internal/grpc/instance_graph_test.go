@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -382,6 +383,72 @@ package Demo {
 		}
 		if got.String() != first {
 			t.Fatalf("run %d serialized %s, run 0 serialized %s", run, got.String(), first)
+		}
+	}
+}
+
+// TestInstantiate_RollsUpMassesOverDefaultedSubsettedParts verifies the wire
+// carries `mass + sum(subcomponents.totalMass)` as a quantity with its unit: a
+// leaf sums its empty subcomponents to a zero mass, and a stack's `default null`
+// subcomponents are the parts subsetting them.
+func TestInstantiate_RollsUpMassesOverDefaultedSubsettedParts(t *testing.T) {
+	content := `
+package Demo {
+  private import SI::*;
+  private import ISQ::*;
+  private import NumericalFunctions::*;
+  part def MassedComponent {
+    part subcomponents : MassedComponent [*] default null;
+    attribute mass :> ISQ::mass;
+    attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
+  }
+  part def Leaf :> MassedComponent {
+    attribute :>> mass = 100 [kg];
+  }
+  part def Stack :> MassedComponent {
+    attribute :>> mass = 10 [kg];
+    part a : Leaf :> subcomponents;
+    part b : Leaf subsets subcomponents;
+  }
+}
+`
+	resp := instantiate(t, content, "graph-rollup", "Demo::Stack")
+
+	total := resp.Instance.FeatureValues["totalMass"]
+	if total == nil || total.Error != "" {
+		t.Fatalf("totalMass = %v, want a value", total)
+	}
+	quantity := total.Value.GetQuantity()
+	if quantity == nil || quantity.GetIntMagnitude() != 210 || quantity.GetUnit() != "kg" {
+		t.Fatalf("totalMass = %v, want 210 [kg]", total.Value)
+	}
+
+	sub := resp.Instance.FeatureValues["subcomponents"]
+	if sub == nil || sub.Error != "" {
+		t.Fatalf("subcomponents = %v, want two instances", sub)
+	}
+	graph := byID(resp)
+	var members []int64
+	for _, v := range sub.Values {
+		members = append(members, v.GetInstanceId())
+	}
+	if len(members) != 2 {
+		t.Fatalf("subcomponents = %v, want two instances", sub)
+	}
+	for _, id := range members {
+		member, ok := graph[id]
+		if !ok {
+			t.Fatalf("subcomponent %d not present in Instances", id)
+		}
+		leafTotal := member.FeatureValues["totalMass"].GetValue().GetQuantity()
+		if leafTotal == nil || leafTotal.GetIntMagnitude() != 100 || leafTotal.GetUnit() != "kg" {
+			t.Errorf("subcomponent %d totalMass = %v, want 100 [kg]", id, member.FeatureValues["totalMass"])
+		}
+	}
+	for _, name := range []string{"a", "b"} {
+		fv := resp.Instance.FeatureValues[name]
+		if fv == nil || !slices.Contains(members, fv.Value.GetInstanceId()) {
+			t.Errorf("%s = %v, want one of the subcomponents %v", name, fv, members)
 		}
 	}
 }

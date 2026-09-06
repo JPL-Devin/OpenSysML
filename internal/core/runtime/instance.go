@@ -206,13 +206,45 @@ func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *Fea
 func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature) {
 	*fv = FeatureValue{Feature: feat}
 	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
-		ctx.restatedInValuedBody(feat) == "" {
+		ctx.restatedInValuedBody(feat) == "" && !ctx.defaultYieldsToSubsetters(inst, feat) {
 		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 			val := Value{Kind: ValConst, Const: semVal}
 			if ctx.checkDefault(inst, fv, feat.Name, val, admitDeclared) == nil {
 				fv.Value = val
 				fv.Materialized = true
 			}
+		}
+	}
+}
+
+// defaultYieldsToSubsetters reports whether feat's `default` may be superseded by a
+// feature of one of inst's types subsetting it, so it must wait to be read rather than be folded.
+func (ctx *Context) defaultYieldsToSubsetters(inst *Instance, feat *EffectiveFeature) bool {
+	if !feat.DefaultIsFallback() {
+		return false
+	}
+	for _, typ := range inst.types() {
+		if len(ctx.SubsettingFeatures(nil, typ, feat.Name)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// unfoldSubsettedDefaults reopens the folded fallback defaults of inst that the
+// features of classifier typ subset, so the next read takes their contributions.
+func (ctx *Context) unfoldSubsettedDefaults(inst *Instance, typ *symbols.Symbol, features []EffectiveFeature) {
+	for i := range features {
+		if features[i].Symbol == nil {
+			continue
+		}
+		for _, name := range ctx.subsettedNames(features[i].Symbol, typ) {
+			fv, ok := inst.FeatureValues[name]
+			if !ok || !fv.Materialized || fv.Written || !ctx.valueBinds(fv.Feature) || !fv.Feature.DefaultIsFallback() {
+				continue
+			}
+			ctx.noteProbeWrite(fv)
+			fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
 		}
 	}
 }
@@ -533,6 +565,18 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
 	}
 
+	// A `default` applies only where nothing else populates the feature: the
+	// members subsetting it do (KerML 1.0 §7.3.4.5).
+	if ctx.valueBinds(fv.Feature) && fv.Feature.DefaultIsFallback() {
+		contributed, err := ctx.subsettingContributions(inst, name)
+		if err != nil {
+			return nil, err
+		}
+		if len(contributed) > 0 {
+			return inst.holdContributed(ctx, fv, name, contributed)
+		}
+	}
+
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling feature values it refers to.
 	// The feature holds what the default states, once that conforms to the
@@ -686,15 +730,26 @@ func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name str
 	if err != nil {
 		return nil, err
 	}
-	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
-		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
+	return inst.holdContributed(ctx, fv, name, contributed)
+}
+
+// holdContributed makes fv hold the values the features subsetting it contribute,
+// once they conform to its multiplicity and type and are classified as its values.
+func (inst *Instance) holdContributed(ctx *Context, fv *FeatureValue, name string, contributed []Value) (*FeatureValue, error) {
+	val := sequenceOf(contributed)
+	if err := ctx.checkDefault(inst, fv, name, val, admitDeclared); err != nil {
+		return nil, err
+	}
+	val, err := ctx.admitted(fv.Feature, val, admitDeclared)
+	if err != nil {
+		return nil, fmt.Errorf("feature value %s.%s: %w", inst.Type.Name, name, err)
 	}
 	if fv.Feature.Scalar() {
 		if len(contributed) == 1 {
-			fv.Value = contributed[0]
+			fv.Value = val
 		}
 	} else {
-		fv.Values = sequenceOf(contributed)
+		fv.Values = val
 	}
 	fv.Materialized = true
 	return fv, nil
