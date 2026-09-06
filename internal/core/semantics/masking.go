@@ -270,15 +270,21 @@ func (m *Model) redefinitionMaskExcluding(sym, exclude *symbols.Symbol) map[*sym
 // elements sym does not inherit.
 func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map[*symbols.Symbol]bool {
 	mask := make(map[*symbols.Symbol]bool)
+	visited := make(map[*symbols.Symbol]bool)
 	pending := candidates
 	for i := 0; i < len(pending); i++ {
 		redefining := pending[i]
 		for _, target := range m.RedefinedFeatures(redefining) {
-			if target == sym || mask[target] {
+			if target == sym {
 				continue
 			}
-			mask[target] = true
-			pending = append(pending, target) // a redefined feature's own targets are masked too
+			if !redefinesSibling(redefining, target) {
+				mask[target] = true
+			}
+			if !visited[target] {
+				visited[target] = true
+				pending = append(pending, target) // a redefined feature's own targets are masked too
+			}
 		}
 	}
 	// A local declaration is present whatever it redefines.
@@ -312,7 +318,9 @@ func (m *Model) buildMaskFromCandidates(
 			return false
 		}
 		for target := range closure {
-			mask[target] = true
+			if !redefinesSibling(candidate, target) {
+				mask[target] = true
+			}
 		}
 		return true
 	})
@@ -334,6 +342,12 @@ func (m *Model) buildMaskFromCandidates(
 		return nil
 	}
 	return mask
+}
+
+// redefinesSibling reports whether target is declared beside redefining: a type
+// never inherits its own members, so redefining one of them removes nothing.
+func redefinesSibling(redefining, target *symbols.Symbol) bool {
+	return target.OwnerScope != nil && target.OwnerScope == redefining.OwnerScope
 }
 
 // redefinitionClosure returns the targets reached from candidate, transitively.
