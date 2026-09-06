@@ -599,7 +599,8 @@ func (a *adoption) planValue(owner string, val Value) error {
 	return err
 }
 
-// unitsOf is the measurement units a quantity or reference value names.
+// unitsOf is the measurement units a quantity, reference or empty quantity
+// sequence names.
 func unitsOf(v Value) []Unit {
 	switch v.Kind {
 	case ValQuantity:
@@ -608,6 +609,10 @@ func unitsOf(v Value) []Unit {
 		return []Unit{v.MeasurementRef().Unit}
 	case ValVectorQuantity:
 		return v.VectorQuantity().Units
+	case ValSequence:
+		if unit, ok := v.Sequence().ElementUnit(); ok {
+			return []Unit{unit}
+		}
 	}
 	return nil
 }
@@ -942,7 +947,7 @@ func (a *adoption) rewrite(val Value) Value {
 			return val
 		}
 		if unit, ok := val.Sequence().ElementUnit(); ok {
-			return NewEmptySequenceOf(unit)
+			return NewEmptySequenceOf(a.rewriteUnit(unit))
 		}
 		seq := NewSequence()
 		for _, elem := range val.Sequence().Elements() {

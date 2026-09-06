@@ -861,7 +861,9 @@ the flat sequence of its elements:
   declares, or reduces differently — `furlong` re-declared as `220 m` — refuses
   adoption naming the unit and both reductions, since a magnitude written under
   the old factor would read as another quantity under the new;
-  `TestAdoptRefusesAUnitWhoseReductionChanged`); the solver refuses to pin one
+  `TestAdoptRefusesAUnitWhoseReductionChanged`; the unit an empty quantity
+  collection remembers for the zero its sum yields is judged the same way,
+  `TestAdoptRebindsTheUnitOfAnEmptyQuantitySequence`); the solver refuses to pin one
   (`ErrNotPinnable`), a document query binds a single unit but not an operator
   over units, and over gRPC it crosses as an unsupported null naming the value
   (`unsupported: measurement reference m`; `TestMeasurementRefCrossesAsUnsupported`):

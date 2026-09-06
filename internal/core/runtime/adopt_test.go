@@ -1293,6 +1293,64 @@ func TestAdoptRebindsAModelsOwnBaseUnit(t *testing.T) {
 	}
 }
 
+// An empty quantity collection remembers the unit its elements would measure in
+// (the zero its sum yields), so that unit is rebound and judged like a value's:
+// carried over with the same declaration, refused when it is gone or redefined.
+func TestAdoptRebindsTheUnitOfAnEmptyQuantitySequence(t *testing.T) {
+	src := strings.Replace(adoptUnitSrc,
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
+		"part def Field { attribute widths : LengthValue[*]; }", 1)
+	prev := libraryContextOver(t, src)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	furlong, err := evalIn(t, prev, scope, "furlong")
+	if err != nil {
+		t.Fatalf("furlong: %v", err)
+	}
+	if err := field.SetFeatureValue(prev, "widths", NewEmptySequenceOf(furlong.MeasurementRef().Unit)); err != nil {
+		t.Fatalf("write widths: %v", err)
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt into a re-analysis with the same furlong: %v", err)
+	}
+	widths, err := field.GetFeatureValue(ctx, "widths")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(widths): %v", err)
+	}
+	unit, ok := widths.Values.Sequence().ElementUnit()
+	if !ok {
+		t.Fatalf("widths after the carry-over = %s, want an empty sequence measured in furlong", FormatValue(widths.Values))
+	}
+	if decl, want := unit.Product.Powers[0].Unit, lookupOne(t, ctx.resolver.Index(), "Demo::furlong"); decl != want {
+		t.Errorf("widths is measured in %p, want the furlong declared by the re-analysis %p", decl, want)
+	}
+	if got, want := unit.Term.Factors[0].Unit, lookupOne(t, ctx.resolver.Index(), "SI::m"); got != want {
+		t.Errorf("widths reduces over %p, want the metre the re-analysis resolves %p", got, want)
+	}
+
+	for name, tc := range map[string]struct{ src, reason string }{
+		"gone": {strings.Replace(src, "attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }", "", 1),
+			"the unit furlong it is measured in is no longer declared"},
+		"redefined": {strings.Replace(src, "conversionFactor = 201.168", "conversionFactor = 220", 1),
+			"the unit furlong it is measured in now reduces to 220·metre, not 201.168·metre"},
+	} {
+		var adoptErr *AdoptError
+		_, err := libraryContextOver(t, tc.src).Adopt(prev, shapes, field)
+		if !errors.As(err, &adoptErr) {
+			t.Fatalf("Adopt into a re-analysis with furlong %s: %v, want an AdoptError", name, err)
+		}
+		if !strings.Contains(err.Error(), tc.reason) {
+			t.Errorf("Adopt into a re-analysis with furlong %s refused for %q, want %q", name, err, tc.reason)
+		}
+	}
+}
+
 const adoptWrittenSrc = `package Demo {
 	private import ScalarValues::*;
 	part def Holder { attribute n : Integer; }
