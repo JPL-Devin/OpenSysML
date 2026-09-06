@@ -50,6 +50,29 @@
             (Multiplicity range=false
               (LiteralInteger value="1")))))))
   (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="CrossingAfterMultiplicity"
+      (Membership visibility="default"
+        (Usage kind="item" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (CrossFeatureMember name=""
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (Relationship kind="subsets" target=beads
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Usage kind="item" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (CrossFeatureMember name=""
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInteger value="1"))
+            (Relationship kind="subsets" target=rims
+              (*ast.QualifiedName))
+            (Relationship kind="typing" target=TireMountingRim
+              (*ast.QualifiedName)))))))
+  (Membership visibility="default"
     (Definition kind="interface" abstract=false variation=false name="FuelInterface"
       (Membership visibility="default"
         (Usage kind="port" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true

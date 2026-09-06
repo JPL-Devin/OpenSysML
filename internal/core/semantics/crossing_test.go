@@ -164,6 +164,61 @@ func TestNamedCrossFeatureRelationshipsStayOnCrossFeature(t *testing.T) {
 	}
 }
 
+// An unnamed cross feature may write its specializations after its multiplicity
+// (KerML.xtext FeatureSpecializationPart); they are still the cross feature's.
+func TestAnonymousCrossFeatureRelationshipsAfterMultiplicity(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"t.kerml", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end [0..1] :> g : Sub1 feature x : C1;
+				end [0..1] subsets g typed by Sub1 feature y : C1;
+			}
+		}`},
+		{"t.sysml", `package P {
+			part def C1; part def C2;
+			part def Sub1 :> C1;
+			item g : C1;
+			connection def A {
+				end [0..1] :> g : Sub1 item x : C1;
+				end [0..1] subsets g typed by Sub1 item y : C1;
+			}
+		}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamed(t, tc.name, tc.src)
+			p := sym(t, root, "P")
+			g := nested(t, p.Scope, "g")
+			a := nested(t, p.Scope, "A")
+			known := func(v int64) Bound { return Bound{Value: v, Known: true} }
+			for _, end := range []string{"x", "y"} {
+				e := nested(t, a.Scope, end)
+				wantRelationshipKinds(t, e, ast.RelTyping)
+				if m.Conforms(e, g) {
+					t.Fatalf("end %s subsets g, want that left to its cross feature", end)
+				}
+				if _, ok := m.MultiplicityOf(e); ok {
+					t.Fatalf("MultiplicityOf(%s) ok, want the [0..1] left to the cross feature", end)
+				}
+				cross := m.OwnedCrossFeature(e)
+				if cross == nil {
+					t.Fatalf("OwnedCrossFeature(%s) = nil", end)
+				}
+				wantRelationshipKinds(t, cross, ast.RelSubsets, ast.RelTyping)
+				wantTypes(t, m, cross, "Sub1", "C1")
+				if !m.Conforms(cross, g) {
+					t.Fatalf("cross feature of %s does not subset g: %v", end, m.DirectSupertypes(cross))
+				}
+				if r, ok := m.MultiplicityOf(cross); !ok || r != (Range{known(0), known(1)}) {
+					t.Fatalf("MultiplicityOf(cross of %s) = %+v, %v, want [0..1]", end, r, ok)
+				}
+			}
+		})
+	}
+}
+
 func wantRelationshipKinds(t *testing.T, sym *symbols.Symbol, want ...ast.RelationshipKind) {
 	t.Helper()
 	rels := RelationshipsOf(sym)

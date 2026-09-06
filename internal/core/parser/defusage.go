@@ -237,17 +237,6 @@ type featureMods struct {
 	cross         *ast.CrossFeatureMember // the cross feature declared right after `end`
 }
 
-// anonymousCrossFeature wraps the `[mult]` written right after `end` as the
-// unnamed cross feature it declares (KerML.xtext OwnedCrossingFeature).
-func anonymousCrossFeature(mult *ast.Multiplicity) *ast.CrossFeatureMember {
-	if mult == nil {
-		return nil
-	}
-	cross := &ast.CrossFeatureMember{Multiplicity: mult}
-	cross.NodeSpan = mult.Span()
-	return cross
-}
-
 // tryParseCrossFeature parses the cross feature an end declares ahead of its kind
 // keyword, `end var x1 : Sub1 [0..1] :> g feature x` (KerML.xtext OwnedCrossingFeature),
 // consuming nothing otherwise; a bare prefix (`end ref attribute e`) is the end's.
@@ -269,6 +258,12 @@ func (p *Parser) tryParseCrossFeature() *ast.CrossFeatureMember {
 		len(cross.Relationships) > 0 || cross.Multiplicity != nil
 	if !declared || !p.isKindKeyword(p.peek()) {
 		p.restore(cp)
+		// `end [mult] ref attribute e`: the multiplicity alone is still the crossing one.
+		if p.at(lexer.LBracket) {
+			cross = &ast.CrossFeatureMember{Multiplicity: p.parseMultiplicity()}
+			cross.NodeSpan = cross.Multiplicity.Span()
+			return cross
+		}
 		return nil
 	}
 	cross.NodeSpan = p.spanFrom(start)
@@ -976,12 +971,7 @@ func (p *Parser) parseMoreFeatureModifiers(m *featureMods) {
 		case "end":
 			m.isEnd = true
 			p.advance() // consume "end"
-			// `end [mult] ref ...`: the multiplicity is the end's crossing one.
-			if p.at(lexer.LBracket) {
-				m.cross = anonymousCrossFeature(p.parseMultiplicity())
-			} else {
-				m.cross = p.tryParseCrossFeature()
-			}
+			m.cross = p.tryParseCrossFeature()
 			continue
 		case "constant", "const":
 			m.isConstant = true

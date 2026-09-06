@@ -102,4 +102,26 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
               (Relationship kind="typing" target=C2
-                (*ast.QualifiedName)))))))))
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A6" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name=""
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="subsets" target=C1::a
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name=""
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (Relationship kind="subsets" target=C2::b
+                  (*ast.QualifiedName))
+                (Relationship kind="typing" target=C1
+                  (*ast.QualifiedName))))))))))

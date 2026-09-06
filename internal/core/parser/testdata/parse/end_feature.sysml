@@ -13,6 +13,11 @@ connection def Crossing {
 	end derived ref x2 [1] item y : TireMountingRim;
 }
 
+connection def CrossingAfterMultiplicity {
+	end [1] :> beads item x : TireBead;
+	end [0..1] subsets rims : TireMountingRim item y : TireMountingRim;
+}
+
 interface def FuelInterface {
 	end supplierPort : FuelOutPort;
 	end part consumerPort;

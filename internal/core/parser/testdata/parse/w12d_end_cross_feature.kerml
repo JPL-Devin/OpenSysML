@@ -38,4 +38,10 @@ package W12DEndCrossFeature {
 		end var [1] feature x : C1;
 		end feature y : C2;
 	}
+	// An unnamed cross feature may specialize after its multiplicity
+	// (KerML.xtext FeatureSpecializationPart).
+	assoc A6 {
+		end [1] :> C1::a feature x : C1;
+		end [1] subsets C2::b : C1 feature y : C2;
+	}
 }
