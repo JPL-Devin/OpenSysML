@@ -374,6 +374,53 @@ func TestW9CInheritedNameLibraryBaseFixtures(t *testing.T) {
 	}
 }
 
+// A usage subsetting an inherited library feature inherits that feature's own
+// members too: a redefinition naming them is silent, one naming only the
+// typing definition's namesake still conflicts, and an unredefined name reached
+// from both is a diamond. The pinned validate-sysml reports the same three.
+func TestW9CMembersInheritedThroughLibraryFeature(t *testing.T) {
+	src := `package Test {
+	private import ShapeItems::*;
+	item def Ok :> Polyhedron {
+		item tf : Quadrilateral [1] :> faces {
+			ref :>> Quadrilateral::edges, Ok::faces::edges;
+			ref :>> Quadrilateral::vertices, Ok::faces::vertices;
+		}
+	}
+	item def Partial :> Polyhedron {
+		item tf : Quadrilateral [1] :> faces {
+			ref :>> Quadrilateral::edges;
+		}
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited)
+		want := []string{
+			msgW9CDuplicateInherited + " 'vertices' from Quadrilateral, faces",
+			msgW9CDuplicateInherited + " 'edges' from faces",
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("warm=%v: got %v, want %v", warm, got, want)
+		}
+	}
+}
+
+// ShapeItems redefines through its own features the way Ok above does, so
+// analyzed as a document against the library it carries no inherited-name
+// conflict; the pinned validate-sysml reports none either.
+func TestW9CShapeItemsHasNoInheritedNameConflict(t *testing.T) {
+	const name = "Domain Libraries/Geometry/ShapeItems.sysml"
+	src, err := libs.DefaultSource().Read(name)
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	for _, warm := range []bool{false, true} {
+		if got := w9cMessages(w9cLibraryDiags(t, string(src), warm), msgW9CDuplicateInherited); len(got) != 0 {
+			t.Errorf("warm=%v: got %v, want none", warm, got)
+		}
+	}
+}
+
 // A metadata usage body names owned redefinitions of the metadata definition's
 // features (SysML.xtext MetadataBodyUsage), so reusing those names is silent
 // (examples/pilot-corpora RationaleMetadataExample.sysml:11).
