@@ -323,6 +323,82 @@
       }
     },
     {
+      "id": "evaluate/a_named_measurement_reference_arrives_with_its_declaration",
+      "description": "A unit held by itself travels in one arm carrying the unit as written, its reduction to base units and the declaration it names, so a client can hand it back as a conversion target.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "measurement_refs"
+      ],
+      "model": {
+        "fixture": "measurement_ref.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "M::q.mRef"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "measurement_ref": {
+              "unit": "km",
+              "unit_term": {
+                "factors": [
+                  {
+                    "unit_id": "SI::metre",
+                    "exponent": 1
+                  }
+                ],
+                "scale_num": 1000,
+                "scale_den": 1
+              },
+              "unit_id": "SI::kilometre"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_composed_measurement_reference_names_no_declaration",
+      "description": "A unit an operation composed has no declaration of its own, so it travels with its reduction and no unit id rather than an invented one.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "measurement_refs"
+      ],
+      "model": {
+        "fixture": "measurement_ref.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "M::speed"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "measurement_ref": {
+              "unit": "m/s",
+              "unit_term": {
+                "factors": [
+                  {
+                    "unit_id": "SI::metre",
+                    "exponent": 1
+                  },
+                  {
+                    "unit_id": "SI::second",
+                    "exponent": -1
+                  }
+                ],
+                "scale_num": 1,
+                "scale_den": 1
+              }
+            }
+          }
+        },
+        "absent": [
+          "result.measurement_ref.unit_id"
+        ]
+      }
+    },
+    {
       "id": "evaluate/an_unparsable_expression_is_reported_in_band",
       "description": "A bad expression is an answer about the expression, not a transport failure.",
       "rpc": "Evaluate",

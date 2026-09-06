@@ -160,6 +160,7 @@ collection property.
 | `Array` | `opensysml.Array`: `dimensions` and row-major `elements`, `nested()` unfolds them |
 | `CartesianVectorValue` and the other numeric vectors | `opensysml.Vector`: a tuple of `int`/`float` components, kept apart |
 | `VectorQuantityValue` | `opensysml.VectorQuantity`: a tuple of `Quantity`, one unit per component |
+| `MeasurementUnit` and the other measurement references (`SI::m`, `m / s`, a quantity's `mRef`) | `opensysml.MeasurementRef`: the `Unit` with its reduction, and `unit_id` naming the declaration a named unit is (`SI::metre`), empty for a composed unit |
 | `Integer`, `Natural` | `int` |
 | `Boolean` | `bool` |
 | `String` | `str` |

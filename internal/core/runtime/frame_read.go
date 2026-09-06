@@ -114,6 +114,12 @@ func (ctx *Context) roleElements(inst *Instance, role string) ([]Value, bool, er
 	return nil, false, nil
 }
 
+// bodyDescribesObject reports whether a usage's own body restates or adds features
+// of a concrete type: a role written so states the one object it describes.
+func bodyDescribesObject(sym, typ *symbols.Symbol) bool {
+	return sym != nil && typ != nil && !symbols.IsAbstract(typ) && declaresFeatures(sym)
+}
+
 // roleValue is the one value an object holds under a role; false when the
 // feature is not stated or holds none, an error when it holds several.
 func (ctx *Context) roleValue(what string, inst *Instance, role string) (Value, bool, error) {

@@ -465,10 +465,6 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 // names the instance featuring the value being evaluated ([KerML, 8.4.2]).
 const thatName = "that"
 
-// selfName is the feature every thing takes from Anything: it names the object
-// itself ([KerML] Base::Anything::self), as `mRefs = self` does.
-const selfName = "self"
-
 // thisName is the context occurrence of what is being evaluated, which for a
 // performance an object owns is that object ([KerML] Occurrences::this).
 const thisName = "this"
@@ -552,11 +548,6 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			delete(ec.resolving, name)
 			return val, err
 		}
-		// Then `self`, the object itself, which Anything declares with no value of
-		// its own to read.
-		if name == selfName && ec.self != nil {
-			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
-		}
 		// Then the bound instance: a feature value holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
 		if ec.self != nil && ec.selfFeatureInScope(name) {
@@ -570,6 +561,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// instance featuring the value being evaluated, which is the bound one.
 		if name == thatName && ec.self != nil {
 			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
+		}
+		// Then `self`, the thing being evaluated, read as its value.
+		if ec.self != nil && ec.namesSelf(name) {
+			return ec.ctx.objectValue(ec.self)
 		}
 		// Then `this`, the context occurrence of what is being evaluated: the
 		// object owning the performance, which is the bound instance.
@@ -595,6 +590,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				// from the object enclosing the bound one: `e1` inside `e3` is the
 				// containing rectangle's e1, not a fresh occurrence of the declaration.
 				if val, ok, err := ec.outerFeatureValue(sym); ok {
+					return val, err
+				}
+				// A transformation's target is the frame featuring it, which its
+				// value carries and no object states.
+				if val, ok, err := ec.featuringReferenceValue(sym); ok {
 					return val, err
 				}
 				// A library feature's value comes from the feature seam, not its
@@ -849,6 +849,16 @@ func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
 	return sequenceOf(nil), true
 }
 
+// namesSelf reports whether the name resolves, where the expression was written,
+// to the `self` feature every thing has of itself or a restatement of it.
+func (ec *EvalContext) namesSelf(name string) bool {
+	if ec.scope == nil {
+		return false
+	}
+	sym, ok := ec.ctx.resolver.LookupName(ec.scope, name)
+	return ok && ec.ctx.model.IsSelf(sym)
+}
+
 // namesOccurrenceThis reports whether the name resolves to the library's
 // context occurrence feature `this` where the expression was written.
 func (ec *EvalContext) namesOccurrenceThis(name string) bool {
@@ -945,7 +955,12 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
 		}
-		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
+		// The object reads as its value, whose own members it answers before the object's.
+		val, err := ec.ctx.objectValue(inst)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(val, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)

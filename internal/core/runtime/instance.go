@@ -129,7 +129,25 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 		return false
 	}
 	inst, ok := ctx.instances[val.Instance]
-	return ok && len(inst.FeatureValues) == 0 && semantics.IsValueType(inst.Type)
+	return ok && semantics.IsValueType(inst.Type) && !ctx.shapeHoldsValue(inst.Type)
+}
+
+// shapeHoldsValue reports whether an object of typ carries a value of its own: a record's
+// features, or a field the model adds to a value-held type (`:>> mRefs = (m, m)`, `label`).
+func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
+	features := ctx.FeaturesOf(typ)
+	if len(features) == 0 {
+		return false
+	}
+	if !ctx.model.ValueHeld(typ) {
+		return true
+	}
+	for _, feat := range features {
+		if !ctx.libraryDeclared(feat.Symbol) && holdsRecordField(feat.Symbol) {
+			return true
+		}
+	}
+	return false
 }
 
 // noValueError reports the read of node, which found the unset value val, naming
@@ -166,7 +184,7 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	// reaches this object; a failed start abandons the occurrence with it.
 	inst.explicit = true
 	prior, hadPrior := ctx.occurrences[sym]
-	if ctx.namesOneObject(sym) {
+	if ctx.registersOccurrence(sym) {
 		ctx.occurrences[sym] = inst.ID
 	}
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
@@ -373,6 +391,15 @@ func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
 	return isOccurrenceUsage(sym) || ctx.namesStructuredValue(sym)
 }
 
+// registersOccurrence reports whether an object materialized for a usage is the one a
+// later read reaches: the object it denotes, or a unit's, read through the unit's reference.
+func (ctx *Context) registersOccurrence(sym *symbols.Symbol) bool {
+	if ctx.namesOneObject(sym) {
+		return true
+	}
+	return ctx.declaresUnit(sym) && ctx.occursOnce(sym)
+}
+
 // namesStructuredValue reports whether a usage carrying no value of its own is
 // typed by a structured value — a non-scalar `attribute def` with features — so
 // it holds those features rather than one scalar value.
@@ -385,7 +412,7 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 	if typ == nil || ctx.model.PrimTypeOf(typ) != semantics.PrimUnknown {
 		return false
 	}
-	return len(ctx.FeaturesOf(sym)) > 0
+	return ctx.shapeHoldsValue(sym)
 }
 
 // occursOnce reports whether a usage names at most one occurrence; several
@@ -403,7 +430,7 @@ func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
 	default:
 		return false
 	}
-	if ctx.extractDefaultValue(sym) != nil || bodyDescribesObject(sym, ctx.extractType(sym)) {
+	if ctx.extractDefaultValue(sym) != nil {
 		return false
 	}
 	lower := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym)).Lower
@@ -642,8 +669,9 @@ func (inst *Instance) materializeIntrinsic(ctx *Context, fv *FeatureValue, name 
 	}
 
 	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
-	// optional one demands none: each, a connector included, holds only contributions.
-	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+	// optional one demands none: each, a connector included, holds only contributions —
+	// unless the declaration's body binds a feature of the one object it then holds.
+	if fv.Feature.HoldsOnlyContributions() && !ctx.bodyBindsAFeature(fv.Feature) && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
 		return inst.holdContributions(ctx, fv, name)
 	}
 
@@ -751,16 +779,7 @@ func (f *EffectiveFeature) HoldsOnlyContributions() bool {
 	if !mult.Lower.Known || !mult.Upper.Known {
 		return false
 	}
-	if symbols.IsAbstract(f.Symbol) {
-		return true
-	}
-	return !mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar() && !bodyDescribesObject(f.Symbol, f.Type)
-}
-
-// bodyDescribesObject reports whether a usage's own body restates or adds features
-// of a concrete type: an optional feature written so states the one object it describes.
-func bodyDescribesObject(sym, typ *symbols.Symbol) bool {
-	return sym != nil && typ != nil && !symbols.IsAbstract(typ) && declaresFeatures(sym)
+	return symbols.IsAbstract(f.Symbol) || (!mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar())
 }
 
 // holdContributions fills an abstract or optional feature with the values the
@@ -928,6 +947,56 @@ func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 		}
 	}
 	return ""
+}
+
+// bodyBindsAFeature reports whether feat's declaration, or one it redefines, binds a
+// feature of what it holds (`:>> unitConversion { :>> prefix = kilo; }`): one object, not none.
+func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
+		return false
+	}
+	if ctx.bindsAFeature(feat.Symbol) {
+		return true
+	}
+	for _, redefined := range ctx.redefinedFeatures(feat.Symbol, feat.OwnerType) {
+		if ctx.bindsAFeature(redefined) {
+			return true
+		}
+	}
+	return false
+}
+
+// bindsAFeature reports whether a declaration's body binds a value to a feature of its object,
+// directly or under a nested one that exists whenever it does (not an optional or abstract one).
+// A framing member (`transformation { :>> target = that; }`) binds no field of it.
+func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Scope == nil {
+		return false
+	}
+	for _, member := range sym.Scope.AllMembers() {
+		usage, ok := member.Decl.(*ast.Usage)
+		if !ok || !holdsRecordField(member) || ctx.model.FrameFeature(member) {
+			continue
+		}
+		if usage.Value != nil {
+			return true
+		}
+		if !symbols.IsAbstract(member) && !ctx.optionalValueless(member) && ctx.bindsAFeature(member) {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsRecordField reports a member whose value is its object's own: a structural shape
+// feature, not a behavior, a constraint or a parameter, whose values bind no field.
+func holdsRecordField(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolActionUsage, symbols.SymbolStateUsage,
+		symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage:
+		return false
+	}
+	return semantics.IsShapeFeature(sym) && !semantics.IsParameter(sym)
 }
 
 // valuesAFeature reports whether a usage states a value: its own, or one its

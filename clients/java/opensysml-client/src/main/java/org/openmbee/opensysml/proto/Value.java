@@ -67,6 +67,7 @@ private static final long serialVersionUID = 0L;
     ARRAY(12),
     VECTOR(13),
     VECTOR_QUANTITY(14),
+    MEASUREMENT_REF(15),
     KIND_NOT_SET(0);
     private final int value;
     private KindCase(int value) {
@@ -98,6 +99,7 @@ private static final long serialVersionUID = 0L;
         case 12: return ARRAY;
         case 13: return VECTOR;
         case 14: return VECTOR_QUANTITY;
+        case 15: return MEASUREMENT_REF;
         case 0: return KIND_NOT_SET;
         default: return null;
       }
@@ -629,6 +631,49 @@ private static final long serialVersionUID = 0L;
     return org.openmbee.opensysml.proto.VectorQuantity.getDefaultInstance();
   }
 
+  public static final int MEASUREMENT_REF_FIELD_NUMBER = 15;
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   * @return Whether the measurementRef field is set.
+   */
+  @java.lang.Override
+  public boolean hasMeasurementRef() {
+    return kindCase_ == 15;
+  }
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   * @return The measurementRef.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.MeasurementRef getMeasurementRef() {
+    if (kindCase_ == 15) {
+       return (org.openmbee.opensysml.proto.MeasurementRef) kind_;
+    }
+    return org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.MeasurementRefOrBuilder getMeasurementRefOrBuilder() {
+    if (kindCase_ == 15) {
+       return (org.openmbee.opensysml.proto.MeasurementRef) kind_;
+    }
+    return org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -689,6 +734,9 @@ private static final long serialVersionUID = 0L;
     }
     if (kindCase_ == 14) {
       output.writeMessage(14, (org.openmbee.opensysml.proto.VectorQuantity) kind_);
+    }
+    if (kindCase_ == 15) {
+      output.writeMessage(15, (org.openmbee.opensysml.proto.MeasurementRef) kind_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -757,6 +805,10 @@ private static final long serialVersionUID = 0L;
     if (kindCase_ == 14) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(14, (org.openmbee.opensysml.proto.VectorQuantity) kind_);
+    }
+    if (kindCase_ == 15) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(15, (org.openmbee.opensysml.proto.MeasurementRef) kind_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -831,6 +883,10 @@ private static final long serialVersionUID = 0L;
       case 14:
         if (!getVectorQuantity()
             .equals(other.getVectorQuantity())) return false;
+        break;
+      case 15:
+        if (!getMeasurementRef()
+            .equals(other.getMeasurementRef())) return false;
         break;
       case 0:
       default:
@@ -907,6 +963,10 @@ private static final long serialVersionUID = 0L;
       case 14:
         hash = (37 * hash) + VECTOR_QUANTITY_FIELD_NUMBER;
         hash = (53 * hash) + getVectorQuantity().hashCode();
+        break;
+      case 15:
+        hash = (37 * hash) + MEASUREMENT_REF_FIELD_NUMBER;
+        hash = (53 * hash) + getMeasurementRef().hashCode();
         break;
       case 0:
       default:
@@ -1067,6 +1127,9 @@ private static final long serialVersionUID = 0L;
       if (vectorQuantityBuilder_ != null) {
         vectorQuantityBuilder_.clear();
       }
+      if (measurementRefBuilder_ != null) {
+        measurementRefBuilder_.clear();
+      }
       kindCase_ = 0;
       kind_ = null;
       return this;
@@ -1135,6 +1198,10 @@ private static final long serialVersionUID = 0L;
       if (kindCase_ == 14 &&
           vectorQuantityBuilder_ != null) {
         result.kind_ = vectorQuantityBuilder_.build();
+      }
+      if (kindCase_ == 15 &&
+          measurementRefBuilder_ != null) {
+        result.kind_ = measurementRefBuilder_.build();
       }
     }
 
@@ -1209,6 +1276,10 @@ private static final long serialVersionUID = 0L;
         }
         case VECTOR_QUANTITY: {
           mergeVectorQuantity(other.getVectorQuantity());
+          break;
+        }
+        case MEASUREMENT_REF: {
+          mergeMeasurementRef(other.getMeasurementRef());
           break;
         }
         case KIND_NOT_SET: {
@@ -1327,6 +1398,13 @@ private static final long serialVersionUID = 0L;
               kindCase_ = 14;
               break;
             } // case 114
+            case 122: {
+              input.readMessage(
+                  internalGetMeasurementRefFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 15;
+              break;
+            } // case 122
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2987,6 +3065,184 @@ private static final long serialVersionUID = 0L;
       kindCase_ = 14;
       onChanged();
       return vectorQuantityBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.MeasurementRef, org.openmbee.opensysml.proto.MeasurementRef.Builder, org.openmbee.opensysml.proto.MeasurementRefOrBuilder> measurementRefBuilder_;
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     * @return Whether the measurementRef field is set.
+     */
+    @java.lang.Override
+    public boolean hasMeasurementRef() {
+      return kindCase_ == 15;
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     * @return The measurementRef.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.MeasurementRef getMeasurementRef() {
+      if (measurementRefBuilder_ == null) {
+        if (kindCase_ == 15) {
+          return (org.openmbee.opensysml.proto.MeasurementRef) kind_;
+        }
+        return org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+      } else {
+        if (kindCase_ == 15) {
+          return measurementRefBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    public Builder setMeasurementRef(org.openmbee.opensysml.proto.MeasurementRef value) {
+      if (measurementRefBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        measurementRefBuilder_.setMessage(value);
+      }
+      kindCase_ = 15;
+      return this;
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    public Builder setMeasurementRef(
+        org.openmbee.opensysml.proto.MeasurementRef.Builder builderForValue) {
+      if (measurementRefBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        measurementRefBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 15;
+      return this;
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    public Builder mergeMeasurementRef(org.openmbee.opensysml.proto.MeasurementRef value) {
+      if (measurementRefBuilder_ == null) {
+        if (kindCase_ == 15 &&
+            kind_ != org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.MeasurementRef.newBuilder((org.openmbee.opensysml.proto.MeasurementRef) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 15) {
+          measurementRefBuilder_.mergeFrom(value);
+        } else {
+          measurementRefBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 15;
+      return this;
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    public Builder clearMeasurementRef() {
+      if (measurementRefBuilder_ == null) {
+        if (kindCase_ == 15) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 15) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        measurementRefBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    public org.openmbee.opensysml.proto.MeasurementRef.Builder getMeasurementRefBuilder() {
+      return internalGetMeasurementRefFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.MeasurementRefOrBuilder getMeasurementRefOrBuilder() {
+      if ((kindCase_ == 15) && (measurementRefBuilder_ != null)) {
+        return measurementRefBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 15) {
+          return (org.openmbee.opensysml.proto.MeasurementRef) kind_;
+        }
+        return org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * a unit by itself, no magnitude
+     * </pre>
+     *
+     * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.MeasurementRef, org.openmbee.opensysml.proto.MeasurementRef.Builder, org.openmbee.opensysml.proto.MeasurementRefOrBuilder> 
+        internalGetMeasurementRefFieldBuilder() {
+      if (measurementRefBuilder_ == null) {
+        if (!(kindCase_ == 15)) {
+          kind_ = org.openmbee.opensysml.proto.MeasurementRef.getDefaultInstance();
+        }
+        measurementRefBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.MeasurementRef, org.openmbee.opensysml.proto.MeasurementRef.Builder, org.openmbee.opensysml.proto.MeasurementRefOrBuilder>(
+                (org.openmbee.opensysml.proto.MeasurementRef) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 15;
+      onChanged();
+      return measurementRefBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:sysml.Value)

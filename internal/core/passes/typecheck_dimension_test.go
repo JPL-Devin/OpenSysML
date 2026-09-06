@@ -293,3 +293,23 @@ func TestInferredMeasurementUnitFeature(t *testing.T) {
 		attribute q : AreaValue = ConvertQuantity(area, m ** 2);`,
 		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
 }
+
+// TestMeasurementUnitDeclarationMembers: a member chain into a unit's declaration
+// (`km.unitConversion.conversionFactor`, `m.quantityDimension.quantityPowerFactors`)
+// is typed by the library's records, so it binds where the types agree and is
+// refused where they do not — the same verdict the runtime reaches reading them.
+func TestMeasurementUnitDeclarationMembers(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute f : ScalarValues::Real = SI::km.unitConversion.conversionFactor;`)
+	wantNoDimensionDiags(t, `attribute u : LengthUnit = SI::km.unitConversion.referenceUnit;`)
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Boolean = SI::km.unitConversion.isExact;`)
+	wantNoDimensionDiags(t, `attribute n : ScalarValues::String = SI::km.unitConversion.prefix.longName;`)
+	wantNoDimensionDiags(t, `attribute x : ScalarValues::Real = SI::m.quantityDimension.quantityPowerFactors#(1).exponent;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::MeasurementUnit = SI::m.unitPowerFactors#(1).unit;`)
+	wantNoDimensionDiags(t, `attribute k : ScalarValues::Real = SI::K.definitionalQuantityValues#(1).num;`)
+	wantNoDimensionDiags(t, `attribute b : ScalarValues::Boolean = SI::m.isBound;`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute d : LengthValue = 3 [km];
+		attribute q : LengthValue = ConvertQuantity(d, km.unitConversion.referenceUnit);`)
+	wantOneDimensionError(t, `attribute f : ScalarValues::String = SI::km.unitConversion.conversionFactor;`,
+		"cannot bind Real value to a feature typed by String")
+}

@@ -159,13 +159,13 @@ func TestFeaturesListFrameTransformation(t *testing.T) {
 }
 
 // A scale's listing reads the library's `mRefs = self` and `elements = self` as the
-// scale itself, named once rather than expanded into itself; `dimensions = ()` is null.
+// scale's value, named once rather than expanded into itself; `dimensions = ()` is null.
 func TestFeaturesListMeasurementScale(t *testing.T) {
 	s := coordinateFrameSession(t)
 	run(t, s, "%instantiate SI::'°C_abs'")
 	got := run(t, s, "%features SI::'°C_abs'")
 	wants(t, got, "\n  unit = '°C'", "\n    origin = 273.15 [K]", "\n  dimensions = null",
-		"\n  mRefs = [Instance(ID: 1)]", "\n  elements = [Instance(ID: 1)]", "\n  flattenedSize = 1")
+		"\n  mRefs = ['°C_abs' ['°C']]", "\n  elements = ['°C_abs' ['°C']]", "\n  flattenedSize = 1")
 	if strings.Contains(got, "error") || strings.Count(got, "\n  mRefs = ") != 1 || strings.Contains(got, "\n    mRefs = ") {
 		t.Errorf("%%features SI::'°C_abs' errs or lists the scale inside itself:\n%s", got)
 	}

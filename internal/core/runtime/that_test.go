@@ -63,9 +63,10 @@ func TestSelfReadsTheObjectItself(t *testing.T) {
 	package test {
 		private import Base::Anything;
 		part def P { ref me : Anything = self; }
-		part def Holder { part p : P; }
+		part holder { part p : P; }
 	}`
-	inst, ctx := instantiatePart(t, "Holder", src)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	inst := instantiateNamed(t, ctx, idx, "test::holder")
 	p := fvInstance(t, ctx, inst, "p")
 	fv, err := p.GetFeatureValue(ctx, "me")
 	if err != nil {

@@ -308,6 +308,22 @@ func (ctx *Context) transformationFeature(val Value, name string) (Value, bool, 
 	return ctx.objectMember(t.Object, name)
 }
 
+// featuringReferenceValue answers a member the enclosing transformation's value
+// supplies (`target = that`): the frame it is read through, or none standalone.
+func (ec *EvalContext) featuringReferenceValue(sym *symbols.Symbol) (Value, bool, error) {
+	for inst := ec.self; inst != nil; inst, _ = inst.Owner() {
+		if !ec.ctx.isTransformationType(ec.ctx.objectType(inst)) || !ec.ctx.model.RestatesFeaturingReference(inst.Type, sym) {
+			continue
+		}
+		val, ok, err := ec.ctx.referenceValueOfObject(inst)
+		if !ok || err != nil {
+			return Value{}, ok, err
+		}
+		return ec.ctx.transformationFeature(val, transformationTargetFeature)
+	}
+	return Value{}, false, nil
+}
+
 // objectMember reads a member of the object a value was read from, if it has one
 // and the member is stated there.
 func (ctx *Context) objectMember(object int64, name string) (Value, bool, error) {

@@ -2,10 +2,12 @@ package opensysml
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // A structured value is refused before it leaves the client when the service
@@ -92,6 +94,64 @@ func TestMalformedStructuredAnswersAreNullsNamingTheFault(t *testing.T) {
 	nested := valueFromProto(array([]int64{1}, &pb.Value{Kind: &pb.Value_Quantity{Quantity: noMagnitude}}))
 	if got, ok := nested.(Array); !ok || len(got.Elements) != 1 || got.Elements[0] != Null("unsupported: quantity without a magnitude") {
 		t.Fatalf("array of a magnitude-less quantity read as %#v", nested)
+	}
+}
+
+// A measurement reference is refused before it leaves the client when the
+// service lacks measurement_refs, however deeply nested.
+func TestMeasurementRefInputIsNotSentWithoutMeasurementRefs(t *testing.T) {
+	ctx := context.Background()
+	model := &Model{Hash: "h"}
+	metre := MeasurementRef{Unit: "m", Term: &UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []UnitFactor{{UnitID: "SI::metre", Exponent: 1}}}}
+	old := &oldCaller{t: t, capabilities: []string{CapabilityFeatureValues, CapabilityComplexValues, CapabilityStructuredValues}}
+	c := &client{caller: old}
+	for label, input := range map[string]Value{
+		"reference":   metre,
+		"nested":      Sequence{Int(1), Sequence{metre}},
+		"in an array": Array{Dimensions: []int64{1}, Elements: []Value{metre}},
+	} {
+		_, err := c.ExecuteAction(ctx, model, "A", map[string]Value{"x": input})
+		wantUnimplemented(t, "ExecuteAction "+label, err)
+		_, err = c.EvaluateCalc(ctx, model, "f", Int(1), input)
+		wantUnimplemented(t, "EvaluateCalc "+label, err)
+	}
+}
+
+// A malformed measurement reference in an answer reads as an unsupported null
+// naming the fault; a well-formed one reads as itself, reduction and identity
+// intact.
+func TestMalformedMeasurementRefAnswersAreNullsNamingTheFault(t *testing.T) {
+	ref := func(pm *pb.MeasurementRef) *pb.Value {
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: pm}}
+	}
+	for name, tc := range map[string]struct {
+		value *pb.Value
+		want  string
+	}{
+		"empty":                {ref(&pb.MeasurementRef{}), "naming no unit"},
+		"unreduced by text":    {ref(&pb.MeasurementRef{Unit: "m"}), "without its reduction"},
+		"unreduced by unit_id": {ref(&pb.MeasurementRef{UnitId: "SI::metre"}), "without its reduction"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := valueFromProto(tc.value)
+			null, ok := got.(Null)
+			if !ok || !strings.HasPrefix(string(null), "unsupported: ") || !strings.Contains(string(null), tc.want) {
+				t.Fatalf("read as %#v, want an unsupported Null containing %q", got, tc.want)
+			}
+		})
+	}
+	term := &pb.UnitTerm{ScaleNum: 1000, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "SI::metre", Exponent: 1}}}
+	got := valueFromProto(ref(&pb.MeasurementRef{Unit: "km", UnitTerm: term, UnitId: "SI::kilometre"}))
+	want := MeasurementRef{Unit: "km", Term: &UnitTerm{ScaleNum: 1000, ScaleDen: 1, Factors: []UnitFactor{{UnitID: "SI::metre", Exponent: 1}}}, UnitID: "SI::kilometre"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("well-formed reference read as %#v, want %#v", got, want)
+	}
+	sent, err := valueToProto(want)
+	if err != nil {
+		t.Fatalf("valueToProto: %v", err)
+	}
+	if !proto.Equal(sent, ref(&pb.MeasurementRef{Unit: "km", UnitTerm: term, UnitId: "SI::kilometre"})) {
+		t.Fatalf("marshalled as %v", sent)
 	}
 }
 

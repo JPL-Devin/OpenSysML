@@ -478,7 +478,7 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	if arraySym == nil || inst == nil || inst.Type == nil {
 		return Value{}, false, nil
 	}
-	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) {
+	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) || !ctx.shapeHoldsValue(inst.Type) {
 		return Value{}, false, nil
 	}
 	dims, dimsStated, err := ctx.objectArrayFeature(inst, arrayDimensionsFeature)
@@ -609,10 +609,13 @@ func (ctx *Context) objectFeatureElements(inst *Instance, name string) ([]Value,
 	return elementsOf(val), stated, nil
 }
 
-// objectValue is what a name denoting an object evaluates to: the frame, scale or
-// transformation a MeasurementReferences object is, the Array a shaped
-// Collections::Array object is, else the object itself.
+// objectValue is what a name denoting an object evaluates to: a unit declaration's
+// reference, the frame, scale or transformation a MeasurementReferences object is,
+// the Array a shaped Collections::Array object is, else the object itself.
 func (ctx *Context) objectValue(inst *Instance) (Value, error) {
+	if val, ok, err := ctx.unitObjectValue(inst); ok {
+		return val, err
+	}
 	if val, ok, err := ctx.referenceValueOfObject(inst); ok {
 		return val, err
 	}

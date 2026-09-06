@@ -365,6 +365,22 @@ impl VectorQuantity {
     }
 }
 
+/// A measurement unit held as a value by itself, with no magnitude: `SI::m`,
+/// or `m / s` as an operation composed it.
+///
+/// A service advertising `measurement_refs` sends one as itself; an older one
+/// sends an unsupported [`Value::Null`] in its place.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeasurementRef {
+    /// Unit as written by the model (`km`), empty for one never written down.
+    pub unit: String,
+    /// What the unit reduces to; the service always sends it.
+    pub unit_term: UnitTerm,
+    /// FQN of the one declaration the unit names (`SI::kilometre`); `None` for
+    /// a unit an operation composed.
+    pub unit_id: Option<String>,
+}
+
 /// A runtime value returned by the service.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -392,6 +408,8 @@ pub enum Value {
     Vector(Vector),
     /// Vector of quantities.
     VectorQuantity(VectorQuantity),
+    /// A bare measurement unit.
+    MeasurementRef(MeasurementRef),
     /// Explicit null value.
     Null,
     /// A materialized feature with no value.
@@ -447,6 +465,9 @@ pub(crate) fn value_from_wire(value: wire::Value) -> Result<Value, Error> {
                 .map(quantity_from_wire)
                 .collect::<Result<_, _>>()?,
         )?)),
+        wire::value::Kind::MeasurementRef(v) => {
+            Ok(Value::MeasurementRef(measurement_ref_from_wire(v)?))
+        }
         wire::value::Kind::EnumLiteral(v) => Ok(Value::EnumLiteral(EnumLiteral {
             literal_id: v.literal_id,
             enumeration_id: v.enumeration_id,
@@ -473,16 +494,35 @@ fn kind_name(kind: &wire::value::Kind) -> &'static str {
         wire::value::Kind::Array(_) => "array",
         wire::value::Kind::Vector(_) => "vector",
         wire::value::Kind::VectorQuantity(_) => "vector_quantity",
+        wire::value::Kind::MeasurementRef(_) => "measurement_ref",
     }
 }
 
-fn quantity_from_wire(v: wire::Quantity) -> Result<Quantity, Error> {
-    let magnitude = match v.magnitude {
-        Some(wire::quantity::Magnitude::IntMagnitude(value)) => Magnitude::Integer(value),
-        Some(wire::quantity::Magnitude::RealMagnitude(value)) => Magnitude::Real(value),
-        None => return Err(Error::Decode("Quantity has no magnitude".to_owned())),
+fn measurement_ref_from_wire(v: wire::MeasurementRef) -> Result<MeasurementRef, Error> {
+    let Some(term) = v.unit_term else {
+        if v.unit.is_empty() && v.unit_id.is_empty() {
+            return Err(Error::Decode(
+                "a measurement reference names no unit".to_owned(),
+            ));
+        }
+        let named = if v.unit.is_empty() {
+            &v.unit_id
+        } else {
+            &v.unit
+        };
+        return Err(Error::Decode(format!(
+            "a measurement reference {named} has no reduction to base units"
+        )));
     };
-    let unit_term = v.unit_term.map(|term| UnitTerm {
+    Ok(MeasurementRef {
+        unit: v.unit,
+        unit_term: unit_term_from_wire(term),
+        unit_id: (!v.unit_id.is_empty()).then_some(v.unit_id),
+    })
+}
+
+fn unit_term_from_wire(term: wire::UnitTerm) -> UnitTerm {
+    UnitTerm {
         scale_num: term.scale_num,
         scale_den: term.scale_den,
         factors: term
@@ -493,11 +533,19 @@ fn quantity_from_wire(v: wire::Quantity) -> Result<Quantity, Error> {
                 exponent: factor.exponent,
             })
             .collect(),
-    });
+    }
+}
+
+fn quantity_from_wire(v: wire::Quantity) -> Result<Quantity, Error> {
+    let magnitude = match v.magnitude {
+        Some(wire::quantity::Magnitude::IntMagnitude(value)) => Magnitude::Integer(value),
+        Some(wire::quantity::Magnitude::RealMagnitude(value)) => Magnitude::Real(value),
+        None => return Err(Error::Decode("Quantity has no magnitude".to_owned())),
+    };
     Ok(Quantity {
         magnitude,
         unit: v.unit,
-        unit_term,
+        unit_term: v.unit_term.map(unit_term_from_wire),
     })
 }
 
@@ -1133,6 +1181,83 @@ mod tests {
         ));
     }
 
+    fn measurement_ref(
+        unit: &str,
+        unit_id: &str,
+        unit_term: Option<wire::UnitTerm>,
+    ) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::MeasurementRef(wire::MeasurementRef {
+                unit: unit.to_owned(),
+                unit_term,
+                unit_id: unit_id.to_owned(),
+            })),
+        }
+    }
+
+    fn wire_term(scale_num: f64, factors: &[(&str, f64)]) -> wire::UnitTerm {
+        wire::UnitTerm {
+            scale_num,
+            scale_den: 1.0,
+            factors: factors
+                .iter()
+                .map(|(unit_id, exponent)| wire::UnitFactor {
+                    unit_id: (*unit_id).to_owned(),
+                    exponent: *exponent,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_measurement_reference_keeps_its_unit_reduction_and_declaration() {
+        let km = wire_term(1000.0, &[("SI::metre", 1.0)]);
+        assert_eq!(
+            value_from_wire(measurement_ref("km", "SI::kilometre", Some(km))).ok(),
+            Some(Value::MeasurementRef(MeasurementRef {
+                unit: "km".to_owned(),
+                unit_term: UnitTerm {
+                    scale_num: 1000.0,
+                    scale_den: 1.0,
+                    factors: vec![UnitFactor {
+                        unit_id: "SI::metre".to_owned(),
+                        exponent: 1.0,
+                    }],
+                },
+                unit_id: Some("SI::kilometre".to_owned()),
+            }))
+        );
+
+        // A unit an operation composed names no declaration, and none is invented.
+        let speed = wire_term(1.0, &[("SI::metre", 1.0), ("SI::second", -1.0)]);
+        let Ok(Value::MeasurementRef(composed)) =
+            value_from_wire(measurement_ref("m/s", "", Some(speed)))
+        else {
+            panic!("a composed unit should decode");
+        };
+        assert_eq!(composed.unit_id, None);
+        assert_eq!(composed.unit_term.factors.len(), 2);
+
+        // Naming no unit, or a unit without its reduction, is malformed at any depth.
+        assert!(matches!(
+            value_from_wire(measurement_ref("", "", None)),
+            Err(Error::Decode(message)) if message.contains("names no unit")
+        ));
+        assert!(matches!(
+            value_from_wire(measurement_ref("km", "", None)),
+            Err(Error::Decode(message)) if message.contains("km has no reduction")
+        ));
+        let nested = wire::Value {
+            kind: Some(wire::value::Kind::Sequence(wire::ValueSequence {
+                elements: vec![measurement_ref("", "SI::kilometre", None)],
+            })),
+        };
+        assert!(matches!(
+            value_from_wire(nested),
+            Err(Error::Decode(message)) if message.contains("SI::kilometre has no reduction")
+        ));
+    }
+
     #[test]
     fn a_structured_value_survives_the_wire_bytes() {
         use prost::Message;
@@ -1143,6 +1268,11 @@ mod tests {
             ),
             vector(vec![real(3.0), int(4)]),
             vector_quantity(vec![metres(3.0), metres(4.0)]),
+            measurement_ref(
+                "km",
+                "SI::kilometre",
+                Some(wire_term(1000.0, &[("SI::metre", 1.0)])),
+            ),
         ] {
             let again = wire::Value::decode(value.encode_to_vec().as_slice())
                 .expect("a value encodes to decodable bytes");

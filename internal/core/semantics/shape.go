@@ -8,11 +8,14 @@ import (
 // Kernel-library members frame every object (`Occurrence::self`, `portions`) and stay
 // out of its shape; Systems, Domain and OpenSysML members describe it and are kept.
 
+// fqnAnythingSelf is the feature every thing has of itself ([KerML] Base::Anything::self).
+const fqnAnythingSelf = "Base::Anything::self"
+
 // frameRoots names the Kernel features whose restatements stay in the frame: the
 // object's identity, its history (time slices, snapshots, start and end) and the
 // transfers it takes part in, which the runtime tracks itself.
 var frameRoots = map[string]bool{
-	"Base::Anything::self":                       true,
+	fqnAnythingSelf:                              true,
 	"Occurrences::Occurrence::timeSlices":        true,
 	"Occurrences::Occurrence::incomingTransfers": true,
 	"Occurrences::Occurrence::outgoingTransfers": true,
@@ -278,7 +281,7 @@ func (m *Model) DescribesReference(typ, member *symbols.Symbol) bool {
 	if tier := m.libraryTier(member); tier == symbols.TierKernelSemantic || tier == symbols.TierLibrary {
 		return false
 	}
-	if m.restatesRoot(member, frameRoots) || m.restatesRoot(member, referenceSelfRoots) {
+	if m.restatesRoot(member, frameRoots) || m.NamesFeaturingReference(member) {
 		return false
 	}
 	// A usage nested in a described reference (a transformation's rotationMatrix)
@@ -303,13 +306,67 @@ func (m *Model) FrameFeature(sym *symbols.Symbol) bool {
 		return false
 	case tier.Frame():
 		return true
-	case sym.OwnerScope != nil && IsValueType(sym.OwnerScope.Owner()):
+	case m.HeldByValue(sym):
 		return true
 	case IsParameter(sym):
 		return true
 	default:
-		return m.restatesRoot(sym, frameRoots)
+		return m.restatesRoot(sym, frameRoots) || m.NamesFeaturingReference(sym)
 	}
+}
+
+// NamesFeaturingReference reports a member restating one of referenceSelfRoots:
+// the frame featuring a transformation, which its value answers rather than its object.
+func (m *Model) NamesFeaturingReference(sym *symbols.Symbol) bool {
+	return m != nil && m.restatesRoot(sym, referenceSelfRoots)
+}
+
+// RestatesFeaturingReference reports whether typ's member for feature is one
+// NamesFeaturingReference accepts: `target` read through a frame's transformation.
+func (m *Model) RestatesFeaturingReference(typ, feature *symbols.Symbol) bool {
+	if m == nil || typ == nil || feature == nil || !IsShapeFeature(feature) {
+		return false
+	}
+	for _, member := range m.MembersOfIncludingRedefined(typ) {
+		if IsShapeFeature(member) && m.restates(member, feature) && m.NamesFeaturingReference(member) {
+			return true
+		}
+	}
+	return false
+}
+
+// HeldByValue reports a member the value of a value-held library type carries itself (`num`,
+// `mRefs`, a constraint); a stated (`isBound default false`) or record-typed one is its object's.
+func (m *Model) HeldByValue(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil || !m.ValueHeld(sym.OwnerScope.Owner()) {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || (sym.Kind != symbols.SymbolAttributeUsage && sym.Kind != symbols.SymbolEnumerationUsage) {
+		return true
+	}
+	return usage.Value == nil && m.ValueHeld(sym)
+}
+
+// ValueHeld reports whether sym is held as a value, not an object: a scalar, an enumeration, or
+// a TensorQuantityValue/TensorMeasurementReference by specialization (frames and scales included).
+func (m *Model) ValueHeld(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolEnumerationDef, symbols.SymbolEnumerationUsage:
+		return true
+	}
+	if m.PrimTypeOf(sym) != PrimUnknown {
+		return true
+	}
+	for _, fqn := range []string{fqnTensorQuantityValue, fqnTensorMeasurementReference} {
+		if root := m.libSymbol(fqn); root != nil && m.Conforms(sym, root) {
+			return true
+		}
+	}
+	return false
 }
 
 // libraryTier reports the tier of the library that declares sym, TierNone for a
@@ -330,14 +387,34 @@ func IsParameter(sym *symbols.Symbol) bool {
 	return ok && (usage.Direction != ast.DirNone || usage.IsResult)
 }
 
+// IsSelf reports whether sym is a thing's `self` feature: Base::Anything::self or a
+// feature restating it, such as DataValue::self or a definition's own redefinition.
+func (m *Model) IsSelf(sym *symbols.Symbol) bool {
+	return m != nil && sym != nil && m.restatesAny(sym, namesFQN(fqnAnythingSelf))
+}
+
+// namesFQN accepts the symbol whose qualified name is fqn.
+func namesFQN(fqn string) func(*symbols.Symbol) bool {
+	return func(sym *symbols.Symbol) bool { return symbols.FQNOf(sym) == fqn }
+}
+
 // restatesRoot reports whether sym redefines or subsets one of the roots, directly
 // or through the features those name.
 func (m *Model) restatesRoot(sym *symbols.Symbol, roots map[string]bool) bool {
+	return m.restatesAny(sym, func(sym *symbols.Symbol) bool { return roots[symbols.FQNOf(sym)] })
+}
+
+// restatesAny reports whether sym, or a feature it redefines or subsets transitively,
+// is one the predicate accepts.
+func (m *Model) restatesAny(sym *symbols.Symbol, root func(*symbols.Symbol) bool) bool {
+	if sym == nil {
+		return false
+	}
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
 		queue = queue[1:]
-		if roots[symbols.FQNOf(cur)] {
+		if root(cur) {
 			return true
 		}
 		for _, rel := range RelationshipsOf(cur) {
