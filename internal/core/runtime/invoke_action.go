@@ -170,7 +170,7 @@ func invokeBoundAction(
 		return nil, nil, err
 	}
 
-	callee, err := ctx.performAction(sym, self, inputs)
+	callee, err := ctx.performActionStep(sym, self, inputs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}

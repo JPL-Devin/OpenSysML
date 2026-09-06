@@ -178,8 +178,11 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	shape.Bindings = calcBindings(chain)
 	shape.ResultExpr = resultBindingExpr(shape.Bindings)
 	// A calc computes nothing when it neither returns a value nor binds an output
-	// feature — by a declaration or by an assignment in its body.
-	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
+	// feature — by a declaration or by an assignment in its body. An analysis
+	// whose body performs steps computes through them, its objective its answer.
+	performs := shape.Kind == "analysis" && len(shape.Nodes) > 0
+	computes := lower.Returns(shape.Body) || len(shape.BodyOutputs) > 0 || shape.ResultExpr != nil || shape.hasInitialOutput() || performs
+	if !computes {
 		if len(shape.Outputs) > 0 && shape.resultOutput() == nil {
 			return nil, fmt.Errorf("%w: %s binds none of its outputs (%s)",
 				ErrNoResultExpression, label, shape.outputNames())
@@ -610,7 +613,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		}
 	}
 	if err != nil {
-		return Value{}, calcFrame(shape.Name, err)
+		return Value{}, calcFrame(shape.Kind, shape.Name, err)
 	}
 	return result, nil
 }
@@ -816,7 +819,7 @@ func (ec *EvalContext) bindCalcParameter(
 	}
 	value, err := ec.Eval(param.Default)
 	if err != nil {
-		return Value{}, "", calcDefaultError(shape.Name, param.Name, err)
+		return Value{}, "", calcDefaultError(shape.Kind, shape.Name, param.Name, err)
 	}
 	return value, "default", nil
 }

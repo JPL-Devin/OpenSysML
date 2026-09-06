@@ -228,8 +228,8 @@ go get github.com/Open-MBEE/OpenSysML@latest
 Nothing else needs installing: the SysML standard library is embedded in the module and no
 operation shells out. Every RPC the service offers is a method (`ParseFiles` for a model made of
 several documents, `ExecuteAction` and `ExecuteState`, `VerifyConstraint`, `VerifyRequirement`,
-`VerifySatisfaction`, `EvaluateCalc`, `Query`, `RunDocumentQuery`, `RenderDocument`, `Convert` and
-`ApplyEdits`), and queries and edits are built from typed values rather than a string dialect, so
+`VerifySatisfaction`, `EvaluateCalc`, `RunAnalysis`, `Query`, `RunDocumentQuery`, `RenderDocument`,
+`Convert` and `ApplyEdits`), and queries and edits are built from typed values rather than a string dialect, so
 an unsupported operator is a compile error rather than a refused call.
 
 `Dial("host:50051")` is the other constructor, for a shared `sysml-grpc` that someone else runs.
@@ -488,9 +488,9 @@ Every call about a loaded model is a `Model` method. The module-level
 working directly from a file (`opensysml.instantiate("Demo::Vehicle",
 file_path="model.sysml")`) or from a hash obtained elsewhere (`model_hash=…`).
 
-### Verifying constraints, requirements, satisfaction and calculations
+### Verifying constraints, requirements, satisfaction, calculations and analyses
 
-The checks the REPL performs with `%constraint`, `%requirement`, `%satisfy` and `%calc` are also
+The checks the REPL performs with `%constraint`, `%requirement`, `%satisfy`, `%calc` and `%analysis` are also
 available as RPCs, so a script can find out whether a model satisfies its requirements.
 These calls use the same runtime evaluation the REPL does, not a second implementation.
 
@@ -580,6 +580,31 @@ evaluated from its own members and reports every output feature it computes (Sys
 model.calc("Demo::add", arguments=[2.5, 4.0]).value    # 6.5
 model.calc("Demo::c").outputs                          # {'a': 6, 'b': 10}
 ```
+
+An analysis case is run the way `%analysis` runs one: a usage that binds its `subject` needs
+nothing more, a definition (or a usage binding none) takes the subject to instantiate, and
+`arguments` and `named_arguments` bind its other `in` parameters. The result carries the case's
+`out` and `return` values, one verdict per `objective` and per `assert constraint` in the body,
+and the subject's objects; it is truthy when every verdict was decided and holds:
+
+```python
+run = model.run_analysis("An::shipCost")
+run.outputs                                            # {'total': 12.0}
+run.verdicts[0].holds                                  # True — objective affordable
+
+run = model.run_analysis("An::CostAnalysis", subject="An::barge",
+                         named_arguments={"limit": 50.0})
+run.outputs["total"], bool(run)                        # (37.0, True)
+
+run = model.run_analysis("An::CostAnalysis", subject="An::barge")
+bool(run), run.verdicts[0].condition                   # (False, 'total <= limit')
+```
+
+An objective that could not be decided — a feature it reads has no value — is a verdict with
+`error` set and `evaluated` false, as a verification's is, and `raise_for_error()` turns it into
+an `ExecutionError`. A definition run with no subject, an `in` parameter left without a value, a
+step that fails and a case that runs itself raise `ExecutionError` from the call; naming a symbol
+that is not an analysis raises `WrongKindError`, and so does asking `calc` to run an analysis.
 
 Verification is capability-negotiated the same way as conversion: against a service that does
 not report the `verification` capability, these calls raise `MissingCapabilityError` naming the

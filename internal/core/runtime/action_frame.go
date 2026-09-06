@@ -1069,7 +1069,7 @@ func (e *performances) performInvocation(perf *actionFrame, inv actionInvocation
 		return err
 	}
 
-	callee, err := e.ctx.performAction(sym, e.self, inputs)
+	callee, err := e.ctx.performActionStep(sym, e.self, inputs)
 	if err != nil {
 		return fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}

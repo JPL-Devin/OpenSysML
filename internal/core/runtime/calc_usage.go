@@ -34,7 +34,10 @@ type calcOutput struct {
 	// IsInOut marks an `inout` parameter: an output feature (KerML 7.4.9) bound by
 	// the invocation rather than by a declaration or an assignment.
 	IsInOut bool
-	Decl    calcMemberDecl // the declaration, closest to the invoked calc, the output's value answers to
+	// IsInitial marks a value declared with `:=`: what the output holds when the
+	// body starts, which the body's assignments may then replace.
+	IsInitial bool
+	Decl      calcMemberDecl // the declaration, closest to the invoked calc, the output's value answers to
 }
 
 // calcOutputs flattens the output features declared along chain (most general
@@ -56,7 +59,7 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol, aliases *map[string]str
 			name, _ := ast.EffectiveName(usage)
 			sym := memberSymbol(declScope(link), usage)
 			out := calcOutput{Name: name, Value: usage.Value, Owner: link, IsResult: usage.IsResult,
-				Decl: ctx.calcMemberDeclOf(link, sym, name)}
+				IsInitial: usage.Value != nil && usage.ValueIsInitial, Decl: ctx.calcMemberDeclOf(link, sym, name)}
 			if usage.Direction == ast.DirInOut {
 				// The value an `inout` declares is the default of the parameter, not a
 				// binding of the output: the invocation binds it either way.
@@ -76,6 +79,7 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol, aliases *map[string]str
 				if out.Value == nil {
 					out.Value = outs[at].Value
 					out.Owner = outs[at].Owner
+					out.IsInitial = outs[at].IsInitial
 				}
 				out.Decl = out.Decl.redeclaring(outs[at].Decl)
 				if name != "" {
@@ -102,6 +106,17 @@ func (shape *calcShape) resultOutput() *calcOutput {
 		}
 	}
 	return nil
+}
+
+// hasInitialOutput reports whether some output starts the body holding a value
+// (`:=`), which the calc yields when the body leaves it as it is.
+func (shape *calcShape) hasInitialOutput() bool {
+	for _, out := range shape.Outputs {
+		if out.IsInitial {
+			return true
+		}
+	}
+	return false
 }
 
 // indexOfAnonymousResult finds the unnamed result parameter among outs, which is
@@ -677,13 +692,15 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	if value, ok := run.outputs[out.Name]; ok && out.Name != "" {
 		return value, nil
 	}
-	if out.Value == nil {
+	if out.Value == nil || out.IsInitial {
 		// An output the body assigned, and an `inout` the invocation bound, are values
 		// the activation left behind rather than bindings to evaluate.
 		if value, ok := run.env.lookup(out.Name); ok && out.Name != "" {
 			run.outputs[out.Name] = value
 			return value, nil
 		}
+	}
+	if out.Value == nil {
 		return Value{}, fmt.Errorf(
 			"%w: output %s of %s", ErrOutputNotAssigned, run.outputDescription(out), run.shape.Label,
 		)

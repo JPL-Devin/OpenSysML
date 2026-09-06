@@ -260,6 +260,73 @@ $ sysml -state MyModel::Monitor -advance 15 checks.sysml
   Remaining events: 0
 ```
 
+An analysis case is a calculation performed as an action, so `-analysis` runs it the way
+`-calc` invokes a calc and `-requirement` checks a requirement: it names the case, optionally
+with arguments in parentheses that bind the case's `in` parameters (positionally or by name),
+and optionally an object to run it on, which becomes the case's `subject`. The report lists the
+case's `out` and `return` values with their units, then the verdict of its `objective`
+(`satisfied`, `not satisfied` with the violated condition, or `undecided` with the reason):
+
+```sysml
+package An {
+    private import ScalarValues::*;
+    part def Ship {
+        attribute cost : Real default = 5.0;
+        attribute other : Real default = 7.0;
+    }
+    calc def Sum { in a : Real; in b : Real; return : Real = a + b; }
+    analysis def CostAnalysis {
+        subject s : Ship;
+        in limit : Real = 20.0;
+        out total : Real = Sum(s.cost, s.other);
+        objective affordable { require constraint { total <= limit } }
+    }
+    part ship : Ship;
+    part barge : Ship { attribute :>> cost = 30.0; }
+    analysis shipCost : CostAnalysis { subject s = ship; }
+}
+```
+
+```bash
+$ sysml -analysis An::shipCost analysis.sysml
+✓ package An
+✓ An::shipCost
+  total = 12.0
+  objective affordable: satisfied
+
+$ sysml -instantiate An::barge -analysis "An::CostAnalysis An::barge" \
+    -analysis "An::CostAnalysis(limit = 50.0) An::barge" analysis.sysml; echo "exit=$?"
+✓ package An
+✓ Created instance of An::barge
+  ID: 1
+  Use %features An::barge to inspect
+✗ An::CostAnalysis on object #1 of "An::barge"
+  total = 37.0
+  objective affordable: not satisfied: total <= limit
+✓ An::CostAnalysis(limit = 50.0) on object #1 of "An::barge"
+  total = 37.0
+  objective affordable: satisfied
+exit=1
+
+$ sysml -analysis An::CostAnalysis analysis.sysml; echo "exit=$?"
+✓ package An
+sysml: analysis run failed: analysis An::CostAnalysis: s subject is unbound: bind it (`subject s = <element>`) or run it on an object
+exit=2
+```
+
+A usage that binds its subject (`subject s = ship;`) needs no object; a definition, or a usage
+that binds none, needs one, and is refused by name when none is given — the same rule
+`-requirement` applies. The object is one `-instantiate` created, named as `-state` names its
+performer. A case whose body performs `action` steps sequenced by `then` runs them as an
+action does, each later step reading the outputs of the earlier ones; a body stating no
+successions runs its steps in declaration order. An objective violated exits with status 1,
+one that could not be decided (a value the condition needs is missing) with status 2, and a
+case that stops before producing its outputs — an unbound subject or `in` parameter, a step
+that fails, a deadlocked body or one that exhausts the step budget — is reported as an error
+naming the case. `-e` reads the results of a package-level usage or of one nested in a part
+(`-e An::shipCost.total`, `-e An::holder.inner.total`) by running the case once and keeping
+what it computed until a value it depends on changes.
+
 A state machine takes only its initial transition unless `-advance` says how much simulated
 time to run for. `-advance 0` runs the machine up to the present, dispatching whatever is already
 due. `-advance` without a matching `-state` is reported as a mistake rather than

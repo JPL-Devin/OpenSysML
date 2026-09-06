@@ -89,7 +89,7 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, s low
 		return fmt.Errorf("%w: %s is not declared by the calculation", ErrCalcExternalAssignment, name)
 	}
 	out, _ := h.shape.output(name)
-	if out.Value != nil {
+	if out.Value != nil && !out.IsInitial {
 		return fmt.Errorf(
 			"%w: output %s of %s is both given a value by its declaration and assigned in its body",
 			ErrConflictingOutput, name, h.shape.Label,

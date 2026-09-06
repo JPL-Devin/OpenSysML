@@ -738,7 +738,41 @@ A service without the `structured_values` capability refuses the same argument w
 A calc *usage* whose output features are evaluated from its own members (no `arguments`)
 answers them as `outputs`, a list of `{"name":…,"value":<Value>}` in declaration order, in
 place of `result`; a client reads whichever of the two is present. A symbol that is not a calc
-is the `FAILURE_REASON_WRONG_KIND` failure shown under [In-body failures](#in-body-failures).
+is the `FAILURE_REASON_WRONG_KIND` failure shown under [In-body failures](#in-body-failures);
+for an analysis case the message says to use `RunAnalysis`.
+
+### `RunAnalysis`
+
+`symbolId` names an analysis definition or usage. `subjectSymbolId` optionally names a part or
+usage to instantiate as the case's `subject`, as `VerifyRequirement` takes one; a usage that
+binds its own subject (`subject s = ship;`) needs none, and a definition or unbinding usage
+run without one is an in-body failure naming the subject. `arguments` is a positional list of
+`Value`s for the case's other `in` parameters in declaration order and `namedArguments` binds
+them by name; a parameter left without a value or default is an in-body failure. `outputs`
+are the case's `out` and `return` values as `EvaluateCalc` reports a usage's, a returned value
+with no name under `result`; `verdicts` is one `Verdict` per `objective` and per
+`assert constraint` in the body, in that order, with `kind` `objective` or `assertion`,
+`holds` for a satisfied one, `condition` for one that is not, and `error` for one that could
+not be decided; `instances` is the subject's object graph when one was
+instantiated:
+
+```console
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::shipCost"}'
+{"outputs":[{"name":"total","value":{"realValue":12}}],"verdicts":[{"kind":"objective","elementId":"An::CostAnalysis::affordable","element":"affordable","holds":true}]}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::CostAnalysis","subjectSymbolId":"An::barge","namedArguments":{"limit":{"realValue":50.0}}}'
+{"outputs":[{"name":"total","value":{"realValue":37}}],"verdicts":[{"kind":"objective","elementId":"An::CostAnalysis::affordable","element":"affordable","holds":true,"instanceId":"1","instanceTypeId":"An::barge"}],"instances":[{"id":"1","typeSymbolId":"An::barge",…}]}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::CostAnalysis"}'
+{"error":"analysis run failed: analysis An::CostAnalysis: s subject is unbound: bind it (`subject s = <element>`) or run it on an object","failureReason":"FAILURE_REASON_EVALUATION"}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::Ship"}'
+{"error":"not an analysis case: An::Ship is a part def, not an analysis case definition or usage","failureReason":"FAILURE_REASON_WRONG_KIND"}
+```
+
+A step that fails, a body that deadlocks or exhausts its step budget and a case that runs itself are
+`FAILURE_REASON_EVALUATION` failures naming the case. Structured and complex arguments are
+capability-gated as `EvaluateCalc`'s are.
 
 ### `Evaluate`
 

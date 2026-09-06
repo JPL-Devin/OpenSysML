@@ -31,7 +31,7 @@ inst, err := client.Instantiate(ctx, model, "Demo::Vehicle")
 | Parse one document | `ParseFile`, `ParseSource` |
 | Parse a model of several documents | `ParseFiles`, `ParseDocuments` |
 | Read the model | `LookupSymbol`, `Diagnostics` |
-| Compute with it | `Evaluate`, `Instantiate`, `EvaluateCalc` |
+| Compute with it | `Evaluate`, `Instantiate`, `EvaluateCalc`, `RunAnalysis` |
 | Run behavior | `ExecuteAction`, `ExecuteState` |
 | Check it | `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction` |
 | Search it | `Query`, `QueryOSLC` |
@@ -195,7 +195,7 @@ that asks for an unavailable capability is refused with `CodeUnimplemented`;
 capabilities that describe response population instead omit the fields they
 name. Check the list first for an operation-specific error (the `Capability*`
 constants name the known ones). Two capabilities are checked for you: a `Complex`
-among `ExecuteAction` inputs or `EvaluateCalc` arguments needs
+among `ExecuteAction` inputs or `EvaluateCalc`/`RunAnalysis` arguments needs
 `complex_values`, and an `Array`, `Vector` or `VectorQuantity` — at the top level
 or nested in a sequence or array — needs `structured_values`; a service without
 them would read the value as null, so the client refuses with `CodeUnimplemented`

@@ -71,15 +71,20 @@ func usageStatement(u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
 	if u.IsAccept {
 		return Effect{Kind: EffectAccept, Node: u, Scope: scope}, true
 	}
+	name, _ := ast.EffectiveName(u)
 	// A result parameter binding no value only names the result, so it states no
 	// step of the computation.
 	if u.IsResult || u.Direction == ast.DirOut {
 		if u.Value == nil {
 			return nil, false
 		}
+		// An initial value (`:=`) is what the output holds when the body starts,
+		// for its assignments to replace; a binding (`=`) is the value it returns.
+		if u.ValueIsInitial && name != "" {
+			return Declare{Name: name, Value: u.Value, Node: u, Scope: scope}, true
+		}
 		return Return{Value: u.Value, Node: u, Scope: scope}, true
 	}
-	name, _ := ast.EffectiveName(u)
 	if u.Kind == ast.UsageAttribute && name != "" {
 		return Declare{Name: name, Value: u.Value, Node: u, Scope: scope}, true
 	}

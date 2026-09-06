@@ -306,7 +306,7 @@ Deliberately out of scope, rather than half-implemented:
 - **RDF conversion** (`Convert`) — Turtle/RDF export;
 - **verification helpers** (`VerifyConstraint`, `VerifyRequirement`,
   `VerifySatisfaction`), **behaviour execution** (`ExecuteAction`,
-  `ExecuteState`), **`EvaluateCalc`** and **`Query`**/OSLC;
+  `ExecuteState`), **`EvaluateCalc`**, **`RunAnalysis`** and **`Query`**/OSLC;
 - **generated model-ergonomics types** — no code generation from a model into
   Java classes.
 

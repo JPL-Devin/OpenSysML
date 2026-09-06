@@ -67,6 +67,7 @@ func allParams(n int) paramSet { return paramSet(1)<<uint(n) - 1 } // #nosec G11
 // compiledCalc is a calc body in the compiled tier: parameters and body locals
 // in the slots of one scalar frame, the body a tree of closures over it.
 type compiledCalc struct {
+	kind   string
 	name   string
 	params []compiledParam
 	// required has a bit set for every parameter without a default, which an
@@ -172,7 +173,7 @@ type compileBatch struct {
 // compile decides shape, compiling its callees first.
 func (b *compileBatch) compile(shape *calcShape) {
 	shape.compileState = compileInProgress
-	shape.compiled = &compiledCalc{name: shape.Name}
+	shape.compiled = &compiledCalc{kind: shape.Kind, name: shape.Name}
 	c := &calcCompiler{batch: b, ctx: b.ctx, shape: shape}
 	if err := c.compile(shape.compiled); err != nil {
 		shape.withdraw(err.Error())
@@ -778,14 +779,14 @@ func (c *compiledCalc) invoke(ctx *Context, base int, bound paramSet) (scalar, e
 			var err error
 			if v, err = p.dflt(ctx, frame); err != nil {
 				ctx.leaveCalc()
-				return scalar{}, calcDefaultError(c.name, p.name, err)
+				return scalar{}, calcDefaultError(c.kind, c.name, p.name, err)
 			}
 			source = "default"
 			frame[i] = v
 		}
 		if !p.check.accepts(v) {
 			err := p.check.refuse(ctx, v, func() string {
-				return fmt.Sprintf("calc %s: %s for parameter %q", c.name, source, p.name)
+				return fmt.Sprintf("%s %s: %s for parameter %q", c.kind, c.name, source, p.name)
 			})
 			if err != nil {
 				ctx.leaveCalc()
@@ -796,11 +797,11 @@ func (c *compiledCalc) invoke(ctx *Context, base int, bound paramSet) (scalar, e
 	result, err := c.body(ctx, frame)
 	ctx.leaveCalc()
 	if err != nil {
-		return scalar{}, calcFrame(c.name, fmt.Errorf("%s%w", c.bodyErr, err))
+		return scalar{}, calcFrame(c.kind, c.name, fmt.Errorf("%s%w", c.bodyErr, err))
 	}
 	if c.result != nil && !c.result.accepts(result) {
 		if err := c.result.refuse(ctx, result, func() string { return c.resultWhat }); err != nil {
-			return scalar{}, calcFrame(c.name, err)
+			return scalar{}, calcFrame(c.kind, c.name, err)
 		}
 	}
 	return result, nil

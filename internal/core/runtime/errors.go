@@ -489,6 +489,7 @@ func (e *OperandTypeError) Unwrap() error { return ErrTypeMismatch }
 // calc frames it propagated through so a recursion reports a depth rather than
 // one wrapped line per frame.
 type CalcFrameError struct {
+	Kind   string // the notation keyword of the calc: `calc` or `analysis`
 	Calc   string // the calc the error surfaced from
 	Frames int    // calc frames the error propagated through
 	Err    error
@@ -500,9 +501,9 @@ type CalcFrameError struct {
 
 func (e *CalcFrameError) Error() string {
 	if e.Frames > 1 {
-		return fmt.Sprintf("calc %s: … %d frames: %v", e.Calc, e.Frames, e.Err)
+		return fmt.Sprintf("%s %s: … %d frames: %v", e.Kind, e.Calc, e.Frames, e.Err)
 	}
-	return fmt.Sprintf("calc %s: %v", e.Calc, e.Err)
+	return fmt.Sprintf("%s %s: %v", e.Kind, e.Calc, e.Err)
 }
 
 func (e *CalcFrameError) Unwrap() error { return e.Err }
@@ -510,11 +511,12 @@ func (e *CalcFrameError) Unwrap() error { return e.Err }
 // calcFrame adds one calc frame to err. A calc the chain already passed through
 // is counted rather than wrapped again, so a recursion reports a depth instead
 // of one line per frame, while a calc calling another still names both.
-func calcFrame(calc string, err error) error {
+func calcFrame(kind, calc string, err error) error {
 	var framed *CalcFrameError
 	if errors.As(err, &framed) {
 		if framed.calcs[calc] {
 			return &CalcFrameError{
+				Kind:   kind,
 				Calc:   calc,
 				Frames: framed.Frames + 1,
 				Err:    framed.Err,
@@ -526,13 +528,13 @@ func calcFrame(calc string, err error) error {
 			calcs[name] = true
 		}
 		calcs[calc] = true
-		return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: calcs}
+		return &CalcFrameError{Kind: kind, Calc: calc, Frames: 1, Err: err, calcs: calcs}
 	}
-	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
+	return &CalcFrameError{Kind: kind, Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
 }
 
 // calcDefaultError reports err raised evaluating calc's default for param as one
 // frame of calc, so a default re-invoking its own calc collapses into a count.
-func calcDefaultError(calc, param string, err error) error {
-	return calcFrame(calc, fmt.Errorf("default for parameter %q: %w", param, err))
+func calcDefaultError(kind, calc, param string, err error) error {
+	return calcFrame(kind, calc, fmt.Errorf("default for parameter %q: %w", param, err))
 }

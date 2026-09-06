@@ -1202,6 +1202,21 @@ the case is to compile; the dependency is on *expression and library semantics b
 which is why the approved order puts A1 first and X2 immediately after it rather than the reverse —
 A1's lowering can land against calcs that already evaluate, and X2 widens what those calcs can be.
 
+**Open:** [PR #979](https://github.com/JPL-Devin/OpenSysML/pull/979). An analysis definition or
+usage runs as the calculation it is: the `subject` is an `in` parameter (bound by the usage, by the
+object the run is asked on, or from the enclosing case), the body's `action`/`perform`/nested
+`analysis` steps are one `lower.Block` over the action graph they state (`then`, `first`, forks,
+joins, decisions, merges; declaration order where none is stated) run by the action executor, `out`
+and `return` are evaluated in the case's frame with their units, and the `objective` and every
+`assert constraint` are checked afterwards by the requirement engine as satisfied / not satisfied /
+undecided. `-analysis`/`%analysis`, the `RunAnalysis` RPC with Connect, Go and Python clients, and
+reads of an analysis usage's outputs as features (`An::shipCost.total`, `holder.inner.total`,
+`attribute :>> x = a.result;`) with memoization and invalidation are in. Left for A6: a verification
+case body lowers through the same code but is not run, and its verdict is still what `-requirement`
+computes. Left for X2: the pilot's `10c`/`10d` analyses and the `Analysis Examples` corpus stop on
+library functions that do not evaluate yet (`Interpolate`, `sum`/`collect` over sampled functions);
+`10a-Analysis.sysml` and the training corpus's `33. Analysis` models run.
+
 ## A2 — a trade study iterates, evaluates and selects
 
 `TradeStudies::TradeStudy` is recognised (its `objective` metadata is read) but `selectedAlternative`
