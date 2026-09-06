@@ -36,16 +36,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	}
 	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
-	tc.checkMultiplicityBounds(ctx, rootScope)
 	return append(tc.diags, tc.expr.diags...)
-}
-
-// checkMultiplicityBounds applies the operator rules to every multiplicity bound
-// of the document, which no declaration's value walk reaches.
-func (tc *typeChecker) checkMultiplicityBounds(ctx *Context, rootScope *symbols.Scope) {
-	for _, sym := range w8cSymbols(ctx, rootScope) {
-		tc.expr.checkBoundOperators(w8cScopeOf(sym), w8cMultiplicityOf(sym))
-	}
 }
 
 type typeChecker struct {
@@ -67,6 +58,8 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			tc.checkRelationships(scope, d.Relationships, declKind{
 				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword, span: d.Span(),
 			})
+			tc.expr.checkBoundOperators(scope, d.Multiplicity)
+			tc.expr.checkRelationshipBounds(scope, d.Relationships)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -83,6 +76,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				hasType:      hasTypingRelationship(d.Relationships),
 				span:         d.Span(),
 			})
+			tc.expr.checkUsageBounds(scope, d)
 			if tc.sendPayloads[d] {
 				tc.checkOneType(scope, usageDecl(d))
 			} else {
@@ -94,6 +88,8 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 		case *ast.AssumeMember, *ast.RequireMember:
 			tc.checkOwnedConstraint(scope, d)
 			tc.checkBehaviorMember(scope, d)
+		case *ast.MultiplicityDecl:
+			tc.expr.checkBoundOperators(scope, d.Range)
 		case *ast.Package:
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -149,9 +145,11 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		}
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.AssumeMember:
+		tc.expr.checkBoundOperators(scope, m.Multiplicity)
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.RequireMember:
+		tc.expr.checkBoundOperators(scope, m.Multiplicity)
 		tc.expr.checkBoolean(scope, m.Expression, "require expression")
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.IfActionNode:
@@ -237,6 +235,7 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	}
 	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
+	tc.expr.checkBoundOperators(scope, m.Multiplicity)
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}

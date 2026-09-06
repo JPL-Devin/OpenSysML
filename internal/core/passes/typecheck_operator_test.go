@@ -445,3 +445,62 @@ func TestOperatorRulesInBodyMembers(t *testing.T) {
 		"4:38 cast argument is typed by Integer, unrelated to the target C",
 		"5:32 cast argument is typed by Integer, unrelated to the target C")
 }
+
+// Every multiplicity the notation writes is reached once by the operator rules:
+// a multiplicity declaration's range, a body parameter's bound (in a value, a
+// select, a collect or a filter body), a cast's, a definition's, a connector
+// end's, a subject's, an assume/require's and a cross feature's.
+func TestOperatorRulesInEveryMultiplicityForm(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	multiplicity m [0..(2 as C)];
+	feature f = { in x : Integer[0..(3 as C)]; x };
+	feature g = (as K[0..(4 as C)]);
+	class D [0..(5 as C)];
+	connector c from [0..(6 as C)] f to [0..(7 as C)] g;
+	feature n : Natural;
+	feature i : K { multiplicity mm [0..(8 as C)]; }
+	feature j = f.?{ in y : Integer[0..(10 as C)]; y == 1 };
+	feature k = f.{ in w : Integer[0..(11 as C)]; w };
+	multiplicity m2 [0..n[1]];
+	feature f2 = { in x : Integer[0..n[2]]; x };
+	feature g2 = (as K[0..n[3]]);
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:22 cast argument is typed by Integer, unrelated to the target C",
+		"5:35 cast argument is typed by Integer, unrelated to the target C",
+		"6:24 cast argument is typed by Integer, unrelated to the target C",
+		"7:15 cast argument is typed by Integer, unrelated to the target C",
+		"8:24 cast argument is typed by Integer, unrelated to the target C",
+		"8:43 cast argument is typed by Integer, unrelated to the target C",
+		"10:39 cast argument is typed by Integer, unrelated to the target C",
+		"11:38 cast argument is typed by Integer, unrelated to the target C",
+		"12:37 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.kerml", codeBracketOperator, kerml,
+		"13:22 `x[i]` is not an index in KerML",
+		"14:35 `x[i]` is not an index in KerML",
+		"15:24 `x[i]` is not an index in KerML")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	part a : K; part b : K;
+	connection cn connect [0..(2 as C)] a to [0..(3 as C)] b;
+	bind [0..(4 as C)] a = b;
+	requirement def D { subject s : K[0..(5 as C)]; }
+	requirement def R { assume constraint ac [0..(6 as C)] { true } require constraint rc [0..(7 as C)] { true } }
+	part e : K[0..(8 as C)] { attribute q = { in v : Integer[0..(9 as C)]; v }; }
+	connection def CD { end e1 [0..(10 as C)] feature x : K; end e2 : K; }
+	package Q { filter { in z : Integer[0..(11 as C)]; z == 1 }; }
+}`,
+		"5:29 cast argument is typed by Integer, unrelated to the target C",
+		"5:48 cast argument is typed by Integer, unrelated to the target C",
+		"6:12 cast argument is typed by Integer, unrelated to the target C",
+		"7:40 cast argument is typed by Integer, unrelated to the target C",
+		"8:48 cast argument is typed by Integer, unrelated to the target C",
+		"8:93 cast argument is typed by Integer, unrelated to the target C",
+		"9:17 cast argument is typed by Integer, unrelated to the target C",
+		"9:63 cast argument is typed by Integer, unrelated to the target C",
+		"10:34 cast argument is typed by Integer, unrelated to the target C",
+		"11:42 cast argument is typed by Integer, unrelated to the target C")
+}

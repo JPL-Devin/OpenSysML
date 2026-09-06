@@ -69,6 +69,8 @@ func (ec *exprChecker) checkOperatorRules(scope *symbols.Scope, node ast.Node) {
 		}
 		ec.checkBodyMembers(scope, e)
 		ec.checkOperatorRules(ec.bodyScope(scope, e), e.Result)
+	case *ast.CastExpr:
+		ec.checkBoundOperators(scope, e.Multiplicity)
 	}
 }
 
@@ -83,20 +85,58 @@ func (ec *exprChecker) checkBoundOperators(scope *symbols.Scope, mult *ast.Multi
 	}
 }
 
-// checkMemberOperators applies the operator rules to the values the declarations
-// of an expression body write, for a checker that types nothing else of them.
+// checkRelationshipBounds applies the operator rules to the end multiplicities
+// relationships write, the `[0..1]` of `bind [0..1] a = b`.
+func (ec *exprChecker) checkRelationshipBounds(scope *symbols.Scope, rels []*ast.Relationship) {
+	for _, rel := range rels {
+		if rel != nil {
+			ec.checkBoundOperators(scope, rel.Multiplicity)
+		}
+	}
+}
+
+// checkUsageBounds applies the operator rules to every multiplicity a usage
+// writes: its own, its value's, its relationships', its cross feature's and its ends'.
+func (ec *exprChecker) checkUsageBounds(scope *symbols.Scope, u *ast.Usage) {
+	ec.checkBoundOperators(scope, u.Multiplicity)
+	ec.checkBoundOperators(scope, u.ValueMultiplicity)
+	ec.checkRelationshipBounds(scope, u.Relationships)
+	inner := childScopeOr(scope, u)
+	if cross := u.CrossFeature; cross != nil {
+		ec.checkBoundOperators(inner, cross.Multiplicity)
+		ec.checkRelationshipBounds(inner, cross.Relationships)
+	}
+	for _, end := range u.ConnectorEnds {
+		if end != nil {
+			ec.checkBoundOperators(inner, end.Multiplicity)
+			ec.checkRelationshipBounds(inner, end.Relationships)
+		}
+	}
+	if u.FlowEnds != nil {
+		ec.checkBoundOperators(inner, u.FlowEnds.PayloadMultiplicity)
+	}
+}
+
+// checkMemberOperators applies the operator rules to the values and bounds the
+// declarations of an expression body write, for a checker that types nothing else of them.
 func (ec *exprChecker) checkMemberOperators(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		m = unwrapType(m)
 		d, ok := featureDeclOf(m)
 		if !ok {
+			if md, ok := m.(*ast.MultiplicityDecl); ok {
+				ec.checkBoundOperators(scope, md.Range)
+			}
 			continue
 		}
 		ec.checkOperatorRules(scope, d.value)
 		if u, ok := m.(*ast.Usage); ok {
+			ec.checkUsageBounds(scope, u)
 			if child := childScopeOf(scope, u); child != nil {
 				ec.checkMemberOperators(child, u.Members)
 			}
+		} else {
+			ec.checkBoundOperators(scope, d.multiplicity)
 		}
 	}
 }
