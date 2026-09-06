@@ -36,6 +36,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
+	walk := newObjectiveWalk()
 	seenRoles := m.explicitRedefinitions(sym)
 	for _, sup := range m.roleSources(owner) {
 		if !behaviorLike(sup) {
@@ -43,7 +44,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 		}
 		var inherited []*symbols.Symbol
 		if role == objectiveRole {
-			inherited, _ = m.effectiveObjectives(sup, seenCases)
+			inherited, _ = m.effectiveObjectives(sup, walk)
 			if f := m.positionalObjective(owner, sym, inherited); f != nil {
 				inherited = []*symbols.Symbol{f}
 			} else {
@@ -112,17 +113,43 @@ func (r replacements) restates(by, sym *symbols.Symbol) bool {
 	return walk(sym)
 }
 
+// objectiveWalk is the state of one effectiveObjectives query: the cases on the current
+// path, which cut a cycle, and the finished ones, read once however many paths reach them.
+type objectiveWalk struct {
+	visiting map[*symbols.Symbol]bool
+	done     map[*symbols.Symbol]effectiveObjectiveSet
+	cuts     int // cycles cut so far; a result computed across a cut is path-bound
+}
+
+// effectiveObjectiveSet is a finished effectiveObjectives answer; readers must not mutate it.
+type effectiveObjectiveSet struct {
+	objectives []*symbols.Symbol
+	replaced   replacements
+}
+
+func newObjectiveWalk() *objectiveWalk {
+	return &objectiveWalk{visiting: map[*symbols.Symbol]bool{}, done: map[*symbols.Symbol]effectiveObjectiveSet{}}
+}
+
 // effectiveObjectives lists sym's objectives by position: each general's, replaced by the
 // owned one redefining it by clause or position, then the owned ones redefining none. A
 // restatement met through one general stands for the objective it restates met through
-// another. visiting holds the cases on the current path, so every general is read in full.
-func (m *Model) effectiveObjectives(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) ([]*symbols.Symbol, replacements) {
-	replaced := replacements{}
-	if sym == nil || visiting[sym] {
-		return nil, replaced
+// another. Every general is read in full, and once per walk when no cycle cuts it short.
+func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([]*symbols.Symbol, replacements) {
+	if sym == nil {
+		return nil, nil
 	}
-	visiting[sym] = true
-	defer delete(visiting, sym)
+	if walk.visiting[sym] {
+		walk.cuts++
+		return nil, nil
+	}
+	if done, ok := walk.done[sym]; ok {
+		return done.objectives, done.replaced
+	}
+	walk.visiting[sym] = true
+	defer delete(walk.visiting, sym)
+	cuts := walk.cuts
+	replaced := replacements{}
 	owned := ownedRoles(sym, objectiveRole)
 	explicit := make([]map[*symbols.Symbol]bool, len(owned))
 	for i, o := range owned {
@@ -134,7 +161,7 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, visiting map[*symbols.S
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited, inheritedReplaced := m.effectiveObjectives(sup, visiting)
+		inherited, inheritedReplaced := m.effectiveObjectives(sup, walk)
 		for f, by := range inheritedReplaced {
 			for b := range by {
 				replaced.add(f, b)
@@ -156,6 +183,9 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, visiting map[*symbols.S
 			placed[o] = true
 			out = append(out, o)
 		}
+	}
+	if walk.cuts == cuts {
+		walk.done[sym] = effectiveObjectiveSet{objectives: out, replaced: replaced}
 	}
 	return out, replaced
 }

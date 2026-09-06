@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -394,5 +396,36 @@ func TestSubjectParameterSurvivesDiamondRedefinition(t *testing.T) {
 		if got := m.SubjectParameterOf(nested(t, p.Scope, tc.name)); got != tc.want {
 			t.Errorf("SubjectParameterOf(%s) = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// Objectives through a tower of diamonds are read once per case, not once per path:
+// sixty stacked diamonds have 2^60 paths, and the restatement halfway up still wins.
+func TestObjectivesThroughLayeredDiamondsAreLinear(t *testing.T) {
+	const layers = 60
+	var b strings.Builder
+	b.WriteString("package P {\n\tverification def C0 { objective o0; }\n")
+	for i := 1; i <= layers; i++ {
+		fmt.Fprintf(&b, "\tverification def L%d :> C%d;\n\tverification def R%d :> C%d;\n", i, i-1, i, i-1)
+		if i == layers/2 {
+			fmt.Fprintf(&b, "\tverification def C%d :> L%d, R%d { objective mid; }\n", i, i, i)
+		} else {
+			fmt.Fprintf(&b, "\tverification def C%d :> L%d, R%d;\n", i, i, i)
+		}
+	}
+	fmt.Fprintf(&b, "\tverification def Top :> C%d { objective top; }\n}", layers)
+	m, root := buildModel(t, b.String())
+	p := sym(t, root, "P")
+	o0 := nested(t, nested(t, p.Scope, "C0").Scope, "o0")
+	mid := nested(t, nested(t, p.Scope, fmt.Sprintf("C%d", layers/2)).Scope, "mid")
+	top := nested(t, nested(t, p.Scope, "Top").Scope, "top")
+	if got := m.ImplicitRoleRedefinitions(mid); len(got) != 1 || got[0] != o0 {
+		t.Errorf("ImplicitRoleRedefinitions(mid) = %v, want [o0]", got)
+	}
+	if got := m.ImplicitRoleRedefinitions(top); len(got) != 1 || got[0] != mid {
+		t.Errorf("ImplicitRoleRedefinitions(top) = %v, want [mid]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, fmt.Sprintf("C%d", layers))); len(owned) != 0 || len(inherited) != 1 || inherited[0] != mid {
+		t.Errorf("ObjectivesOf(C%d) = %v, %v; want [], [mid]", layers, owned, inherited)
 	}
 }
