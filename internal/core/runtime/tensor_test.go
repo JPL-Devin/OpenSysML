@@ -238,3 +238,62 @@ func TestAbandonedTensorReferenceIsForgottenByItsHolders(t *testing.T) {
 		t.Error("stress still holds a tensor built over an abandoned reference")
 	}
 }
+
+// TestWriteOfEqualTensorComponentsOverAnotherReferenceRecomputesDerivedValues: a
+// tensor of the same components over a reference of another boundness, or another
+// reference object, is a change to what read its isBound or mRef.
+func TestWriteOfEqualTensorComponentsOverAnotherReferenceRecomputesDerivedValues(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+		private import ISQ::*;
+		private import SI::*;
+		private import MeasurementReferences::*;
+		private import Quantities::*;
+		attribute def Labeled :> TensorMeasurementReference { attribute label : ScalarValues::String; }
+		attribute looseRef : Labeled { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); :>> label = "loose"; }
+		attribute boundRef : Labeled { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); :>> isBound = true; :>> label = "bound"; }
+		attribute otherRef : Labeled { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); :>> isBound = true; :>> label = "other"; }
+		part def Holder {
+			attribute stress : TensorQuantityValue;
+			attribute bound = stress.isBound;
+			attribute label = stress.mRef.label;
+		}
+		part holder : Holder;
+	}`)
+	pkg, _ := idx.DocumentRoot("<test>").LookupLocal("test")
+	holder, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(ref string) {
+		t.Helper()
+		val := tensorEval(t, ctx, pkg.Scope, "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), "+ref+")")
+		if err := holder.SetFeatureValue(ctx, "stress", val); err != nil {
+			t.Fatalf("write stress over %s: %v", ref, err)
+		}
+	}
+	expect := func(ref, bound, label string) {
+		t.Helper()
+		if got := readFormatted(t, ctx, holder, "bound"); got != bound {
+			t.Errorf("bound over %s = %s, want %s", ref, got, bound)
+		}
+		if got := readFormatted(t, ctx, holder, "label"); got != label {
+			t.Errorf("label over %s = %s, want %s", ref, got, label)
+		}
+	}
+	write("looseRef")
+	expect("looseRef", "false", `"loose"`)
+	write("boundRef")
+	if holder.FeatureValues["bound"].Materialized || holder.FeatureValues["label"].Materialized {
+		t.Fatal("bound or label is still materialized after stress was restated over boundRef")
+	}
+	expect("boundRef", "true", `"bound"`)
+	write("otherRef")
+	if holder.FeatureValues["label"].Materialized {
+		t.Fatal("label is still materialized after stress was restated over otherRef")
+	}
+	expect("otherRef", "true", `"other"`)
+	write("otherRef")
+	if !holder.FeatureValues["bound"].Materialized || !holder.FeatureValues["label"].Materialized {
+		t.Fatal("writing the same tensor over the same reference again unmaterialized its readers")
+	}
+}

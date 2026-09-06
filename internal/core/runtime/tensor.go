@@ -102,11 +102,14 @@ func tensorQuantityEqual(a, b *TensorQuantity) bool {
 	return true
 }
 
-// tensorQuantityHeldSame is heldSame over tensor quantities: the same shape, and
-// every component held the same.
+// tensorQuantityHeldSame is heldSame over tensor quantities: the same shape,
+// boundness and reference object, and every component held the same.
 func tensorQuantityHeldSame(prior, now *TensorQuantity) bool {
 	if prior == nil || now == nil || !equalInt64s(prior.Dimensions, now.Dimensions) {
 		return prior == now
+	}
+	if prior.BoundKnown != now.BoundKnown || prior.IsBound != now.IsBound || prior.MRef != now.MRef {
+		return false
 	}
 	for i := range prior.Num {
 		if !heldSame(NewQuantityValue(prior.component(i)), NewQuantityValue(now.component(i))) {
