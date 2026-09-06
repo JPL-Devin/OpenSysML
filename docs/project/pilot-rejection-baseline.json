@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 256,
-        "digest": "sha256:04de50497011a01b8e37a008d8ce85682c417b02fa3a2e44ad1c240ff6915bc1"
+        "files": 257,
+        "digest": "sha256:1d2ae045d7d1add5f52a6484ddbad23857c3e41954880a76a32d919443d0c7e5"
       }
     ],
-    "recorded": "2026-09-05"
+    "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 256,
-    "bothReject": 247,
+    "cases": 257,
+    "bothReject": 248,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 124,
-      "bothReject": 115,
+      "cases": 125,
+      "bothReject": 116,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -2083,6 +2083,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/s88-assert-through-owner-of-unnamed-assertion.sysml",
+      "source": "semantic",
+      "rule": "An unnamed assertion derives no member name from the feature it references, so a qualified reference through its owner still reaches the referenced non-constraint (KerML 7.3.4.5 Feature names; SysML 7.19 Constraints; pilot validateAssertConstraintUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 4
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2457,8 +2466,8 @@
       }
     ],
     "totals": {
-      "cases": 256,
-      "bothReject": 247,
+      "cases": 257,
+      "bothReject": 248,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
