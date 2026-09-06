@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/migrate"
 )
 
 // buildCLI builds the sysml binary once so the conversion tests exercise the
@@ -245,4 +249,172 @@ func run(t *testing.T, binary string, args ...string) string {
 		t.Fatalf("%v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+// TestConvertMigratesXMI drives a SysML v1 migration through the command line:
+// the .xmi extension picks the input format, -migration-report writes text or
+// JSON by extension, the summary goes to stderr otherwise, and XMI is never a
+// target.
+func TestConvertMigratesXMI(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	xmi := filepath.Join("..", "..", "internal", "core", "migrate", "testdata", "cameo", "vehicle.xmi")
+	model := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	migrated := runCommand(t, exec.Command(binary, xmi, "-convert", "sysml"))
+	if migrated.status != 0 {
+		t.Fatalf("migrating failed: %s%s", migrated.stdout, migrated.stderr)
+	}
+	if !strings.Contains(migrated.stdout, "part def Vehicle") {
+		t.Errorf("no migrated notation on stdout:\n%s", migrated.stdout)
+	}
+	if !strings.Contains(migrated.stderr, "migration: migrated") || strings.Contains(migrated.stdout, "migration:") {
+		t.Errorf("the migration summary belongs on stderr:\nstdout: %s\nstderr: %s", migrated.stdout, migrated.stderr)
+	}
+	if !strings.Contains(migrated.stderr, "note: SysML v1 migration is experimental") || strings.Contains(migrated.stdout, "experimental") {
+		t.Errorf("the experimental notice belongs on stderr:\nstdout: %s\nstderr: %s", migrated.stdout, migrated.stderr)
+	}
+
+	textReport := filepath.Join(dir, "report.txt")
+	jsonReport := filepath.Join(dir, "report.json")
+	turtle := filepath.Join(dir, "model.ttl")
+	run(t, binary, xmi, "-convert", "ttl", "-o", turtle, "-migration-report", textReport)
+	run(t, binary, xmi, "-from", "xmi", "-convert", "sysml", "-o", model, "-migration-report", jsonReport)
+	text, err := os.ReadFile(textReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(text), "unmapped") || !strings.Contains(string(text), "Vehicle") {
+		t.Errorf("text report lacks its verdicts:\n%s", text)
+	}
+	var report migrate.Report
+	raw, err := os.ReadFile(jsonReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatalf("JSON report does not decode: %v\n%s", err, raw)
+	}
+	if report.Exporter != "MagicDraw UML" || len(report.Entries) == 0 {
+		t.Errorf("JSON report is incomplete: exporter %q, %d entries", report.Exporter, len(report.Entries))
+	}
+	// The written notation must be what the ttl was built from.
+	run(t, binary, model, "-convert", "ttl")
+
+	// A copy of the input, so a refused overwrite that slipped through could not touch testdata.
+	source, err := os.ReadFile(xmi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1 := filepath.Join(dir, "v1.xmi")
+	if err := os.WriteFile(v1, source, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hardLink := filepath.Join(dir, "v1-hard.xmi")
+	if err := os.Link(v1, hardLink); err != nil {
+		hardLink = v1
+	}
+	t.Cleanup(func() {
+		if got, err := os.ReadFile(v1); err != nil || !bytes.Equal(got, source) {
+			t.Errorf("the v1 model was modified (err %v)", err)
+		}
+	})
+
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"xmi as target":                                {[]string{model, "-convert", "xmi"}, "cannot write xmi"},
+		"report without xmi":                           {[]string{model, "-convert", "ttl", "-migration-report", textReport}, "-migration-report describes a SysML v1 migration"},
+		"report without convert":                       {[]string{model, "-migration-report", textReport}, "-migration-report accompanies -convert"},
+		"notation read as xmi":                         {[]string{model, "-from", "xmi", "-convert", "sysml"}, "model.sysml"},
+		"report over the model":                        {[]string{xmi, "-convert", "sysml", "-o", textReport, "-migration-report", textReport}, "-migration-report and -o both name"},
+		"report over the model through dangling links": {[]string{xmi, "-convert", "sysml", "-o", danglingLink(t, dir, "model-link", "shared.txt"), "-migration-report", danglingLink(t, dir, "report-link", "shared.txt")}, "-migration-report and -o both name"},
+		"report over the input":                        {[]string{xmi, "-convert", "sysml", "-migration-report", xmi}, "names the model being migrated"},
+		"report over the input, spelled differently":   {[]string{xmi, "-convert", "sysml", "-migration-report", filepath.Join(filepath.Dir(xmi), ".", filepath.Base(xmi))}, "names the model being migrated"},
+		"report over the input through a link":         {[]string{xmi, "-convert", "sysml", "-migration-report", symlinkTo(t, dir, "input-link", xmi)}, "names the model being migrated"},
+		"report over the model, spelled differently":   {[]string{xmi, "-convert", "sysml", "-o", filepath.Join(filepath.Dir(textReport), ".", filepath.Base(textReport)), "-migration-report", textReport}, "-migration-report and -o both name"},
+		"output over the input":                        {[]string{v1, "-convert", "sysml", "-o", v1}, "-o names the model being migrated"},
+		"output over the input, spelled differently":   {[]string{v1, "-convert", "sysml", "-o", filepath.Join(dir, ".", "v1.xmi")}, "-o names the model being migrated"},
+		"output over the input through a link":         {[]string{v1, "-convert", "sysml", "-o", symlinkTo(t, dir, "v1-link", v1)}, "-o names the model being migrated"},
+		"output over the input through a hard link":    {[]string{v1, "-convert", "sysml", "-o", hardLink}, "-o names the model being migrated"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := exec.Command(binary, tc.args...).CombinedOutput()
+			if err == nil {
+				t.Fatalf("expected a non-zero exit, got:\n%s", out)
+			}
+			if !strings.Contains(string(out), tc.want) {
+				t.Errorf("expected %q in the error, got:\n%s", tc.want, out)
+			}
+		})
+	}
+}
+
+func TestLoadingXMIDirectlyPointsAtMigration(t *testing.T) {
+	binary := buildCLI(t)
+	xmi := filepath.Join("..", "..", "internal", "core", "migrate", "testdata", "cameo", "vehicle.xmi")
+	for _, args := range [][]string{
+		{xmi, "-validate"},
+		{xmi, "-eval", "1"},
+		{xmi, "-query", "Vehicle"},
+	} {
+		res := runCommand(t, exec.Command(binary, args...))
+		if res.status != 2 || !strings.Contains(res.stderr, "migrate it first") || strings.Contains(res.stderr, "expected a namespace member") {
+			t.Errorf("%v: status %d, stderr:\n%s", args, res.status, res.stderr)
+		}
+	}
+}
+
+func TestMigrationReportRefusedBeforeEveryMode(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := filepath.Join(dir, "report.txt")
+	for _, args := range [][]string{
+		{model, "-migration-report", report},
+		{model, "-validate", "-migration-report", report},
+		{model, "-compile", "P::F", "-o", filepath.Join(dir, "f"), "-migration-report", report},
+		{model, "-sync-diff", filepath.Join(dir, "g.ttl"), "-migration-report", report},
+		{model, "-render-all", filepath.Join(dir, "views"), "-migration-report", report},
+		{model, "-render-documents", filepath.Join(dir, "docs"), "-migration-report", report},
+	} {
+		res := runCommand(t, exec.Command(binary, args...))
+		if res.status != 2 || !strings.Contains(res.stderr, "-migration-report accompanies -convert") {
+			t.Errorf("%v: status %d, stderr:\n%s", args[1:], res.status, res.stderr)
+		}
+		if _, err := os.Stat(report); err == nil {
+			t.Errorf("%v: report written", args[1:])
+		}
+	}
+}
+
+// symlinkTo makes a symbolic link in dir to an existing target.
+func symlinkTo(t *testing.T, dir, name, target string) string {
+	t.Helper()
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, name)
+	if err := os.Symlink(abs, link); err != nil {
+		t.Skipf("cannot make a symbolic link: %v", err)
+	}
+	return link
+}
+
+// danglingLink makes a symbolic link in dir to a target that does not exist.
+func danglingLink(t *testing.T, dir, name, target string) string {
+	t.Helper()
+	link := filepath.Join(dir, name)
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot make a symbolic link: %v", err)
+	}
+	return link
 }
