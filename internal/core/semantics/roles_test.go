@@ -268,3 +268,49 @@ func TestObjectivesOfMasksOnlyTheFirstOfEachGeneral(t *testing.T) {
 		t.Errorf("ObjectivesOf(C3) = %v, %v; want [o6], []: o6 redefines o2 by clause and o1 by role", owned, inherited)
 	}
 }
+
+// A restatement deeper in one branch of a diamond replaces the common ancestor's
+// objective seen through the other, whichever branch is written first, so a
+// further specialization's positions line up with the restatement.
+func TestAnalysisObjectivesAlignAcrossUnevenDiamond(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		analysis def Base { objective b1; objective b2; }
+		analysis def A :> Base;
+		analysis def Mid :> Base { objective m1; }
+		analysis def B :> Mid;
+		analysis def D :> A, B;
+		analysis def Reversed :> B, A;
+		analysis def E :> D { objective e1; objective e2; objective e3; }
+		analysis def F :> Reversed { objective f1; objective f2; objective f3; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	b1 := nested(t, base.Scope, "b1")
+	b2 := nested(t, base.Scope, "b2")
+	m1 := nested(t, nested(t, p.Scope, "Mid").Scope, "m1")
+	for _, name := range []string{"D", "Reversed"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 0 || len(inherited) != 2 || !contains(inherited, m1) || !contains(inherited, b2) {
+			t.Errorf("ObjectivesOf(%s) = %v, %v; want [], {m1 b2}", name, owned, inherited)
+		}
+	}
+	for _, tc := range []struct {
+		owner string
+		names [3]string
+	}{{"E", [3]string{"e1", "e2", "e3"}}, {"F", [3]string{"f1", "f2", "f3"}}} {
+		owner := nested(t, p.Scope, tc.owner)
+		first := nested(t, owner.Scope, tc.names[0])
+		if got := m.ImplicitRoleRedefinitions(first); len(got) != 1 || got[0] != m1 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want [m1]", tc.owner, tc.names[0], got)
+		}
+		if got := m.AllSupertypes(first); len(got) != 2 || got[0] != m1 || got[1] != b1 {
+			t.Errorf("AllSupertypes(%s::%s) = %v, want [m1 b1]", tc.owner, tc.names[0], got)
+		}
+		if got := m.ImplicitRoleRedefinitions(nested(t, owner.Scope, tc.names[1])); len(got) != 1 || got[0] != b2 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want [b2]", tc.owner, tc.names[1], got)
+		}
+		if got := m.ImplicitRoleRedefinitions(nested(t, owner.Scope, tc.names[2])); len(got) != 0 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want none: the generals state two", tc.owner, tc.names[2], got)
+		}
+	}
+}

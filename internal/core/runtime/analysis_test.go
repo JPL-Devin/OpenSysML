@@ -512,3 +512,39 @@ func TestObjectivesOfAnalysisUsage(t *testing.T) {
 		t.Errorf("conditions are [%s], want [required size >= 2]", conds)
 	}
 }
+
+// A restatement deeper in one branch of a diamond stands for the common
+// ancestor's objective seen through the other branch, in whichever order the
+// generals are written and traversed.
+func TestObjectivesOfUnevenDiamond(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Base {
+				attribute cost : Integer;
+				attribute margin : Integer;
+				objective cheapest : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { cost }
+				}
+			}
+			analysis def A :> Base;
+			analysis def Mid :> Base {
+				objective : MinimizeObjective {
+					subject :>> selectedAlternative;
+					in calc :>> eval { return :>> result = cost + margin; }
+				}
+			}
+			analysis def B :> Mid;
+			analysis def D :> A, B;
+			analysis def Reversed :> B, A;
+		}
+	`)
+	for _, name := range []string{"D", "Reversed"} {
+		got := objectiveLabels(objectivesOfCase(t, ctx, scope, name))
+		if want := "minimize  = cost + margin"; got != want {
+			t.Errorf("%s: objectives are [%s], want [%s]", name, got, want)
+		}
+	}
+}

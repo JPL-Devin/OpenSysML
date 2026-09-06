@@ -41,7 +41,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 		}
 		var inherited []*symbols.Symbol
 		if role == objectiveRole {
-			inherited = m.effectiveObjectives(sup, seenCases)
+			inherited, _ = m.effectiveObjectives(sup, seenCases)
 			if f := m.positionalObjective(owner, sym, inherited); f != nil {
 				inherited = []*symbols.Symbol{f}
 			} else {
@@ -70,13 +70,46 @@ func (m *Model) positionalObjective(owner, sym *symbols.Symbol, inherited []*sym
 	return inherited[position]
 }
 
-// effectiveObjectives lists sym's objectives by position: each general's, replaced by the
-// owned one redefining it by clause or position, then the owned ones redefining none.
-func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
-	if sym == nil || seen[sym] {
-		return nil
+// replacements records which objectives restate which: replaced objective to its restatements.
+type replacements map[*symbols.Symbol]map[*symbols.Symbol]bool
+
+func (r replacements) add(replaced, by *symbols.Symbol) {
+	if r[replaced] == nil {
+		r[replaced] = map[*symbols.Symbol]bool{}
 	}
-	seen[sym] = true
+	r[replaced][by] = true
+}
+
+// restates reports whether by restates sym, directly or through a chain of restatements.
+func (r replacements) restates(by, sym *symbols.Symbol) bool {
+	seen := map[*symbols.Symbol]bool{}
+	var walk func(*symbols.Symbol) bool
+	walk = func(s *symbols.Symbol) bool {
+		if seen[s] {
+			return false
+		}
+		seen[s] = true
+		for next := range r[s] {
+			if next == by || walk(next) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(sym)
+}
+
+// effectiveObjectives lists sym's objectives by position: each general's, replaced by the
+// owned one redefining it by clause or position, then the owned ones redefining none. A
+// restatement met through one general stands for the objective it restates met through
+// another. visiting holds the cases on the current path, so every general is read in full.
+func (m *Model) effectiveObjectives(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) ([]*symbols.Symbol, replacements) {
+	replaced := replacements{}
+	if sym == nil || visiting[sym] {
+		return nil, replaced
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
 	owned := ownedRoles(sym, objectiveRole)
 	explicit := make([]map[*symbols.Symbol]bool, len(owned))
 	for i, o := range owned {
@@ -88,18 +121,21 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbo
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited := m.effectiveObjectives(sup, seen)
+		inherited, inheritedReplaced := m.effectiveObjectives(sup, visiting)
+		for f, by := range inheritedReplaced {
+			for b := range by {
+				replaced.add(f, b)
+			}
+		}
 		for _, f := range inherited {
 			for i, o := range owned {
 				if explicit[i][f] || m.positionalObjective(sym, o, inherited) == f {
+					replaced.add(f, o)
 					f = o
 					break
 				}
 			}
-			if !placed[f] {
-				placed[f] = true
-				out = append(out, f)
-			}
+			out = placeObjective(out, placed, f, replaced)
 		}
 	}
 	for _, o := range owned {
@@ -108,7 +144,26 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbo
 			out = append(out, o)
 		}
 	}
-	return out
+	return out, replaced
+}
+
+// placeObjective adds f to out: in place of an objective it restates, nowhere when one
+// already placed restates it, and at the end otherwise.
+func placeObjective(out []*symbols.Symbol, placed map[*symbols.Symbol]bool, f *symbols.Symbol, replaced replacements) []*symbols.Symbol {
+	if placed[f] {
+		return out
+	}
+	placed[f] = true
+	for i, prev := range out {
+		if replaced.restates(prev, f) {
+			return out
+		}
+		if replaced.restates(f, prev) {
+			out[i] = f
+			return out
+		}
+	}
+	return append(out, f)
 }
 
 // ObjectivesOf returns the objectives a case owns and the inherited ones that no
