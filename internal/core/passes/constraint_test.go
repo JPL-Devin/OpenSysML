@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -469,6 +470,50 @@ func TestConstraint_RedefinitionTypeMismatch(t *testing.T) {
 	diags := constraintDiags(t, src)
 	if !hasCode(diags, "redefinition-type-mismatch") {
 		t.Fatalf("expected redefinition-type-mismatch diagnostic, got %v", diags)
+	}
+	// KerML defines no such constraint and the pinned pilot validator is silent:
+	// the redefining type joins the redefined one's, so the report is advisory.
+	for _, d := range diags {
+		if d.Code == "redefinition-type-mismatch" && d.Severity != SeverityWarning {
+			t.Errorf("redefinition-type-mismatch is %v, want a warning", d.Severity)
+		}
+	}
+}
+
+// A redefinition narrowing to a subtype conforms; one keeping the redefined
+// feature's type and adding none is silent as well.
+func TestConstraint_RedefinitionConformingTypeStaysSilent(t *testing.T) {
+	src := `
+		part def A; part def A2 :> A;
+		part def X { part p : A; }
+		part def Y :> X { part :>> p : A2; }
+		part def Z :> X { part :>> p; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "redefinition-type-mismatch") {
+		t.Fatalf("expected no redefinition-type-mismatch, got %v", diags)
+	}
+}
+
+// ShapeItems redefines `faces : StructuredSurface` as `Polygon` and
+// `PlanarSurface`, which the pinned pilot validator accepts: analyzed against
+// the library the file carries no error, and only advisory type reports.
+func TestConstraint_ShapeItemsRedefinitionsAreNotErrors(t *testing.T) {
+	const name = "Domain Libraries/Geometry/ShapeItems.sysml"
+	src, err := libs.DefaultSource().Read(name)
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	mismatches := 0
+	for _, d := range w9cLibraryDiags(t, string(src), false) {
+		if d.Severity == SeverityError {
+			t.Errorf("error on ShapeItems: %s", d.Message)
+		}
+		if d.Code == "redefinition-type-mismatch" {
+			mismatches++
+		}
+	}
+	if mismatches != 2 {
+		t.Errorf("redefinition-type-mismatch on ShapeItems = %d, want the two faces redefinitions", mismatches)
 	}
 }
 
