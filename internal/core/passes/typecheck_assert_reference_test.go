@@ -262,6 +262,26 @@ part h : H { assert h.missing; }`)
 	}
 }
 
+// Nor is the assertion a member `q` of its owner for anyone else: `h.q` written
+// outside still names `H::q` (the pinned pilot rejects both assertions here).
+func TestAssertReferenceNamesNoMemberOfItsOwner(t *testing.T) {
+	src := `constraint def CD; part def H { part q; constraint c : CD; }
+part h : H { assert q; }
+part ctx { assert h.q; assert h.c; }`
+	diags := typeDiags(t, src)
+	if len(diags) != 2 {
+		t.Fatalf("expected two type diagnostics (q, h.q), got %v", diags)
+	}
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "assert target must be a constraint usage, found partUsage") {
+			t.Errorf("got %q", d.Message)
+		}
+	}
+	if got := nameresDiags(t, src); len(got) != 0 {
+		t.Fatalf("got %+v, want no name-resolution diagnostics", got)
+	}
+}
+
 // The other requirement-parameter usages stay parts and stay rejected.
 func TestAssertReferenceToRequirementParameterPartsRejected(t *testing.T) {
 	tests := []struct {

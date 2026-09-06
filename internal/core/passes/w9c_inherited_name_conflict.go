@@ -117,7 +117,7 @@ func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, bases []*symbo
 	if sym.Scope == nil || resolve.ParameterizedByName(sym) {
 		return
 	}
-	owned, aliases := resolve.DistinguishableMembers(sym.Scope)
+	owned, aliases := c.resolver.DistinguishableMembers(sym.Scope)
 	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
 		for _, mem := range mems {
 			cands := c.contributionsOf(bases, mem.Name)

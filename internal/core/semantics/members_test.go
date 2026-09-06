@@ -3,6 +3,7 @@ package semantics
 import (
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -111,5 +112,90 @@ func TestHasMemberAgreesWithMembersOf(t *testing.T) {
 	if m.HasMember(sub, baseA) || m.HasMember(sub, baseR) || !m.HasMember(sub, baseB) {
 		t.Fatalf("HasMember(Sub): a=%v r=%v b=%v, want false false true",
 			m.HasMember(sub, baseA), m.HasMember(sub, baseR), m.HasMember(sub, baseB))
+	}
+}
+
+// A member named by a reference that resolves to nothing, or to no feature,
+// binds no name: MembersOf omits it exactly where LookupMember does.
+func TestMembersOfOmitsDerivedNamesTheirTargetsDoNotSupply(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		requirement def RD { constraint q : Q; }
+		requirement r : RD { require zz; require Q; }
+		requirement s : r;
+	}`)
+
+	pkg := sym(t, root, "P")
+	q := sym(t, sym(t, pkg.Scope, "RD").Scope, "q")
+	for _, owner := range []string{"r", "s"} {
+		o := sym(t, pkg.Scope, owner)
+		names := memberNames(m.MembersOf(o))
+		for _, name := range []string{"zz", "Q"} {
+			if names[name] {
+				t.Errorf("MembersOf(%s) lists %q, whose target names no feature", owner, name)
+			}
+			if got, ok := m.LookupMember(o, name); ok {
+				t.Errorf("LookupMember(%s, %q) = %v, want none", owner, name, got)
+			}
+		}
+		if !names["q"] {
+			t.Errorf("MembersOf(%s) lacks the inherited q", owner)
+		}
+		if got, ok := m.LookupMember(o, "q"); !ok || got != q {
+			t.Errorf("LookupMember(%s, q) = %v, want RD::q", owner, got)
+		}
+	}
+}
+
+// Enumerating e1's members asks whether its `:>> length` binds that name, which
+// resolves the redefinition's target through e1's own inherited members while
+// that very resolution is under way. The provisional "no" must not stick.
+func TestMembersOfKeepsARedefinitionWhoseTargetIsStillResolving(t *testing.T) {
+	src := `package P {
+		attribute def Q;
+		item def Curve { attribute length : Q; item edges [*]; }
+		item def Line :> Curve { attribute :>> length [1]; }
+		item def Polygon :> Curve { item :>> edges : Line; }
+		item def Quad :> Polygon {
+			item :>> edges [2] = (e1, e2);
+			item e1 [1];
+			item e2 [1];
+		}
+		item def Rectangle :> Quad {
+			attribute :>> length [1];
+			item :>> e1 { attribute :>> length = Rectangle::length; }
+			item :>> e2 { attribute :>> length = e1.length; }
+		}
+	}`
+	for _, first := range []string{"e1", "Rectangle"} {
+		t.Run("MembersOf "+first+" first", func(t *testing.T) {
+			m, root, _, _ := buildUnresolvedModel(t, "t.sysml", source.KindSysML, src)
+			pkg := sym(t, root, "P")
+			rect := sym(t, pkg.Scope, "Rectangle")
+			curveLength := sym(t, sym(t, pkg.Scope, "Curve").Scope, "length")
+			if first == "e1" {
+				m.MembersOf(sym(t, rect.Scope, "e1"))
+			} else {
+				m.MembersOf(rect)
+			}
+			for _, edge := range []string{"e1", "e2"} {
+				e := sym(t, rect.Scope, edge)
+				l, ok := m.LookupMember(e, "length")
+				if !ok || l.OwnerScope != e.Scope {
+					t.Errorf("LookupMember(%s, length) = %v, %v, want the redefinition", edge, l, ok)
+					continue
+				}
+				if !memberNames(m.MembersOf(e))["length"] {
+					t.Errorf("MembersOf(%s) lacks length", edge)
+				}
+				found := false
+				for _, r := range m.AllRedefinedFeatures(l) {
+					found = found || r == curveLength
+				}
+				if !found {
+					t.Errorf("%s.length does not redefine Curve::length", edge)
+				}
+			}
+		})
 	}
 }

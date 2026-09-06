@@ -55,6 +55,16 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 	}
 }
 
+// constraintCondition records the names a require/assume member's condition
+// uses; a lone name is the reference form, recorded as decl's reference target.
+func (c *refCollector) constraintCondition(scope *symbols.Scope, decl ast.Node, expr ast.Node) {
+	if ref := ast.ConditionReference(decl); ref != nil {
+		c.referenceTarget(scope, decl, ref)
+		return
+	}
+	c.expr(scope, expr)
+}
+
 // addRedefinition records a redefinition's target, which names a feature of the
 // owning scope's generals rather than a member of the scope itself, past the
 // name decl itself borrows from it.
@@ -297,8 +307,8 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.AssumeMember:
 		c.prefixes(scope, d, d.Prefixes)
-		c.expr(scope, d.Expression)
-		c.add(scope, d.Reference)
+		c.constraintCondition(scope, d, d.Expression)
+		c.addReference(scope, d, d.Reference)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
@@ -306,8 +316,8 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.RequireMember:
 		c.prefixes(scope, d, d.Prefixes)
-		c.expr(scope, d.Expression)
-		c.add(scope, d.Reference)
+		c.constraintCondition(scope, d, d.Expression)
+		c.addReference(scope, d, d.Reference)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
@@ -463,7 +473,7 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if rel == nil {
 			continue
 		}
-		if rel.Kind == ast.RelReferences {
+		if ast.IsReferenceSubsetting(decl, rel) {
 			c.referenceTarget(scope, decl, rel.Target)
 			continue
 		}

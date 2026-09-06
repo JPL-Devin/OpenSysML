@@ -27,9 +27,10 @@ import (
 // its library chain) masks nothing on that walk: the target stays the resolved one.
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
-	for _, qn := range relationshipTargets(sym, kind) {
-		resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if ok && resolved != nil && resolved != sym {
+	for _, rel := range relationshipsOfKind(sym, kind) {
+		qn := ast.AsQualifiedName(rel.Target)
+		resolved := ctx.model.RelationshipTarget(sym, rel)
+		if resolved != nil && resolved != sym {
 			if ctx.isFeatureOf(owner, resolved, sym) {
 				features = append(features, resolved)
 				continue
@@ -97,22 +98,18 @@ func (ctx *Context) ownDeclarationNamed(owner, sym *symbols.Symbol, names ...str
 	return nil, false
 }
 
-// relationshipTargets returns the names sym's relationships of the given kind name.
-func relationshipTargets(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.QualifiedName {
-	var names []*ast.QualifiedName
+// relationshipsOfKind returns sym's relationships of the given kind that name a target.
+func relationshipsOfKind(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.Relationship {
+	var rels []*ast.Relationship
 	for _, rel := range semantics.RelationshipsOf(sym) {
 		if rel == nil || rel.Kind != kind || rel.Target == nil {
 			continue
 		}
-		target := rel.Target
-		if fr, ok := target.(*ast.FeatureReference); ok {
-			target = fr.Name
-		}
-		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
-			names = append(names, qn)
+		if qn := ast.AsQualifiedName(rel.Target); qn != nil && len(qn.Parts) > 0 {
+			rels = append(rels, rel)
 		}
 	}
-	return names
+	return rels
 }
 
 // isFeatureOf reports whether owner carries feature under its name, as its own

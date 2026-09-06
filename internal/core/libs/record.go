@@ -2,7 +2,6 @@ package libs
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -64,27 +63,27 @@ type IndexRecord struct {
 // each supertype rather than text that only means something in its own file.
 // The model is shared across the records of one library, so the whole-index work
 // it memoizes is done once rather than once per file.
-func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) (*IndexRecord, bool) {
+func recordFromIndex(name string, idx *symbols.Index, model *semantics.Model) (*IndexRecord, bool) {
 	root := idx.DocumentRoot(name)
 	if root == nil {
 		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	complete := collectScope(root, "", rec, model, idx, r)
+	complete := collectScope(root, "", rec, model, idx)
 	return rec, complete
 }
 
 // collectScope walks scope's members (and child scopes) appending the facts of
 // each. prefix is the fully-qualified name of scope's owner ("" at root).
 // Reports whether every specialization target it met resolved.
-func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *semantics.Model, idx *symbols.Index, r *resolve.Resolver) bool {
+func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *semantics.Model, idx *symbols.Index) bool {
 	complete := true
 	for _, sym := range scope.Members() {
 		fqn := sym.Name
 		if prefix != "" {
 			fqn = prefix + "::" + sym.Name
 		}
-		supers, resolved := supersOf(sym, idx, r, model)
+		supers, resolved := supersOf(sym, idx, model)
 		complete = complete && resolved
 		facts := factRecord{
 			FQN:       fqn,
@@ -97,7 +96,7 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *
 			rec.Facts = append(rec.Facts, facts)
 		}
 		if sym.Scope != nil {
-			complete = collectScope(sym.Scope, fqn, rec, model, idx, r) && complete
+			complete = collectScope(sym.Scope, fqn, rec, model, idx) && complete
 		}
 	}
 	return complete
@@ -152,7 +151,7 @@ func dimensionFactsOf(sym *symbols.Symbol, model *semantics.Model, idx *symbols.
 // while checking that every declared generalization target resolves. Nothing is
 // recorded for a symbol with an edge that has no qualified name to restore it by,
 // or whose edges are still provisional: those are derived on every load instead.
-func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) ([]string, bool) {
+func supersOf(sym *symbols.Symbol, idx *symbols.Index, model *semantics.Model) ([]string, bool) {
 	var rels []*ast.Relationship
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -167,18 +166,12 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, mode
 		if !semantics.GeneralizationKind(rel.Kind) {
 			continue
 		}
-		// Unwrap FeatureReference to get underlying QualifiedName
-		target := rel.Target
-		if ref, ok := target.(*ast.FeatureReference); ok {
-			target = ref.Name
-		}
-		qn, ok := target.(*ast.QualifiedName)
-		if !ok {
+		if ast.AsQualifiedName(rel.Target) == nil {
 			complete = false
 			continue
 		}
-		super, ok := r.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || super == nil {
+		super := model.RelationshipTarget(sym, rel)
+		if super == nil {
 			complete = false
 			continue
 		}

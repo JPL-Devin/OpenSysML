@@ -484,38 +484,6 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// relationshipTarget resolves the element rel names from sym's scope, following
-// an alias to what it names; a chain target (`subsets b.f`) is its final feature.
-func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
-	if m.resolver == nil {
-		return nil
-	}
-	node := rel.Target
-	if fr, ok := node.(*ast.FeatureReference); ok {
-		node = fr.Name
-	}
-	if fc, ok := node.(*ast.FeatureChainExpr); ok {
-		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc)
-		if !ok || target == nil {
-			return nil
-		}
-		return target
-	}
-	qn, ok := node.(*ast.QualifiedName)
-	if !ok {
-		return nil
-	}
-	target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
-	if !ok || target == nil {
-		return nil
-	}
-	resolved, ok := m.resolver.ResolveAliasTarget(target)
-	if !ok {
-		return nil
-	}
-	return resolved
-}
-
 // declaredTypeFeatureBase returns the base feature implied by the kind of the
 // type sym is declared to have, if it declares one that is a KerML type.
 func (m *Model) declaredTypeFeatureBase(sym *symbols.Symbol) (string, bool) {

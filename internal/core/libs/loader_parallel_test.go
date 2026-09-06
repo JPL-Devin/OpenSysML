@@ -64,7 +64,7 @@ func indexFingerprint(idx *symbols.Index) string {
 		for i, sym := range syms {
 			fmt.Fprintf(&b, "  [%d] %s kind=%v short=%q vis=%v decl=%v name=%v doc=%s effective=%v library=%v fqn=%s\n",
 				i, sym.Name, sym.Kind, sym.ShortName, sym.Visibility, sym.DeclSpan, sym.NameSpan,
-				sym.DocName, sym.EffectiveName, idx.Library(sym), idx.GetFQN(sym))
+				sym.DocName, sym.EffectiveName(), idx.Library(sym), idx.GetFQN(sym))
 			fmt.Fprintf(&b, "      decl=%x trivia=%v facts=%s\n",
 				sha256.Sum256([]byte(ast.Dump(sym.Decl))), sym.LeadingTrivia, factsString(sym.Facts))
 			for _, doc := range docs {
@@ -114,7 +114,7 @@ func indexRecords(idx *symbols.Index) []*IndexRecord {
 	sort.Strings(docs)
 	recs := make([]*IndexRecord, 0, len(docs))
 	for _, doc := range docs {
-		rec, _ := recordFromIndex(doc, idx, r, model)
+		rec, _ := recordFromIndex(doc, idx, model)
 		recs = append(recs, rec)
 	}
 	return recs

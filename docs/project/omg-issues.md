@@ -1095,6 +1095,55 @@ implicit-specialization machinery that conjugation switches off?
 
 ---
 
+### Repeated anonymous `perform a;` members are distinguishable or not by whether they have bodies (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML reports the two `Duplicate of … member name` warnings
+on every repeated anonymous performed or exhibited use (`internal/core/resolve/distinguishability.go`),
+as the pilot does when the uses have bodies; the Name Resolution map in
+[spec-compliance.md](spec-compliance.md) records the bodiless case as a pilot
+artefact.
+
+````markdown
+### `validateNamespaceDistinguishability` misses repeated anonymous performed uses unless they have bodies
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-sysml-batch`; each file run four
+times with the same result).
+
+```sysml
+package P {
+    part def H { action a; }
+    part h : H { perform a; }                                   // (1)
+    part h2 : H { perform a; perform a; }                       // (2)
+    part h3 : H { perform a; perform a; perform a; }            // (3)
+    part h4 : H { perform a { attribute i; } perform a { attribute j; } }   // (4)
+    part h5 : H { perform a { attribute i; } perform a; }       // (5)
+    part h6 : H { exhibit s; exhibit s; }                       // (6), with `state s;` in H
+}
+```
+
+Each `perform a;` is an unnamed `PerformActionUsage` whose effective name is `a`, the name of
+the action it references (KerML 7.3.4.5, SysML v2 7.16.4), so every one of them duplicates the
+inherited `H::a` and, where repeated, its siblings. With each `part` in a file of its own next to
+`H`:
+
+- (1) `warning: Duplicate of inherited member name 'a' from H` at the `perform` — as expected;
+- (4) and (5) `Duplicate of other owned member name` **and** `Duplicate of inherited member name
+  'a' from H` on each of the two uses — as expected;
+- (2) and (6) **no warning at all**, the inherited duplicate of (1) included;
+- (3) a single `Duplicate of inherited member name 'a' from H` on the *third* use only.
+
+The KerML spellings behave consistently: `feature :>> a; feature :>> a;` reports the two
+owned duplicates with or without bodies, and `feature ::> a;` never names anything. The
+SysML result appears to depend on the order in which the effective names are computed while
+the references are still being linked — computing `memberName` for one use resolves `a` in
+`h2`, which asks the sibling use for *its* `memberName`, which resolves `a` again — rather than
+on anything in the model. Is the bodiless outcome intended, or should (2), (3) and (6) report
+what (4) and (5) do?
+````
+
+---
+
 ## The errata overlay entries for these models
 
 The second section's rows are also entries of the declared errata overlay

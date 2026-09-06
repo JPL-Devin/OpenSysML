@@ -617,7 +617,7 @@ func (e *ActionExecutor) NodeNames() []string {
 func (e *ActionExecutor) initializeAttributes() error {
 	if e.occurrence != nil {
 		for _, attr := range e.features {
-			if _, held := e.root.data[attr.Name]; held {
+			if _, held := e.root.data[e.root.key(attr.Name)]; held {
 				continue
 			}
 			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
@@ -626,7 +626,7 @@ func (e *ActionExecutor) initializeAttributes() error {
 					ErrActionPerformanceOccurrence, attr.Name, e.occurrence.ID, err)
 			}
 			if value := fv.HeldValue(); value.Kind != ValInvalid {
-				e.root.data[attr.Name] = value
+				e.root.data[e.root.key(attr.Name)] = value
 			}
 		}
 		return nil
@@ -638,14 +638,14 @@ func (e *ActionExecutor) initializeAttributes() error {
 		if attr.Value == nil {
 			continue
 		}
-		if _, held := e.root.data[attr.Name]; held {
+		if _, held := e.root.data[e.root.key(attr.Name)]; held {
 			continue
 		}
 		value, err := ec.evalIn(attr.Scope).Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-		e.root.data[attr.Name] = value
+		e.root.data[e.root.key(attr.Name)] = value
 	}
 
 	return nil
@@ -692,7 +692,7 @@ func (e *ActionExecutor) setFeature(name string, value Value) error {
 		// rather than by the write to that occurrence.
 		return err
 	}
-	e.root.data[name] = value
+	e.root.data[e.root.key(name)] = value
 	return nil
 }
 

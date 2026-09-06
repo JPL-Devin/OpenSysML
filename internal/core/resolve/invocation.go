@@ -97,7 +97,7 @@ func (r *Resolver) surfacedMembers(cur *symbols.Symbol, from *symbols.Scope, nam
 	if cur == nil {
 		return nil
 	}
-	if cur.Scope != nil && len(r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(name)))) > 0 {
+	if len(r.namedThroughNamespaces(r.LocalBindings(cur.Scope, name))) > 0 {
 		return nil
 	}
 	var out []*symbols.Symbol
@@ -186,8 +186,8 @@ func (r *Resolver) localBindingCandidates(scope *symbols.Scope, name string) ([]
 		return nil, true
 	}
 	out := []*symbols.Symbol{first}
-	for _, sym := range symbols.PreferDeclared(scope.LookupLocalAll(name)) {
-		if r.bindsEffectiveName(sym) && !r.AliasNamesNothing(sym) {
+	for _, sym := range r.LocalBindings(scope, name) {
+		if !r.AliasNamesNothing(sym) {
 			out = appendSymbol(out, sym)
 		}
 	}
@@ -200,11 +200,14 @@ func (r *Resolver) visibleMemberCandidates(sym *symbols.Symbol, name string) ([]
 	if r.model == nil || sym == nil {
 		return nil, false
 	}
-	admits := func(found *symbols.Symbol) bool {
-		return visibleAsInheritedMember(sym, found) && !r.inheritanceMaskedDeclaring(sym, found, "")
+	admits := func(found *symbols.Symbol) (*symbols.Symbol, bool) {
+		if !visibleAsInheritedMember(sym, found) {
+			return nil, false
+		}
+		return r.inheritedAs(sym, found)
 	}
 	if found, ok := r.lookupMemberOf(sym, name); ok {
-		if !admits(found) {
+		if found, ok = admits(found); !ok {
 			return nil, false
 		}
 		if r.AliasNamesNothing(found) {
@@ -214,7 +217,7 @@ func (r *Resolver) visibleMemberCandidates(sym *symbols.Symbol, name string) ([]
 		// Each general type contributes its own declaration of a name sym does not declare.
 		if all, ok := r.model.(contributedMembersLookuper); ok && !declaresLocally(sym, found, name) {
 			for _, other := range all.LookupContributedMembers(sym, name) {
-				if admits(other) && !r.AliasNamesNothing(other) {
+				if other, ok := admits(other); ok && !r.AliasNamesNothing(other) {
 					out = appendSymbol(out, other)
 				}
 			}
@@ -230,7 +233,7 @@ func (r *Resolver) visibleMemberCandidates(sym *symbols.Symbol, name string) ([]
 			continue
 		}
 		for _, found := range r.importMatchesAll(sym.Scope, imp, name) {
-			if admits(found) && !r.AliasNamesNothing(found) {
+			if found, ok := admits(found); ok && !r.AliasNamesNothing(found) {
 				out = appendSymbol(out, found)
 			}
 		}

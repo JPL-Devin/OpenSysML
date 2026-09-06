@@ -138,7 +138,7 @@ func TestEffectiveShortNameStopsAtADeclaredName(t *testing.T) {
 		t.Fatalf("EffectiveShortNameOf(B::b) = %q, want none: b declares its name", got)
 	}
 	unnamed := sym(t, sym(t, p, "C").Scope, "b")
-	if !unnamed.EffectiveName {
+	if unnamed.Naming != symbols.NamedByRedefinition {
 		t.Fatal("C's redefinition of b should take the name b")
 	}
 	if got := m.EffectiveShortNameOf(unnamed); got != "" {
@@ -146,7 +146,9 @@ func TestEffectiveShortNameStopsAtADeclaredName(t *testing.T) {
 	}
 }
 
-func TestEffectiveShortNameOfAReferenceOutranksItsRedefinition(t *testing.T) {
+// The pilot names a plain usage by its first redefinition alone: a `::>`
+// reference on it supplies no name (Feature::namingFeature).
+func TestEffectiveShortNameOfARedefinitionOutranksItsReference(t *testing.T) {
 	m, root := buildModel(t, `package P {
 		part def A { part <r> redefined; part <s> subsetted; }
 		part def B :> A { ref part :>> redefined ::> subsetted; }
@@ -161,7 +163,7 @@ func TestEffectiveShortNameOfAReferenceOutranksItsRedefinition(t *testing.T) {
 	if feature == nil {
 		t.Fatal("B declares no part usage")
 	}
-	if got := m.EffectiveShortNameOf(feature); got != "s" {
-		t.Fatalf("EffectiveShortNameOf = %q, want s", got)
+	if got := m.EffectiveShortNameOf(feature); got != "r" {
+		t.Fatalf("EffectiveShortNameOf = %q, want r", got)
 	}
 }

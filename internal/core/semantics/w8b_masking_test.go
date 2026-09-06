@@ -65,18 +65,22 @@ func TestRedefinitionMasksTransitivelyRedefinedFeatures(t *testing.T) {
 	}
 }
 
-func TestRedefinitionClosureSkipsNamesakeIntermediate(t *testing.T) {
+func TestRedefinitionClosureMasksThroughNamesakeIntermediate(t *testing.T) {
 	m, root := buildModel(t,
 		"part def A { part a; } part def B specializes A { part :>> a; }"+
-			" part def C specializes B { part c redefines B::a; }")
+			" part def C specializes B { part c redefines B::a; } part def D specializes B;")
 	a := sym(t, root, "A").Scope.LookupLocalAll("a")[0]
 	ba := sym(t, root, "B").Scope.LookupLocalAll("a")[0]
 	c := sym(t, root, "C")
 	if !m.InheritanceMasked(c, ba) {
 		t.Fatalf("C's redefinition must mask B::a")
 	}
-	if m.InheritanceMasked(c, a) {
-		t.Fatalf("B::a's namesake edge must not mask A::a")
+	if !m.InheritanceMasked(c, a) {
+		t.Fatalf("B::a's redefinition of A::a masks it in C too")
+	}
+	d := sym(t, root, "D")
+	if m.InheritanceMasked(d, ba) || !m.InheritanceMasked(d, a) {
+		t.Fatalf("D inherits B::a in place of A::a")
 	}
 }
 

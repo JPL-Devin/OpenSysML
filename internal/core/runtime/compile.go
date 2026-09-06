@@ -257,7 +257,7 @@ func (c *calcCompiler) compile(cell *compiledCalc) error {
 			continue
 		}
 		scope := c.ctx.calcScope(param.Owner, shape.Sym, nil)
-		dflt, err := c.compileNode(param.Default, scope, newFrameLayout(shape.ParamNames, i))
+		dflt, err := c.compileNode(param.Default, scope, newFrameLayout(shape.ParamNames, shape.Aliases, i))
 		if err != nil {
 			return err
 		}
@@ -274,7 +274,7 @@ func (c *calcCompiler) compile(cell *compiledCalc) error {
 		}
 		result = &check
 	}
-	layout := newFrameLayout(shape.ParamNames, len(shape.Params))
+	layout := newFrameLayout(shape.ParamNames, shape.Aliases, len(shape.Params))
 	if len(shape.Steps) == 0 {
 		if err := c.compileResultBinding(cell, layout, result); err != nil {
 			return err

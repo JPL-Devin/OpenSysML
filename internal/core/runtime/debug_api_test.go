@@ -127,9 +127,10 @@ func TestSetBreakpointStopsRun(t *testing.T) {
 	}
 }
 
-// A step stating a short name and a redefinition answers to both keys, so a
-// breakpoint may name either one.
-func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
+// A step stating a short name and a redefinition answers to its short name
+// alone: a declared short name is a name, so the step takes none from what it
+// redefines (KerML 7.3.4.5), and a breakpoint on that name never fires.
+func TestBreakpointNamesAShortNamedStepByItsShortName(t *testing.T) {
 	const src = `package test {
 	action def Base { action accumulate; }
 	action tally : Base {
@@ -144,7 +145,7 @@ func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
 	}
 }`
 
-	for _, breakpoint := range []string{"acc", "accumulate"} {
+	for breakpoint, want := range map[string]string{"acc": "acc", "accumulate": ""} {
 		ctx, sym := loadAction(t, src, "tally")
 		exec, err := ctx.CreateActionExecutor(sym)
 		if err != nil {
@@ -154,8 +155,8 @@ func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
 		if err := exec.RunToCompletion(); err != nil {
 			t.Fatalf("RunToCompletion: %v", err)
 		}
-		if got := exec.PausedAt(); got != breakpoint {
-			t.Errorf("PausedAt() = %q, want %s", got, breakpoint)
+		if got := exec.PausedAt(); got != want {
+			t.Errorf("breakpoint %s: PausedAt() = %q, want %q", breakpoint, got, want)
 		}
 	}
 }
