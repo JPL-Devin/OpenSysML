@@ -611,8 +611,8 @@ func (c OwnedConstraint) NamingFeature() *Relationship {
 // EffectiveName returns the name the constraint answers to: its declared name,
 // else the name its naming feature supplies.
 func (c OwnedConstraint) EffectiveName() (string, source.Span) {
-	if c.Ident.Name != "" {
-		return c.Ident.Name, c.Ident.NameSpan
+	if c.Ident.Declared() {
+		return c.Ident.DeclaredName()
 	}
 	if rel := c.NamingFeature(); rel != nil {
 		return TargetName(rel.Target)
@@ -636,8 +636,8 @@ func (m *SubjectMember) EffectiveName() (string, source.Span) {
 	if m == nil {
 		return "", source.Span{}
 	}
-	if m.Ident.Name != "" {
-		return m.Ident.Name, m.Ident.NameSpan
+	if m.Ident.Declared() {
+		return m.Ident.DeclaredName()
 	}
 	if rel := m.NamingFeature(); rel != nil {
 		return TargetName(rel.Target)

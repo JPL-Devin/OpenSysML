@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "test::ConfiguredCounter",
+  "objects": [
+    {
+      "slots": {
+        "short.total": {"type": "Integer", "value": 6},
+        "named.total": {"type": "Integer", "value": 9}
+      }
+    }
+  ]
+}

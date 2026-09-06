@@ -169,14 +169,14 @@ func namingReference(rels []*Relationship) *Relationship {
 	return nil
 }
 
-// EffectiveName returns the name a usage answers to: its declared name, else
-// the name its naming feature supplies.
+// EffectiveName returns the name a usage answers to: its declared name (a short
+// name alone included), else the name its naming feature supplies.
 func EffectiveName(u *Usage) (string, source.Span) {
 	if u == nil {
 		return "", source.Span{}
 	}
-	if u.Ident.Name != "" {
-		return u.Ident.Name, u.Ident.NameSpan
+	if u.Ident.Declared() {
+		return u.Ident.DeclaredName()
 	}
 	if rel := NamingFeature(u); rel != nil {
 		return TargetName(rel.Target)
@@ -196,6 +196,15 @@ type Identification struct {
 // takes no name from its naming feature (KerML 7.3.4.5).
 func (id Identification) Declared() bool {
 	return id.Name != "" || id.ShortName != ""
+}
+
+// DeclaredName returns the name a declaration is known by: its name, else its
+// short name, as the symbol table registers it.
+func (id Identification) DeclaredName() (string, source.Span) {
+	if id.Name != "" {
+		return id.Name, id.NameSpan
+	}
+	return id.ShortName, id.ShortNameSpan
 }
 
 // Membership wraps a namespace member with a visibility prefix. Member is

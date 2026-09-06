@@ -13,3 +13,8 @@
   subsetting or a reference no longer masks it, so a feature reached through such a member
   resolves as the reference validators resolve it. A name-conflict warning on a member with a
   derived name is reported on the whole declaration, where the validators place it.
+- **A parameter redefined under a short name alone is bound at run time.** `in <f> :>> factor
+  default 3;` in a calc or action, and `in <a> :>> x = 4;` as the argument of a performed action
+  or exhibited state machine, were dropped when the behavior ran, so the body read the inherited
+  default instead; a redefinition under a new name (`in g :>> factor`) left the body's reads of
+  `factor` unbound too. The body now reads the redefining feature's value under either name.

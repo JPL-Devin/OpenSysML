@@ -879,7 +879,8 @@ func (ctx *Context) namedBehavior(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // classifierBehaviorArguments evaluates the values a binding declaration
-// supplies to the behavior's parameters, against the object running it.
+// supplies to the behavior's parameters, against the object running it, keyed
+// by the parameter each binds: the one it redefines, else its own name.
 func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierBehaviorDecl) (map[string]Value, error) {
 	if len(decl.behavior.Arguments) == 0 {
 		return nil, nil
@@ -896,9 +897,20 @@ func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierB
 			return nil, fmt.Errorf("%s %s of %s: bind %s: %w",
 				decl.behavior.Kind, decl.behavior.Name, symbolText(inst.Type), arg.Name, err)
 		}
-		args[arg.Name] = value
+		args[ctx.argumentParameter(scope, arg)] = value
 	}
 	return args, nil
+}
+
+// argumentParameter names the behavior parameter an argument binds: the feature
+// its declaration redefines (`in <a> :>> x = 4` binds x), else its own name.
+func (ctx *Context) argumentParameter(scope *symbols.Scope, arg lower.Attribute) string {
+	for _, redefined := range ctx.model.RedefinedFeatures(memberSymbol(scope, arg.Node)) {
+		if redefined.Name != "" {
+			return redefined.Name
+		}
+	}
+	return arg.Name
 }
 
 // actionBodySymbol resolves the element holding the body an action symbol

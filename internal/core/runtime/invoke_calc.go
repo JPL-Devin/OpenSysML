@@ -62,8 +62,7 @@ func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) e
 }
 
 // calcMemberDeclOf resolves what a member of link declares for a value bound to it.
-func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, usage *ast.Usage, name string) calcMemberDecl {
-	sym := memberSymbol(declScope(link), usage)
+func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, sym *symbols.Symbol, name string) calcMemberDecl {
 	if sym == nil {
 		return calcMemberDecl{}
 	}
@@ -90,6 +89,9 @@ type calcShape struct {
 	Params []calcParameter
 	// ParamNames are the Params' names by position: the slots an invocation binds.
 	ParamNames []string
+	// Aliases map the name of a parameter or output redeclared under a new name
+	// (`in g :>> x`) to that name, which an inherited body reads it by.
+	Aliases map[string]string
 	// Outputs are the calc's output features — its `out` parameters and the
 	// result parameter a `return` declares — in declaration order.
 	Outputs []calcOutput
@@ -150,17 +152,17 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	shape := &calcShape{
 		Sym:       sym,
 		Name:      name,
-		Params:    ctx.calcParameters(chain),
-		Outputs:   ctx.calcOutputs(chain),
 		Body:      body,
 		BodyOwner: bodyOwner,
 		Steps:     calcSteps(body),
 	}
+	shape.Params = ctx.calcParameters(chain, &shape.Aliases)
+	shape.Outputs = ctx.calcOutputs(chain, &shape.Aliases)
 	shape.ParamNames = make([]string, len(shape.Params))
 	for i, param := range shape.Params {
 		shape.ParamNames[i] = param.Name
 	}
-	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs)
+	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs, shape.Aliases)
 	shape.Bindings = calcBindings(chain)
 	shape.ResultExpr = resultBindingExpr(shape.Bindings)
 	// A calc computes nothing when it neither returns a value nor binds an output
@@ -214,8 +216,9 @@ func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
 
 // calcParameters flattens the input parameters declared along chain (most
 // general first). A parameter redeclared closer to the invoked calc keeps its
-// inherited position and its inherited default unless it binds a new one.
-func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
+// inherited position and its inherited default unless it binds a new one; one
+// redeclared under a new name records the old one in aliases.
+func (ctx *Context) calcParameters(chain []*symbols.Symbol, aliases *map[string]string) []calcParameter {
 	var params []calcParameter
 	index := make(map[string]int)
 
@@ -225,7 +228,6 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 			if !ok {
 				continue
 			}
-			// A parameter written as a redefinition names the one it overrides.
 			name, _ := ast.EffectiveName(usage)
 			if name == "" {
 				continue
@@ -233,8 +235,9 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 			if usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut {
 				continue
 			}
-			param := calcParameter{Name: name, Default: usage.Value, Owner: link, Decl: ctx.calcMemberDeclOf(link, usage, name)}
-			if at, seen := index[param.Name]; seen {
+			sym := memberSymbol(declScope(link), usage)
+			param := calcParameter{Name: name, Default: usage.Value, Owner: link, Decl: ctx.calcMemberDeclOf(link, sym, name)}
+			if at, seen := ctx.redeclaredIndex(index, sym, name); seen {
 				// A redeclaration binding no value keeps the inherited default,
 				// which is written in the scope of the calc that stated it.
 				if param.Default == nil {
@@ -242,7 +245,9 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 					param.Owner = params[at].Owner
 				}
 				param.Decl = param.Decl.redeclaring(params[at].Decl)
+				*aliases = aliasRedefined(*aliases, params[at].Name, name)
 				params[at] = param
+				index[name] = at
 				continue
 			}
 			index[param.Name] = len(params)
@@ -250,6 +255,20 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 		}
 	}
 	return params
+}
+
+// redeclaredIndex finds the flattened member the member sym, named name,
+// redeclares: the one of its own name, else one it redefines (`in y :>> x`).
+func (ctx *Context) redeclaredIndex(index map[string]int, sym *symbols.Symbol, name string) (int, bool) {
+	if at, seen := index[name]; seen {
+		return at, true
+	}
+	for _, redefined := range ctx.model.RedefinedFeatures(sym) {
+		if at, seen := index[redefined.Name]; seen {
+			return at, true
+		}
+	}
+	return 0, false
 }
 
 // calcBody returns the computation the invoked calc runs — its own body if that
@@ -440,6 +459,7 @@ type invocationFrame struct {
 	// slots hold the parameters; bindings the locals the body declares beside them.
 	slots    slotFrame
 	bindings map[string]Value
+	aliases  map[string]string
 	host     calcStmtHost
 	env      stmtEnv
 	engine   stmtEngine
@@ -447,7 +467,7 @@ type invocationFrame struct {
 
 // locals is the frame the invocation's parameters and body locals are bound in.
 func (f *invocationFrame) locals() frame {
-	return frame{slots: &f.slots, vars: f.bindings}
+	return frame{slots: &f.slots, vars: f.bindings, aliases: f.aliases}
 }
 
 // maxFreeInvocationFrames bounds the frames kept, so one deep recursion does not
@@ -524,6 +544,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	defer ctx.endActivation(activation)
 
 	frame.slots.reset(shape.ParamNames)
+	frame.aliases = shape.Aliases
 	locals := frame.locals()
 	ec := &frame.ec
 	*ec = EvalContext{
@@ -971,7 +992,8 @@ func (ctx *Context) calcComputes(chain []*symbols.Symbol) bool {
 	if lower.Returns(body) || resultBindingExpr(calcBindings(chain)) != nil {
 		return true
 	}
-	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
+	var aliases map[string]string
+	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain, &aliases), aliases)) > 0
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

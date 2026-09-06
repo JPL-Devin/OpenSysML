@@ -65,6 +65,8 @@ type actionFrame struct {
 	data map[string]Value
 	// features are the parameters and attributes the performance holds, by name.
 	features map[string]ast.FeatureDirection
+	// aliases map each name a held feature redefines to the feature's own name.
+	aliases map[string]string
 	// result names the parameter a value read of the performance stands for,
 	// "" when the action it performs states no result parameter.
 	result string
@@ -132,14 +134,21 @@ func (e *ActionExecutor) newRootFrame() *actionFrame {
 	}
 	for _, attr := range e.graph.Attributes {
 		root.features[attr.Name] = ast.DirNone
+		scope := attr.Scope
+		if scope == nil {
+			scope = e.graph.Scope
+		}
+		e.ctx.aliasRedefinitions(&root.aliases, memberSymbol(scope, attr.Node), attr.Name)
 	}
-	e.addFeatureDirections(root.features, e.action)
+	e.addFeatureDirections(root.features, &root.aliases, e.action)
 	return root
 }
 
 // addFeatureDirections adds the parameters and attributes an action holds, the
-// inherited ones included, to features by name.
-func (e *performances) addFeatureDirections(features map[string]ast.FeatureDirection, action *symbols.Symbol) {
+// inherited ones included, to features by name, aliasing what each redefines.
+func (e *performances) addFeatureDirections(
+	features map[string]ast.FeatureDirection, aliases *map[string]string, action *symbols.Symbol,
+) {
 	if action == nil {
 		return
 	}
@@ -158,7 +167,34 @@ func (e *performances) addFeatureDirections(features map[string]ast.FeatureDirec
 		if _, held := features[name]; !held {
 			features[name] = usage.Direction
 		}
+		e.ctx.aliasRedefinitions(aliases, member, name)
 	}
+}
+
+// aliasRedefinitions maps every name sym redefines, by clause, to name: a body
+// written against the redefined feature then reads the redefining one.
+func (ctx *Context) aliasRedefinitions(aliases *map[string]string, sym *symbols.Symbol, name string) {
+	if sym == nil || name == "" {
+		return
+	}
+	seen := map[*symbols.Symbol]bool{sym: true}
+	var visit func(*symbols.Symbol)
+	visit = func(s *symbols.Symbol) {
+		for _, redefined := range ctx.model.RedefinedFeatures(s) {
+			if redefined == nil || seen[redefined] {
+				continue
+			}
+			seen[redefined] = true
+			*aliases = aliasRedefined(*aliases, redefined.Name, name)
+			visit(redefined)
+		}
+	}
+	visit(sym)
+}
+
+// key is the name the performance holds name under: its redefinition's, else its own.
+func (f *actionFrame) key(name string) string {
+	return canonical(f.aliases, name)
 }
 
 // beginPerformance starts a performance of node (of parent's flow, or a block's with locals bound),
@@ -186,12 +222,13 @@ func (e *performances) beginPerformance(
 		perf.connections = joinConnections(parent.connections, sub.Graph.Connections)
 		perf.subactions = make(map[ast.Node]*actionFrame)
 	}
-	pins, result, err := e.nodePins(flow, node)
+	pins, err := e.nodePins(flow, node)
 	if err != nil {
 		return nil, err
 	}
-	perf.features = pins
-	perf.result = result
+	perf.features = pins.directions
+	perf.aliases = pins.aliases
+	perf.result = pins.result
 	if err := e.takeDeliveries(parent, node, perf); err != nil {
 		return nil, err
 	}
@@ -251,7 +288,7 @@ func (e *performances) seedDeclaredValues(perf *actionFrame, features []lower.Fe
 		if feature.Value == nil {
 			continue
 		}
-		if _, held := perf.data[feature.Name]; held {
+		if _, held := perf.data[perf.key(feature.Name)]; held {
 			continue
 		}
 		ec := e.evalContextFor(perf, feature.Scope)
@@ -263,7 +300,7 @@ func (e *performances) seedDeclaredValues(perf *actionFrame, features []lower.Fe
 		if err := e.ctx.checkNamedWrite(feature.Scope, perf.describe(), feature.Name, value); err != nil {
 			return err
 		}
-		perf.data[feature.Name] = value
+		perf.data[perf.key(feature.Name)] = value
 	}
 	return nil
 }
@@ -274,7 +311,7 @@ func (e *performances) seedDeclaredValues(perf *actionFrame, features []lower.Fe
 func (e *performances) endPerformance(perf *actionFrame) error {
 	perf.ended = true
 	for _, name := range perf.outputs {
-		value, ok := perf.data[name]
+		value, ok := perf.data[perf.key(name)]
 		if !ok {
 			continue
 		}
@@ -285,39 +322,52 @@ func (e *performances) endPerformance(perf *actionFrame) error {
 	return e.bindOutputPins(perf)
 }
 
-// nodePins returns the pins a performance of node holds (its own and its action's),
+// nodePins are the pins a performance of node holds (its own and its action's),
 // and the pin read when the node is read as a value: `return`, else `out result`.
-func (e *performances) nodePins(graph *lower.ActionGraph, node ast.Node) (map[string]ast.FeatureDirection, string, error) {
-	pins := make(map[string]ast.FeatureDirection)
+type nodePins struct {
+	directions map[string]ast.FeatureDirection
+	aliases    map[string]string
+	result     string
+}
+
+// declares reports whether the pins hold name, under its own name or as a redefinition.
+func (p nodePins) declares(name string) bool {
+	_, ok := p.directions[canonical(p.aliases, name)]
+	return ok
+}
+
+// nodePins returns the pins a performance of node holds.
+func (e *performances) nodePins(graph *lower.ActionGraph, node ast.Node) (nodePins, error) {
+	pins := nodePins{directions: make(map[string]ast.FeatureDirection)}
 	usage, ok := node.(*ast.Usage)
 	if !ok {
-		return pins, "", nil
+		return pins, nil
 	}
-	result := ""
 	for _, feature := range graph.Features[node] {
-		pins[feature.Name] = feature.Direction
+		pins.directions[feature.Name] = feature.Direction
+		e.ctx.aliasRedefinitions(&pins.aliases, memberSymbol(feature.Scope, feature.Node), feature.Name)
 		if feature.IsResult {
-			result = feature.Name
+			pins.result = feature.Name
 		}
 	}
 	if inv, performs := nestedInvocation(usage); performs {
 		sym, err := resolveActionSymbol(e.ctx, nodeScope(graph, node), inv)
 		if err != nil {
-			return nil, "", err
+			return nodePins{}, err
 		}
-		e.addFeatureDirections(pins, e.ctx.actionBodySymbol(sym))
+		e.addFeatureDirections(pins.directions, &pins.aliases, e.ctx.actionBodySymbol(sym))
 		for _, param := range e.ctx.actionParametersOf(sym) {
-			if param.IsResult && result == "" {
-				result = param.Name
+			if param.IsResult && pins.result == "" {
+				pins.result = param.Name
 			}
 		}
 	}
-	if result == "" {
-		if dir, ok := pins["result"]; ok && (dir == ast.DirOut || dir == ast.DirInOut) {
-			result = "result"
+	if pins.result == "" {
+		if dir, ok := pins.directions["result"]; ok && (dir == ast.DirOut || dir == ast.DirInOut) {
+			pins.result = "result"
 		}
 	}
-	return pins, result, nil
+	return pins, nil
 }
 
 // nodeScope is the namespace a node's declaration resolves in: its own where the
@@ -354,7 +404,7 @@ func (f *actionFrame) path() string {
 
 // declares reports whether the performance holds a feature of this name.
 func (f *actionFrame) declares(name string) bool {
-	_, ok := f.features[name]
+	_, ok := f.features[f.key(name)]
 	return ok
 }
 
@@ -364,7 +414,7 @@ func (f *actionFrame) holds(name string) bool {
 	if f.declares(name) {
 		return true
 	}
-	_, ok := f.data[name]
+	_, ok := f.data[f.key(name)]
 	return ok
 }
 
@@ -453,7 +503,7 @@ func (f *actionFrame) subaction(name string, decl ast.Node) (perf *actionFrame, 
 
 // pin reads the value the performance's pin holds.
 func (f *actionFrame) pin(name string) (Value, error) {
-	value, ok := f.data[name]
+	value, ok := f.data[f.key(name)]
 	if ok {
 		return value, nil
 	}
@@ -470,7 +520,7 @@ func (f *actionFrame) resultValue() (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s declares no result to read it as a value by",
 			ErrNodePin, f.describe())
 	}
-	if value, ok := f.data[f.result]; ok {
+	if value, ok := f.data[f.key(f.result)]; ok {
 		return value, nil
 	}
 	return Value{}, &NoValueError{Feature: f.path() + "." + f.result}
@@ -494,16 +544,17 @@ func (e *performances) deliver(f *actionFrame, flow *lower.ActionGraph, node ast
 		f.nested[node] = append(f.nested[node], nestedDelivery{path: path, pin: pin, value: value})
 		return nil
 	}
-	pins, _, err := e.nodePins(flow, node)
+	pins, err := e.nodePins(flow, node)
 	if err != nil {
 		return err
 	}
-	if _, declared := pins[pin]; !declared {
+	if !pins.declares(pin) {
 		return fmt.Errorf("%w: %s declares no %s", ErrNodePin, nodeDescription(node), pin)
 	}
 	if err := e.ctx.checkNamedWrite(flow.Scopes[node], nodeDescription(node), pin, value); err != nil {
 		return err
 	}
+	pin = canonical(pins.aliases, pin)
 	if f.pending == nil {
 		f.pending = make(map[ast.Node]map[string][]Value)
 	}
@@ -524,11 +575,11 @@ func (e *performances) checkNestedDelivery(flow *lower.ActionGraph, node ast.Nod
 		}
 		node = next
 	}
-	pins, _, err := e.nodePins(flow, node)
+	pins, err := e.nodePins(flow, node)
 	if err != nil {
 		return err
 	}
-	if _, declared := pins[pin]; !declared {
+	if !pins.declares(pin) {
 		return fmt.Errorf("%w: %s declares no %s", ErrNodePin, nodeDescription(node), pin)
 	}
 	return e.ctx.checkNamedWrite(flow.Scopes[node], nodeDescription(node), pin, value)
@@ -569,7 +620,7 @@ func (e *performances) setFrameFeature(f *actionFrame, name string, value Value)
 	if err := e.ctx.checkNamedWrite(f.scope, f.describe(), name, value); err != nil {
 		return err
 	}
-	f.data[name] = value
+	f.data[f.key(name)] = value
 	return nil
 }
 
@@ -614,7 +665,7 @@ func lookupEnclosing(perf *actionFrame, name string) (Value, bool) {
 			}
 		}
 		if f.parent != nil {
-			if value, ok := f.parent.data[name]; ok {
+			if value, ok := f.parent.data[f.parent.key(name)]; ok {
 				return value, true
 			}
 			continue
@@ -699,7 +750,7 @@ func (e *performances) bindInputPins(perf *actionFrame, activation int64) error 
 			continue
 		}
 		earlier, alreadyBound := bound[end.Pin]
-		if _, held := perf.data[end.Pin]; held && !alreadyBound {
+		if _, held := perf.data[perf.key(end.Pin)]; held && !alreadyBound {
 			continue
 		}
 		if holder, node, _ := otherEnd(perf, end); node != nil && holder == perf {
@@ -713,7 +764,7 @@ func (e *performances) bindInputPins(perf *actionFrame, activation int64) error 
 			return err
 		}
 		if alreadyBound {
-			if held := perf.data[end.Pin]; !valueEqual(held, value) {
+			if held := perf.data[perf.key(end.Pin)]; !valueEqual(held, value) {
 				return &BindingConflictError{
 					Target:     end.pinText(),
 					Left:       bindingEndText(earlier.Other),
@@ -740,7 +791,7 @@ func (e *performances) bindOutputPins(perf *actionFrame) error {
 		if err != nil {
 			return err
 		}
-		value, ok := perf.data[end.Pin]
+		value, ok := perf.data[perf.key(end.Pin)]
 		switch dir {
 		case ast.DirOut, ast.DirInOut:
 			if !ok {
@@ -811,7 +862,7 @@ func (e *performances) bindingsAt(perf *actionFrame) []boundEnd {
 // boundPin returns the direction of the pin a binding ends at, which must be a
 // feature the performance holds.
 func (e *performances) boundPin(perf *actionFrame, end boundEnd) (ast.FeatureDirection, error) {
-	dir, declared := perf.features[end.Pin]
+	dir, declared := perf.features[perf.key(end.Pin)]
 	if !declared {
 		return ast.DirNone, fmt.Errorf("%w: %s names no parameter or attribute of %s",
 			ErrBindingEnd, end.pinText(), perf.describe())
@@ -922,7 +973,7 @@ func (e *performances) otherEndHeld(perf *actionFrame, end boundEnd) (Value, boo
 		if !performed {
 			return Value{}, false
 		}
-		value, held := other.data[end.OtherPin]
+		value, held := other.data[other.key(end.OtherPin)]
 		return value, held
 	}
 	if name := simpleEndName(end.Other); name != "" {
@@ -1000,7 +1051,7 @@ func (e *performances) performInvocation(perf *actionFrame, inv actionInvocation
 	in, out := parameterNames(params)
 	inputs := make(map[string]Value, len(in))
 	for _, name := range in {
-		if value, ok := perf.data[name]; ok {
+		if value, ok := perf.data[perf.key(name)]; ok {
 			inputs[name] = value
 		}
 	}
@@ -1032,7 +1083,7 @@ func (e *performances) performInvocation(perf *actionFrame, inv actionInvocation
 // own: its features' values, and its subactions, read as `call.inner.v`.
 func (f *actionFrame) adopt(callee *ActionExecutor) {
 	for name, value := range callee.root.data {
-		f.data[name] = value
+		f.data[f.key(name)] = value
 	}
 	f.performs = callee.graph
 	if len(callee.root.subactions) > 0 && f.subactions == nil {
@@ -1063,5 +1114,5 @@ func checkInputsBound(inv actionInvocation, params []actionParameter, inputs map
 // performanceFrame is the frame an evaluation reads a performance's values
 // through, which also answers for the nodes of its flow.
 func performanceFrame(f *actionFrame) frame {
-	return frame{vars: f.data, perf: f}
+	return frame{vars: f.data, aliases: f.aliases, perf: f}
 }

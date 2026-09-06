@@ -164,11 +164,11 @@ func runChainWrite(t *testing.T, body string) error {
 func TestChainedAssignmentBindsNoCalcOutput(t *testing.T) {
 	outputs := []calcOutput{{Name: "x"}}
 	chained := []lower.Statement{lower.Assign{Target: "x", Chain: &lower.AssignTarget{Text: "foo.x"}}}
-	if assigned := assignedOutputs(chained, outputs); len(assigned) != 0 {
+	if assigned := assignedOutputs(chained, outputs, nil); len(assigned) != 0 {
 		t.Errorf("assignedOutputs(chained) = %v; want none, since foo.x is another object's feature", assigned)
 	}
 	plain := []lower.Statement{lower.Assign{Target: "x"}}
-	if assigned := assignedOutputs(plain, outputs); !assigned["x"] {
+	if assigned := assignedOutputs(plain, outputs, nil); !assigned["x"] {
 		t.Errorf("assignedOutputs(plain) = %v; want x, which the body does bind", assigned)
 	}
 }
