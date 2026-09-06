@@ -454,6 +454,21 @@ elmt:Demo__Vehicle
   `sysml:owningType` on it and `sysml:ownedFeature` and
   `sysml:ownedFeatureMembership` on the owner. `FeatureMembership` specializes
   `OwningMembership`, so the `_om` id and the properties above still apply.
+- A KerML **`member feature`** — `class C { member feature x; }`, the grammar's
+  `TypeFeatureMember` — is a feature the type owns through a plain
+  `sysml:OwningMembership`, not a `FeatureMembership`: it is a member of the type
+  but not one of its features, so none of `ownedFeature`,
+  `ownedFeatureMembership`, `ownedMemberFeature` or `owningType` is stated.
+  Reading a graph back, a `Feature` a `Type` owns through a plain
+  `OwningMembership` is written with the `member` prefix, after its visibility
+  (`private member feature x;`), unless the membership is one KerML writes
+  another way: a `VariantMembership`, a `ResultExpressionMembership`, a
+  metadata annotation, an enumerated value, or the cross feature an end declares
+  in its head (described with the metadata annotations above). SysML has no
+  `member` keyword, so a SysML-language type
+  that owns a feature through a plain `OwningMembership` is an
+  `UnsupportedError` naming the feature: writing it as `attribute x;` would
+  make it a feature of the type, a different model.
 - A **relationship a namespace declares** — an import, a dependency, a state's
   entry membership — is owned directly, with `sysml:owningRelatedElement` on it
   and `sysml:ownedRelationship` on the owner, and no membership between. An
@@ -854,7 +869,13 @@ name there would reach the inherited redefinition; a `part payload :> payload`
 whose target is the package's `payload` writes `subsets Shadowing::payload`,
 since `payload` inside the definition would be the subsetting part itself; and a
 `: Packet` inside a definition that declares its own `Packet` writes
-`: Shadowing::Packet` when the outer one is meant. A name shadowed at every
+`: Shadowing::Packet` when the outer one is meant. The scope a spelling is read
+in is the one the parser reads it in: a `featured by` or `crosses` target in a
+feature's head is read in that feature's own scope first, where its type's
+members are visible, so a `member feature` nested in an anonymous
+`portion :>> startShot` that is featured by that portion writes `featured by
+CC1::startShot`, since the short name in the feature's head would reach the
+inherited `Occurrence::startShot` instead. A name shadowed at every
 level falls back to the global form (`$::Shadowing::Packet`), and an element
 that no spelling reaches from where it is written is reported rather than
 written as a different element. What a spelling reaches can depend on how the
