@@ -557,6 +557,8 @@ type CrossFeatureMember struct {
 	IsReference   bool
 	Ident         Identification
 	Multiplicity  *Multiplicity
+	IsOrdered     bool
+	IsNonunique   bool
 	Relationships []*Relationship
 }
 

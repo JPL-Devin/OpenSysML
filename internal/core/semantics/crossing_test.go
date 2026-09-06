@@ -231,3 +231,69 @@ func wantRelationshipKinds(t *testing.T, sym *symbols.Symbol, want ...ast.Relati
 		}
 	}
 }
+
+// `ordered`/`nonunique` after the cross feature's multiplicity, and the
+// specializations after them, are the cross feature's, so conformance judges it.
+func TestCrossFeatureOrderedNonunique(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"t.kerml", `package P {
+			class C1;
+			feature g : C1;
+			feature h : C1 nonunique;
+			assoc A {
+				end [*] nonunique :> g feature x : C1;
+				end y1 [1..*] ordered nonunique :> h feature y : C1;
+			}
+		}`},
+		{"t.sysml", `package P {
+			part def C1;
+			item g : C1;
+			item h : C1 nonunique;
+			connection def A {
+				end [*] nonunique :> g item x : C1;
+				end y1 [1..*] ordered nonunique :> h item y : C1;
+			}
+		}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamed(t, tc.name, tc.src)
+			p := sym(t, root, "P")
+			a := nested(t, p.Scope, "A")
+			g := nested(t, p.Scope, "g")
+			for _, end := range []string{"x", "y"} {
+				e := nested(t, a.Scope, end)
+				u := e.Decl.(*ast.Usage)
+				if u.IsOrdered || u.IsNonunique {
+					t.Fatalf("end %s is ordered=%v nonunique=%v, want the cross feature's", end, u.IsOrdered, u.IsNonunique)
+				}
+				wantRelationshipKinds(t, e, ast.RelTyping)
+				if got := m.ConformanceViolations(e); len(got) != 0 {
+					t.Fatalf("ConformanceViolations(%s) = %d, want none on the end", end, len(got))
+				}
+			}
+			x := m.OwnedCrossFeature(nested(t, a.Scope, "x"))
+			y := m.OwnedCrossFeature(nested(t, a.Scope, "y"))
+			if x == nil || y == nil {
+				t.Fatal("OwnedCrossFeature = nil")
+			}
+			if cross := x.Decl.(*ast.CrossFeatureMember); cross.IsOrdered || !cross.IsNonunique {
+				t.Fatalf("cross feature of x: ordered=%v nonunique=%v, want nonunique only", cross.IsOrdered, cross.IsNonunique)
+			}
+			if cross := y.Decl.(*ast.CrossFeatureMember); !cross.IsOrdered || !cross.IsNonunique || cross.Ident.Name != "y1" {
+				t.Fatalf("cross feature of y: %+v, want y1 ordered nonunique", cross)
+			}
+			wantRelationshipKinds(t, x, ast.RelSubsets)
+			wantRelationshipKinds(t, y, ast.RelSubsets)
+			if !m.Conforms(x, g) {
+				t.Fatalf("cross feature of x does not subset g: %v", m.DirectSupertypes(x))
+			}
+			got := m.ConformanceViolations(x)
+			if len(got) != 1 || got[0].Kind != ViolationUniqueness || got[0].Target != g {
+				t.Fatalf("ConformanceViolations(cross of x) = %+v, want one uniqueness violation against g", got)
+			}
+			if got := m.ConformanceViolations(y); len(got) != 0 {
+				t.Fatalf("ConformanceViolations(cross of y) = %+v, want none: h is nonunique", got)
+			}
+		})
+	}
+}

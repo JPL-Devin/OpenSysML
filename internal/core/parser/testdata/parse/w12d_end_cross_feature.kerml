@@ -44,4 +44,12 @@ package W12DEndCrossFeature {
 		end [1] :> C1::a feature x : C1;
 		end [1] subsets C2::b : C1 feature y : C2;
 	}
+	assoc A7 {
+		end x1 [1..*] ordered feature x : C1;
+		end [*] nonunique ordered :> C2::b feature y : C2;
+	}
+	assoc A8 {
+		end ordered nonunique feature x : C1;
+		end [1] nonunique feature y : C2;
+	}
 }

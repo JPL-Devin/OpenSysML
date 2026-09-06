@@ -124,4 +124,37 @@
                 (Relationship kind="subsets" target=C2::b
                   (*ast.QualifiedName))
                 (Relationship kind="typing" target=C1
-                  (*ast.QualifiedName))))))))))
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A7" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="x1" ordered=true
+                (Multiplicity range=true
+                  (LiteralInteger value="1")
+                  (LiteralInfinity)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" ordered=true nonunique=true
+                (Multiplicity range=false
+                  (LiteralInfinity))
+                (Relationship kind="subsets" target=C2::b
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A8" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" ordered=true nonunique=true)))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="" nonunique=true
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))))))))))

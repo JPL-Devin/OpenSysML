@@ -250,24 +250,46 @@ func (p *Parser) tryParseCrossFeature() *ast.CrossFeatureMember {
 		cross.Ident = p.parseIdentification()
 	}
 	cross.Relationships = p.parseRelationships(true)
-	if p.at(lexer.LBracket) {
-		cross.Multiplicity = p.parseMultiplicity()
+	if p.parseCrossMultiplicityPart(cross) {
 		cross.Relationships = append(cross.Relationships, p.parseRelationships(true)...)
 	}
 	declared := cross.Ident.Name != "" || cross.Ident.ShortName != "" ||
-		len(cross.Relationships) > 0 || cross.Multiplicity != nil
+		len(cross.Relationships) > 0 || cross.Multiplicity != nil || cross.IsOrdered || cross.IsNonunique
 	if !declared || !p.isKindKeyword(p.peek()) {
 		p.restore(cp)
-		// `end [mult] ref attribute e`: the multiplicity alone is still the crossing one.
+		// `end [2] nonunique ref e : C`: the multiplicity part alone is still the crossing one.
 		if p.at(lexer.LBracket) {
-			cross = &ast.CrossFeatureMember{Multiplicity: p.parseMultiplicity()}
-			cross.NodeSpan = cross.Multiplicity.Span()
+			cross = &ast.CrossFeatureMember{}
+			p.parseCrossMultiplicityPart(cross)
+			cross.NodeSpan = source.Span{Offset: start, Len: p.lastEnd() - start}
 			return cross
 		}
 		return nil
 	}
 	cross.NodeSpan = p.spanFrom(start)
 	return cross
+}
+
+// parseCrossMultiplicityPart reads `[mult]` and the `ordered`/`nonunique` after it
+// onto cross (KerML.xtext MultiplicityPart), reporting whether any was present.
+func (p *Parser) parseCrossMultiplicityPart(cross *ast.CrossFeatureMember) bool {
+	present := false
+	if p.at(lexer.LBracket) {
+		cross.Multiplicity = p.parseMultiplicity()
+		present = true
+	}
+	for {
+		switch {
+		case p.atKeyword("ordered") && !cross.IsOrdered:
+			cross.IsOrdered = true
+		case p.atKeyword("nonunique") && !cross.IsNonunique:
+			cross.IsNonunique = true
+		default:
+			return present
+		}
+		p.advance()
+		present = true
+	}
 }
 
 // parseCrossFeaturePrefix reads the modifiers a cross feature is declared with

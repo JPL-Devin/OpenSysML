@@ -216,3 +216,61 @@ func TestPortionAloneComesBackAsPortion(t *testing.T) {
 		t.Errorf("isPortion alone did not write portion:\n--- want ---\n%s--- got ---\n%s", kerml, out)
 	}
 }
+
+// `ordered` and `nonunique` after a cross feature's multiplicity are stated on
+// the cross feature, never on the end, and come back from the graph alone.
+func TestCrossFeatureOrderingComesBackFromTheGraphAlone(t *testing.T) {
+	sysml := `package Crossing {
+    part def A;
+    part def B;
+    item g : A;
+    connection def C {
+        end x1[1..*] ordered item x : A;
+        end [0..*] ordered nonunique subsets g item y : A;
+        end nonunique item z : B;
+        end [2] nonunique ref w : B;
+    }
+}
+`
+	g := turtleOf(t, "crossing", sysml)
+	elmt := func(name string) string { return rdf.ElementIRI(name).Value }
+	for _, flag := range []struct{ end, cross, property string }{
+		{"Crossing::C::x", "Crossing::C::x::x1", "isOrdered"},
+		{"Crossing::C::y", "Crossing::C::y::@0", "isOrdered"},
+		{"Crossing::C::y", "Crossing::C::y::@0", "isNonunique"},
+		{"Crossing::C::z", "Crossing::C::z::@0", "isNonunique"},
+		{"Crossing::C::w", "Crossing::C::w::@0", "isNonunique"},
+	} {
+		wantLexical(t, g, elmt(flag.cross), rdf.SysML+flag.property, "true")
+		if g.HasProperty(iri(elmt(flag.end)), rdf.SysML+flag.property) {
+			t.Errorf("the end <%s> took its cross feature's %s", flag.end, flag.property)
+		}
+	}
+	if g.HasProperty(iri(elmt("Crossing::C::x::x1")), rdf.SysML+"isNonunique") {
+		t.Errorf("the ordered cross feature x1 is not nonunique")
+	}
+	if back := toNotation(t, withoutTriples(t, idTurtle(t, sysml), "sysx:sourceText")); back != sysml {
+		t.Errorf("cross feature ordering was not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", sysml, back)
+	}
+
+	kerml := `package Crossing {
+    class A;
+    feature g : A;
+    assoc C {
+        end x1[1..*] ordered feature x : A;
+        end [0..*] ordered nonunique subsets g feature y : A;
+    }
+}
+`
+	turtle, err := export.Convert("m.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	out, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(out) != kerml {
+		t.Errorf("KerML cross feature ordering was not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", kerml, out)
+	}
+}

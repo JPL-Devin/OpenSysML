@@ -448,6 +448,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 			{"derived", v.IsDerived}, {"abstract", v.IsAbstract}, {"variation", v.IsVariation},
 			{"composite", v.IsComposite}, {"portion", v.IsPortion}, {"variable", v.IsVariable},
 			{"constant", v.IsConstant}, {"ref", v.IsReference},
+			{"ordered", v.IsOrdered}, {"nonunique", v.IsNonunique},
 		} {
 			if flag.set {
 				fmt.Fprintf(b, ` %s=true`, flag.name)

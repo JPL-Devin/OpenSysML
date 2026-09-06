@@ -1337,6 +1337,8 @@ func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error
 		{"isComposite", cross.IsComposite},
 		{"isPortion", cross.IsPortion},
 		{"isDerived", cross.IsDerived},
+		{"isOrdered", cross.IsOrdered},
+		{"isNonunique", cross.IsNonunique},
 	})
 	if keyword := directionKeyword(cross.Direction); keyword != "" {
 		e.graph.Add(crossSubject, e.sysml(pDirection), rdf.String(keyword))

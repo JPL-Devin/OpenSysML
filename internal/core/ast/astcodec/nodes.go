@@ -756,6 +756,8 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.w.Bool(n.IsReference)
 		e.ident(n.Ident)
 		e.node(n.Multiplicity)
+		e.w.Bool(n.IsOrdered)
+		e.w.Bool(n.IsNonunique)
 		e.rels(n.Relationships)
 	case *ast.DecisionNode:
 		e.base(&n.NodeBase)
@@ -1257,6 +1259,8 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.IsReference = d.r.Bool()
 		n.Ident = d.ident()
 		n.Multiplicity = typed[*ast.Multiplicity](d)
+		n.IsOrdered = d.r.Bool()
+		n.IsNonunique = d.r.Bool()
 		n.Relationships = d.rels()
 	case *ast.DecisionNode:
 		d.base(&n.NodeBase)

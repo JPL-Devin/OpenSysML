@@ -2244,10 +2244,19 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 		words[len(words)-1] += mult
 	case mult != "":
 		words = append(words, mult)
-	default:
+	}
+	for _, flag := range []struct {
+		property string
+		keyword  string
+	}{{"isOrdered", "ordered"}, {"isNonunique", "nonunique"}} {
+		if d.boolOf(cross, rdf.SysML+flag.property) {
+			words = append(words, flag.keyword)
+		}
+	}
+	if len(words) == 0 {
 		return nil, &UnsupportedError{
 			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
-			Note: "it declares neither a name nor a multiplicity, and one or the other introduces a cross feature ahead of its end",
+			Note: "it declares neither a name nor a multiplicity part, and one or the other introduces a cross feature ahead of its end",
 		}
 	}
 	words = append(d.crossFeaturePrefixWords(cross), words...)

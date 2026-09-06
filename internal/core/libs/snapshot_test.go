@@ -78,7 +78,7 @@ func TestSnapshotIndexMatchesFreshLoad(t *testing.T) {
 
 // snapshotKindDigest pins the SymbolKind numbering the snapshot stream persists
 // under snapshotFormatVersion; a kind added or moved renumbers the ones after it.
-const snapshotKindDigest = "9ab76119c0248383"
+const snapshotKindDigest = "d49dad41d357c031"
 
 func TestSnapshotFormatVersionPinsSymbolKinds(t *testing.T) {
 	var b strings.Builder
@@ -103,9 +103,9 @@ func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	// A blob in the previous or a later format is refused before its stream
 	// is read, so a layout change never decodes into shifted fields. Format 8
 	// numbered the kinds before SymbolCrossFeature was added; format 9 wrote a
-	// CrossFeatureMember without its prefix fields.
+	// CrossFeatureMember without its prefix fields, format 10 without ordered/nonunique.
 	digest := NewLoader(EmbeddedSource(), nil).setDigest()
-	for _, version := range []uint64{8, 9, snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
+	for _, version := range []uint64{8, 9, 10, snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
 		other := binary.AppendUvarint([]byte(snapshotMagic), version)
 		other = binary.AppendUvarint(other, uint64(len(digest)))
 		other = append(other, digest...)
