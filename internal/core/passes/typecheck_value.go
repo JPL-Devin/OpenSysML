@@ -17,18 +17,22 @@ import (
 // never produces a false positive.
 func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
 	wants := ec.declaredTypeSymbols(declScope, d.relationships)
-	if len(wants) == 0 || ec.anyScalar(wants) {
-		// An untyped feature has nothing to conform to, and a scalar-typed one
-		// is the lattice rules' to report — in lattice terms (Natural vs
-		// Integer), which is the more precise message.
+	if len(wants) == 0 {
 		return
 	}
+	// A scalar value bound to a scalar-typed feature is the lattice rules' to
+	// report — in lattice terms (Natural vs Integer), the more precise message.
+	scalar := ec.anyScalar(wants)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, value := range valueElements(value) {
 		if feature := ec.valueFeature(valueScope, value); feature != nil {
 			gots := ec.featureValueTypes(feature)
-			if len(gots) == 0 {
+			if _, indexed := value.(*ast.IndexExpr); indexed {
+				// The value is the selected element, not the indexed feature.
+				gots = ec.model.ExprResultTypes(valueScope, value)
+			}
+			if len(gots) == 0 || (scalar && ec.anyScalar(gots)) {
 				continue
 			}
 			// A binding equates the two features, so one conforming pairing in
@@ -41,9 +45,12 @@ func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scop
 		}
 		if result := ec.invocationResultParameter(valueScope, value); result != nil {
 			gots := ec.featureValueTypes(result)
-			if len(gots) > 0 && !ec.boundTypesConform(result, gots, wants) {
+			if len(gots) > 0 && !(scalar && ec.anyScalar(gots)) && !ec.boundTypesConform(result, gots, wants) {
 				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", typeNames(gots), typeNames(wants))
 			}
+			continue
+		}
+		if scalar {
 			continue
 		}
 		// The feature's type has no scalar ancestor, so no literal value can

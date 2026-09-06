@@ -589,7 +589,7 @@ func TestTriggerInBodyValuedExpression(t *testing.T) {
 		{"attribute v = { action inner { accept after 5; } d };", "trigger-after-duration", after},
 		{"attribute v = Timed({ action inner { accept after 5; } d });", "trigger-after-duration", after},
 		{"attribute v = Timed(e = { action inner { accept at 5; } d });", "trigger-at-time-instant", "an 'at' trigger's time must be a TimeInstantValue, found Natural"},
-		{"entry { assign x := Timed({ action inner { accept when x; } d }); }", "trigger-when-boolean", "a 'when' trigger's condition must be Boolean, found Integer"},
+		{"entry { assign d := Timed({ action inner { accept when x; } d }); }", "trigger-when-boolean", "a 'when' trigger's condition must be Boolean, found Integer"},
 		{"entry { assign untyped := { action inner { accept after 5; } d }; }", "trigger-after-duration", after},
 		{"do action run { assign untyped := { action inner { accept after 5; } d }; }", "trigger-after-duration", after},
 		{"attribute v = (true, { action inner { accept after 5; } d });", "trigger-after-duration", after},

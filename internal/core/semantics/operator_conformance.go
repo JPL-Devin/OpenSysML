@@ -73,17 +73,17 @@ func (m *Model) resultTypes(scope *symbols.Scope, node ast.Node) []*symbols.Symb
 func (m *Model) indexResultTypes(scope *symbols.Scope, n *ast.IndexExpr) []*symbols.Symbol {
 	seq := m.resultTypes(scope, n.Operand)
 	anything, collection := m.libSymbol(fqnAnything), m.libSymbol(fqnCollection)
-	if len(seq) == 0 || collection == nil {
-		return []*symbols.Symbol{anything}
-	}
 	var out []*symbols.Symbol
 	for _, typ := range seq {
-		if m.Conforms(typ, collection) {
+		if collection != nil && m.Conforms(typ, collection) {
 			typ = anything
 		}
-		if !containsElement(out, typ) {
+		if typ != nil && !containsElement(out, typ) {
 			out = append(out, typ)
 		}
+	}
+	if len(out) == 0 && anything != nil {
+		return []*symbols.Symbol{anything}
 	}
 	return out
 }

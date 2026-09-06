@@ -5,3 +5,6 @@
   `satisfy … by` operand or a cast that conformed through the second type was reported. Every
   statically known type is now kept and the reference implementation's existential rule applied;
   arithmetic and conditional results, which are not statically known, stay silent as before.
+  Conversely, a value whose types are all unrelated to a scalar-typed feature (`attribute
+  a : Integer = b` with `part b : Boat`, or `part a : A, Integer = b`) is now reported instead of
+  being skipped as a scalar case, and an indexed element `xs#(i)` is judged by the element's type.
