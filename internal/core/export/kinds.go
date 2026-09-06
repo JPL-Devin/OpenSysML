@@ -102,12 +102,25 @@ var keywordMetaclass = map[string]string{
 	"ref":      "ReferenceUsage",
 }
 
+// The metaclasses an `event` or `assert` declaration builds: the keyword is a
+// type of its own in the metamodel, so the graph types it rather than spelling it.
+const (
+	mEventOccurrenceUsage  = "EventOccurrenceUsage"
+	mAssertConstraintUsage = "AssertConstraintUsage"
+)
+
 // usageMetaclassOf gives the metaclass a usage builds, reading the keyword where
 // the kind does not decide it; a kindless one is a DefaultReferenceUsage, as is
 // a kindless `name = value;` in a metadata body (SysML.xtext MetadataBodyUsage).
 func usageMetaclassOf(n *ast.Usage, inMetadataBody bool) (string, bool) {
 	if m, ok := keywordMetaclass[n.Keyword]; ok {
 		return m, true
+	}
+	switch {
+	case eventOccurrence(n):
+		return mEventOccurrenceUsage, true
+	case assertedConstraint(n):
+		return mAssertConstraintUsage, true
 	}
 	if n.Keyword == "" && (n.Kind == ast.UsageAttribute || inMetadataBody && n.Kind == ast.UsageEnumeration) {
 		return "ReferenceUsage", true
@@ -116,12 +129,37 @@ func usageMetaclassOf(n *ast.Usage, inMetadataBody bool) (string, bool) {
 	return m, ok
 }
 
+// eventOccurrence reports an occurrence declared with `event`, whether as its
+// kind (`event m.start`) or as a modifier (`event occurrence e`).
+func eventOccurrence(n *ast.Usage) bool {
+	return n.Kind == ast.UsageOccurrence && (n.IsEvent || n.Keyword == "event")
+}
+
+// assertedConstraint reports a constraint declared with `assert`, prefixing
+// `constraint` or standing in for it (SysML.xtext AssertConstraintUsage).
+func assertedConstraint(n *ast.Usage) bool {
+	return n.Kind == ast.UsageConstraint && (n.Keyword == "assert" || n.PrefixKeyword == "assert")
+}
+
+// portionKeyword gives the `snapshot`/`timeslice` a usage is a portion of, or "".
+func portionKeyword(portion ast.PortionKind) string {
+	switch portion {
+	case ast.PortionSnapshot:
+		return "snapshot"
+	case ast.PortionTimeslice:
+		return "timeslice"
+	}
+	return ""
+}
+
 // metaclassKeywordUsage reads the keyword-decided metaclasses back to the kind
 // the parser records for them.
 var metaclassKeywordUsage = map[string]ast.UsageKind{
-	"DataType":       ast.UsageAttribute,
-	"Function":       ast.UsageCalc,
-	"ReferenceUsage": ast.UsageAttribute,
+	"DataType":             ast.UsageAttribute,
+	"Function":             ast.UsageCalc,
+	"ReferenceUsage":       ast.UsageAttribute,
+	mEventOccurrenceUsage:  ast.UsageOccurrence,
+	mAssertConstraintUsage: ast.UsageConstraint,
 }
 
 // definitionKeyword and usageKeyword give the source keyword for a kind. The

@@ -2813,7 +2813,7 @@ func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 		if !errors.As(err, &unsupported) {
 			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
 		}
-		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote a metadata annotation this way", "convert the model from source again"} {
+		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote this fact this way", "convert the model from source again"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("expected %q in error:\n%s", want, err.Error())
 			}
@@ -2832,6 +2832,43 @@ func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 	for _, unwanted := range []string{"#Safety", "about"} {
 		if strings.Contains(string(back), unwanted) {
 			t.Errorf("%q should not come from a graph that no longer states it:\n%s", unwanted, back)
+		}
+	}
+}
+
+// The fixture is 0.5.1's own output: `sysml:isSnapshot` and `sysml:isTimeslice`
+// for a portion, which `sysml:portionKind` now states.
+func TestSupersededPortionFlagsAreRefused(t *testing.T) {
+	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "portions_0_5_1.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := func(turtle []byte, property, now string) {
+		t.Helper()
+		_, err := export.Convert("old.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
+		}
+		for _, want := range []string{"the property <" + property + ">", "it is now " + now, "convert the model from source again"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("expected %q in error:\n%s", want, err.Error())
+			}
+		}
+	}
+	refused(turtle, rdf.SysML+"isSnapshot", `sysml:portionKind "snapshot"`)
+	withoutSnapshot := withoutTriples(t, turtle, "sysml:isSnapshot")
+	refused(withoutSnapshot, rdf.SysML+"isTimeslice", `sysml:portionKind "timeslice"`)
+
+	// With both flags gone the keyword contradicts the typing: still refused.
+	_, err = export.Convert("old.ttl", withoutTriples(t, withoutSnapshot, "sysml:isTimeslice"), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected the untyped portion to be refused, got %v", err)
+	}
+	for _, want := range []string{"the `snapshot` declaration <urn:sysmlv2:element:Portions__atStart>", "no sysml:portionKind"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
 		}
 	}
 }
