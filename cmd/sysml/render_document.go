@@ -114,10 +114,24 @@ func documentOptions() docrender.HTMLOptions {
 	return docrender.HTMLOptions{
 		Fragment:            htmlFragment,
 		NoDefaultStylesheet: htmlNoCSS,
+		Theme:               htmlTheme,
 		TitlePage:           pdfTitlePage,
 		TOC:                 pdfTOC,
 		NumberSections:      pdfNumbering,
+		MermaidScript:       mermaidScriptURL(),
 	}
+}
+
+// The -html-mermaid value naming the pinned CDN release.
+const mermaidCDN = "cdn"
+
+// mermaidScriptURL resolves -html-mermaid: cdn names the pinned release,
+// anything else is the URL to load as it stands.
+func mermaidScriptURL() string {
+	if htmlMermaid == mermaidCDN {
+		return docrender.MermaidScriptURL
+	}
+	return htmlMermaid
 }
 
 // setStylesheets resolves the stylesheets of an HTML set: the default sheet
@@ -133,10 +147,14 @@ func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
 		assets = append(assets, repl.RenderedDocument{Name: name, FileName: name, Content: content})
 	}
 	if !htmlNoCSS {
-		add(docrender.StylesheetFileName, docrender.DefaultStylesheet())
+		base, err := docrender.ThemeStylesheet(htmlTheme)
+		if err != nil {
+			return nil, nil, err
+		}
+		add(docrender.StylesheetFileName, base)
 	}
 	for _, css := range htmlCSS {
-		if isStylesheetURL(css) {
+		if isWebURL(css) {
 			links = append(links, docrender.LinkedStylesheet(css))
 			continue
 		}
@@ -215,7 +233,7 @@ func shortenStylesheetName(name string) string {
 func htmlOptions() (docrender.HTMLOptions, error) {
 	opts := documentOptions()
 	for _, css := range htmlCSS {
-		if isStylesheetURL(css) {
+		if isWebURL(css) {
 			opts.Stylesheets = append(opts.Stylesheets, docrender.LinkedStylesheet(css))
 			continue
 		}
@@ -229,9 +247,9 @@ func htmlOptions() (docrender.HTMLOptions, error) {
 	return opts, nil
 }
 
-// isStylesheetURL reports whether -html-css named a stylesheet to link rather
-// than a file to inline.
-func isStylesheetURL(css string) bool {
+// isWebURL reports whether a value is an http(s) or protocol-relative URL a
+// page can load a resource from, rather than a local file.
+func isWebURL(css string) bool {
 	lower := strings.ToLower(css)
 	for _, scheme := range []string{"http://", "https://", "//"} {
 		if strings.HasPrefix(lower, scheme) {
@@ -241,10 +259,15 @@ func isStylesheetURL(css string) bool {
 	return false
 }
 
-// runDefaultStylesheet writes the default document stylesheet, so a reader
-// styling the HTML starts from the sheet it overrides.
+// runDefaultStylesheet writes the default document stylesheet, with the
+// -html-theme overrides when one is named, so a reader styling the HTML
+// starts from the sheet it overrides.
 func runDefaultStylesheet() error {
-	return writeArtifact(docrender.DefaultStylesheet(), formCSS)
+	css, err := docrender.ThemeStylesheet(htmlTheme)
+	if err != nil {
+		return err
+	}
+	return writeArtifact(css, formCSS)
 }
 
 // commitDocumentSet writes a rendered document set all-or-nothing: every
@@ -547,7 +570,29 @@ const (
 // htmlFlagsGiven reports whether the run asked for anything only HTML output
 // shapes.
 func htmlFlagsGiven() bool {
-	return len(htmlCSS) > 0 || htmlNoCSS || htmlFragment
+	return htmlPageFlagsGiven() || htmlTheme != ""
+}
+
+// htmlPageFlagsGiven reports whether the run asked for anything only a
+// rendered HTML page carries; -html-theme is left out, as it also shapes the
+// sheet -html-default-css writes.
+func htmlPageFlagsGiven() bool {
+	return len(htmlCSS) > 0 || htmlNoCSS || htmlFragment || htmlMermaid != ""
+}
+
+// checkTheme rejects an -html-theme value that names no bundled theme.
+func checkTheme() error {
+	_, err := docrender.ThemeStylesheet(htmlTheme)
+	return err
+}
+
+// checkMermaidScript rejects an -html-mermaid value that is neither cdn nor a
+// URL a page can load a script from.
+func checkMermaidScript() error {
+	if htmlMermaid == "" || htmlMermaid == mermaidCDN || isWebURL(htmlMermaid) {
+		return nil
+	}
+	return fmt.Errorf("-html-mermaid takes %s or the URL of a Mermaid script; %q is neither", mermaidCDN, htmlMermaid)
 }
 
 // documentSetForm resolves -doc-form for -render-documents, which writes a
@@ -569,12 +614,27 @@ func documentSetForm() (string, error) {
 		if pdfEngine != "" {
 			return "", errors.New("-pdf-engine shapes PDF output; -doc-form html needs no external converter")
 		}
+		if err := checkMermaidScript(); err != nil {
+			return "", err
+		}
+		if err := checkThemeUse(); err != nil {
+			return "", err
+		}
 		return form, nil
 	case docFormPDF:
 		return "", errors.New("-render-documents writes a linked set of files, which PDF cannot be; render one document at a time with -render-document -doc-form pdf")
 	default:
 		return "", unknownDocumentForm(form)
 	}
+}
+
+// checkThemeUse rejects an -html-theme that names no bundled theme or would
+// layer over a default sheet -html-no-default-css leaves out.
+func checkThemeUse() error {
+	if htmlNoCSS && htmlTheme != "" {
+		return errors.New("-html-theme layers a theme over the default stylesheet, which -html-no-default-css leaves out; ask for one or the other")
+	}
+	return checkTheme()
 }
 
 func docFormOrDefault() string {
@@ -609,6 +669,18 @@ func documentForm() (string, error) {
 		}
 		if htmlFragment && len(htmlCSS) > 0 {
 			return "", errors.New("-html-fragment writes the document element alone, with no place for a stylesheet; style the page you embed it in")
+		}
+		if htmlFragment && htmlMermaid != "" {
+			return "", errors.New("-html-fragment writes the document element alone, with no place for a script; load Mermaid in the page you embed it in")
+		}
+		if err := checkMermaidScript(); err != nil {
+			return "", err
+		}
+		if htmlFragment && htmlTheme != "" {
+			return "", errors.New("-html-fragment writes the document element alone, with no place for a stylesheet; -html-theme styles a whole page")
+		}
+		if err := checkThemeUse(); err != nil {
+			return "", err
 		}
 		return form, nil
 	case docFormPDF:

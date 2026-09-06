@@ -157,6 +157,9 @@ collection property.
 | --- | --- |
 | `Real`, `Rational` | `float` |
 | `Complex` | `complex`, one number rather than two floats |
+| `Array` | `opensysml.Array`: `dimensions` and row-major `elements`, `nested()` unfolds them |
+| `CartesianVectorValue` and the other numeric vectors | `opensysml.Vector`: a tuple of `int`/`float` components, kept apart |
+| `VectorQuantityValue` | `opensysml.VectorQuantity`: a tuple of `Quantity`, one unit per component |
 | `Integer`, `Natural` | `int` |
 | `Boolean` | `bool` |
 | `String` | `str` |

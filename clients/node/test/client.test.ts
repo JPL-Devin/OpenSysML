@@ -10,6 +10,7 @@ import { after, before, test } from "node:test";
 import {
   CAPABILITY_COMPLEX_VALUES,
   CAPABILITY_QUERY,
+  CAPABILITY_STRUCTURED_VALUES,
   ClosedConnectionError,
   MissingCapabilityError,
   EvaluationError,
@@ -134,6 +135,46 @@ test("a complex number is one value over gRPC, Connect protobuf and Connect JSON
       { kind: "complex", value: { real: 1, imaginary: 2 } },
       { kind: "complex", value: { real: 3, imaginary: 4 } },
     ]);
+  }
+});
+
+const STRUCTURED_MODEL = `package S {
+    private import ScalarValues::*;
+    private import Collections::*;
+    private import VectorValues::*;
+    private import VectorFunctions::*;
+    private import Quantities::*;
+    private import SI::*;
+    attribute grid : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+    attribute v : CartesianVectorValue = VectorOf((3.0, 4.0));
+    attribute d : VectorQuantityValue = VectorOf((3.0, 4.0)) [m];
+}`;
+
+test("an array, a vector and a vector quantity arrive whole over gRPC, Connect protobuf and Connect JSON", async () => {
+  for (const options of [{ protocol: "grpc" as const }, {}, { encoding: "json" as const }]) {
+    await using connection = await connect(options);
+    assert.ok((await connection.serverInfo()).has(CAPABILITY_STRUCTURED_VALUES));
+    await using model = await connection.loads(STRUCTURED_MODEL);
+
+    assert.deepEqual(await model.eval("S::grid"), {
+      kind: "array",
+      dimensions: [2n, 3n],
+      elements: [1n, 2n, 3n, 4n, 5n, 6n].map((value) => ({ kind: "int", value })),
+    });
+    const v = await model.eval("S::v");
+    assert.deepEqual(v, {
+      kind: "vector",
+      components: [{ kind: "real", value: 3 }, { kind: "real", value: 4 }],
+    });
+    assert.equal(formatValue(v), "⟨3.0, 4.0⟩");
+    const d = await model.eval("S::d");
+    assert.ok(d.kind === "vectorQuantity");
+    assert.deepEqual(d.components.map((c) => c.magnitude), [
+      { kind: "real", value: 3 },
+      { kind: "real", value: 4 },
+    ]);
+    assert.deepEqual(d.components.map((c) => c.unit), ["m", "m"]);
+    assert.deepEqual(d.components[0]?.unitTerm?.factors, [{ unitId: "SI::metre", exponent: 1 }]);
   }
 });
 

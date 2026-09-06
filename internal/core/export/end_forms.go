@@ -76,9 +76,10 @@ func (n endNotation) text() (string, error) {
 }
 
 // endVerbs are the verbs a head writes ahead of its ends when its own keyword
-// is a noun (`allocation a allocate x to y`), by the form they introduce.
+// is a noun (`allocation a allocate x to y`, `connector c from x to y`), by the
+// form they introduce.
 var endVerbs = map[string][]string{
-	formTo:        {"connect", "allocate"},
+	formTo:        {"connect", "allocate", "from"},
 	formNary:      {"connect", "allocate"},
 	formEquals:    {"bind", "of"},
 	formFirstThen: {"first"},
@@ -151,16 +152,17 @@ func (e *encoder) subjectClause(n *ast.Usage) string {
 
 // endShape reads the form a head writes its ends in, with the end texts the
 // graph carries beside it, or "" for a head whose ends the graph cannot state:
-// an end with a `references` clause, an inline payload declaration, or a
-// transition's trigger, guard and effect.
+// an end that redefines, an inline payload declaration, or a transition's
+// trigger, guard and effect.
 func (e *encoder) endShape(n *ast.Usage) (form string, ends []string, payload string) {
 	switch {
 	case len(n.ConnectorEnds) > 0:
 		for _, end := range n.ConnectorEnds {
-			if end == nil || end.Target == nil || end.ReferencedTarget() != nil {
+			text, ok := e.connectorEndText(end)
+			if !ok {
 				return "", nil, ""
 			}
-			ends = append(ends, e.endText(end.Multiplicity, end.Target))
+			ends = append(ends, text)
 		}
 		switch {
 		case n.Kind == ast.UsageSuccession:
@@ -212,6 +214,43 @@ func (e *encoder) endText(mult *ast.Multiplicity, target ast.Node) string {
 	return e.text(mult) + " " + e.text(target)
 }
 
+// connectorEndText is one connector end as the graph can state it: `[1] a.p`
+// or `[1] bead ::> t.bead`; an end saying more than that is not stated.
+func (e *encoder) connectorEndText(end *ast.ConnectorEnd) (string, bool) {
+	if end == nil || end.Target == nil {
+		return "", false
+	}
+	if _, named := end.DeclaredName(); !named {
+		if end.ReferencedTarget() != nil {
+			return "", false
+		}
+		return e.endText(end.Multiplicity, end.Target), true
+	}
+	var reference *ast.Relationship
+	for _, rel := range end.Relationships {
+		if rel == nil || rel.Kind != ast.RelReferences || reference != nil {
+			return "", false
+		}
+		reference = rel
+	}
+	if reference == nil {
+		return "", false
+	}
+	return e.endText(end.Multiplicity, end.Target) + " " + e.referencesKeyword(end.Target, reference) + " " + e.text(reference), true
+}
+
+// referencesKeyword is the ReferencesKeyword written between a connector end's
+// name and its target, `::>` or `references` (KerML.xtext:856).
+func (e *encoder) referencesKeyword(name ast.Node, reference *ast.Relationship) string {
+	between := source.Span{Offset: name.Span().End(), Len: reference.Span().Offset - name.Span().End()}
+	if between.Len > 0 {
+		if written := words(e.src.slice(between)); len(written) == 1 && written[0] == "references" {
+			return "references"
+		}
+	}
+	return "::>"
+}
+
 // endVerb returns the verb written ahead of the ends and the offset the ends
 // notation starts at, which is that verb's if there is one.
 func (e *encoder) endVerb(n *ast.Usage, form string) (string, int) {
@@ -228,33 +267,33 @@ func (e *encoder) endVerb(n *ast.Usage, form string) (string, int) {
 	if at <= start {
 		return "", at
 	}
-	head := e.file.Text(source.Span{Offset: start, Len: at - start})
+	head := source.Span{Offset: start, Len: at - start}
 	for _, verb := range endVerbs[form] {
 		// A head whose own keyword is the verb (`connect a to b`) writes it
 		// once; the keyword the graph already carries is that verb.
 		if verb == n.Keyword {
 			continue
 		}
-		if index := strings.LastIndex(head, verb); index >= 0 && isWord(head, index, len(verb)) {
-			return verb, start + index
+		if index := e.src.lastToken(head, verb); index >= 0 {
+			return verb, index
 		}
 	}
 	if form == formNary {
-		if index := strings.LastIndex(head, "("); index >= 0 {
-			return "", start + index
+		if index := e.src.lastToken(head, "("); index >= 0 {
+			return "", index
 		}
 	}
 	if form == formFromTo {
-		if index := strings.LastIndex(head, "of "); index >= 0 && isWord(head, index, 2) {
-			return "", start + index
+		if index := e.src.lastToken(head, "of"); index >= 0 {
+			return "", index
 		}
-		if index := strings.LastIndex(head, "from"); index >= 0 && isWord(head, index, 4) {
-			return "", start + index
+		if index := e.src.lastToken(head, "from"); index >= 0 {
+			return "", index
 		}
 	}
 	if form == formFlowTo && n.FlowEnds != nil && n.FlowEnds.Payload != nil {
-		if index := strings.LastIndex(head, "of "); index >= 0 && isWord(head, index, 2) {
-			return "", start + index
+		if index := e.src.lastToken(head, "of"); index >= 0 {
+			return "", index
 		}
 	}
 	return "", at
@@ -302,32 +341,14 @@ func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
 	return strings.TrimSpace(strings.TrimSuffix(text, ";")), true
 }
 
-// isWord reports whether the match at index in text stands alone rather than
-// inside a longer name.
-func isWord(text string, index, length int) bool {
-	isNameByte := func(b byte) bool {
-		return b == '_' || b == '\'' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
-	}
-	if index > 0 && isNameByte(text[index-1]) {
-		return false
-	}
-	after := index + length
-	return after >= len(text) || !isNameByte(text[after])
-}
-
-// wroteBefore reports whether word appears in the head ahead of an end, which
+// wroteBefore reports whether word is a token of the head ahead of an end, which
 // is what tells the parenthesized and `from` forms from the ones without them.
 func (e *encoder) wroteBefore(n *ast.Usage, end ast.Node, word string) bool {
 	start, at := n.Span().Offset, end.Span().Offset
 	if at <= start {
 		return false
 	}
-	head := e.file.Text(source.Span{Offset: start, Len: at - start})
-	if word == "(" {
-		return strings.Contains(head, word)
-	}
-	index := strings.LastIndex(head, word)
-	return index >= 0 && isWord(head, index, len(word))
+	return e.src.lastToken(source.Span{Offset: start, Len: at - start}, word) >= 0
 }
 
 // relationshipTarget returns the target of the first relationship of a kind.
@@ -385,6 +406,9 @@ func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err e
 		if role, ok := d.graph.Lexical(term, rdf.OpenSysML+xEndRole); ok && role == "payload" {
 			payload = text
 			continue
+		}
+		if name, ok := d.graph.Lexical(term, rdf.OpenSysML+xEndName); ok {
+			text = nameText(name) + " ::> " + text
 		}
 		mult, err := d.endMultiplicity(term, el)
 		if err != nil {

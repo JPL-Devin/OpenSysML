@@ -63,15 +63,17 @@ Use `-cases DIR` for another directory of `.cases` files, `-out DIR`,
 lines followed by `id :: target :: expression` lines. Reports go to
 `build/pilot-exec-diff/pilot-exec-diff.{txt,json}`.
 
-Reference values at the current implementation (121 cases, all six default
+Reference values at the current implementation (126 cases, all six default
 fixtures):
-`agree 69 · kind-only 1 · order-only 0 · disagree 1 · pilot-unevaluated 34 ·
+`agree 69 · kind-only 1 · order-only 0 · disagree 4 · pilot-unevaluated 36 ·
 pilot-silent 4 · pilot-error 2 · ours-error 2 · both-error 8 ·
 nondeterministic 0`.
-The single `disagree` is `w6d:complex-is-zero-qualified` and is unrefereeable
-rather than a verdict against us — the pilot answers `false` for
+All four `disagree` are unrefereeable rather than verdicts against us:
+`w6d:complex-is-zero-qualified`, where the pilot answers `false` for
 `isZero(rect(0.0, 0.0))` *and* for `isZero(rect(3.0, 4.0))`, because its
-`re`/`im` have no evaluable body. See
+`re`/`im` have no evaluable body; and the three `w6d:subsetting-*-count`
+cases, where the pilot counts a `[*]` collection as `1` whether two parts
+subset it or none does (and folds a `default null` one to `0`). See
 [pilot-execution-referee.md](../../../docs/project/pilot-execution-referee.md).
 
 ## Checks that actually distinguish working from broken

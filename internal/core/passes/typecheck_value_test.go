@@ -203,3 +203,90 @@ func TestValueCollectionOfReferencesIsNotCountedStatically(t *testing.T) {
 		attribute xs : ScalarValues::Integer[2] = (src, src);
 	}`)
 }
+
+// A feature typed by several types, or a value so typed, binds when any one
+// pairing of their types conforms one way or the other (KerML 8.3.4.3); only
+// wholly unrelated types are rejected. The pinned pilot agrees.
+func TestValueMultiTypedFeaturesConformByAnyPairing(t *testing.T) {
+	wantNoValueDiags(t, `package P {
+		part vb : M::Vehicle, M::Boat;
+		part v : M::Vehicle = vb;
+		part b : M::Boat = vb;
+		part t : M::Truck = vb;
+		part w : M::Vehicle, M::Boat = t;
+		calc def GivesVB { return : M::Vehicle, M::Boat; }
+		part b2 : M::Boat = GivesVB();
+		part t2 : M::Truck = GivesVB();
+	}`)
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		part vb : M::Vehicle, M::Boat;
+		part p : Plane = vb;
+	}`, "cannot bind a value of type Vehicle, Boat to a feature typed by Plane")
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		part p : Plane;
+		part vb : M::Vehicle, M::Boat = p;
+	}`, "cannot bind a value of type Plane to a feature typed by Vehicle, Boat")
+	wantOneValueDiag(t, `package P {
+		part def Plane;
+		calc def GivesVB { return : M::Vehicle, M::Boat; }
+		part p : Plane = GivesVB();
+	}`, "cannot bind a value of type Vehicle, Boat to a feature typed by Plane")
+}
+
+// A feature typed by a scalar and a structural type keeps the lattice rules
+// for scalar values, while a non-scalar value is judged against every declared
+// type as it is for any other feature. The pinned pilot warns on each rejection.
+func TestValueMixedScalarAndStructuralTypes(t *testing.T) {
+	wantNoValueDiags(t, `package P {
+		part v : M::Vehicle;
+		part t : M::Truck;
+		attribute n : ScalarValues::Integer;
+		ref a : M::Vehicle, ScalarValues::Integer = t;
+		ref b : M::Vehicle, ScalarValues::Integer = 1;
+		ref c : M::Vehicle, ScalarValues::Integer = n;
+		ref d : ScalarValues::Integer, M::Vehicle = v;
+	}`)
+	wantOneValueDiag(t, `package P {
+		part b : M::Boat;
+		ref a : M::Vehicle, ScalarValues::Integer = b;
+	}`, "cannot bind a value of type Boat to a feature typed by Vehicle, Integer")
+	wantOneValueDiag(t, `package P {
+		part b : M::Boat;
+		ref a : ScalarValues::Integer, M::Vehicle = b;
+	}`, "cannot bind a value of type Boat to a feature typed by Integer, Vehicle")
+	wantOneValueDiag(t, `package P {
+		part b : M::Boat;
+		attribute a : ScalarValues::Integer = b;
+	}`, "cannot bind a value of type Boat to a feature typed by Integer")
+	wantOneValueDiag(t, `package P {
+		calc def GivesBoat { return : M::Boat; }
+		ref a : M::Vehicle, ScalarValues::Integer = GivesBoat();
+	}`, "cannot bind a value of type Boat to a feature typed by Vehicle, Integer")
+	wantOneValueDiag(t, `package P {
+		ref a : M::Vehicle, ScalarValues::Integer = "s";
+	}`, "cannot bind String value to a feature typed by Integer")
+}
+
+// Indexing selects an element: one of the feature's type for a sequence, and
+// one of unknown type for a Collection, which no feature type rejects.
+func TestValueIndexedCollectionElementIsUnknown(t *testing.T) {
+	if diags := libraryTypeDiags(t, `package P {
+		private import Collections::*;
+		part def Vehicle;
+		attribute a : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+		attribute i : ScalarValues::Integer = a#(3, 1);
+		part v : Vehicle = a#(1);
+	}`); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics, got %v", diags)
+	}
+	wantNoValueDiags(t, `package P {
+		part vs : M::Vehicle[2];
+		part v : M::Vehicle = vs#(1);
+	}`)
+	wantOneValueDiag(t, `package P {
+		part bs : M::Boat[2];
+		part v : M::Vehicle = bs#(1);
+	}`, "cannot bind a value of type Boat to a feature typed by Vehicle")
+}

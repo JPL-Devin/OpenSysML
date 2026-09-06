@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -1106,5 +1107,64 @@ func TestShapeDigestExpandsALibraryOfUnknownText(t *testing.T) {
 	other := crateContextOver(t, strings.Replace(lib, "n = 1", "n = 2", 1), false)
 	if other.ShapeDigest(lookupOne(t, other.resolver.Index(), "Demo::Crate")) == digest {
 		t.Error("digest unchanged by an edit to the library type it expands")
+	}
+}
+
+const adoptWrittenSrc = `package Demo {
+	private import ScalarValues::*;
+	part def Holder { attribute n : Integer; }
+	part holder : Holder;
+}`
+
+// documentContextOver indexes src over the standard library and registers the
+// scope tree the document builds for itself, which a workspace resolves references in.
+func documentContextOver(t *testing.T, src string) (*Context, *symbols.Scope) {
+	t.Helper()
+	file := parser.New(source.New("<test>", []byte(src))).ParseFile()
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<test>", file)
+	idx.ExpandWildcardImports()
+	scope := symbols.Build(file)
+	symbols.SetDocName(scope, "<test>")
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	ctx.RegisterSource(source.New("<test>", []byte(src)))
+	ctx.RegisterScope(scope)
+	return ctx, scope
+}
+
+// A workspace resolves references in the scope tree its document builds, not in
+// the index's, so an object carried into such a context is rebound to that tree's
+// symbols: a feature chain from the document reads the carried object and the
+// value written to it rather than materializing another.
+func TestAdoptRebindsIntoTheScopeTreeTheCallerResolvesIn(t *testing.T) {
+	prev, prevScope := documentContextOver(t, adoptWrittenSrc)
+	prevDemo := resolveSymbol(t, prevScope, "Demo").Scope
+	holder, err := prev.Instantiate(resolveSymbol(t, prevDemo, "holder"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if err := holder.SetFeatureValue(prev, "n", constInt(5)); err != nil {
+		t.Fatalf("write n: %v", err)
+	}
+	if got, err := evalIn(t, prev, prevDemo, "holder.n"); err != nil || FormatValue(got) != "5" {
+		t.Fatalf("holder.n before the carry-over = %s, %v; want 5", FormatValue(got), err)
+	}
+	shapes := prev.ShapesOf(holder)
+
+	ctx, scope := documentContextOver(t, adoptWrittenSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, holder); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	demo := resolveSymbol(t, scope, "Demo").Scope
+	if holder.Type != resolveSymbol(t, demo, "holder") {
+		t.Error("the object is of the index's symbol, not the one the document declares")
+	}
+	got, err := evalIn(t, ctx, demo, "holder.n")
+	if err != nil || FormatValue(got) != "5" {
+		t.Errorf("holder.n after the carry-over = %s, %v; want the written 5", FormatValue(got), err)
+	}
+	if n := len(ctx.instances); n != 1 {
+		t.Errorf("the context holds %d objects, want the carried one alone", n)
 	}
 }

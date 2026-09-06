@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -67,6 +68,32 @@ func TestHTMLTelescopeReportFragmentGolden(t *testing.T) {
 		"Observatory::MassReport",
 		HTMLOptions{Fragment: true, TitlePage: true, TOC: true, NumberSections: true})
 	checkGolden(t, got, filepath.Join("testdata", "telescope_report.fragment.golden.html"))
+}
+
+// TestHTMLMermaidScript checks a page asked to load Mermaid carries one
+// script element after the document, a fragment none, and a default page none.
+func TestHTMLMermaidScript(t *testing.T) {
+	path := filepath.Join("testdata", "telescope_report.sysml")
+	url := `https://cdn.example/mermaid.js?a=1&b="2"`
+	got := renderFixtureHTML(t, path, "Observatory::MassReport", HTMLOptions{MermaidScript: url})
+	script := `<script src="https://cdn.example/mermaid.js?a=1&amp;b=&#34;2&#34;"></script>`
+	if strings.Count(got, "<script") != 1 || !strings.Contains(got, script) {
+		t.Errorf("page lacks the one script element %s:\n%s", script, got)
+	}
+	if strings.Index(got, "</article>") > strings.Index(got, script) || !strings.HasSuffix(got, script+"\n</body>\n</html>\n") {
+		t.Errorf("script must follow the document, before </body>:\n%s", got)
+	}
+	if !strings.Contains(got, `<pre class="mermaid">`) {
+		t.Errorf("diagram source must stay for the script to draw:\n%s", got)
+	}
+	for name, opts := range map[string]HTMLOptions{
+		"default":  {},
+		"fragment": {Fragment: true, MermaidScript: url},
+	} {
+		if out := renderFixtureHTML(t, path, "Observatory::MassReport", opts); strings.Contains(out, "<script") {
+			t.Errorf("%s page loads a script:\n%s", name, out)
+		}
+	}
 }
 
 // TestHTMLSemanticStructure checks the semantic skeleton and the model facts
@@ -208,6 +235,90 @@ func TestHTMLDefaultStylesheetIsOverridable(t *testing.T) {
 		}
 		if literal.MatchString(value) {
 			t.Errorf("declaration %q hardcodes a value; take it from a --sysml-* token", text)
+		}
+	}
+}
+
+// TestHTMLThemes checks every bundled theme is one block of the opensysml
+// layer, scoped to the document, layered after the default sheet in a page,
+// and that a name that is no theme is refused.
+func TestHTMLThemes(t *testing.T) {
+	names := Themes()
+	if want := []string{"default", "modern", "print", "report"}; !slices.Equal(names, want) {
+		t.Fatalf("Themes() = %v, want %v", names, want)
+	}
+	plain, err := ThemeStylesheet("")
+	if err != nil || plain != DefaultStylesheet() {
+		t.Fatalf("an empty theme is the default sheet; got err %v", err)
+	}
+	if named, _ := ThemeStylesheet(DefaultTheme); named != plain {
+		t.Error("the default theme, named, is the default sheet")
+	}
+	for _, name := range names[1:] {
+		css, err := ThemeStylesheet(name)
+		if err != nil {
+			t.Fatalf("theme %s: %v", name, err)
+		}
+		if !strings.HasPrefix(css, DefaultStylesheet()) {
+			t.Errorf("theme %s does not start from the default sheet", name)
+		}
+		overrides := css[len(DefaultStylesheet()):]
+		if strings.Count(overrides, "@layer opensysml {") != 1 || strings.Contains(overrides, "@layer opensysml;") {
+			t.Errorf("theme %s must be exactly one block of the opensysml layer:\n%s", name, overrides)
+		}
+		if strings.Contains(strings.ToLower(overrides), "</style") {
+			t.Errorf("theme %s would close the style element it is inlined in", name)
+		}
+		// Selectors are the lines ending a rule opener or a selector list entry.
+		for _, line := range strings.Split(overrides[strings.Index(overrides, "@layer opensysml {"):], "\n") {
+			sel := strings.TrimSpace(line)
+			if !strings.HasSuffix(sel, "{") && !strings.HasSuffix(sel, ",") || strings.HasPrefix(sel, "@") {
+				continue
+			}
+			if !strings.HasPrefix(sel, ".sysml-document") {
+				t.Errorf("theme %s selector %q is not scoped to .sysml-document", name, sel)
+			}
+		}
+		got := renderFixtureHTML(t, filepath.Join("testdata", "telescope_report.sysml"),
+			"Observatory::MassReport", HTMLOptions{
+				Theme:       name,
+				Stylesheets: []Stylesheet{{Content: ".sysml-document { color: rebeccapurple; }"}},
+			})
+		base := strings.Index(got, "@layer opensysml {")
+		theme := strings.Index(got, "/* "+name+":")
+		supplied := strings.Index(got, "rebeccapurple")
+		if base < 0 || theme < base || supplied < theme {
+			t.Errorf("theme %s: default, theme and supplied CSS must follow in that order:\n%s", name, got)
+		}
+		if strings.Count(got, "<style>") != 2 {
+			t.Errorf("theme %s: default and theme share one style element, supplied CSS has its own:\n%s", name, got)
+		}
+	}
+	for _, bad := range []string{"fancy", "../document", "report.css", `themes\report`} {
+		_, err := ThemeStylesheet(bad)
+		var rendering *Error
+		if !errors.As(err, &rendering) || rendering.Kind != ErrorUnknownTheme || rendering.Actual != bad {
+			t.Errorf("ThemeStylesheet(%q) = %v, want an unknown-theme error", bad, err)
+		}
+		if err != nil && !strings.Contains(err.Error(), "default, modern, print, report") {
+			t.Errorf("ThemeStylesheet(%q) error does not list the themes: %v", bad, err)
+		}
+	}
+	doc := fixtureDocument(t, filepath.Join("testdata", "telescope_report.sysml"), "Observatory::MassReport")
+	if _, err := HTML(doc, HTMLOptions{Theme: "fancy"}); err == nil {
+		t.Error("HTML accepted a theme that does not exist")
+	}
+	if _, err := HTML(doc, HTMLOptions{Theme: "fancy", NoDefaultStylesheet: true}); err != nil {
+		t.Errorf("HTML checked a theme it was told to leave out: %v", err)
+	}
+	// print spells out web links however the scheme is spelled.
+	printCSS, err := ThemeStylesheet("print")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sel := range []string{`[href^="http:" i]::after`, `[href^="https:" i]::after`, `[href^="//"]::after`} {
+		if !strings.Contains(printCSS, ".sysml-link"+sel) {
+			t.Errorf("print theme lacks the link selector %s", sel)
 		}
 	}
 }

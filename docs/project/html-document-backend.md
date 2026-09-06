@@ -209,7 +209,10 @@ Decisions, each with its reason:
 - **No script, no network reference.** The default page is self-contained: one inline
   stylesheet, no CDN, no JavaScript. A rendered document is an artifact that has to open
   from a file on a machine with no network, and a generated page that silently fetches a
-  script is not that.
+  script is not that. Loading Mermaid is therefore opt-in: `-html-mermaid cdn` or
+  `-html-mermaid <url>` adds one `<script src>` before `</body>` — nothing is bundled, the
+  browser fetches the script under Mermaid's own terms — and a fragment refuses it, since the
+  embedding page owns the shell.
 - **Every separator is an element, not bare punctuation.** A multi-valued cell renders each
   value in `span.sysml-value` with the `, ` between them in `span.sysml-separator`, and a
   group key gets `span.sysml-group-key`. Markdown has to join those with punctuation; HTML
@@ -222,10 +225,12 @@ Decisions, each with its reason:
 A diagram's rendering comes from the view engine as Mermaid source. The HTML backend writes
 that source in `<pre class="mermaid">` inside the `<figure>` by default — it is exactly what
 Mermaid's own client-side renderer looks for, so a site that already loads Mermaid renders it
-with no further work, and a site that does not shows the source rather than nothing. When
-pre-rendered images are supplied, the `<pre>` is replaced by `<img>` with the caption as its
-`alt` text; that is the path the PDF converters use, since no print engine runs Mermaid.
-Table-kind views keep rendering as a table, as they do in Markdown.
+with no further work, and a site that does not shows the source rather than nothing. A
+standalone page asked to with `-html-mermaid` loads that renderer itself, from the pinned
+jsDelivr release or a URL the caller names. When pre-rendered images are supplied, the `<pre>`
+is replaced by `<img>` with the caption as its `alt` text; that is the path the PDF converters
+use, since no print engine runs Mermaid. Table-kind views keep rendering as a table, as they do
+in Markdown.
 
 Supplying the images stays out of `docrender`: rendering them means running `mmdc` as a
 subprocess, which is `docpdf`'s job and must not become a dependency of a pure renderer. So
@@ -278,18 +283,27 @@ document. Class names are stable and unprefixed by depth: nesting expresses dept
 
 The flags follow from that:
 
+- **`-html-theme <name>`** layers one of the bundled themes (`modern`, `print`, `report`;
+  `default` names the default sheet alone) after the default sheet, in the same `<style>` and
+  the same `opensysml` layer. A theme is written against the `--sysml-*` tokens and the class
+  vocabulary and scopes every selector under `.sysml-document`, so it changes the look without
+  changing the cascade contract: unlayered reader CSS still wins over default and theme alike.
+  The themes live in `docrender/themes/*.css` and are embedded; the file names are the theme
+  names, so adding a theme is adding a file.
 - **`-html-css <file-or-url>`**, repeatable. A file's contents are inlined, so the artifact
   stays self-contained; a URL becomes a `<link>` for a site that serves its own. Each is
   emitted after the default, unlayered, in the order given.
 - **`-html-no-default-css`** drops the built-in stylesheet entirely, for a reader who wants to
-  start from nothing rather than from a layer.
+  start from nothing rather than from a layer. A theme needs the default under it, so the two
+  are refused together.
 - **`-html-default-css`** writes the built-in stylesheet to stdout, so "start from ours and
   edit" needs no source dive. It is a printing mode like the other informational flags, not a
-  rendering option.
+  rendering option; `-html-theme` is the one rendering flag it takes, to write a theme's whole
+  sheet instead.
 - **`-html-fragment`** writes the `<article>` alone — no `<!DOCTYPE>`, `<head>` or stylesheet
   — for embedding in a site that brings its own CSS.
-- **`-render-documents -doc-form html`** writes one shared `sysml-document.css` beside the
-  files and links it, rather than inlining the same bytes into every document, so a set has
+- **`-render-documents -doc-form html`** writes one shared `sysml-document.css` (default sheet
+  plus theme, when one is named) beside the files and links it, rather than inlining the same bytes into every document, so a set has
   one stylesheet to override and it is a file the reader can replace on disk. `-html-css`
   additions are linked alongside it, in order.
 
@@ -388,13 +402,14 @@ Markdown.
 ## Known limitations
 
 - **No HTML for the REPL or the LSP preview.** Both stay Markdown by choice, stated above.
-- **Client-side Mermaid by default.** A page opened without a Mermaid script shows diagram
-  source rather than a diagram. Pre-rendered images are available through the PDF path's
-  machinery, but wiring `mmdc` into the HTML form — an `-html-diagrams svg` option — is
-  deliberately out of scope for the two steps above and left as follow-on work.
-- **One stylesheet, no theme set.** The default is a starting point, not a theme system. A
-  themed set (print, screen, house style) is a separate piece of work that the layer and the
-  token vocabulary enable rather than deliver.
+- **Client-side Mermaid only.** A page opened without a Mermaid script shows diagram source
+  rather than a diagram; `-html-mermaid` has the page load the script, which still needs a
+  browser with access to the script's URL. Pre-rendered images are available through the PDF
+  path's machinery, but wiring `mmdc` into the HTML form — an `-html-diagrams svg` option — is
+  deliberately out of scope and left as follow-on work.
+- **Three bundled themes, no house style.** `modern`, `print` and `report` are generic looks
+  built on the layer and the token vocabulary; an organisation's house style is still a
+  `-html-css` sheet of its own, and no theme is loaded from the network.
 - **The class and token vocabulary becomes a compatibility surface.** Once readers write
   stylesheets against `sysml-` classes, `data-` attributes and `--sysml-*` properties,
   renaming one breaks them silently. It is documented in `docs/reference/` as a contract and

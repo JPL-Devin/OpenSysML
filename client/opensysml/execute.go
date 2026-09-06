@@ -39,7 +39,7 @@ func (c *client) ExecuteAction(
 	}
 	req := &pb.ExecuteActionRequest{ModelHash: hash, ActionSymbolId: actionSymbolID}
 	if len(inputs) > 0 {
-		if err := c.requireComplexValues(ctx, slices.Collect(maps.Values(inputs))...); err != nil {
+		if err := c.requireValueCapabilities(ctx, slices.Collect(maps.Values(inputs))...); err != nil {
 			return nil, err
 		}
 		req.Inputs = make(map[string]*pb.Value, len(inputs))

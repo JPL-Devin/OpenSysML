@@ -140,6 +140,123 @@ func TestRenderDocumentHTMLDocumentOptions(t *testing.T) {
 		`<span class="sysml-section-number">1</span>`)
 }
 
+// TestRenderDocumentHTMLMermaid checks -html-mermaid loads the pinned CDN
+// release or the URL named, on a single page and on every page of a set.
+func TestRenderDocumentHTMLMermaid(t *testing.T) {
+	binary := buildCLI(t)
+	pinned := `<script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"></script>`
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "cdn"), 0, pinned, "</article>\n"+pinned+"\n</body>")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "https://example.test/mermaid.js"),
+		0, `<script src="https://example.test/mermaid.js"></script>`)
+	plain := check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-doc-form", "html")
+	wantReport(t, plain, 0, "<!DOCTYPE html>")
+	if strings.Contains(plain.stdout, "<script") {
+		t.Errorf("a page loads no script unless asked:\n%s", plain.stdout)
+	}
+
+	dir := filepath.Join(t.TempDir(), "site")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir, "-doc-form", "html", "-html-mermaid", "cdn"), 0)
+	pages, err := filepath.Glob(filepath.Join(dir, "*.html"))
+	if err != nil || len(pages) == 0 {
+		t.Fatalf("set wrote no pages: %v", err)
+	}
+	for _, page := range pages {
+		content, err := os.ReadFile(page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), pinned) {
+			t.Errorf("%s does not load Mermaid:\n%s", page, content)
+		}
+	}
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid", "mermaid.js"),
+		2, "-html-mermaid takes cdn or the URL of a Mermaid script")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-mermaid", "mermaid.js"),
+		2, "-html-mermaid takes cdn or the URL of a Mermaid script")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-html-mermaid="), 2, "-html-mermaid is empty")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-fragment", "-html-mermaid", "cdn"),
+		2, "load Mermaid in the page you embed it in")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-html-mermaid", "cdn"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "pdf", "-o", filepath.Join(t.TempDir(), "r.pdf"), "-html-mermaid", "cdn"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-html-mermaid", "cdn"),
+		2, "apply to -render-document")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-mermaid", "cdn")),
+		2, "not the sheet")
+}
+
+// TestRenderDocumentHTMLTheme checks -html-theme layers a bundled theme over
+// the default sheet on a page, in a set's shared sheet and in the sheet
+// -html-default-css writes, and refuses what it cannot style.
+func TestRenderDocumentHTMLTheme(t *testing.T) {
+	binary := buildCLI(t)
+
+	themed := check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "report")
+	wantReport(t, themed, 0, "<!DOCTYPE html>", "--sysml-font-body: system-ui", "/* report:")
+	if strings.Index(themed.stdout, "/* report:") < strings.Index(themed.stdout, "--sysml-font-body: system-ui") {
+		t.Errorf("the theme must follow the default sheet it overrides:\n%s", themed.stdout)
+	}
+	if strings.Count(themed.stdout, "<style>") != 1 {
+		t.Errorf("default sheet and theme share one style element:\n%s", themed.stdout)
+	}
+	// The default theme, named, is the default sheet alone.
+	plain := check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-doc-form", "html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "default"), 0, plain.stdout)
+	for _, name := range []string{"modern", "print"} {
+		wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+			"-doc-form", "html", "-html-theme", name), 0, "/* "+name+":")
+	}
+
+	dir := filepath.Join(t.TempDir(), "site")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir, "-doc-form", "html", "-html-theme", "modern"), 0)
+	sheet, err := os.ReadFile(filepath.Join(dir, "sysml-document.css"))
+	if err != nil {
+		t.Fatalf("set wrote no shared sheet: %v", err)
+	}
+	if !strings.Contains(string(sheet), "@layer opensysml;") || !strings.Contains(string(sheet), "/* modern:") {
+		t.Errorf("the set's sheet carries default and theme:\n%s", sheet)
+	}
+
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-theme", "print")),
+		0, "@layer opensysml;", "/* print:")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-theme", "fancy")),
+		2, `no bundled theme is named "fancy"`, "default, modern, print, report")
+
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme", "fancy"), 2, `no bundled theme is named "fancy"`)
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-theme", "../document"), 2, "no bundled theme is named")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-theme="), 2, "-html-theme is empty")
+	wantReport(t, check(t, binary, documentModel, "-html-theme="), 2, "-html-theme is empty")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-fragment", "-html-theme", "report"), 2, "-html-theme styles a whole page")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-no-default-css", "-html-theme", "report"), 2, "ask for one or the other")
+	wantReport(t, check(t, binary, documentModel, "-render-documents", dir,
+		"-doc-form", "html", "-html-no-default-css", "-html-theme", "report"), 2, "ask for one or the other")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-html-theme", "report"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "pdf", "-o", filepath.Join(t.TempDir(), "r.pdf"), "-html-theme", "report"),
+		2, "-doc-form html")
+	wantReport(t, check(t, binary, documentModel, "-html-theme", "report"),
+		2, "apply to -render-document")
+}
+
 // TestRenderDocumentHTMLFlagConflicts checks the HTML flag combinations the
 // run refuses.
 func TestRenderDocumentHTMLFlagConflicts(t *testing.T) {

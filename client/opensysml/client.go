@@ -61,7 +61,9 @@ type Client interface {
 
 	// ExecuteAction executes the named action with the inputs given, bound by
 	// parameter name, and reports the outputs it produced. A Complex input
-	// requires the complex_values capability, checked before anything is sent.
+	// requires the complex_values capability and an Array, Vector or
+	// VectorQuantity input the structured_values one, checked before anything
+	// is sent.
 	ExecuteAction(ctx context.Context, model *Model, actionSymbolID string, inputs map[string]Value) (*ActionRun, error)
 
 	// ExecuteState runs the named state machine, feeding it the events in
@@ -83,8 +85,9 @@ type Client interface {
 
 	// EvaluateCalc invokes the named calculation with positional arguments, or,
 	// given none, evaluates a calc usage from its own members. Requires the
-	// verification capability, and the complex_values capability for a Complex
-	// argument, checked before anything is sent.
+	// verification capability, and the complex_values or structured_values
+	// capability for a Complex or a structured argument, checked before anything
+	// is sent.
 	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
 
 	// Query selects the model's elements the query matches, in declaration
@@ -489,20 +492,31 @@ func (c *client) call(model *Model) (string, error) {
 	return modelHash(model)
 }
 
-// requireComplexValues refuses to send a Complex to a service without the
-// complex_values capability, which would read it as null rather than refuse it.
-func (c *client) requireComplexValues(ctx context.Context, values ...Value) error {
-	if !slices.ContainsFunc(values, carriesComplex) {
+// requireValueCapabilities refuses to send a value of a kind whose capability
+// the service lacks — a Complex without complex_values, an Array, Vector or
+// VectorQuantity without structured_values — which would read it as null
+// rather than refuse it.
+func (c *client) requireValueCapabilities(ctx context.Context, values ...Value) error {
+	var needed []string
+	if slices.ContainsFunc(values, carriesComplex) {
+		needed = append(needed, CapabilityComplexValues)
+	}
+	if slices.ContainsFunc(values, carriesStructured) {
+		needed = append(needed, CapabilityStructuredValues)
+	}
+	if len(needed) == 0 {
 		return nil
 	}
 	info, err := c.serverInfo(ctx)
 	if err != nil {
 		return err
 	}
-	if !info.Has(CapabilityComplexValues) {
-		return &StatusError{
-			Code:    CodeUnimplemented,
-			Message: fmt.Sprintf("capability %q is unavailable", CapabilityComplexValues),
+	for _, capability := range needed {
+		if !info.Has(capability) {
+			return &StatusError{
+				Code:    CodeUnimplemented,
+				Message: fmt.Sprintf("capability %q is unavailable", capability),
+			}
 		}
 	}
 	return nil
@@ -531,14 +545,32 @@ func (c *client) serverInfo(ctx context.Context) (*ServerInfo, error) {
 	return info, nil
 }
 
-// carriesComplex reports whether a value, or any element of a sequence, is a
+// carriesComplex reports whether a value, or any value nested in it, is a
 // Complex.
 func carriesComplex(value Value) bool {
-	switch v := value.(type) {
-	case Complex:
+	if _, ok := value.(Complex); ok {
 		return true
-	case Sequence:
-		return slices.ContainsFunc(v, carriesComplex)
 	}
-	return false
+	return slices.ContainsFunc(nestedValues(value), carriesComplex)
+}
+
+// carriesStructured reports whether a value, or any value nested in it, is an
+// Array, a Vector or a VectorQuantity.
+func carriesStructured(value Value) bool {
+	switch value.(type) {
+	case Array, Vector, VectorQuantity:
+		return true
+	}
+	return slices.ContainsFunc(nestedValues(value), carriesStructured)
+}
+
+// nestedValues are the values a value holds: a sequence's elements, an array's.
+func nestedValues(value Value) []Value {
+	switch v := value.(type) {
+	case Sequence:
+		return v
+	case Array:
+		return v.Elements
+	}
+	return nil
 }

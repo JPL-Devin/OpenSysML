@@ -18,6 +18,8 @@ export const CAPABILITY_ENUM_VALUES = "enum_values";
 export const CAPABILITY_UNSET_VALUE = "unset_value";
 /** A complex number as `Value.complex`, rather than an unsupported null. */
 export const CAPABILITY_COMPLEX_VALUES = "complex_values";
+/** An array, a vector and a vector quantity as their own arms, rather than unsupported nulls. */
+export const CAPABILITY_STRUCTURED_VALUES = "structured_values";
 /** `ParseFileRequest.language`, which declares the language of inline content. */
 export const CAPABILITY_INLINE_LANGUAGE = "inline_language";
 /** `ParseFileRequest.strict_conformance`. */

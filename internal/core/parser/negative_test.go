@@ -73,6 +73,14 @@ func TestNegative(t *testing.T) {
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// Prefix metadata belongs after these keywords, not ahead of them.
+		{"subject_prefix_metadata_before_keyword", "requirement r { #goal subject s : T; }"},
+		{"subject_prefix_metadata_before_keyword_eof", "requirement r { #goal subject"},
+		{"actor_prefix_metadata_before_keyword", "requirement r { #goal actor a; }"},
+		{"variant_prefix_metadata_before_keyword", "variation part def V { #goal variant part v; }"},
+		{"assume_prefix_metadata_before_keyword", "requirement r { #goal assume constraint a : C; }"},
+		{"require_prefix_metadata_before_keyword", "requirement r { #goal require constraint r : C; }"},
+		{"require_prefix_metadata_before_keyword_bare", "requirement r { #goal require ; }"},
 		// An assertion's prefix metadata comes ahead of `assert`, not after it or
 		// its `not` (SysML.xtext AssertConstraintUsage `OccurrenceUsagePrefix 'assert'`).
 		{"assert_prefix_metadata_after_keyword", "package P { part def D { assert #B constraint c; } }"},
@@ -591,6 +599,9 @@ func TestNegativeKerML(t *testing.T) {
 
 		// A binary connector states both ends around `to` (KerML.xtext:836).
 		{"binary_connector_no_second_end", "package P { feature a; connector a to ; }"},
+		{"binary_connector_no_first_end", "package P { feature t; connector to t; }"},
+		{"binary_connector_no_to", "package P { feature eng; feature t; connector eng t; }"},
+		{"binary_connector_end_multiplicity_no_target", "package P { feature a; feature b; connector [1] to b; }"},
 		{"binary_connector_named_end_no_target", "package P { feature a; feature b; connector e ::> to b; }"},
 		{"binary_connector_name_without_from", "package P { feature a; feature b; connector c : L a to b; }"},
 
