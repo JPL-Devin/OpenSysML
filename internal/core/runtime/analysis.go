@@ -129,7 +129,7 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	var out []Objective
+	var all []Objective
 	for _, member := range ctx.chainMembers(sym, scope) {
 		usage, ok := member.node.(*ast.Usage)
 		if !ok || usage.Kind != ast.UsageObjective {
@@ -139,27 +139,41 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 		if objSym == nil {
 			continue
 		}
-		out = ctx.replaceObjective(out, ctx.objectiveOf(objSym, sym))
+		all = append(all, ctx.objectiveOf(objSym, sym))
+	}
+	return ctx.dropRestated(all)
+}
+
+// dropRestated keeps the objectives no other one restates, by a later same name or
+// by redefinition, by clause or by role: a redeclared objective is the same
+// objective declared again, wherever the general declaring it was met.
+func (ctx *Context) dropRestated(all []Objective) []Objective {
+	redefined := map[*symbols.Symbol]bool{}
+	for _, obj := range all {
+		for _, target := range ctx.model.AllRedefinedFeatures(obj.Symbol) {
+			redefined[target] = true
+		}
+	}
+	var out []Objective
+	for i, obj := range all {
+		if redefined[obj.Symbol] || restatedByName(all[i+1:], obj.Name) {
+			continue
+		}
+		out = append(out, obj)
 	}
 	return out
 }
 
-// replaceObjective appends obj, dropping the objectives it restates by name or
-// redefines, by clause or by role: a redeclared objective is the same objective
-// declared again.
-func (ctx *Context) replaceObjective(out []Objective, obj Objective) []Objective {
-	redefined := map[*symbols.Symbol]bool{}
-	for _, target := range ctx.model.AllRedefinedFeatures(obj.Symbol) {
-		redefined[target] = true
+func restatedByName(later []Objective, name string) bool {
+	if name == "" {
+		return false
 	}
-	kept := out[:0:0]
-	for _, prev := range out {
-		if (obj.Name != "" && prev.Name == obj.Name) || redefined[prev.Symbol] {
-			continue
+	for _, obj := range later {
+		if obj.Name == name {
+			return true
 		}
-		kept = append(kept, prev)
 	}
-	return append(kept, obj)
+	return false
 }
 
 // objectiveOf reads one objective usage: its direction from the definition it is

@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -332,5 +334,163 @@ func TestObjectivesOfMasksOnlyTheFirstOfEachGeneral(t *testing.T) {
 	}
 	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "C3")); len(owned) != 1 || len(inherited) != 0 {
 		t.Errorf("ObjectivesOf(C3) = %v, %v; want [o6], []: o6 redefines o2 by clause and o1 by role", owned, inherited)
+	}
+}
+
+// A restatement deeper in one branch of a diamond replaces the common ancestor's
+// objective seen through the other, whichever branch is written first, so a
+// further specialization's positions line up with the restatement.
+func TestAnalysisObjectivesAlignAcrossUnevenDiamond(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		analysis def Base { objective b1; objective b2; }
+		analysis def A :> Base;
+		analysis def Mid :> Base { objective m1; }
+		analysis def B :> Mid;
+		analysis def D :> A, B;
+		analysis def Reversed :> B, A;
+		analysis def E :> D { objective e1; objective e2; objective e3; }
+		analysis def F :> Reversed { objective f1; objective f2; objective f3; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	b1 := nested(t, base.Scope, "b1")
+	b2 := nested(t, base.Scope, "b2")
+	m1 := nested(t, nested(t, p.Scope, "Mid").Scope, "m1")
+	for _, name := range []string{"D", "Reversed"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 0 || len(inherited) != 2 || !contains(inherited, m1) || !contains(inherited, b2) {
+			t.Errorf("ObjectivesOf(%s) = %v, %v; want [], {m1 b2}", name, owned, inherited)
+		}
+	}
+	for _, tc := range []struct {
+		owner string
+		names [3]string
+	}{{"E", [3]string{"e1", "e2", "e3"}}, {"F", [3]string{"f1", "f2", "f3"}}} {
+		owner := nested(t, p.Scope, tc.owner)
+		first := nested(t, owner.Scope, tc.names[0])
+		if got := m.ImplicitRoleRedefinitions(first); len(got) != 1 || got[0] != m1 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want [m1]", tc.owner, tc.names[0], got)
+		}
+		if got := m.AllSupertypes(first); len(got) != 2 || got[0] != m1 || got[1] != b1 {
+			t.Errorf("AllSupertypes(%s::%s) = %v, want [m1 b1]", tc.owner, tc.names[0], got)
+		}
+		if got := m.ImplicitRoleRedefinitions(nested(t, owner.Scope, tc.names[1])); len(got) != 1 || got[0] != b2 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want [b2]", tc.owner, tc.names[1], got)
+		}
+		if got := m.ImplicitRoleRedefinitions(nested(t, owner.Scope, tc.names[2])); len(got) != 0 {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want none: the generals state two", tc.owner, tc.names[2], got)
+		}
+	}
+}
+
+// Reference subsetting is a subsetting, so a usage inherits the roles of the usage it
+// references: alone, beside an owned one (which redefines it by role), beside one
+// inherited from its definition, and through a chain of references.
+func TestRolesInheritThroughReferenceSubsetting(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		case def CD { objective o; }
+		case c0 { objective o0; }
+		case alone ::> c0;
+		case owned ::> c0 { objective o1; }
+		case both : CD ::> c0;
+		case mid ::> c0;
+		case deep : CD ::> mid;
+		requirement def RD { subject s; }
+		requirement r0 { subject s0; }
+		requirement rAlone ::> r0;
+		requirement rOwned ::> r0 { subject s1; }
+		requirement rBoth : RD ::> r0;
+	}`)
+	p := sym(t, root, "P")
+	o := nested(t, nested(t, p.Scope, "CD").Scope, "o")
+	o0 := nested(t, nested(t, p.Scope, "c0").Scope, "o0")
+	s := nested(t, nested(t, p.Scope, "RD").Scope, "s")
+	s0 := nested(t, nested(t, p.Scope, "r0").Scope, "s0")
+
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "alone")); len(owned) != 0 || len(inherited) != 1 || inherited[0] != o0 {
+		t.Errorf("ObjectivesOf(alone) = %v, %v; want [], [o0]", owned, inherited)
+	}
+	o1 := nested(t, nested(t, p.Scope, "owned").Scope, "o1")
+	if got := m.ImplicitRoleRedefinitions(o1); len(got) != 1 || got[0] != o0 {
+		t.Errorf("ImplicitRoleRedefinitions(owned::o1) = %v, want [o0]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "owned")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(owned) = %v, %v; want [o1], []", owned, inherited)
+	}
+	for _, name := range []string{"both", "deep"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 0 || len(inherited) != 2 || inherited[0] != o || inherited[1] != o0 {
+			t.Errorf("ObjectivesOf(%s) = %v, %v; want [], [o o0]", name, owned, inherited)
+		}
+	}
+	if got := m.SubjectParameterOf(nested(t, p.Scope, "rAlone")); got != s0 {
+		t.Errorf("SubjectParameterOf(rAlone) = %v, want s0", got)
+	}
+	s1 := nested(t, nested(t, p.Scope, "rOwned").Scope, "s1")
+	if got := m.ImplicitRoleRedefinitions(s1); len(got) != 1 || got[0] != s0 {
+		t.Errorf("ImplicitRoleRedefinitions(rOwned::s1) = %v, want [s0]", got)
+	}
+	if owned, inherited := m.SubjectsOf(nested(t, p.Scope, "rBoth")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != s || inherited[1] != s0 {
+		t.Errorf("SubjectsOf(rBoth) = %v, %v; want [], [s s0]", owned, inherited)
+	}
+}
+
+// The subject parameter is the one that survives redefinition: when one branch of a
+// diamond restates the common ancestor's subject, the restatement wins whichever branch
+// is written first, and whether the branch is a general or a referenced usage.
+func TestSubjectParameterSurvivesDiamondRedefinition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A;
+		part def B :> A;
+		requirement def Base { subject s : A; }
+		requirement def L :> Base;
+		requirement r : Base { subject s2 : B :>> s; }
+		requirement d : L ::> r;
+		requirement def D :> L, Base { subject s3 : B :>> s; }
+		requirement def E :> L, D;
+		requirement def F :> D, L;
+		requirement e : E;
+	}`)
+	p := sym(t, root, "P")
+	s2 := nested(t, nested(t, p.Scope, "r").Scope, "s2")
+	s3 := nested(t, nested(t, p.Scope, "D").Scope, "s3")
+	for _, tc := range []struct {
+		name string
+		want *symbols.Symbol
+	}{{"d", s2}, {"E", s3}, {"F", s3}, {"e", s3}} {
+		if got := m.SubjectParameterOf(nested(t, p.Scope, tc.name)); got != tc.want {
+			t.Errorf("SubjectParameterOf(%s) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// Objectives through a tower of diamonds are read once per case, not once per path:
+// sixty stacked diamonds have 2^60 paths, and the restatement halfway up still wins.
+func TestObjectivesThroughLayeredDiamondsAreLinear(t *testing.T) {
+	const layers = 60
+	var b strings.Builder
+	b.WriteString("package P {\n\tverification def C0 { objective o0; }\n")
+	for i := 1; i <= layers; i++ {
+		fmt.Fprintf(&b, "\tverification def L%d :> C%d;\n\tverification def R%d :> C%d;\n", i, i-1, i, i-1)
+		if i == layers/2 {
+			fmt.Fprintf(&b, "\tverification def C%d :> L%d, R%d { objective mid; }\n", i, i, i)
+		} else {
+			fmt.Fprintf(&b, "\tverification def C%d :> L%d, R%d;\n", i, i, i)
+		}
+	}
+	fmt.Fprintf(&b, "\tverification def Top :> C%d { objective top; }\n}", layers)
+	m, root := buildModel(t, b.String())
+	p := sym(t, root, "P")
+	o0 := nested(t, nested(t, p.Scope, "C0").Scope, "o0")
+	mid := nested(t, nested(t, p.Scope, fmt.Sprintf("C%d", layers/2)).Scope, "mid")
+	top := nested(t, nested(t, p.Scope, "Top").Scope, "top")
+	if got := m.ImplicitRoleRedefinitions(mid); len(got) != 1 || got[0] != o0 {
+		t.Errorf("ImplicitRoleRedefinitions(mid) = %v, want [o0]", got)
+	}
+	if got := m.ImplicitRoleRedefinitions(top); len(got) != 1 || got[0] != mid {
+		t.Errorf("ImplicitRoleRedefinitions(top) = %v, want [mid]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, fmt.Sprintf("C%d", layers))); len(owned) != 0 || len(inherited) != 1 || inherited[0] != mid {
+		t.Errorf("ObjectivesOf(C%d) = %v, %v; want [], [mid]", layers, owned, inherited)
 	}
 }

@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -34,14 +36,15 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
+	walk := newObjectiveWalk()
 	seenRoles := m.explicitRedefinitions(sym)
-	for _, sup := range m.DirectSupertypes(owner) {
+	for _, sup := range m.roleSources(owner) {
 		if !behaviorLike(sup) {
 			continue
 		}
 		var inherited []*symbols.Symbol
 		if role == objectiveRole {
-			inherited = m.effectiveObjectives(sup, seenCases)
+			inherited, _ = m.effectiveObjectives(sup, walk)
 			if f := m.positionalObjective(owner, sym, inherited); f != nil {
 				inherited = []*symbols.Symbol{f}
 			} else {
@@ -60,6 +63,17 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	return out
 }
 
+// roleSources are the cases whose subjects and objectives sym inherits: its generals and
+// the usage it reference-subsets, a subsetting too (KerML 8.3.3.3.9) but kept out of
+// DirectSupertypes.
+func (m *Model) roleSources(sym *symbols.Symbol) []*symbols.Symbol {
+	out := m.DirectSupertypes(sym)
+	if ref := m.ReferencedFeature(sym); ref != nil && !slices.Contains(out, ref) {
+		out = append(out[:len(out):len(out)], ref)
+	}
+	return out
+}
+
 // positionalObjective is the general's effective objective at sym's position in owner,
 // nil when there is none or sym is a later objective outside an analysis case.
 func (m *Model) positionalObjective(owner, sym *symbols.Symbol, inherited []*symbols.Symbol) *symbols.Symbol {
@@ -70,15 +84,72 @@ func (m *Model) positionalObjective(owner, sym *symbols.Symbol, inherited []*sym
 	return inherited[position]
 }
 
-// effectiveObjectives lists sym's objectives by position: each general's, replaced by the
-// owned one redefining it by clause or position, then the owned ones redefining none.
-// seen is the path walked, so siblings sharing an ancestor each list it in full.
-func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
-	if sym == nil || seen[sym] {
-		return nil
+// replacements records which objectives restate which: replaced objective to its restatements.
+type replacements map[*symbols.Symbol]map[*symbols.Symbol]bool
+
+func (r replacements) add(replaced, by *symbols.Symbol) {
+	if r[replaced] == nil {
+		r[replaced] = map[*symbols.Symbol]bool{}
 	}
-	seen[sym] = true
-	defer delete(seen, sym)
+	r[replaced][by] = true
+}
+
+// restates reports whether by restates sym, directly or through a chain of restatements.
+func (r replacements) restates(by, sym *symbols.Symbol) bool {
+	seen := map[*symbols.Symbol]bool{}
+	var walk func(*symbols.Symbol) bool
+	walk = func(s *symbols.Symbol) bool {
+		if seen[s] {
+			return false
+		}
+		seen[s] = true
+		for next := range r[s] {
+			if next == by || walk(next) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(sym)
+}
+
+// objectiveWalk is the state of one effectiveObjectives query: the cases on the current
+// path, which cut a cycle, and the finished ones, read once however many paths reach them.
+type objectiveWalk struct {
+	visiting map[*symbols.Symbol]bool
+	done     map[*symbols.Symbol]effectiveObjectiveSet
+	cuts     int // cycles cut so far; a result computed across a cut is path-bound
+}
+
+// effectiveObjectiveSet is a finished effectiveObjectives answer; readers must not mutate it.
+type effectiveObjectiveSet struct {
+	objectives []*symbols.Symbol
+	replaced   replacements
+}
+
+func newObjectiveWalk() *objectiveWalk {
+	return &objectiveWalk{visiting: map[*symbols.Symbol]bool{}, done: map[*symbols.Symbol]effectiveObjectiveSet{}}
+}
+
+// effectiveObjectives lists sym's objectives by position: each general's, replaced by the
+// owned one redefining it by clause or position, then the owned ones redefining none. A
+// restatement met through one general stands for the objective it restates met through
+// another. Every general is read in full, and once per walk when no cycle cuts it short.
+func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([]*symbols.Symbol, replacements) {
+	if sym == nil {
+		return nil, nil
+	}
+	if walk.visiting[sym] {
+		walk.cuts++
+		return nil, nil
+	}
+	if done, ok := walk.done[sym]; ok {
+		return done.objectives, done.replaced
+	}
+	walk.visiting[sym] = true
+	defer delete(walk.visiting, sym)
+	cuts := walk.cuts
+	replaced := replacements{}
 	owned := ownedRoles(sym, objectiveRole)
 	explicit := make([]map[*symbols.Symbol]bool, len(owned))
 	for i, o := range owned {
@@ -86,22 +157,25 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbo
 	}
 	var out []*symbols.Symbol
 	placed := map[*symbols.Symbol]bool{}
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited := m.effectiveObjectives(sup, seen)
+		inherited, inheritedReplaced := m.effectiveObjectives(sup, walk)
+		for f, by := range inheritedReplaced {
+			for b := range by {
+				replaced.add(f, b)
+			}
+		}
 		for _, f := range inherited {
 			for i, o := range owned {
 				if explicit[i][f] || m.positionalObjective(sym, o, inherited) == f {
+					replaced.add(f, o)
 					f = o
 					break
 				}
 			}
-			if !placed[f] {
-				placed[f] = true
-				out = append(out, f)
-			}
+			out = placeObjective(out, placed, f, replaced)
 		}
 	}
 	for _, o := range owned {
@@ -110,7 +184,29 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbo
 			out = append(out, o)
 		}
 	}
-	return out
+	if walk.cuts == cuts {
+		walk.done[sym] = effectiveObjectiveSet{objectives: out, replaced: replaced}
+	}
+	return out, replaced
+}
+
+// placeObjective adds f to out: in place of an objective it restates, nowhere when one
+// already placed restates it, and at the end otherwise.
+func placeObjective(out []*symbols.Symbol, placed map[*symbols.Symbol]bool, f *symbols.Symbol, replaced replacements) []*symbols.Symbol {
+	if placed[f] {
+		return out
+	}
+	placed[f] = true
+	for i, prev := range out {
+		if replaced.restates(prev, f) {
+			return out
+		}
+		if replaced.restates(f, prev) {
+			out[i] = f
+			return out
+		}
+	}
+	return append(out, f)
 }
 
 // ObjectivesOf returns the objectives a case owns and the inherited ones that no
@@ -131,7 +227,7 @@ func (m *Model) visibleRoles(sym *symbols.Symbol, role caseRole) (owned, inherit
 	owned = ownedRoles(sym, role)
 	var reachable []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		reachable = m.collectRoles(sup, role, seen, reachable)
 	}
 	masked := map[*symbols.Symbol]bool{}
@@ -158,23 +254,23 @@ func (m *Model) collectRoles(sym *symbols.Symbol, role caseRole, seen map[*symbo
 	}
 	seen[sym] = true
 	out = append(out, ownedRoles(sym, role)...)
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		out = m.collectRoles(sup, role, seen, out)
 	}
 	return out
 }
 
-// SubjectParameterOf returns the subject parameter of a requirement or case,
-// owned or inherited along its generals, or nil when it has none.
+// SubjectParameterOf returns the subject parameter of a requirement or case: its own,
+// else the inherited one no other visible subject redefines, or nil when it has none.
 func (m *Model) SubjectParameterOf(sym *symbols.Symbol) *symbols.Symbol {
-	if m == nil || sym == nil {
-		return nil
+	owned, inherited := m.SubjectsOf(sym)
+	if len(owned) > 0 {
+		return owned[0]
 	}
-	subjects := m.effectiveRoles(sym, subjectRole, map[*symbols.Symbol]bool{})
-	if len(subjects) == 0 {
-		return nil
+	if len(inherited) > 0 {
+		return inherited[0]
 	}
-	return subjects[0]
+	return nil
 }
 
 func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
@@ -186,7 +282,7 @@ func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*sym
 		return owned
 	}
 	var out []*symbols.Symbol
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		if behaviorLike(sup) {
 			out = append(out, m.effectiveRoles(sup, role, seen)...)
 		}
