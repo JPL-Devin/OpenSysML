@@ -344,7 +344,8 @@ func TestObjectiveWithGuardedDivision(t *testing.T) {
 // usage restating its general's several objectives without naming them takes
 // each one's direction at the same position, and the restatement stands in for
 // the objective it redefines rather than beside it (which, being valueless,
-// would refuse the whole analysis).
+// would refuse the whole analysis). A general restating only its first objective
+// still hands its second one down at that position.
 func TestDerivedAnalysisObjectivesRedefineByPosition(t *testing.T) {
 	ctx, idx := fixture(t, "derived_objectives.sysml", `package test {
 		private import ScalarValues::*;
@@ -365,8 +366,17 @@ func TestDerivedAnalysisObjectivesRedefineByPosition(t *testing.T) {
 			objective { in calc :>> eval { cost + 1 } }
 			objective { in calc :>> eval { margin } }
 		}
+		analysis def Mid :> Base { objective { in calc :>> eval { cost } } }
+		analysis def ViaMid :> Mid {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+		analysis viaMid : Mid {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
 	}`)
-	for _, name := range []string{"test::Derived", "test::d"} {
+	for _, name := range []string{"test::Derived", "test::d", "test::ViaMid", "test::viaMid"} {
 		sym := symbolNamed(t, idx, name)
 		objectives := ctx.ObjectivesOf(sym, sym.OwnerScope)
 		if len(objectives) != 2 {

@@ -16,7 +16,7 @@ const (
 // ImplicitRoleRedefinitions returns the same-role features of the owner's generals that sym
 // does not redefine by name: every one for a subject, each general's first for a first
 // objective. An analysis case may state several objectives, and each one redefines the
-// general's objective at the same position.
+// general's effective objective at the same position.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	role := roleOf(sym)
 	if role == noCaseRole || sym.OwnerScope == nil {
@@ -26,9 +26,8 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	if !behaviorLike(owner) {
 		return nil
 	}
-	position := 0
 	if role == objectiveRole {
-		position = rolePosition(owner, role, sym)
+		position := rolePosition(owner, role, sym)
 		if position < 0 || (position > 0 && !analysisCase(owner)) {
 			return nil
 		}
@@ -40,18 +39,73 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited := m.effectiveRoles(sup, role, seenCases)
+		var inherited []*symbols.Symbol
 		if role == objectiveRole {
-			if position >= len(inherited) {
-				continue
+			inherited = m.effectiveObjectives(sup, seenCases)
+			if f := m.positionalObjective(owner, sym, inherited); f != nil {
+				inherited = []*symbols.Symbol{f}
+			} else {
+				inherited = nil
 			}
-			inherited = inherited[position : position+1]
+		} else {
+			inherited = m.effectiveRoles(sup, role, seenCases)
 		}
 		for _, f := range inherited {
 			if !seenRoles[f] {
 				seenRoles[f] = true
 				out = append(out, f)
 			}
+		}
+	}
+	return out
+}
+
+// positionalObjective is the general's effective objective at sym's position in owner,
+// nil when there is none or sym is a later objective outside an analysis case.
+func (m *Model) positionalObjective(owner, sym *symbols.Symbol, inherited []*symbols.Symbol) *symbols.Symbol {
+	position := rolePosition(owner, objectiveRole, sym)
+	if position < 0 || (position > 0 && !analysisCase(owner)) || position >= len(inherited) {
+		return nil
+	}
+	return inherited[position]
+}
+
+// effectiveObjectives lists sym's objectives by position: each general's, replaced by the
+// owned one redefining it by clause or position, then the owned ones redefining none.
+func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if sym == nil || seen[sym] {
+		return nil
+	}
+	seen[sym] = true
+	owned := ownedRoles(sym, objectiveRole)
+	explicit := make([]map[*symbols.Symbol]bool, len(owned))
+	for i, o := range owned {
+		explicit[i] = m.explicitRedefinitions(o)
+	}
+	var out []*symbols.Symbol
+	placed := map[*symbols.Symbol]bool{}
+	for _, sup := range m.DirectSupertypes(sym) {
+		if !behaviorLike(sup) {
+			continue
+		}
+		inherited := m.effectiveObjectives(sup, seen)
+		for _, f := range inherited {
+			for i, o := range owned {
+				if explicit[i][f] || m.positionalObjective(sym, o, inherited) == f {
+					f = o
+					break
+				}
+			}
+			if !placed[f] {
+				placed[f] = true
+				out = append(out, f)
+			}
+		}
+	}
+	for _, o := range owned {
+		if !placed[o] {
+			placed[o] = true
+			out = append(out, o)
 		}
 	}
 	return out
