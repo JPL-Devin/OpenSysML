@@ -208,17 +208,9 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		}
 		out = append(out, Condition{Group: body, Negated: true, Required: required})
 	case *ast.RequireMember:
-		if m.Expression != nil {
-			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
-		}
-		out = ctx.appendReferencedConditions(out, m, m.Reference, scope, true, seen)
-		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
+		out = ctx.appendRequirementConditions(out, m, m.Expression, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
-		if m.Expression != nil {
-			out = append(out, Condition{Expr: m.Expression, Scope: scope})
-		}
-		out = ctx.appendReferencedConditions(out, m, m.Reference, scope, false, seen)
-		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
+		out = ctx.appendRequirementConditions(out, m, m.Expression, m.Body, scope, false, seen)
 	case *ast.Membership:
 		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
 	default:
@@ -227,6 +219,19 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		}
 	}
 	return out
+}
+
+// appendRequirementConditions appends what a require/assume member states: the
+// conditions of the constraint it references (`require q;`, `require P::q;`),
+// or else its own condition expression, then those its body owns.
+func (ctx *Context) appendRequirementConditions(out []Condition, member ast.Node, expr ast.Node, body []ast.Node,
+	scope *symbols.Scope, required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if ref := ast.ConstraintReferenceOf(member); ref != nil {
+		out = ctx.appendReferencedConditions(out, member, ref, scope, required, seen)
+	} else if expr != nil {
+		out = append(out, Condition{Expr: expr, Scope: scope, Required: required})
+	}
+	return ctx.appendOwnedConditions(out, member, body, scope, required, seen)
 }
 
 // appendOwnedConditions appends what a require/assume member's constraint states:

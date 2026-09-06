@@ -124,6 +124,9 @@ func (m *Model) eachMember(sym *symbols.Symbol, view memberView, declaring *symb
 				continue // masked by a closer declaration
 			}
 			for _, s := range scope.LookupLocalAll(key) {
+				if !m.resolver.BindsName(s) {
+					continue // a derived name its target does not supply
+				}
 				if !inherited && view == memberViewDeclaring && NotYetMember(s, declaring) {
 					continue // a feature being declared is not yet a member
 				}
@@ -233,7 +236,7 @@ func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield fu
 	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
-			for _, s := range symbols.PreferDeclared(sup.Scope.LookupLocalAll(name)) {
+			for _, s := range m.resolver.LocalBindings(sup.Scope, name) {
 				if !yield(s) {
 					return
 				}

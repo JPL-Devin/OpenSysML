@@ -329,3 +329,33 @@ func TestRequireReferenceInheritsTheReferencedMembers(t *testing.T) {
 		}
 	}
 }
+
+// The body-less `require q;` and `assume q;` are the same reference form: the
+// member is named q, references RD::q and inherits its members.
+func TestBareRequireAndAssumeReferenceTheNamedConstraint(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		requirement def RD { constraint q : Q { attribute inner; } }
+		requirement r : RD { require q; }
+		requirement r2 : RD { assume q; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	q := sym(t, sym(t, pkg.Scope, "RD").Scope, "q")
+	for _, owner := range []string{"r", "r2"} {
+		r := sym(t, pkg.Scope, owner)
+		refs := r.Scope.LookupLocalAll("q")
+		if len(refs) != 1 || refs[0].Naming != symbols.NamedByReference {
+			t.Fatalf("%s: members bound as q = %v, want one named by reference", owner, refs)
+		}
+		if got := m.ReferencedFeature(refs[0]); got != q {
+			t.Errorf("%s: ReferencedFeature = %v, want RD::q", owner, got)
+		}
+		if got, ok := m.LookupMember(r, "q"); !ok || got != refs[0] {
+			t.Errorf("%s: LookupMember(q) = %v, want the reference member", owner, got)
+		}
+		if _, ok := m.LookupMember(refs[0], "inner"); !ok {
+			t.Errorf("%s: LookupMember(require, inner) not found", owner)
+		}
+	}
+}

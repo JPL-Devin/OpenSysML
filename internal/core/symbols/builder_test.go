@@ -365,7 +365,7 @@ func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
 
 // A prefixed anonymous `assume`/`require constraint` is an anonymous constraint
 // usage symbol, as `constraint { … }` is, so metadata written on it is analysed.
-// A reference member (`require Other;`) declares no usage.
+// A reference member (`require Other;`) declares a usage named by its reference.
 func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	src := `package P {
 		metadata def M;
@@ -399,12 +399,13 @@ func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	if body := ConstraintBodyScope(r.Scope, require.Decl); body != require.Scope {
 		t.Fatalf("anonymous require body = %v, want its own scope", body)
 	}
-	for _, sym := range r.Scope.AllMembers() {
-		if _, ok := sym.Decl.(*ast.RequireMember); ok && sym != require {
-			t.Fatalf("the reference form `require Other;` declares no symbol, got %v", sym)
-		}
-		if _, ok := sym.Decl.(*ast.AssumeMember); ok && sym != assume {
-			t.Fatalf("the reference form `assume Other;` declares no symbol, got %v", sym)
+	refs := r.Scope.LookupLocalAll("Other")
+	if len(refs) != 2 {
+		t.Fatalf("members of R named Other = %d, want the two reference forms", len(refs))
+	}
+	for _, sym := range refs {
+		if sym.Kind != SymbolConstraintUsage || sym.Naming != NamedByReference || sym.NamingTarget == nil {
+			t.Fatalf("reference form %v = %v named %v, want a constraint usage named by its reference", sym.Decl, sym.Kind, sym.Naming)
 		}
 	}
 }

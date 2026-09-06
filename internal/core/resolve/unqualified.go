@@ -86,7 +86,7 @@ func (r *Resolver) enclosingLocal(scope *symbols.Scope, name string, hide *refFi
 // localBinding is lookupLocal less the members that bind no name of their own.
 func (r *Resolver) localBinding(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
 	sym, ok := hide.lookupLocal(scope, name)
-	if !ok || !r.bindsEffectiveName(sym) {
+	if !ok || !r.BindsName(sym) {
 		return nil, false
 	}
 	return sym, true
@@ -101,7 +101,7 @@ func (r *Resolver) LocalBindings(scope *symbols.Scope, name string) []*symbols.S
 	all := symbols.PreferDeclared(scope.LookupLocalAll(name))
 	out := make([]*symbols.Symbol, 0, len(all))
 	for _, sym := range all {
-		if r.bindsEffectiveName(sym) {
+		if r.BindsName(sym) {
 			out = append(out, sym)
 		}
 	}
@@ -116,12 +116,12 @@ func (r *Resolver) LocalBinding(scope *symbols.Scope, name string) (*symbols.Sym
 	return nil, false
 }
 
-// bindsEffectiveName reports whether sym binds the name it was found under. A
+// BindsName reports whether sym binds the name it is registered under. A
 // feature with no declared name takes the name of the feature it redefines or
 // references, so it binds none when that target resolves to nothing, or to no
 // feature (KerML 7.3.4.5).
-func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Naming == symbols.NamedByDeclaration {
+func (r *Resolver) BindsName(sym *symbols.Symbol) bool {
+	if r == nil || sym == nil || sym.Naming == symbols.NamedByDeclaration {
 		return true
 	}
 	if named, done := r.effNames[sym]; done {
@@ -132,6 +132,7 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	}
 	r.naming[sym] = true
 	defer delete(r.naming, sym)
+	r.Enter()
 	named := true
 	r.aside(func() {
 		if sym.Naming == symbols.NamedByReference {
@@ -140,7 +141,10 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 			named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, sym.NamingTarget)
 		}
 	})
-	r.effNames[sym] = named
+	// A lookup cut short by a guard answered for an enclosing one, not for good.
+	if r.Leave() {
+		r.effNames[sym] = named
+	}
 	return named
 }
 

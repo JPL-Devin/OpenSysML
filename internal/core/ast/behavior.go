@@ -553,15 +553,21 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 }
 
 // ConstraintReferenceOf returns the constraint or requirement an assume or
-// require member states by reference alone (`require P::r1;`), if it does.
+// require member states by reference alone (`require P::r1;`, `require r1;`).
 func ConstraintReferenceOf(n Node) *QualifiedName {
 	switch m := n.(type) {
 	case *AssumeMember:
-		return m.Reference
+		if m.Reference != nil {
+			return m.Reference
+		}
 	case *RequireMember:
-		return m.Reference
+		if m.Reference != nil {
+			return m.Reference
+		}
+	default:
+		return nil
 	}
-	return nil
+	return ConditionReference(n)
 }
 
 // ConditionReference returns the name an assume or require member's condition

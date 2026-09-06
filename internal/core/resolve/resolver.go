@@ -138,7 +138,7 @@ type Resolver struct {
 	// scope the document pass has not stamped: see (*Resolver).scopeOwner.
 	bodyOwners map[*symbols.Scope]*symbols.Symbol
 	// effNames memoizes whether a feature named by a redefinition binds that
-	// name: see (*Resolver).bindsEffectiveName.
+	// name: see (*Resolver).BindsName.
 	effNames map[*symbols.Symbol]bool
 	model    MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
 	naming   map[*symbols.Symbol]bool // effective names being computed, for cycle detection
