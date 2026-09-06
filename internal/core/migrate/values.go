@@ -2,6 +2,7 @@ package migrate
 
 import (
 	"html"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,8 +31,9 @@ func (m *migration) valueExpr(v *xmi.Element, scope *xmi.Element) (expr string, 
 		if val == "" {
 			val = "0.0"
 		}
-		if _, err := strconv.ParseFloat(val, 64); err != nil {
-			return "", false, "real literal " + strconv.Quote(val) + " is not a number"
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return "", false, "real literal " + strconv.Quote(val) + " is not a finite number"
 		}
 		if !strings.ContainsAny(val, ".eE") {
 			val += ".0"

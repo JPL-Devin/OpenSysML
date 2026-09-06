@@ -23,19 +23,16 @@ func writeName(name string) string {
 // for an anonymous element that something refers to; "" when it is anonymous
 // and stays so.
 func (m *migration) nameOf(e *xmi.Element) string {
-	if e.Name != "" {
-		return e.Name
+	if n, ok := m.names[e]; ok {
+		return n
 	}
-	return m.names[e]
+	return e.Name
 }
 
 // nameFor returns the v2 name of an element, synthesizing one for an anonymous
 // element the first time it is asked for, so it can be referred to.
 func (m *migration) nameFor(e *xmi.Element) string {
-	if e.Name != "" {
-		return e.Name
-	}
-	if n, ok := m.names[e]; ok {
+	if n := m.nameOf(e); n != "" {
 		return n
 	}
 	// Distinct within the owner: the id is unique, so its tail is too once the
@@ -126,7 +123,7 @@ func (m *migration) ref(target *xmi.Element, scope *xmi.Element) string {
 		}
 		shadowed := false
 		for _, inner := range chain[:i] {
-			if m.nameTaken(inner, target.Name) && target.Name != "" {
+			if n := m.nameOf(target); n != "" && m.nameTaken(inner, n) {
 				shadowed = true
 				break
 			}
@@ -138,7 +135,7 @@ func (m *migration) ref(target *xmi.Element, scope *xmi.Element) string {
 	if owner == nil && len(chain) > 0 {
 		// A top-level declaration: visible everywhere unless shadowed.
 		for _, inner := range chain {
-			if m.nameTaken(inner, target.Name) && target.Name != "" {
+			if n := m.nameOf(target); n != "" && m.nameTaken(inner, n) {
 				return m.qualifiedFrom(segs, chain)
 			}
 		}

@@ -342,3 +342,134 @@ func TestShadowedReferencesAreGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestUnwritableFeaturePartsAreDroppedWithNotes covers three Cameo shapes that
+// have no v2 spelling: an anonymous property whose type is not migrated, a
+// multiplicity whose bounds are strings, a non-finite real, and a default
+// on a reference. Each is written validly and every loss is reported.
+func TestUnwritableFeaturePartsAreDroppedWithNotes(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_v" name="Intro"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_h" name="H">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_anon" type="_v" aggregation="composite"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_grid" name="grid">
+        <lowerValue xmi:type="uml:LiteralString" xmi:id="_l" value="492x21"/>
+        <upperValue xmi:type="uml:LiteralString" xmi:id="_u" value="492x21"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_many" name="many">
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_l2" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_u2" value="*"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_nan" name="margin">
+        <defaultValue xmi:type="uml:LiteralReal" xmi:id="_d" value="NaN"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_exp" name="exposure">
+        <defaultValue xmi:type="uml:LiteralString" xmi:id="_d2" value="4"/>
+      </ownedAttribute>
+    </packagedElement>`, `
+  <sysml:View xmi:id="_s1" base_Class="_v"/>
+  <sysml:Block xmi:id="_s2" base_Class="_h"/>`)
+	wantLine(t, r.Notation, "ref intro;")
+	wantLine(t, r.Notation, "ref grid;")
+	wantLine(t, r.Notation, "ref many[0..*];")
+	wantLine(t, r.Notation, "ref margin {")
+	wantLine(t, r.Notation, `ref exposure default = "4";`)
+	if strings.Contains(string(r.Notation), "= NaN") {
+		t.Errorf("a non-finite real was written:\n%s", r.Notation)
+	}
+	wantLine(t, r.Notation, "/* default value not migrated: NaN")
+	for id, want := range map[string]string{
+		"_anon": "is named intro",
+		"_grid": "multiplicity 492x21..492x21 is not a range of natural numbers",
+		"_nan":  `real literal "NaN" is not a finite number`,
+	} {
+		es := entriesFor(r, id)
+		if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, want) {
+			t.Errorf("entries for %s = %+v, want one approximation noting %q", id, es, want)
+		}
+	}
+	for _, d := range errors(t, "drop.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+	if _, err := export.Convert("drop.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestClashingSiblingNamesAreDistinguished covers two members of one classifier
+// that share a name, which UML allows and v2 does not: the later one is renamed,
+// references and redefinitions follow the new name, and the report says so.
+func TestClashingSiblingNamesAreDistinguished(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_h" name="H">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p1" name="unnamed1"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p2" name="unnamed1"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_g" name="G">
+      <generalization xmi:type="uml:Generalization" xmi:id="_gen" general="_h"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p3" name="q" redefinedProperty="_p2"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_c" name="C"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_c2" name="C"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_u" name="U">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p4" name="x" type="_c2" aggregation="composite"/>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_h"/>
+  <sysml:Block xmi:id="_s2" base_Class="_g"/>
+  <sysml:Block xmi:id="_s3" base_Class="_c"/>
+  <sysml:Block xmi:id="_s4" base_Class="_c2"/>
+  <sysml:Block xmi:id="_s5" base_Class="_u"/>`)
+	wantLine(t, r.Notation, "ref unnamed1;")
+	wantLine(t, r.Notation, "ref 'unnamed1 2';")
+	wantLine(t, r.Notation, "ref q :>> 'unnamed1 2';")
+	wantLine(t, r.Notation, "part def 'C 2'")
+	wantLine(t, r.Notation, "part x : 'C 2';")
+	for id, want := range map[string]string{
+		"_p2": "written as unnamed1 2 since a sibling is also named unnamed1",
+		"_c2": "written as C 2 since a sibling is also named C",
+	} {
+		es := entriesFor(r, id)
+		if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, want) {
+			t.Errorf("entries for %s = %+v, want one approximation noting %q", id, es, want)
+		}
+	}
+	for _, d := range errors(t, "clash.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+	if _, err := export.Convert("clash.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestConnectionEndYieldsItsNameToAMember covers Cameo's association block whose
+// participant property is named like the member end it stands for: the end,
+// declared in another class, takes a distinct name inside the connection def.
+func TestConnectionEndYieldsItsNameToAMember(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_toB" name="toB" type="_b" association="_ab"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_toA" name="toA" type="_a" association="_ab"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:AssociationClass" xmi:id="_ab" name="AB" memberEnd="_toB _toA">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_pp" name="toB" type="_b"/>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_a"/>
+  <sysml:Block xmi:id="_s2" base_Class="_b"/>
+  <sysml:Block xmi:id="_s3" base_Class="_ab"/>
+  <sysml:ParticipantProperty xmi:id="_s4" base_Property="_pp" end="_toB"/>`)
+	wantLine(t, r.Notation, "end toB2 : B;")
+	wantLine(t, r.Notation, "end toA : A;")
+	wantLine(t, r.Notation, "ref part toB : B")
+	es := entriesFor(r, "_ab")
+	if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "end toB is written as toB2") {
+		t.Errorf("entries for the association = %+v, want one approximation noting the renamed end", es)
+	}
+	for _, d := range errors(t, "end.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+	if _, err := export.Convert("end.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatal(err)
+	}
+}

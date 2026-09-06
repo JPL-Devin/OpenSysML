@@ -89,6 +89,12 @@ type migration struct {
 }
 
 func (m *migration) add(e *xmi.Element, v Verdict, target, note string) {
+	if n, ok := m.names[e]; ok && e.Name != "" && n != e.Name {
+		if v == Mapped {
+			v = Approximated
+		}
+		note = joinNotes(note, "written as "+n+" since a sibling is also named "+e.Name)
+	}
 	m.report.Entries = append(m.report.Entries, Entry{
 		ID: e.ID, Kind: kindOf(e), Name: qualifiedName(e), Target: target, Verdict: v, Note: note,
 	})
@@ -99,6 +105,7 @@ func (m *migration) add(e *xmi.Element, v Verdict, target, note string) {
 func (m *migration) prepare() {
 	var walk func(e *xmi.Element)
 	walk = func(e *xmi.Element) {
+		m.distinguish(e)
 		switch e.Type {
 		case "InformationFlow":
 			for _, c := range m.model.Refs(e, "realizingConnector") {
@@ -136,6 +143,39 @@ func (m *migration) prepare() {
 	}
 }
 
+// distinguish renames the later of two members of e that share a name, since
+// v2 members of one namespace must be distinct while UML allows the clash.
+func (m *migration) distinguish(e *xmi.Element) {
+	seen := map[string]bool{}
+	for _, c := range e.Children {
+		if c.Name == "" || ownerWritten(c.Role) {
+			continue
+		}
+		if !seen[c.Name] {
+			seen[c.Name] = true
+			continue
+		}
+		name := c.Name
+		for i := 2; seen[name] || m.nameTaken(e, name); i++ {
+			name = fmt.Sprintf("%s %d", c.Name, i)
+		}
+		seen[name] = true
+		m.names[c] = name
+	}
+}
+
+// ownerWritten reports whether a child in role is written by its owner rather
+// than as a member of its body.
+func ownerWritten(role string) bool {
+	switch role {
+	case "ownedComment", "generalization", "lowerValue", "upperValue", "defaultValue",
+		"end", "specification", "type", "general", "annotatedElement", "body", "language",
+		"ownedEnd", "memberEnd", "value", "slot", "ownedLiteral", "ownedParameter", "region":
+		return true
+	}
+	return false
+}
+
 // root writes a top-level element: a Model's members are written at the top
 // level, any other root as a declaration of its own.
 func (m *migration) root(e *xmi.Element) {
@@ -164,12 +204,10 @@ func (m *migration) body(e *xmi.Element) {
 
 // member writes one owned element of the current scope.
 func (m *migration) member(e *xmi.Element) {
-	switch e.Role {
-	case "ownedComment", "generalization", "lowerValue", "upperValue", "defaultValue",
-		"end", "specification", "type", "general", "annotatedElement", "body", "language",
-		"ownedEnd", "memberEnd", "value", "slot", "ownedLiteral", "ownedParameter", "region":
-		// Written by the owner.
+	if ownerWritten(e.Role) {
 		return
+	}
+	switch e.Role {
 	case "profileApplication", "packageImport", "elementImport", "packageMerge":
 		m.imports(e)
 		return
@@ -234,7 +272,7 @@ func (m *migration) classifier(e *xmi.Element) {
 		m.unmapped(e, note)
 		return
 	}
-	name := e.Name
+	name := m.nameOf(e)
 	if name == "" {
 		if cat == catConnectionDef {
 			m.association(e)
@@ -293,7 +331,7 @@ func (m *migration) classifier(e *xmi.Element) {
 		m.w.block(header.String(), func() {
 			m.comments(e)
 			for _, lit := range e.Owned("ownedLiteral") {
-				m.w.line(writeName(lit.Name) + ";")
+				m.w.line(writeName(m.nameOf(lit)) + ";")
 				m.add(lit, Mapped, m.v2Name(lit), "")
 			}
 			m.stereotypeComments(e)
@@ -514,7 +552,7 @@ func (m *migration) individualBody(e *xmi.Element) {
 		default:
 			value = " = (" + strings.Join(vals, ", ") + ")"
 		}
-		m.w.line("attribute :>> " + writeName(f.Name) + value + ";")
+		m.w.line("attribute :>> " + writeName(m.nameOf(f)) + value + ";")
 		m.add(slot, verdictFor(strings.Join(notes, "; ")), m.v2Name(e)+"::"+writeName(f.Name), strings.Join(notes, "; "))
 	}
 	for _, extra := range m.extras[e] {
@@ -557,7 +595,7 @@ func ownsEveryEnd(e *xmi.Element, ends []*xmi.Element) bool {
 // is already written as that property, so it writes nothing.
 func (m *migration) association(e *xmi.Element) {
 	ends := m.model.Refs(e, "memberEnd")
-	name := e.Name
+	name := m.nameOf(e)
 	if name == "" {
 		missing := m.dangling(e, "memberEnd")
 		if e.Type == "Association" && !ownsEveryEnd(e, ends) {
@@ -583,8 +621,13 @@ func (m *migration) association(e *xmi.Element) {
 			if endName == "" && t != nil {
 				endName = m.nameFor(end)
 			}
-			for base, i := endName, 2; endName != "" && used[endName]; i++ {
+			// An end named elsewhere yields to a member of the connection def.
+			clash := func(n string) bool { return used[n] || (end.Parent != e && m.nameTaken(e, n)) }
+			for base, i := endName, 2; endName != "" && clash(endName); i++ {
 				endName = fmt.Sprintf("%s%d", base, i)
+			}
+			if endName != m.nameOf(end) && m.nameOf(end) != "" {
+				m.downgrade(e, "end "+m.nameOf(end)+" is written as "+endName+" so the ends and members stay distinct")
 			}
 			used[endName] = true
 			decl := "end"
@@ -594,7 +637,9 @@ func (m *migration) association(e *xmi.Element) {
 			if typ != "" {
 				decl += " : " + typ
 			}
-			decl += m.multiplicity(end) + ";"
+			mult, mnote := m.multiplicity(end)
+			decl += mult + ";"
+			tnote = joinNotes(tnote, mnote)
 			m.w.line(decl)
 			if end.Parent == e {
 				m.add(end, verdictFor(tnote), m.v2Name(e)+"::"+writeName(endName), tnote)
@@ -705,6 +750,11 @@ func (m *migration) feature(p *xmi.Element) {
 	b.WriteString(prefix)
 	b.WriteString(kw)
 	name := m.nameOf(p)
+	if name == "" && typ == "" {
+		// A usage needs a name or a type; an anonymous one with no written type gets a name.
+		name = m.nameFor(p)
+		note = joinNotes(note, "the anonymous property is named "+name+" as it has no v2 type")
+	}
 	target := ""
 	if name != "" {
 		b.WriteString(" " + writeName(name))
@@ -728,7 +778,9 @@ func (m *migration) feature(p *xmi.Element) {
 		}
 		b.WriteString(" : " + typ)
 	}
-	b.WriteString(m.multiplicity(p))
+	mult, mnote := m.multiplicity(p)
+	b.WriteString(mult)
+	note = joinNotes(note, mnote)
 	for _, r := range m.model.Refs(p, "redefinedProperty") {
 		b.WriteString(" :>> " + m.featureRef(r))
 	}
@@ -796,6 +848,10 @@ func (m *migration) written(e *xmi.Element) bool {
 	if e == nil || e.IsProxy() {
 		return false
 	}
+	// The root Model is the file itself, so nothing can refer to it.
+	if e.Parent == nil && e.Type == "Model" {
+		return false
+	}
 	switch e.Type {
 	case "Property", "Port":
 		return m.written(e.Parent)
@@ -810,7 +866,7 @@ func (m *migration) written(e *xmi.Element) bool {
 // subsets it: the simple name when it is inherited into the current scope.
 func (m *migration) featureRef(r *xmi.Element) string {
 	if r.Parent != nil && m.inherits(m.scope, r.Parent) && r.Name != "" {
-		return writeName(r.Name)
+		return writeName(m.nameOf(r))
 	}
 	return m.ref(r, m.scope)
 }
@@ -857,8 +913,9 @@ func (m *migration) typeRef(t *xmi.Element, scope *xmi.Element) (string, string)
 	return m.ref(t, scope), ""
 }
 
-// multiplicity writes a [lower..upper] multiplicity, or nothing for 1..1.
-func (m *migration) multiplicity(p *xmi.Element) string {
+// multiplicity writes a [lower..upper] multiplicity, or nothing for 1..1. A
+// bound that is not a natural number (or * above) is dropped with a note.
+func (m *migration) multiplicity(p *xmi.Element) (string, string) {
 	lower, upper := "", ""
 	if lv := firstOwned(p, "lowerValue"); lv != nil {
 		lower = lv.Attrs["value"]
@@ -875,19 +932,35 @@ func (m *migration) multiplicity(p *xmi.Element) string {
 	// UML defaults an omitted bound to 1.
 	switch {
 	case lower == "" && upper == "":
-		return ""
+		return "", ""
 	case lower == "":
 		lower = "1"
 	case upper == "":
 		upper = "1"
 	}
+	if !isNatural(lower) || (!isNatural(upper) && upper != "*") {
+		return "", "multiplicity " + lower + ".." + upper + " is not a range of natural numbers and is not written"
+	}
 	if lower == upper {
 		if lower == "1" {
-			return ""
+			return "", ""
 		}
-		return "[" + lower + "]"
+		return "[" + lower + "]", ""
 	}
-	return "[" + lower + ".." + upper + "]"
+	return "[" + lower + ".." + upper + "]", ""
+}
+
+// isNatural reports whether s spells a natural number.
+func isNatural(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // connector writes a connector: a binding connector as `bind`, another as
@@ -917,8 +990,8 @@ func (m *migration) connector(c *xmi.Element) {
 		decl, kw = "bind "+paths[0]+" = "+paths[1]+";", "binding "
 	}
 	target := ""
-	if c.Name != "" {
-		decl = kw + writeName(c.Name) + " " + decl
+	if m.nameOf(c) != "" {
+		decl = kw + writeName(m.nameOf(c)) + " " + decl
 		target = m.v2Name(c)
 	}
 	m.w.line(decl)
@@ -998,7 +1071,7 @@ func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string
 			m.w.lines(commentLines("item flow of " + item.Name + " from " + from + " to " + to + " not migrated: " + notes[len(notes)-1]))
 			continue
 		}
-		m.w.line("flow " + from + "." + writeName(sp.Name) + " to " + to + "." + writeName(dp.Name) + ";")
+		m.w.line("flow " + from + "." + writeName(m.nameOf(sp)) + " to " + to + "." + writeName(m.nameOf(dp)) + ";")
 		written = append(written, item.Name)
 	}
 	note := strings.Join(notes, "; ")
@@ -1048,8 +1121,8 @@ func (m *migration) rule(r *xmi.Element) {
 		return
 	}
 	decl := "constraint"
-	if r.Name != "" {
-		decl += " " + writeName(r.Name)
+	if m.nameOf(r) != "" {
+		decl += " " + writeName(m.nameOf(r))
 	}
 	m.w.line(decl + " { " + expr + " }")
 	m.add(r, verdictFor(note), m.v2Name(r), note)
@@ -1142,7 +1215,7 @@ func (m *migration) dependency(d *xmi.Element) {
 		pl.notes = append(pl.notes, note)
 	}
 	for i, p := range pairs {
-		name := d.Name
+		name := m.nameOf(d)
 		if name != "" && i > 0 {
 			name = m.freshName(m.scope, name)
 			pl.notes = append(pl.notes, fmt.Sprintf("pair %d is named %s so the pairs stay distinct", i+1, name))

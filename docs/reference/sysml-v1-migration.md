@@ -86,6 +86,10 @@ returned over the service yet.
 | Comment, Documentation | `doc` (first) / `comment`, HTML tags stripped | mapped |
 | Custom-profile stereotypes and tags | preserved as `/* applied stereotype «Name»: tag = value */` | mapped |
 | SysML stereotype tags without a v2 form (`Block.isEncapsulated`, `ValueType.unit`, …) | preserved as `/* «Name» tags with no v2 form: tag = value */` | approximated |
+| Two members of one namespace with the same name (UML allows it, v2 does not) | the later one renamed `Name 2`; a connection end named like a member of its connection def renamed `name2` | approximated |
+| Anonymous property with no v2 type | a `ref` named after its type, or `unnamed` | approximated |
+| Multiplicity bounds that are not natural numbers (Cameo's `492x21` array dimensions) | omitted | approximated |
+| `NaN`/infinite real literals | comment | approximated |
 | References to ids the document does not define | the resolvable ends are written; the missing ids are named in the report | approximated |
 | OpaqueExpression defaults and constraints | copied verbatim when it parses as a v2 expression; otherwise as a `comment` | mapped / approximated |
 | Activity, StateMachine, Interaction, OpaqueBehavior | comment placeholder | **unmapped** — behaviors come in a follow-up |
@@ -99,6 +103,13 @@ future work (see [element identity annotations](../project/element-identity-anno
 
 Names that are not v2 identifiers — with spaces, punctuation, or starting with a digit — are
 quoted (`'Vehicle Design'`).
+
+The mapping has been run over the [OpenMBEE TMT SysML model](https://github.com/Open-MBEE/TMT-SysML-Model)
+(`TMT-2024x.mdzip`, 27 MB, 34,660 elements): it writes 6 MB of notation that passes the gate
+below in about a second, and 150 MB of Turtle in four. Roughly half the elements map or are
+approximated; the unmapped rest is dominated by behaviors (activities, signal and time events,
+operations), instance specifications without a classifier, slots of part and constraint
+properties, and views.
 
 ## The report
 
