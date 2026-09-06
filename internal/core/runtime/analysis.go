@@ -209,9 +209,8 @@ func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 	return obj
 }
 
-// restatedObjectives returns the objectives objSym restates as seen from owner,
-// those its clause names first, then those it redefines by position or role,
-// each followed by the ones they restate in turn.
+// restatedObjectives returns what objSym restates as seen from owner, nearest
+// first: its clause's targets, then positional and role redefinitions, transitively.
 func (ctx *Context) restatedObjectives(objSym, owner *symbols.Symbol) []*symbols.Symbol {
 	seen := map[*symbols.Symbol]bool{objSym: true}
 	var out []*symbols.Symbol
