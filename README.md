@@ -350,11 +350,16 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
-binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized; see
-[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries are
-Authenticode signed through [SignPath Foundation](https://signpath.org) once the project's
-application is approved; the signed files are published as separate `*-signed*` assets beside
-the unsigned ones that `SHA256SUMS.txt` covers. See the [Code signing policy](#code-signing-policy).
+binaries, and `SHA256SUMS.txt`. Windows also gets an installer,
+`opensysml-<x.y.z>-windows-amd64.msi` (`sysml`, `sysml-lsp`, `sysml-grpc`, optional bundled Z3
+solver; see [packaging/msi](packaging/msi/README.md)), built by the GitHub Actions release
+workflow after CircleCI publishes the release, with its digest in `SHA256SUMS-windows-msi.txt`.
+macOS binaries are not Developer ID signed or notarized; see
+[docs/project/macos-distribution.md](docs/project/macos-distribution.md). Windows binaries and
+the MSI are Authenticode signed through [SignPath Foundation](https://signpath.org) once the
+project's application is approved; the signed files are published as separate `*-signed*`
+assets beside the unsigned ones that `SHA256SUMS.txt` covers. See the
+[Code signing policy](#code-signing-policy).
 
 ## Code signing policy
 
@@ -367,11 +372,15 @@ built by the GitHub Actions workflow
 tagged commit of this repository and submitted to SignPath for signing from that workflow, so
 every signed file traces back to a public commit and a public build log. The signed files are
 published on the GitHub release as `sysml-windows-amd64-signed.zip`,
-`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe` and
-`opensysml-windows-amd64-signed.zip`, with their digests in `SHA256SUMS-windows-signed.txt`.
-Every signed executable carries `ProductName` `OpenSysML` and the release tag as
-`ProductVersion`/`FileVersion`. Signing is not in effect until the project's SignPath
-application is approved; releases made before that carry only unsigned Windows assets.
+`sysml-lsp-windows-amd64-signed.zip`, `sysml-grpc-windows-amd64-signed.exe`,
+`opensysml-windows-amd64-signed.zip` and the installer `opensysml-<x.y.z>-windows-amd64-signed.msi`
+(built from the signed executables and itself signed), with their digests in
+`SHA256SUMS-windows-signed.txt`. Every signed executable carries `ProductName` `OpenSysML` and
+the release tag as `ProductVersion`/`FileVersion`. The Z3 solver the MSI optionally bundles is
+upstream open-source software and is never signed with the Foundation certificate; the
+installer carries it unsigned, as the SignPath Foundation terms allow. Signing is not in effect
+until the project's SignPath application is approved; releases made before that carry only
+unsigned Windows assets (including the unsigned MSI).
 
 **Team roles**
 

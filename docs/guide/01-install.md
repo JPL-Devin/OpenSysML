@@ -38,8 +38,29 @@ tar xzf opensysml.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
-**Windows:**
-Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized: those binaries are not Authenticode-signed. Once the project's [SignPath Foundation](https://signpath.org) application is approved, releases also carry an `opensysml-windows-amd64-signed.zip` with the same two executables signed through SignPath — prefer it when it is there (see the [Code signing policy](../../README.md#code-signing-policy)).
+**Windows — use the installer.** Download `opensysml-<x.y.z>-windows-amd64.msi` from
+[releases](https://github.com/Open-MBEE/OpenSysML/releases/latest) and run it. It installs
+`sysml.exe`, `sysml-lsp.exe` and `sysml-grpc.exe` into `C:\Program Files\OpenSysML`, puts that
+directory on the system `PATH`, and installs the [Z3](https://github.com/Z3Prover/z3) SMT solver
+under `C:\Program Files\OpenSysML\z3` (also on `PATH`) as the optional *SMT solver (Z3)*
+feature, so the experimental `%check`/`%explain` commands work out of the box. To skip the
+bundled solver or the gRPC service run the installer from an elevated prompt with
+`msiexec /i opensysml-<x.y.z>-windows-amd64.msi REMOVE=Z3` (or `REMOVE=Z3,GrpcService`); to use
+another solver, point `OPENSYSML_SMT` at it (see [Installing a solver](#installing-a-solver-optional)).
+A newer installer upgrades an older one in place, and *Apps & features* uninstalls it. Windows
+SmartScreen may warn that the publisher is unrecognized: the installer is not yet
+Authenticode-signed. Once the project's [SignPath Foundation](https://signpath.org) application
+is approved, releases also carry `opensysml-<x.y.z>-windows-amd64-signed.msi`, whose executables
+and the MSI itself are signed through SignPath (the bundled `z3.exe` stays unsigned) — prefer it
+when it is there (see the [Code signing policy](../../README.md#code-signing-policy)).
+
+**Windows — zip.** Download `opensysml-windows-amd64.zip` (or `opensysml-windows-amd64-signed.zip`
+when present) instead, extract, and add the directory to `PATH`; the zip has `sysml.exe` and
+`sysml-lsp.exe` only and no solver. [Scoop](https://scoop.sh) and
+[winget](https://learn.microsoft.com/windows/package-manager/) manifests are maintained under
+[`packaging/`](https://github.com/Open-MBEE/OpenSysML/tree/main/packaging) and will be listed
+here once accepted into the public bucket / `winget-pkgs`; both install the zip and declare Z3
+as a dependency.
 
 **Available binaries:**
 - `sysml` — Interactive REPL
@@ -144,7 +165,10 @@ either add the archive's `bin` directory to `PATH`, or point `OPENSYSML_SMT` at 
 $env:OPENSYSML_SMT = "C:\tools\z3-5.1.0-x64-win\bin\z3.exe"
 ```
 [Scoop](https://scoop.sh) packages the same archive, so `scoop install z3` places `z3.exe` on
-`PATH` automatically.
+`PATH` automatically. The OpenSysML MSI installer bundles this same release under
+`C:\Program Files\OpenSysML\z3` (on `PATH`) as its *SMT solver (Z3)* feature; deselect the
+feature (`REMOVE=Z3`) if you want a different solver, or just set `OPENSYSML_SMT`, which takes
+precedence over `PATH`.
 
 **Any platform with Python — the `pip` fallback:** the `z3-solver` wheels (MIT) are published
 for Linux, macOS and Windows and include the executable, not just the Python module:
