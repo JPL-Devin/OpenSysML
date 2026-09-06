@@ -127,3 +127,50 @@ func TestRecursiveRollupThroughACall(t *testing.T) {
 		attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
 	}`)
 }
+
+// TestBoundMeasurementUnit: a unit binds to the unit definition typing it, to any
+// measurement-reference supertype, and to no quantity value type; the checker
+// judges each as the runtime's write conformance does. A quantity bound to a
+// unit-typed feature (`hp : PowerUnit = 745.7 [W]` in the OMG examples) is not
+// judged, as the pilot implementation accepts it.
+func TestBoundMeasurementUnit(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute u : LengthUnit = m;`)
+	wantNoDimensionDiags(t, `attribute u : LengthUnit = km;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::ScalarMeasurementReference = m;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::MeasurementUnit = m;`)
+	wantOneDimensionError(t, `attribute u : LengthUnit = s;`,
+		"cannot bind a value of type DurationUnit to a feature typed by LengthUnit")
+	wantOneDimensionError(t, `attribute q : LengthValue = m;`,
+		"cannot bind a value of type LengthUnit to a feature typed by LengthValue")
+	wantNoDimensionDiags(t, `attribute u : PowerUnit = 745.7 [W];`)
+}
+
+// TestBoundComposedMeasurementUnit: a product, quotient or power of units is a
+// DerivedUnit of the composed dimension, so it binds to a unit definition of
+// that dimension and is refused by one of another with the dimension named.
+func TestBoundComposedMeasurementUnit(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute a : AreaUnit = m * m;`)
+	wantNoDimensionDiags(t, `attribute kpl : MeasurementReferences::DerivedUnit = km / L;`)
+	wantNoDimensionDiags(t, `attribute v : SpeedUnit = m / s;`)
+	wantNoDimensionDiags(t, `attribute v : SpeedUnit = km / h;`)
+	wantNoDimensionDiags(t, `attribute c : VolumeUnit = m ** 3;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::MeasurementUnit = m / s;`)
+	wantOneDimensionError(t, `attribute a : AreaUnit = m * s;`,
+		"cannot bind a measurement reference of dimension L·T to a feature typed by AreaUnit")
+	wantOneDimensionError(t, `attribute u : LengthUnit = m / s;`,
+		"cannot bind a measurement reference of dimension L·T^-1 to a feature typed by LengthUnit")
+}
+
+// TestComposedMeasurementUnitAsAnArgument: an operator expression over units is
+// a measurement reference where an overload is chosen by argument type, so
+// ToString(m / s) selects MeasurementRefCalculations::ToString and a quantity
+// parameter refuses it by name.
+func TestComposedMeasurementUnitAsAnArgument(t *testing.T) {
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute text : ScalarValues::String = ToString(m / s);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(3 [km], m);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(m, m);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found LengthUnit")
+}

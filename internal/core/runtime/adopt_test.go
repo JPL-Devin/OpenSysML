@@ -1108,3 +1108,75 @@ func TestShapeDigestExpandsALibraryOfUnknownText(t *testing.T) {
 		t.Error("digest unchanged by an edit to the library type it expands")
 	}
 }
+
+const adoptUnitSrc = `package Demo {
+	private import ISQ::*;
+	private import SI::*;
+	private import MeasurementReferences::*;
+	attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }
+	part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }
+	part field : Field;
+}`
+
+// A quantity or measurement reference a run wrote names unit declarations, which
+// are rebound to the declarations of the re-analysis like everything else the
+// object points at, so the reference still answers its declaration's type.
+func TestAdoptRebindsTheUnitsAWrittenValueNames(t *testing.T) {
+	prev := libraryContextOver(t, adoptUnitSrc)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for feature, src := range map[string]string{"width": "3 [furlong]", "unit": "furlong"} {
+		val, err := evalIn(t, prev, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, adoptUnitSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	furlong := lookupOne(t, ctx.resolver.Index(), "Demo::furlong")
+	unit, err := field.GetFeatureValue(ctx, "unit")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(unit): %v", err)
+	}
+	if decl := unit.Value.MeasurementRef().Declaration(); decl != furlong {
+		t.Errorf("unit names %p, want the furlong declared by the re-analysis %p", decl, furlong)
+	}
+	width, err := field.GetFeatureValue(ctx, "width")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(width): %v", err)
+	}
+	if decl := width.Value.Quantity().Unit.Product.Powers[0].Unit; decl != furlong {
+		t.Errorf("width is measured in %p, want the furlong declared by the re-analysis %p", decl, furlong)
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"field.unit":                                            "furlong",
+		"field.unit istype LengthUnit":                          "true",
+		"field.unit == furlong":                                 "true",
+		"field.width.mRef == field.unit":                        "true",
+		"QuantityCalculations::ConvertQuantity(field.width, m)": "603.504 [m]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+
+	gone := libraryContextOver(t, strings.Replace(adoptUnitSrc, "attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }", "", 1))
+	var adoptErr *AdoptError
+	if _, err := gone.Adopt(prev, shapes, field); !errors.As(err, &adoptErr) {
+		t.Fatalf("Adopt into a re-analysis without the unit: %v, want an AdoptError", err)
+	} else if !strings.Contains(err.Error(), "the unit furlong it is measured in is no longer declared") {
+		t.Errorf("Adopt refused for %q, want the missing unit named", err)
+	}
+}

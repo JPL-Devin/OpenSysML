@@ -531,6 +531,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
 					return val, err
 				}
+				// A measurement unit declaration is the measurement reference it names.
+				if val, ok, err := ec.ctx.MeasurementUnitValue(sym); ok {
+					return val, err
+				}
 				// A part, item or structured value names an object, so the name
 				// evaluates to that object rather than to a value the declaration
 				// would have to hold.
@@ -606,6 +610,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
 	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
+	}
+	// A measurement unit declaration (`SI::m`) is the measurement reference it names.
+	if val, ok, err := ec.ctx.MeasurementUnitValue(currentSym); ok {
 		return val, err
 	}
 	// A qualified feature of an enclosing type (`Rectangle::length` inside its
@@ -947,7 +955,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	switch value.Kind {
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
-	case ValArray, ValVector, ValVectorQuantity:
+	case ValArray, ValVector, ValVectorQuantity, ValQuantity, ValMeasurementRef:
 		// An array or vector read from an object keeps that object's members; any
 		// other's own features are answered from the value.
 		if inst, ok := ec.ctx.structuredObject(value); ok {
@@ -1340,6 +1348,8 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		}
 	case ValArray, ValVector, ValVectorQuantity:
 		return ctx.structuredValueType(value)
+	case ValMeasurementRef:
+		return ctx.measurementRefValueType(value.MeasurementRef())
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1564,6 +1574,11 @@ func arithmeticValues(op ast.OperatorKind, left, right Value, span source.Span) 
 	// StringFunctions declares; a non-string operand is not coerced.
 	if op == ast.OpAdd && left.Kind == ValString && right.Kind == ValString {
 		return concatStrings(left.Str(), right.Str()), nil
+	}
+
+	// A product, quotient or power of measurement references is the unit it composes.
+	if ref, ok := composeMeasurementRefs(op, left, right); ok {
+		return ref, nil
 	}
 
 	// A quantity carries its unit through arithmetic: a sum converts, a product
@@ -2328,6 +2343,8 @@ func valueEqual(a, b Value) bool {
 		return vectorEqual(a.Vector(), b.Vector())
 	case ValVectorQuantity:
 		return vectorQuantityEqual(a.VectorQuantity(), b.VectorQuantity())
+	case ValMeasurementRef:
+		return a.MeasurementRef().equal(b.MeasurementRef())
 	default:
 		return false
 	}

@@ -35,6 +35,7 @@ var (
 // Quantities and Units domain library).
 const (
 	fqnMeasurementUnit    = "MeasurementReferences::MeasurementUnit"
+	fqnDerivedUnit        = "MeasurementReferences::DerivedUnit"
 	fqnDimensionOneUnit   = "MeasurementReferences::DimensionOneUnit"
 	fqnAngularMeasureUnit = "ISQSpaceTime::AngularMeasureUnit"
 

@@ -11,12 +11,11 @@ import (
 // Reasons the domain library's calculations this runtime does not evaluate are
 // reported with, named per representation the runtime lacks.
 const (
-	noMeasurementRefValue = "a measurement reference is a library declaration, not a value the evaluator " +
-		"passes as an argument; write the quantity as `num [unit]`"
 	noTensorQuantity = "a tensor quantity has no representation: the runtime has no tensor value kind, " +
 		"and TensorCalculations gives its calculations no bodies to compute one by"
-	noCoordinateTransformation = "a coordinate transformation has no representation: a coordinate frame is a " +
-		"library declaration, not a value, and transform has no body applying origin and basisDirections"
+	noCoordinateTransformation = "a CoordinateTransformation has no representation: the runtime holds a scalar " +
+		"measurement reference but no coordinate frame with an origin and basisDirections, a vector quantity " +
+		"carries a unit per axis and no source frame, and transform has no body applying one"
 )
 
 // init registers the Quantities and Units domain library's calculation packages:
@@ -31,7 +30,7 @@ func init() {
 // registerQuantityCalculations registers QuantityCalculations over the quantity
 // representation; `sum` folds in the first element's unit, not the body's unvalued `zero`.
 func registerQuantityCalculations() {
-	registerUnevaluable("QuantityCalculations::[", []declaredParam{param("num"), param("mRef")}, noMeasurementRefValue)
+	registerValueFunction("QuantityCalculations::[", []string{"num", "mRef"}, 2, quantityOf)
 	registerValueFunction("QuantityCalculations::isZero", []string{"x"}, 1, quantityPredicate(0))
 	registerValueFunction("QuantityCalculations::isUnit", []string{"x"}, 1, quantityPredicate(1))
 	registerValueFunction("QuantityCalculations::abs", []string{"x"}, 1, quantityMagnitudeUnary(numericAbs))
@@ -58,19 +57,19 @@ func registerQuantityCalculations() {
 	registerValueFunction("QuantityCalculations::ToDimensionOneValue", []string{"x"}, 1, toDimensionOneValue)
 	registerValueFunction("QuantityCalculations::sum", []string{"collection"}, 0, quantityAggregate(ast.OpAdd))
 	registerValueFunction("QuantityCalculations::product", []string{"collection"}, 0, quantityAggregate(ast.OpMul))
-	registerUnevaluable("QuantityCalculations::ConvertQuantity", []declaredParam{param("x"), param("targetMRef")}, noMeasurementRefValue)
+	registerValueFunction("QuantityCalculations::ConvertQuantity", []string{"x", "targetMRef"}, 2, convertQuantity)
 }
 
-// registerMeasurementRefCalculations registers MeasurementRefCalculations, all
-// of which take a measurement reference as an argument.
+// registerMeasurementRefCalculations registers MeasurementRefCalculations over
+// the measurement reference value; the two over a CoordinateFrame are named.
 func registerMeasurementRefCalculations() {
-	registerUnevaluable("MeasurementRefCalculations::*", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::/", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::**", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::^", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame*", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame/", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::ToString", []declaredParam{param("x")}, noMeasurementRefValue)
+	registerValueFunction("MeasurementRefCalculations::*", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpMul))
+	registerValueFunction("MeasurementRefCalculations::/", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpDiv))
+	registerValueFunction("MeasurementRefCalculations::**", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
+	registerValueFunction("MeasurementRefCalculations::^", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
+	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame*", []declaredParam{param("x"), param("y")}, noCoordinateFrameValue)
+	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame/", []declaredParam{param("x"), param("y")}, noCoordinateFrameValue)
+	registerValueFunction("MeasurementRefCalculations::ToString", []string{"x"}, 1, measurementRefToString)
 }
 
 // anonymous is an `in : Type` parameter: it has no name and binds by position only.
@@ -81,7 +80,7 @@ const anonymous = ""
 // A parameter declared `in : Type` under a VectorFunctions general takes that
 // general's parameter name (KerML implicit redefinition); otherwise it is anonymous.
 func registerVectorCalculations() {
-	registerUnevaluable("VectorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noMeasurementRefValue)
+	registerUnevaluable("VectorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noVectorMeasurementRef)
 	registerValueFunction("VectorCalculations::isZeroVectorQuantity", []string{"v"}, 1, vectorIsZero)
 	registerValueFunction("VectorCalculations::isUnitVectorQuantity", []string{anonymous}, 1, vectorIsUnit)
 	registerValueFunction("VectorCalculations::+", []string{"v", "w"}, 2, vectorAdd)

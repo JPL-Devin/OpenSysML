@@ -46,6 +46,7 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 	}
 	want, ok := ec.model.DimensionOfType(declared)
 	if !ok {
+		ec.checkValueMeasurementRef(valueScope, declared, value)
 		return
 	}
 	for _, element := range valueElements(value) {
@@ -63,6 +64,22 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		}
 		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s",
 			describeDimension(got), describeDimension(want))
+	}
+}
+
+// checkValueMeasurementRef reports a unit composed by `*`, `/` or `**` bound to
+// a feature typed by a unit of another dimension — `m * s` to an AreaUnit — or
+// by a type no measurement reference is a value of.
+func (ec *exprChecker) checkValueMeasurementRef(scope *symbols.Scope, declared *symbols.Symbol, value ast.Node) {
+	for _, element := range valueElements(value) {
+		e, ok := element.(*ast.OperatorExpr)
+		if !ok {
+			continue
+		}
+		c, ok := ec.model.MeasurementRefExprConformance(scope, e, declared)
+		if ok && c.Known && !c.Holds {
+			ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s", c.Found, declared.Name)
+		}
 	}
 }
 

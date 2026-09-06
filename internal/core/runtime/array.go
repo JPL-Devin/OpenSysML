@@ -226,10 +226,9 @@ const (
 	scalarValueTypeFQN          = "ScalarValues::ScalarValue"
 )
 
-// structuredFeature reads a library feature of an array, vector or vector
-// quantity; the second result is false for another name. A sequence it answers
-// is charged to the element budget. A vector quantity's mRef is a measurement
-// reference, which has no value, so reading it is an error.
+// structuredFeature reads a library feature of an array, vector, vector
+// quantity, scalar quantity or measurement reference; the second result is
+// false for another name. A sequence it answers is charged to the element budget.
 func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, error) {
 	switch val.Kind {
 	case ValArray:
@@ -249,12 +248,14 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 	case ValVectorQuantity:
 		vq := val.VectorQuantity()
 		if name == vectorQuantityMRefFeature {
-			return Value{}, true, fmt.Errorf(
-				"%w: Quantities::VectorQuantityValue::mRef: %s",
-				ErrUnevaluableLibraryFunction, noMeasurementRefValue,
-			)
+			ref, err := vectorQuantityMRef(vq)
+			return ref, true, err
 		}
 		return ctx.oneDimensionalFeature(name, vq.Num, vectorQuantityAliases)
+	case ValQuantity:
+		return ctx.quantityFeature(val, name)
+	case ValMeasurementRef:
+		return ctx.measurementRefFeature(val, name)
 	}
 	return Value{}, false, nil
 }

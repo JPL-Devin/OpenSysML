@@ -329,6 +329,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
+	t.Run("measurement_reference_failure_modes", testMeasurementReferenceFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -1272,6 +1273,65 @@ func testQuantityWriteOfAnotherDimension(t *testing.T) {
 			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("ExecuteAction err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// testMeasurementReferenceFailureModes: a measurement reference the runtime
+// cannot honestly compute with is a typed error at the write or the call, never a
+// value: a unit of another dimension does not conform, a conversion between
+// dimensions is incommensurable, a number is not a reference, a reference is not
+// a number, and the frames and tensors the library declares have no value.
+func testMeasurementReferenceFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		declared string
+		value    string
+		want     error
+	}{
+		{"speed unit into a length unit", "ISQ::LengthUnit", "SI::m / SI::s", ErrTypeMismatch},
+		{"dimensionless unit into a length unit", "ISQ::LengthUnit", "MeasurementReferences::one", ErrTypeMismatch},
+		{"unit into a length value", "ISQ::LengthValue", "SI::m", ErrTypeMismatch},
+		{"composed unit of the same dimension", "ISQ::AreaUnit", "SI::m * SI::m", nil},
+		{"composed unit as a derived unit", "MeasurementReferences::DerivedUnit", "SI::km / SI::L", nil},
+		{"another scale of the same dimension", "ISQ::LengthUnit", "SI::km", nil},
+		{"incommensurable conversion", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], SI::s)", ErrIncommensurableUnits},
+		{"conversion to a number", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], 3)", ErrTypeMismatch},
+		{"reference scaled by a number", "ISQ::LengthUnit", "SI::m * 3", ErrTypeMismatch},
+		{"reference raised to a reference", "ISQ::LengthUnit", "SI::m ** SI::m", ErrTypeMismatch},
+		{"declaration member of a reference", "Quantities::QuantityDimension", "SI::m.quantityDimension", ErrUnevaluableLibraryFunction},
+		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrUnevaluableLibraryFunction},
+		{"coordinate transformation", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrUnevaluableLibraryFunction},
+		{"outer product", "Quantities::TensorQuantityValue", "VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+		{"tensor sum", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					part def Holder {
+						attribute value : %s = %s;
+					}
+				}
+			`, tc.declared, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+			if sym == nil {
+				t.Fatal("part def Holder not found")
+			}
+			inst, err := ctx.Instantiate(sym)
+			if err != nil {
+				t.Fatalf("Instantiate err = %v", err)
+			}
+			_, err = inst.GetFeatureValue(ctx, "value")
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("value err = %v, want the reference to be held", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("value err = %v, want %v", err, tc.want)
 			}
 		})
 	}

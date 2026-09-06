@@ -7,8 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// The wire Value has no Array or Vector arm, so a structured value crosses as
-// an unsupported null naming it, never as a sequence that has lost its shape.
+// The wire Value has no Array, Vector or measurement-reference arm, so such a
+// value crosses as an unsupported null naming it, never as a sequence that has lost its shape.
 func TestStructuredValuesCrossAsUnsupported(t *testing.T) {
 	real := func(f float64) semantics.Value {
 		return semantics.Value{Kind: semantics.ValReal, Real: f}
@@ -21,6 +21,7 @@ func TestStructuredValuesCrossAsUnsupported(t *testing.T) {
 	}{
 		{runtime.NewArrayValue([]int64{1, 2}, []runtime.Value{one, two}), "unsupported: array Array(1, 2)[1.0, 2.0]"},
 		{runtime.NewVectorValue([]semantics.Value{real(1), real(2)}), "unsupported: vector ⟨1.0, 2.0⟩"},
+		{runtime.NewMeasurementRefValue(semantics.Unit{Text: "m", Product: semantics.OpaqueUnitProduct("m", semantics.UnitTerm{Scale: semantics.UnitScale(1)})}), "unsupported: measurement reference m"},
 	}
 	for _, tc := range cases {
 		pv := ValueToProto(tc.val, nil)

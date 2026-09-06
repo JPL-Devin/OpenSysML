@@ -587,11 +587,55 @@ func (a *adoption) planValue(owner string, val Value) error {
 				return
 			}
 		}
+		for _, unit := range unitsOf(v) {
+			if err = a.planUnit(unit); err != nil {
+				return
+			}
+		}
 		if id, ok := carriedObject(v); ok {
 			err = a.planHeld(owner, id)
 		}
 	})
 	return err
+}
+
+// unitsOf is the measurement units a quantity or reference value names.
+func unitsOf(v Value) []Unit {
+	switch v.Kind {
+	case ValQuantity:
+		return []Unit{v.Quantity().Unit}
+	case ValMeasurementRef:
+		return []Unit{v.MeasurementRef().Unit}
+	case ValVectorQuantity:
+		return v.VectorQuantity().Units
+	}
+	return nil
+}
+
+// planUnit rebinds every unit declaration a unit product names.
+func (a *adoption) planUnit(unit Unit) error {
+	for _, power := range unit.Product.Powers {
+		if power.Unit == nil {
+			continue
+		}
+		if _, err := a.rebind(power.Unit, "the unit "+power.Name+" it is measured in"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rewriteUnit is the unit with every declaration it names rebound.
+func (a *adoption) rewriteUnit(unit Unit) Unit {
+	powers := make([]semantics.UnitPower, len(unit.Product.Powers))
+	for i, power := range unit.Product.Powers {
+		if found, ok := a.rebound[power.Unit]; ok {
+			power.Unit = found
+		}
+		powers[i] = power
+	}
+	unit.Product = semantics.UnitProduct{Powers: powers}
+	return unit
 }
 
 func (a *adoption) planHeld(owner string, id int64) error {
@@ -860,6 +904,19 @@ func (a *adoption) rewrite(val Value) Value {
 		out := NewArrayValue(arr.Dimensions, elements)
 		out.Array().Object = arr.Object
 		return out
+	case ValQuantity:
+		q := *val.Quantity()
+		q.Unit = a.rewriteUnit(q.Unit)
+		return NewQuantityValue(&q)
+	case ValMeasurementRef:
+		return NewMeasurementRefValue(a.rewriteUnit(val.MeasurementRef().Unit))
+	case ValVectorQuantity:
+		vq := val.VectorQuantity()
+		units := make([]Unit, len(vq.Units))
+		for i, unit := range vq.Units {
+			units[i] = a.rewriteUnit(unit)
+		}
+		return NewVectorQuantityValue(vq.Num, units)
 	default:
 		return val
 	}

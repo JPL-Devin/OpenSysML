@@ -293,6 +293,9 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		// The wire Value has no Array or Vector arm, so one is named unsupported
 		// rather than flattened into a sequence that loses its shape or unit.
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
+	case runtime.ValMeasurementRef:
+		// No wire arm names a unit by itself either; a quantity carries one, a bare reference cannot.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}

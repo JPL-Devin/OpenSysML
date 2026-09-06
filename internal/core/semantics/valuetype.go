@@ -586,6 +586,9 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		if e.Operator == ast.OpAdd && m.operandsConformTo(scope, e, m.libSymbol(fqnString)) {
 			return m.typeConformance(m.libSymbol(fqnString), want)
 		}
+		if c, ok := m.MeasurementRefExprConformance(scope, e, want); ok {
+			return c
+		}
 		if found, ok := m.nonArithmeticOperand(scope, e); ok {
 			return Conformance{Known: true, Found: fmt.Sprintf("`%s` over %s, which no arithmetic function takes", e.Operator, found)}
 		}
@@ -710,6 +713,76 @@ func (m *Model) QuantityConforms(unit UnitTerm, want *symbols.Symbol) Conformanc
 		return Conformance{Known: true, Holds: true, Found: found}
 	}
 	return Conformance{Known: true, Holds: got.Term.Commensurable(wantDim.Term), Found: found}
+}
+
+// MeasurementRefConforms judges a measurement reference against a declared type:
+// by the type it is declared with (typ, DerivedUnit for a composed unit), or
+// else by dimension when want is a unit definition fixing one, as `m*m` is an AreaUnit.
+func (m *Model) MeasurementRefConforms(typ *symbols.Symbol, unit UnitTerm, want *symbols.Symbol) Conformance {
+	if m == nil || typ == nil || want == nil {
+		return conformanceUnknown()
+	}
+	c := m.typeConformance(typ, want)
+	if !c.Known || c.Holds {
+		return c
+	}
+	c.Found = "a measurement reference typed " + c.Found
+	wantDim, ok := m.dimensionOf(want)
+	if !ok {
+		return c
+	}
+	got, ok := m.dimensionOfUnitTerm(unit)
+	if !ok {
+		return c
+	}
+	c.Found = "a measurement reference of dimension " + Dimension{Term: got}.String()
+	c.Holds = got.Commensurable(wantDim)
+	return c
+}
+
+// MeasurementRefExprConformance judges a product, quotient or power of measurement
+// units (`m * s`), the DerivedUnit such a composition is; false for any other expression.
+func (m *Model) MeasurementRefExprConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol) (Conformance, bool) {
+	if want == nil {
+		return conformanceUnknown(), false
+	}
+	unit, term, ok := m.measurementRefExpr(scope, e)
+	if !ok {
+		return conformanceUnknown(), false
+	}
+	return m.MeasurementRefConforms(unit, term, want), true
+}
+
+// MeasurementRefExprType is the type of a product, quotient or power of measurement
+// units: DerivedUnit, a unit of powers of other units; nil for any other expression.
+func (m *Model) MeasurementRefExprType(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.Symbol {
+	unit, _, ok := m.measurementRefExpr(scope, e)
+	if !ok {
+		return nil
+	}
+	return unit
+}
+
+// measurementRefExpr reduces `*`, `/` or `**` over measurement units to the unit it
+// composes, with the DerivedUnit type; false when e is not such an expression.
+func (m *Model) measurementRefExpr(scope *symbols.Scope, e *ast.OperatorExpr) (*symbols.Symbol, UnitTerm, bool) {
+	if m == nil || e == nil {
+		return nil, UnitTerm{}, false
+	}
+	switch e.Operator {
+	case ast.OpMul, ast.OpDiv, ast.OpPow:
+	default:
+		return nil, UnitTerm{}, false
+	}
+	unit := m.libSymbol(fqnDerivedUnit)
+	if unit == nil {
+		return nil, UnitTerm{}, false
+	}
+	term, err := m.UnitTermOfExpr(scope, e)
+	if err != nil {
+		return nil, UnitTerm{}, false
+	}
+	return unit, term, true
 }
 
 // incommensurableSum finds, in quantity arithmetic, a sum or difference of
