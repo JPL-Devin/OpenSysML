@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
@@ -222,6 +223,71 @@ func TestAnalysisObjectivesRedefineThroughPartialRestatement(t *testing.T) {
 	if got := m.AllRedefinedFeatures(deepOwned[1]); len(got) != 2 || got[0] != derivedOwned[1] || got[1] != widestMargin {
 		t.Errorf("AllRedefinedFeatures(Deep's second objective) = %v, want [Derived's second widestMargin]", got)
 	}
+}
+
+// Generals sharing an ancestor each present its objectives in full, whichever is
+// walked first: a sibling restating one position does not hide the rest.
+func TestAnalysisObjectivesSurviveDiamondPartialRestatement(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		requirement def Min { attribute a; }
+		requirement def Max { attribute b; }
+		analysis def Base {
+			objective cheapest : Min;
+			objective widestMargin : Max;
+		}
+		analysis def Left :> Base { objective :>> widestMargin; }
+		analysis def Right :> Base;
+		analysis def Derived :> Left, Right { objective; objective; }
+		analysis def Mirror :> Right, Left { objective; objective; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	cheapest := nested(t, base.Scope, "cheapest")
+	widestMargin := nested(t, base.Scope, "widestMargin")
+	minA := nested(t, nested(t, p.Scope, "Min").Scope, "a")
+	maxB := nested(t, nested(t, p.Scope, "Max").Scope, "b")
+	leftOwned, leftInherited := m.ObjectivesOf(nested(t, p.Scope, "Left"))
+	if len(leftOwned) != 1 || len(leftInherited) != 0 {
+		t.Fatalf("ObjectivesOf(Left) = %v, %v; want [<restated>], []", leftOwned, leftInherited)
+	}
+	restated := leftOwned[0]
+	for _, name := range []string{"Derived", "Mirror"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 2 || len(inherited) != 0 {
+			t.Fatalf("ObjectivesOf(%s) = %v, %v; want two owned, none inherited", name, owned, inherited)
+		}
+		if got := m.ImplicitRoleRedefinitions(owned[0]); len(got) != 2 || !containsAll(got, restated, cheapest) {
+			t.Errorf("ImplicitRoleRedefinitions(%s's first objective) = %v, want Left's restatement and cheapest", name, got)
+		}
+		if got, ok := m.LookupMember(owned[0], "a"); !ok || got != minA {
+			t.Errorf("LookupMember(%s's first objective, a) = %v, %v; want Min::a", name, got, ok)
+		}
+		if got := m.ImplicitRoleRedefinitions(owned[1]); len(got) != 1 || got[0] != widestMargin {
+			t.Errorf("ImplicitRoleRedefinitions(%s's second objective) = %v, want [widestMargin]", name, got)
+		}
+		if got, ok := m.LookupMember(owned[1], "b"); !ok || got != maxB {
+			t.Errorf("LookupMember(%s's second objective, b) = %v, %v; want Max::b", name, got, ok)
+		}
+		if _, ok := m.LookupMember(owned[1], "a"); ok {
+			t.Errorf("%s's second objective sees Min::a through the first position", name)
+		}
+	}
+}
+
+func containsAll(got []*symbols.Symbol, want ...*symbols.Symbol) bool {
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			if g == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // Only the first owned objective redefines, and it takes the first objective

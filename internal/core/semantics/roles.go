@@ -72,11 +72,13 @@ func (m *Model) positionalObjective(owner, sym *symbols.Symbol, inherited []*sym
 
 // effectiveObjectives lists sym's objectives by position: each general's, replaced by the
 // owned one redefining it by clause or position, then the owned ones redefining none.
+// seen is the path walked, so siblings sharing an ancestor each list it in full.
 func (m *Model) effectiveObjectives(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sym == nil || seen[sym] {
 		return nil
 	}
 	seen[sym] = true
+	defer delete(seen, sym)
 	owned := ownedRoles(sym, objectiveRole)
 	explicit := make([]map[*symbols.Symbol]bool, len(owned))
 	for i, o := range owned {
