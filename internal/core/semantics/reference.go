@@ -67,6 +67,9 @@ func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
 		}
 		return nil
 	}
+	if ref := ast.ConstraintReferenceOf(sym.Decl); ref != nil {
+		return ref
+	}
 	for _, rel := range RelationshipsOf(sym) {
 		if rel != nil && rel.Kind.ReferenceSubsets() && rel.Target != nil {
 			return rel.Target
