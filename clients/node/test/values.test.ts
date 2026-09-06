@@ -257,6 +257,18 @@ test("a vector quantity carries one quantity per component, each with its unit",
 
   assert.throws(() => decodeValue(vectorQuantity()), MalformedValueError);
   assert.throws(() => encodeValue({ kind: "vectorQuantity", components: [] }), MalformedValueError);
+
+  // A component without a magnitude is malformed, never read as zero;
+  // so is a lone quantity without one.
+  const noMagnitude = create(QuantitySchema, { unit: "m" });
+  assert.throws(
+    () => decodeValue(vectorQuantity(metres(3), noMagnitude)),
+    (error: unknown) => error instanceof MalformedValueError && /no magnitude/.test(error.message),
+  );
+  assert.throws(
+    () => decodeValue(create(ValueSchema, { kind: { case: "quantity", value: noMagnitude } })),
+    MalformedValueError,
+  );
 });
 
 test("encodeValue is the inverse of decodeValue, through the wire bytes", () => {

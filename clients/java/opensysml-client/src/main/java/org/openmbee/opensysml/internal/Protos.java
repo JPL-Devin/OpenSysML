@@ -129,12 +129,20 @@ public final class Protos {
    *
    * @param quantity the generated quantity
    * @return the immutable quantity
+   * @throws TransportException when the quantity carries no magnitude, which no number stands in for
    */
   public static Quantity quantity(org.openmbee.opensysml.proto.Quantity quantity) {
     Number magnitude =
-        quantity.getMagnitudeCase() == org.openmbee.opensysml.proto.Quantity.MagnitudeCase.INT_MAGNITUDE
-            ? Long.valueOf(quantity.getIntMagnitude())
-            : Double.valueOf(quantity.getRealMagnitude());
+        switch (quantity.getMagnitudeCase()) {
+          case INT_MAGNITUDE -> Long.valueOf(quantity.getIntMagnitude());
+          case REAL_MAGNITUDE -> Double.valueOf(quantity.getRealMagnitude());
+          case MAGNITUDE_NOT_SET ->
+              throw new TransportException(
+                  "the service answered a malformed quantity in ["
+                      + quantity.getUnit()
+                      + "]: it has no magnitude",
+                  null);
+        };
     Optional<Quantity.UnitTerm> reduction =
         quantity.hasUnitTerm() ? Optional.of(unitTerm(quantity.getUnitTerm())) : Optional.empty();
     return new Quantity(magnitude, present(quantity.getUnit()), reduction);

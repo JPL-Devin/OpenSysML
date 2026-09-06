@@ -108,7 +108,11 @@ func valueFromProto(value *pb.Value) Value {
 	case *pb.Value_Null:
 		return Null(kind.Null)
 	case *pb.Value_Quantity:
-		return quantityFromProto(kind.Quantity)
+		quantity, ok := quantityFromProto(kind.Quantity)
+		if !ok {
+			return Null("unsupported: quantity without a magnitude")
+		}
+		return quantity
 	case *pb.Value_EnumLiteral:
 		return EnumLiteral{
 			LiteralID:     kind.EnumLiteral.GetLiteralId(),
@@ -118,6 +122,9 @@ func valueFromProto(value *pb.Value) Value {
 	case *pb.Value_Unset:
 		return Unset{}
 	case *pb.Value_Array:
+		if err := sysmlgrpc.CheckArrayShape(kind.Array.GetDimensions(), len(kind.Array.GetElements())); err != nil {
+			return Null("unsupported: " + err.Error())
+		}
 		out := Array{
 			Dimensions: append([]int64(nil), kind.Array.GetDimensions()...),
 			Elements:   make([]Value, 0, len(kind.Array.GetElements())),
@@ -137,9 +144,16 @@ func valueFromProto(value *pb.Value) Value {
 		}
 		return out
 	case *pb.Value_VectorQuantity:
+		if len(kind.VectorQuantity.GetComponents()) == 0 {
+			return Null("unsupported: vector quantity without components")
+		}
 		out := make(VectorQuantity, 0, len(kind.VectorQuantity.GetComponents()))
 		for _, component := range kind.VectorQuantity.GetComponents() {
-			out = append(out, quantityFromProto(component))
+			quantity, ok := quantityFromProto(component)
+			if !ok {
+				return Null("unsupported: vector quantity with a component without a magnitude")
+			}
+			out = append(out, quantity)
 		}
 		return out
 	default:
@@ -268,13 +282,17 @@ func instancesFromProto(instances []*pb.Instance) []*Instance {
 	return out
 }
 
-func quantityFromProto(quantity *pb.Quantity) Quantity {
+// quantityFromProto is false for a quantity carrying no magnitude, which no
+// number stands in for.
+func quantityFromProto(quantity *pb.Quantity) (Quantity, bool) {
 	out := Quantity{Unit: quantity.GetUnit()}
 	switch magnitude := quantity.GetMagnitude().(type) {
 	case *pb.Quantity_IntMagnitude:
 		out.Magnitude = Int(magnitude.IntMagnitude)
 	case *pb.Quantity_RealMagnitude:
 		out.Magnitude = Real(magnitude.RealMagnitude)
+	default:
+		return Quantity{}, false
 	}
 	if term := quantity.GetUnitTerm(); term != nil {
 		converted := &UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
@@ -283,7 +301,7 @@ func quantityFromProto(quantity *pb.Quantity) Quantity {
 		}
 		out.Term = converted
 	}
-	return out
+	return out, true
 }
 
 func instanceFromProto(inst *pb.Instance) *Instance {

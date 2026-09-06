@@ -256,6 +256,22 @@ class ProtosTest {
   }
 
   @Test
+  void aQuantityWithoutAMagnitudeIsRefusedRatherThanReadAsZero() {
+    org.openmbee.opensysml.proto.Quantity noMagnitude =
+        org.openmbee.opensysml.proto.Quantity.newBuilder().setUnit("m").build();
+
+    TransportException component =
+        assertThrows(
+            TransportException.class,
+            () -> Protos.value(vectorQuantity(metres(3.0), noMagnitude)));
+    assertTrue(component.getMessage().contains("no magnitude"), component.getMessage());
+
+    org.openmbee.opensysml.proto.Value alone =
+        org.openmbee.opensysml.proto.Value.newBuilder().setQuantity(noMagnitude).build();
+    assertThrows(TransportException.class, () -> Protos.value(alone));
+  }
+
+  @Test
   void aStructuredValueSurvivesTheWireBytes() throws Exception {
     for (org.openmbee.opensysml.proto.Value value :
         List.of(

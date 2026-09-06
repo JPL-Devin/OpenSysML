@@ -529,19 +529,8 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 // rather than reading them under some other shape.
 func protoToArray(pa *pb.Array, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
 	dimensions := slices.Clone(pa.GetDimensions())
-	size := int64(1)
-	for i, d := range dimensions {
-		if d < 1 {
-			return runtime.Value{}, fmt.Errorf("%w: dimension %d is %d", ErrArrayDimensionNotPositive, i+1, d)
-		}
-		if size > math.MaxInt64/d {
-			return runtime.Value{}, fmt.Errorf("%w: flattenedSize of dimensions %v exceeds the Integer range", ErrArrayShapeMismatch, dimensions)
-		}
-		size *= d
-	}
-	if size != int64(len(pa.GetElements())) {
-		return runtime.Value{}, fmt.Errorf("%w: %d elements under dimensions %v (flattenedSize %d)",
-			ErrArrayShapeMismatch, len(pa.GetElements()), dimensions, size)
+	if err := CheckArrayShape(dimensions, len(pa.GetElements())); err != nil {
+		return runtime.Value{}, err
 	}
 	elements := make([]runtime.Value, 0, len(pa.GetElements()))
 	for _, elem := range pa.GetElements() {
@@ -552,6 +541,26 @@ func protoToArray(pa *pb.Array, idx *symbols.Index, sem *semantics.Model) (runti
 		elements = append(elements, val)
 	}
 	return runtime.NewArrayValue(dimensions, elements), nil
+}
+
+// CheckArrayShape reports whether count elements fill dimensions in row-major
+// order: every dimension positive and their product (one for rank 0) count.
+func CheckArrayShape(dimensions []int64, count int) error {
+	size := int64(1)
+	for i, d := range dimensions {
+		if d < 1 {
+			return fmt.Errorf("%w: dimension %d is %d", ErrArrayDimensionNotPositive, i+1, d)
+		}
+		if size > math.MaxInt64/d {
+			return fmt.Errorf("%w: flattenedSize of dimensions %v exceeds the Integer range", ErrArrayShapeMismatch, dimensions)
+		}
+		size *= d
+	}
+	if size != int64(count) {
+		return fmt.Errorf("%w: %d elements under dimensions %v (flattenedSize %d)",
+			ErrArrayShapeMismatch, count, dimensions, size)
+	}
+	return nil
 }
 
 // protoToVector rebuilds a vector from components that are each an Integer or

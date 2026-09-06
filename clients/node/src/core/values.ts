@@ -121,9 +121,10 @@ export type SysMLVerdict =
 /**
  * Decodes a `sysml.Value` into the union.
  *
- * @throws {MalformedValueError} for a structured value that contradicts itself:
- *   an array whose elements do not fill its dimensions, a vector with a
- *   component that is not a number, or a vector quantity with no components.
+ * @throws {MalformedValueError} for a value that contradicts itself: an array
+ *   whose elements do not fill its dimensions, a vector with a component that
+ *   is not a number, a vector quantity with no components, or a quantity
+ *   (alone or as a component) with no magnitude.
  */
 export function decodeValue(value: Value | undefined): SysMLValue {
   if (value === undefined) {
@@ -326,10 +327,17 @@ function formatComplex(value: ComplexValue): string {
 }
 
 function decodeQuantity(quantity: Quantity): QuantityValue {
-  const magnitude: Magnitude =
-    quantity.magnitude.case === "intMagnitude"
-      ? { kind: "int", value: quantity.magnitude.value }
-      : { kind: "real", value: quantity.magnitude.value ?? 0 };
+  let magnitude: Magnitude;
+  switch (quantity.magnitude.case) {
+    case "intMagnitude":
+      magnitude = { kind: "int", value: quantity.magnitude.value };
+      break;
+    case "realMagnitude":
+      magnitude = { kind: "real", value: quantity.magnitude.value };
+      break;
+    default:
+      throw new MalformedValueError(`a quantity in [${quantity.unit}] has no magnitude`);
+  }
   const unitTerm = quantity.unitTerm === undefined ? undefined : decodeUnitTerm(quantity.unitTerm);
   return {
     magnitude,
