@@ -2008,6 +2008,18 @@ the `@type` mapping and the comparison choices.
   `repl/classifier_behavior_test.go:TestObjectMachineRestartsOverAnUnrelatedDeclaration`,
   `:TestRestartedMachineRunsInTheNewContext`, `:TestRewritingTheExhibitedMachineDropsTheObject`).
   Tool-defined: the spec has no notion of re-analysing an edited model
+- a carried object is bound to the symbols the prompt resolves in, not the index's own for the
+  same declaration: the runtime keys its occurrences by symbol, and the prompt resolves
+  `Demo::holder` through the buffer's scope tree, so the carried object is what a feature chain
+  through the part reads on every surface — `%eval Demo::holder.n` answers the `5` an action
+  wrote and `%features` lists, `holder.cells.rank` reads the array behind the carried value, a
+  debugger still stepping writes to it, and `Demo::holder === Demo::holder` holds — while a
+  resubmission that changes the holder's declaration drops the object and every surface reports
+  the loss (`runtime/context.go` `RegisterScope`/`declaredSymbol`, `runtime/adopt.go`
+  `adoption.rebind`; `repl/session.go` `getOrCreateRuntime`;
+  `runtime/adopt_test.go:TestAdoptRebindsIntoTheScopeTreeTheCallerResolvesIn`,
+  `repl/carryover_eval_test.go`, `cmd/sysml/carryover_test.go`). Before this the object was
+  rebound to the index's symbol, so `%eval` materialized a fresh, unwritten occurrence beside it
 - the Kernel frame roots a Systems library member may restate — `Anything::self`,
   `Occurrence::timeSlices`, `incomingTransfers`, `outgoingTransfers` — are named in
   `runtime/library_frame.go` `frameRoots`, since the library marks them no differently from
