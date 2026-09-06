@@ -452,6 +452,7 @@ func (ctx *Context) ownEndpointValue(loc bindingLocation) (Value, bool, error) {
 			return Value{}, false, err
 		}
 	}
+	ctx.noteRead(fv)
 	val := fv.HeldValue()
 	return val, val.Kind != ValInvalid, nil
 }
@@ -767,6 +768,7 @@ func (ctx *Context) bindingLocationValue(loc bindingLocation, materialize bool) 
 	if fv.BindingDerived {
 		if ctx.CompositeTypeOf(fv.Feature) != nil {
 			if val := fv.HeldValue(); val.Kind != ValInvalid {
+				ctx.noteRead(fv)
 				return val, true, nil
 			}
 		}
@@ -787,6 +789,7 @@ func (ctx *Context) bindingLocationValue(loc bindingLocation, materialize bool) 
 			return Value{}, false, err
 		}
 	}
+	ctx.noteRead(fv)
 	if val := fv.HeldValue(); val.Kind != ValInvalid {
 		return val, true, nil
 	}
@@ -834,7 +837,13 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 			ErrBindingEnd, ctx.bindingEndpointText(binding, end), ctx.bindingEndpointText(binding, 1-end), endpoint.across())
 	}
 	loc := endpoint.locations[0]
-	return ctx.assignBindingValue(loc.instance, loc.instance.FeatureValues[loc.name], loc.name, val)
+	fv := loc.instance.FeatureValues[loc.name]
+	prior, had := ctx.priorValue(fv)
+	if err := ctx.assignBindingValue(loc.instance, fv, loc.name, val); err != nil {
+		return err
+	}
+	ctx.noteChanged(fv, prior, had)
+	return nil
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {

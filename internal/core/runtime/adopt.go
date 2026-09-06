@@ -674,10 +674,12 @@ func (a *adoption) commit() {
 			// stale against what that expression now reads.
 			if a.ctx.derivedFeatureValue(fv) {
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
+				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			if a.ctx.collectedFeatureValue(fv) {
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
+				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			// A connector reads the features the `connect` clause names, which are
@@ -688,6 +690,7 @@ func (a *adoption) commit() {
 					plan.obj.keepConnector(fv, id)
 				}
 				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
+				a.ctx.invalidateDependents(fv)
 				continue
 			}
 			fv.Value = a.rewrite(fv.Value)
@@ -759,7 +762,7 @@ func (a *adoption) restartBehaviors() ([]string, error) {
 	// A behavior writes the feature values of its own object and of the objects that
 	// one holds, so the whole carried closure forgets what the discarded run wrote.
 	for _, obj := range carried {
-		obj.forgetBehaviorWrites()
+		obj.forgetBehaviorWrites(a.ctx)
 	}
 	if err := a.ctx.restartClassifierBehaviors(objects); err != nil {
 		a.abandon()

@@ -201,6 +201,9 @@ type Context struct {
 	// the identities it keeps for connectors not yet materialized — run in reverse
 	// as each is undone; see noteProbeUndo.
 	journalUndos []func()
+	// deriving are the `=` values being derived, innermost last; every feature
+	// value read while one is records it as a dependent (see dependents.go).
+	deriving []*FeatureValue
 	// runBoundaries mark, innermost last, where in objectBehaviors and in
 	// pendingBehaviors the behaviors a change still to be kept or undone attached
 	// begin: the only ones a drain under it may run (see nextRunnableBehavior).

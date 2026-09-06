@@ -55,13 +55,14 @@ func (b *ObjectBehavior) Describe() string {
 
 // forgetBehaviorWrites drops what a run wrote, so a restarted behavior reads the
 // object's declared initial values instead of what the discarded run left.
-func (inst *Instance) forgetBehaviorWrites() {
+func (inst *Instance) forgetBehaviorWrites(ctx *Context) {
 	for _, fv := range inst.FeatureValues {
 		if !fv.Written {
 			continue
 		}
 		fv.Value, fv.Values = Value{}, Value{}
 		fv.Materialized, fv.Written = false, false
+		ctx.invalidateDependents(fv)
 	}
 }
 
@@ -334,6 +335,7 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 			}
 			fv.Value, fv.Values = Value{}, Value{}
 			fv.Materialized, fv.Written = false, false
+			ctx.invalidateDependents(fv)
 		}
 	}
 }
@@ -777,8 +779,10 @@ func (ctx *Context) performanceOccurrence(
 				sentinel, name, inst.ID, err)
 		}
 		ctx.noteProbeWrite(fv)
+		prior, had := ctx.priorValue(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
+		ctx.noteChanged(fv, prior, had)
 		return occurrence, nil
 	}
 	id, ok := fv.HeldValue().Object()
