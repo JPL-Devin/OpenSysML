@@ -433,7 +433,7 @@ type UnboundSubjectError struct {
 
 func (e *UnboundSubjectError) Error() string {
 	if e.Kind == "analysis" {
-		return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`) or pass the object as the first argument",
+		return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`) or run it on an object",
 			e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject)
 	}
 	return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`), check it on an object, or assert `satisfy %s by <element>`",

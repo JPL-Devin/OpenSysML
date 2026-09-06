@@ -146,9 +146,8 @@ type AnalysisArgs struct {
 	// subject binding, or the enclosing case's subject, to supply it.
 	Subject *Instance
 
-	// Positional bind the parameters the case does not bind itself, in
-	// declaration order; the subject first when the case binds none and no
-	// Subject is supplied.
+	// Positional bind the input parameters the case does not bind itself, in
+	// declaration order; the subject is never among them.
 	Positional []Value
 
 	// Named bind parameters by name.
@@ -281,8 +280,9 @@ func (ctx *Context) analysisRun(shape *calcShape, reader *EvalContext, args Anal
 
 // analysisArgs spells the run's arguments as bindings by parameter name: the
 // supplied subject binds the subject parameter, and positional arguments bind
-// the remaining parameters in declaration order — a subject the case binds
-// itself excepted, a defaulted input included, as a calc invocation binds them.
+// the inputs in declaration order — a defaulted one included, as a calc
+// invocation binds them; the subject is an object, so only Subject or a named
+// argument binds it.
 func (shape *calcShape) analysisArgs(args AnalysisArgs) (calcArgs, error) {
 	named := make(map[string]Value, len(args.Named)+len(args.Positional)+1)
 	for name, value := range args.Named {
@@ -302,7 +302,7 @@ func (shape *calcShape) analysisArgs(args AnalysisArgs) (calcArgs, error) {
 	open := make([]*calcParameter, 0, len(shape.Params))
 	for i := range shape.Params {
 		param := &shape.Params[i]
-		if _, bound := named[param.Name]; bound || (param.IsSubject && param.Default != nil) {
+		if _, bound := named[param.Name]; bound || param.IsSubject {
 			continue
 		}
 		open = append(open, param)

@@ -156,6 +156,66 @@ func TestRunCalc(t *testing.T) {
 	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall(3)"), 2, `parameter "g" has no argument`)
 }
 
+// analysisModel declares an analysis case run by TestRunAnalysis: a usage binding
+// its own subject, and a definition whose subject and inputs a run supplies.
+const analysisModel = `package An {
+    private import ScalarValues::*;
+    part def Ship { attribute cost : Real = 5.0; attribute other : Real = 7.0; }
+    calc def Sum { in a : Real; in b : Real; return : Real = a + b; }
+    analysis def Priced {
+        subject s : Ship;
+        in tax : Real;
+        in limit : Real default = 100.0;
+        objective { require constraint { total <= limit } }
+        out total : Real = Sum(s.cost, s.other) * (1.0 + tax);
+    }
+    part ship : Ship;
+    analysis shipCost : Priced { subject s = ship; in tax = 0.0; }
+    part def Holder { analysis inner : Priced { subject s = h; in tax = 0.0; } part h : Ship; }
+}`
+
+// TestRunAnalysis checks that an analysis case runs outside the prompt: from
+// its own bindings, on an object as its subject with arguments for its inputs,
+// as a feature of an object holding it; and that its objective's verdict is the
+// run's, while one that could not be run exits 2.
+func TestRunAnalysis(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::shipCost"), 0,
+		"✓ An::shipCost", "total = 12.0", "objective obj: satisfied")
+	wantReport(t, check(t, binary, analysisModel, "-instantiate", "An::ship", "-analysis", "An::Priced(0.5) An::ship"), 0,
+		`✓ An::Priced(0.5) on object #1 of "An::ship"`, "total = 18.0")
+	wantReport(t, check(t, binary, analysisModel, "-instantiate", "An::ship", "-analysis", "An::Priced(tax = 0.5, limit = 10.0) An::ship"), 1,
+		"✗ An::Priced(tax = 0.5, limit = 10.0)", "total = 18.0", "objective obj: not satisfied: total <= limit")
+	wantReport(t, check(t, binary, analysisModel, "-instantiate", "An::Holder", "-analysis", "An::Holder::inner"), 0,
+		"✓ An::Holder::inner", "total = 12.0")
+
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Priced(0.5)"), 2, "subject is unbound")
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Sum"), 2, "not an analysis case")
+	wantReport(t, check(t, binary, analysisModel, "-calc", "An::shipCost"), 2, "run it as an analysis case")
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::nosuch"), 2, "unresolved reference: An::nosuch")
+
+	// The JSON report carries each output and verdict as a named value.
+	got := check(t, binary, analysisModel, "-json", "-analysis", "An::shipCost")
+	var report struct {
+		Status string `json:"status"`
+		Checks []struct {
+			Values []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"values"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.output())
+	}
+	if report.Status != "holds" || len(report.Checks) != 1 || len(report.Checks[0].Values) != 2 ||
+		report.Checks[0].Values[0].Name != "total" || report.Checks[0].Values[0].Value != "12.0" ||
+		report.Checks[0].Values[1].Name != "objective obj" || report.Checks[0].Values[1].Value != "satisfied" {
+		t.Errorf("report does not carry the outputs and verdict:\n%s", got.stdout)
+	}
+}
+
 // TestRunAction checks that an action runs to completion outside the prompt and
 // reports the values it produced, and that a name that is not an action exits 2.
 func TestRunAction(t *testing.T) {

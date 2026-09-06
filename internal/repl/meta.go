@@ -157,6 +157,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object; an object is named, #<id>, or a path such as car.fl"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
+	{group: groupBehavioral, name: "%analysis", args: "<name>[(<args>)] [<object>]", desc: "run an analysis case and report its outputs and the verdict of its objective; arguments bind its inputs and an object is its subject"},
 	{group: groupBehavioral, name: cmdRunQuery, args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
 	{group: groupBehavioral, name: cmdRenderDocument, args: argName, desc: "compile a document definition, run its queries and print the rendered Markdown"},
 	{group: groupBehavioral, name: "%constraint", args: argName, desc: "evaluate a constraint definition"},
@@ -375,6 +376,11 @@ func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bo
 		}
 		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
 		return metaOut(s.doCalc(name, argText)), true
+	case "%analysis":
+		if len(fields) < 2 {
+			return metaOut([]string{analysisUsage}, false, nil), true
+		}
+		return metaOut(s.doAnalysis(strings.TrimPrefix(strings.TrimSpace(line), "%analysis"))), true
 	case cmdRunQuery:
 		if len(fields) < 2 {
 			return metaOut([]string{runQueryUsage}, false, nil), true
