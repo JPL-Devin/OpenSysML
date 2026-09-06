@@ -60,7 +60,8 @@ func wantFragments(t *testing.T, text string, fragments ...string) {
 }
 
 // An anonymous connector's own multiplicity is its declaration and is written
-// ahead of the ends, where the grammar reads it as the connector's.
+// ahead of the ends, where the grammar reads it as the connector's; the `[1]`s
+// of a `bind` shorthand are both end multiplicities and stay on their ends.
 func TestConnectorOwnMultiplicityPrecedesTheEnds(t *testing.T) {
 	src := `package S {
     part def D {
@@ -76,6 +77,51 @@ func TestConnectorOwnMultiplicityPrecedesTheEnds(t *testing.T) {
 	wantFragments(t, back,
 		"succession [n] first [0..1] a then [0..1] b;",
 		"bind [1] a = [1] b;")
+}
+
+// In SysML the `bind` shorthand declares nothing, so a binding whose own
+// bounds the graph states is written `binding [1] bind a = b`, never `bind [1]`,
+// which the parser reads as the first end's multiplicity.
+func TestSysMLBindingOwnMultiplicityTakesTheDeclaredForm(t *testing.T) {
+	src := `package S {
+    part def D {
+        part a;
+        part b;
+        binding [1] bind a = b;
+        binding bb [2] bind a = b;
+    }
+}
+`
+	back := notationFromTheGraphAlone(t, "s.sysml", src)
+	wantFragments(t, back, "binding [1] bind a = b;", "binding bb[2] bind a = b;")
+	// A graph from another tool may state the bounds on a `bind` and no verb.
+	turtle, err := export.Convert("s.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:endVerb"} {
+		turtle = withoutTriples(t, turtle, property)
+	}
+	// The anonymous binding is the first end-binding head; state it as a `bind`.
+	turtle = []byte(strings.Replace(string(turtle), `sysx:endForm "equals" ;`, "sysx:endForm \"equals\" ;\n    sysx:declaredKeyword \"bind\" ;", 1))
+	back2, err := export.Convert("s.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back from a `bind` with its own bounds: %v", err)
+	}
+	if strings.Contains(string(back2), "bind [") {
+		t.Errorf("`bind [n]` hands the bounds to the first end:\n%s", back2)
+	}
+	wantFragments(t, string(back2), "binding [1] bind a = b;", "binding bb[2] bind a = b;")
+	again, err := export.Convert("s.sysml", back2, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(again), "sysml:upperBound expr:"); n != 2 {
+		t.Errorf("want the two bindings to keep their own bounds, got %d\n%s", n, again)
+	}
+	if strings.Contains(string(again), "_pend0_pupperBound") {
+		t.Errorf("the bounds moved onto the first end\n%s", again)
+	}
 }
 
 // In KerML a leading `[1]` without `of`/`first` is the first end's cross
@@ -155,6 +201,9 @@ func TestGuardedSuccessionKeepsItsSyntax(t *testing.T) {
         transition first on if x == 3 then off;
         transition on if x == 4 then off;
         public succession U first off if x == 5 then on;
+        /* transition */ succession /* first */ V first /* first */ on if x == 6 then off;
+        transition // succession first
+            first off if x == 7 then on;
     }
 }
 `
@@ -165,16 +214,18 @@ func TestGuardedSuccessionKeepsItsSyntax(t *testing.T) {
 		"private transition T first off if x == 2 then on;",
 		"transition first on if x == 3 then off;",
 		"transition on if x == 4 then off;",
-		"public succession U first off if x == 5 then on;")
+		"public succession U first off if x == 5 then on;",
+		"succession V first on if x == 6 then off;",
+		"transition first off if x == 7 then on;")
 	turtle, err := export.Convert("d.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(turtle), `sysx:transitionSyntax "first"`); n != 5 {
-		t.Errorf("want 5 transitions recorded with `first`, got %d\n%s", n, turtle)
+	if n := strings.Count(string(turtle), `sysx:transitionSyntax "first"`); n != 7 {
+		t.Errorf("want 7 transitions recorded with `first`, got %d\n%s", n, turtle)
 	}
-	if n := strings.Count(string(turtle), `sysx:declaredKeyword "succession"`); n != 3 {
-		t.Errorf("want 3 successions recorded, got %d\n%s", n, turtle)
+	if n := strings.Count(string(turtle), `sysx:declaredKeyword "succession"`); n != 4 {
+		t.Errorf("want 4 successions recorded, got %d\n%s", n, turtle)
 	}
 }
 

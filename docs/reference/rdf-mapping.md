@@ -963,11 +963,13 @@ allocation) it is carried as `sysx:declaredKeyword`, as elsewhere.
 
 An anonymous connector's own multiplicity (`sysml:lowerBound`/`sysml:upperBound`
 on the connector, as against on an end node) is its declaration, and is written
-ahead of the ends: `succession [n] first a then b`, `bind [1] a = [1] b`. In KerML
-`binding [1] a = b` reads the leading `[1]` as the first end's multiplicity, so a
-connector multiplicity on a KerML `binding` or `succession` that recorded no
-`sysx:endVerb` is written with `of` or `first` (`binding [1] of a = b`), which the
-second hop then records as its verb.
+ahead of the ends: `succession [n] first a then b`, `binding [1] of a = b`. A
+declaration is always followed by the end verb, since `binding [1] a = b` reads
+the leading `[1]` as the first end's multiplicity in both notations: a `binding`
+or `succession` that declares something but recorded no `sysx:endVerb` is written
+with KerML `of`/`first` or SysML `bind`/`first`, which the second hop then records
+as its verb. SysML's `bind` shorthand declares nothing, so a `bind` whose graph
+states a multiplicity is written `binding [1] bind a = b`.
 
 **The form is only recorded when rebuilding from it reproduces the head's tokens.**
 The encoder writes the ends back from `sysx:endForm` and compares them with the

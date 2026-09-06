@@ -371,12 +371,14 @@ func (d *decoder) endWords(el *element, form string, declared bool) (string, err
 	}
 	verb, _ := d.stringOf(el, rdf.OpenSysML+xEndVerb)
 	if verb == "" && declared {
-		// `binding [1] a = b` reads `[1]` as the first end's (KerML.xtext
-		// BindingConnectorDeclaration); `of`/`first` keeps it the connector's.
-		switch form {
-		case formEquals:
+		// A declaration is followed by the verb (KerML.xtext BindingConnectorDeclaration,
+		// SysML.xtext BindingConnectorAsUsage); `binding [1] a = b` gives `[1]` to the end.
+		switch {
+		case form == formEquals && d.kerml(el):
 			verb = "of"
-		case formFirstThen:
+		case form == formEquals:
+			verb = "bind"
+		case form == formFirstThen:
 			verb = "first"
 		}
 	}

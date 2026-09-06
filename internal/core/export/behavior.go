@@ -506,7 +506,7 @@ func (e *encoder) transitionSyntax(n *ast.TransitionMember) string {
 		return "accept"
 	}
 	// The source is the node the AST places right after an optional `first`.
-	if e.introducer(n, n.Source) == "first" {
+	if head := words(e.before(n, n.Source)); len(head) > 0 && head[len(head)-1] == "first" {
 		return "first"
 	}
 	return "source"
@@ -518,7 +518,7 @@ func (e *encoder) transitionKeyword(subject rdf.Term, n *ast.TransitionMember) {
 	if n.Source == nil {
 		return
 	}
-	for _, word := range strings.Fields(e.before(n, n.Source)) {
+	for _, word := range words(e.before(n, n.Source)) {
 		switch word {
 		case "succession":
 			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(word))
