@@ -24,6 +24,7 @@
             "symbol_attributes",
             "unset_value",
             "complex_values",
+            "structured_values",
             "apply_edits",
             "strict_conformance",
             "feature_values",

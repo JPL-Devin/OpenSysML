@@ -1,15 +1,31 @@
 // Values, quantities and verdicts as discriminated unions: a caller switches on
 // `kind` and the compiler checks the switch is exhaustive.
 
+import { create } from "@bufbuild/protobuf";
 import type {
+  Array as ArrayMessage,
   EnumLiteral,
   Quantity,
   UnitTerm,
   Value,
+  Vector,
+  VectorQuantity,
   Verdict,
 } from "../generated/sysml_pb.js";
-import { FailureReason } from "../generated/sysml_pb.js";
-import type { FailureCause } from "./errors.js";
+import {
+  ArraySchema,
+  ComplexSchema,
+  EnumLiteralSchema,
+  FailureReason,
+  QuantitySchema,
+  UnitFactorSchema,
+  UnitTermSchema,
+  ValueSchema,
+  ValueSequenceSchema,
+  VectorQuantitySchema,
+  VectorSchema,
+} from "../generated/sysml_pb.js";
+import { MalformedValueError, type FailureCause } from "./errors.js";
 
 /** A quantity's magnitude: an integer or a real, never both. */
 export type Magnitude = { kind: "int"; value: bigint } | { kind: "real"; value: number };
@@ -40,9 +56,28 @@ export interface EnumValue {
   enumerationId: string;
 }
 
+/** A magnitude in a unit as written, with the unit's reduction when the service reports one. */
+export interface QuantityValue {
+  magnitude: Magnitude;
+  unit: string;
+  unitTerm?: UnitFactorization;
+}
+
+/**
+ * A multidimensional array: `dimensions` gives the extent of each dimension and
+ * `elements` the elements flattened row-major, the last dimension varying
+ * fastest. A rank-0 array holds one element; an element may itself be an array.
+ */
+export interface ArrayValue {
+  dimensions: bigint[];
+  elements: SysMLValue[];
+}
+
 /**
  * A value the service computed. `absent` is the case a service sent no value at
  * all for, which is distinct from `unset` — a feature that exists and has none.
+ * A `vector` is one value of numeric components, never a sequence of numbers,
+ * and a `vectorQuantity` carries one quantity per component, each with its own unit.
  */
 export type SysMLValue =
   | { kind: "int"; value: bigint }
@@ -52,8 +87,11 @@ export type SysMLValue =
   | { kind: "string"; value: string }
   | { kind: "instance"; id: bigint }
   | { kind: "sequence"; elements: SysMLValue[] }
-  | { kind: "quantity"; magnitude: Magnitude; unit: string; unitTerm?: UnitFactorization }
+  | ({ kind: "quantity" } & QuantityValue)
   | { kind: "enum"; value: EnumValue }
+  | ({ kind: "array" } & ArrayValue)
+  | { kind: "vector"; components: Magnitude[] }
+  | { kind: "vectorQuantity"; components: QuantityValue[] }
   | { kind: "null"; reason: string }
   | { kind: "unset" }
   | { kind: "absent" };
@@ -80,7 +118,13 @@ export type SysMLVerdict =
   | { kind: "fails"; subject: VerdictSubject; condition: string }
   | { kind: "undecided"; subject: VerdictSubject; error: string; cause: FailureCause };
 
-/** Decodes a `sysml.Value` into the union. */
+/**
+ * Decodes a `sysml.Value` into the union.
+ *
+ * @throws {MalformedValueError} for a structured value that contradicts itself:
+ *   an array whose elements do not fill its dimensions, a vector with a
+ *   component that is not a number, or a vector quantity with no components.
+ */
 export function decodeValue(value: Value | undefined): SysMLValue {
   if (value === undefined) {
     return { kind: "absent" };
@@ -102,15 +146,94 @@ export function decodeValue(value: Value | undefined): SysMLValue {
     case "sequence":
       return { kind: "sequence", elements: kind.value.elements.map(decodeValue) };
     case "quantity":
-      return decodeQuantity(kind.value);
+      return { kind: "quantity", ...decodeQuantity(kind.value) };
     case "enumLiteral":
       return { kind: "enum", value: decodeEnumLiteral(kind.value) };
+    case "array":
+      return { kind: "array", ...decodeArray(kind.value) };
+    case "vector":
+      return { kind: "vector", components: decodeVector(kind.value) };
+    case "vectorQuantity":
+      return { kind: "vectorQuantity", components: decodeVectorQuantity(kind.value) };
     case "null":
       return { kind: "null", reason: kind.value };
     case "unset":
       return { kind: "unset" };
     case undefined:
       return { kind: "absent" };
+  }
+}
+
+/**
+ * Encodes the union as the `sysml.Value` the service decodes: the inverse of
+ * {@link decodeValue} for every kind but `absent`, which is no value at all.
+ *
+ * @throws {MalformedValueError} for an `absent` value, or a structured value
+ *   the service would refuse (see {@link decodeValue}).
+ */
+export function encodeValue(value: SysMLValue): Value {
+  switch (value.kind) {
+    case "int":
+      return create(ValueSchema, { kind: { case: "intValue", value: value.value } });
+    case "real":
+      return create(ValueSchema, { kind: { case: "realValue", value: value.value } });
+    case "complex":
+      return create(ValueSchema, {
+        kind: { case: "complex", value: create(ComplexSchema, value.value) },
+      });
+    case "boolean":
+      return create(ValueSchema, { kind: { case: "boolValue", value: value.value } });
+    case "string":
+      return create(ValueSchema, { kind: { case: "stringValue", value: value.value } });
+    case "instance":
+      return create(ValueSchema, { kind: { case: "instanceId", value: value.id } });
+    case "sequence":
+      return create(ValueSchema, {
+        kind: {
+          case: "sequence",
+          value: create(ValueSequenceSchema, { elements: value.elements.map(encodeValue) }),
+        },
+      });
+    case "quantity":
+      return create(ValueSchema, { kind: { case: "quantity", value: encodeQuantity(value) } });
+    case "enum":
+      return create(ValueSchema, {
+        kind: { case: "enumLiteral", value: create(EnumLiteralSchema, value.value) },
+      });
+    case "array":
+      checkArrayShape(value.dimensions, value.elements.length);
+      return create(ValueSchema, {
+        kind: {
+          case: "array",
+          value: create(ArraySchema, {
+            dimensions: value.dimensions,
+            elements: value.elements.map(encodeValue),
+          }),
+        },
+      });
+    case "vector":
+      return create(ValueSchema, {
+        kind: {
+          case: "vector",
+          value: create(VectorSchema, { components: value.components.map(encodeMagnitude) }),
+        },
+      });
+    case "vectorQuantity":
+      if (value.components.length === 0) {
+        throw new MalformedValueError("a vector quantity has no components");
+      }
+      return create(ValueSchema, {
+        kind: {
+          case: "vectorQuantity",
+          value: create(VectorQuantitySchema, { components: value.components.map(encodeQuantity) }),
+        },
+      });
+    case "null":
+      return create(ValueSchema, { kind: { case: "null", value: value.reason } });
+    case "unset":
+      return create(ValueSchema, { kind: { case: "unset", value: true } });
+    case "absent":
+      throw new MalformedValueError("an absent value is no value at all, so it cannot be sent");
   }
 }
 
@@ -168,14 +291,17 @@ export function formatValue(value: SysMLValue): string {
     case "sequence":
       return `(${value.elements.map(formatValue).join(", ")})`;
     case "quantity": {
-      const magnitude =
-        value.magnitude.kind === "int"
-          ? value.magnitude.value.toString()
-          : formatReal(value.magnitude.value);
+      const magnitude = formatMagnitude(value.magnitude);
       return value.unit === "" ? magnitude : `${magnitude}[${value.unit}]`;
     }
     case "enum":
       return value.value.name;
+    case "array":
+      return `Array(${value.dimensions.join(", ")})[${value.elements.map(formatValue).join(", ")}]`;
+    case "vector":
+      return `⟨${value.components.map(formatMagnitude).join(", ")}⟩`;
+    case "vectorQuantity":
+      return `⟨${value.components.map((c) => formatValue({ kind: "quantity", ...c })).join(", ")}⟩`;
     case "null":
       return value.reason === "" ? "null" : `null (${value.reason})`;
     case "unset":
@@ -189,24 +315,95 @@ function formatReal(value: number): string {
   return Number.isInteger(value) ? value.toFixed(1) : value.toString();
 }
 
+function formatMagnitude(magnitude: Magnitude): string {
+  return magnitude.kind === "int" ? magnitude.value.toString() : formatReal(magnitude.value);
+}
+
 /** `1.5 - 2.0i`, as the REPL prints a Complex; the sign is the imaginary part's. */
 function formatComplex(value: ComplexValue): string {
   const sign = value.imaginary < 0 || Object.is(value.imaginary, -0) ? "-" : "+";
   return `${formatReal(value.real)} ${sign} ${formatReal(Math.abs(value.imaginary))}i`;
 }
 
-function decodeQuantity(quantity: Quantity): SysMLValue {
+function decodeQuantity(quantity: Quantity): QuantityValue {
   const magnitude: Magnitude =
     quantity.magnitude.case === "intMagnitude"
       ? { kind: "int", value: quantity.magnitude.value }
       : { kind: "real", value: quantity.magnitude.value ?? 0 };
   const unitTerm = quantity.unitTerm === undefined ? undefined : decodeUnitTerm(quantity.unitTerm);
   return {
-    kind: "quantity",
     magnitude,
     unit: quantity.unit,
     ...(unitTerm === undefined ? {} : { unitTerm }),
   };
+}
+
+function encodeQuantity(quantity: QuantityValue): Quantity {
+  return create(QuantitySchema, {
+    magnitude:
+      quantity.magnitude.kind === "int"
+        ? { case: "intMagnitude", value: quantity.magnitude.value }
+        : { case: "realMagnitude", value: quantity.magnitude.value },
+    unit: quantity.unit,
+    ...(quantity.unitTerm === undefined
+      ? {}
+      : {
+          unitTerm: create(UnitTermSchema, {
+            scaleNum: quantity.unitTerm.scaleNum,
+            scaleDen: quantity.unitTerm.scaleDen,
+            factors: quantity.unitTerm.factors.map((factor) => create(UnitFactorSchema, factor)),
+          }),
+        }),
+  });
+}
+
+function encodeMagnitude(magnitude: Magnitude): Value {
+  return magnitude.kind === "int"
+    ? create(ValueSchema, { kind: { case: "intValue", value: magnitude.value } })
+    : create(ValueSchema, { kind: { case: "realValue", value: magnitude.value } });
+}
+
+/** The flattened size the dimensions demand, refusing a dimension that is not positive. */
+function checkArrayShape(dimensions: bigint[], elementCount: number): void {
+  let size = 1n;
+  for (const extent of dimensions) {
+    if (extent <= 0n) {
+      throw new MalformedValueError(`an array dimension is ${extent.toString()}, not positive`);
+    }
+    size *= extent;
+  }
+  if (size !== BigInt(elementCount)) {
+    throw new MalformedValueError(
+      `an array of dimensions (${dimensions.join(", ")}) holds ${elementCount} element(s), want ${size.toString()}`,
+    );
+  }
+}
+
+function decodeArray(array: ArrayMessage): ArrayValue {
+  checkArrayShape(array.dimensions, array.elements.length);
+  return { dimensions: [...array.dimensions], elements: array.elements.map(decodeValue) };
+}
+
+function decodeVector(vector: Vector): Magnitude[] {
+  return vector.components.map((component) => {
+    switch (component.kind.case) {
+      case "intValue":
+        return { kind: "int", value: component.kind.value };
+      case "realValue":
+        return { kind: "real", value: component.kind.value };
+      default:
+        throw new MalformedValueError(
+          `a vector component is ${component.kind.case ?? "empty"}, not a number`,
+        );
+    }
+  });
+}
+
+function decodeVectorQuantity(vector: VectorQuantity): QuantityValue[] {
+  if (vector.components.length === 0) {
+    throw new MalformedValueError("a vector quantity has no components");
+  }
+  return vector.components.map(decodeQuantity);
 }
 
 function decodeUnitTerm(term: UnitTerm): UnitFactorization {

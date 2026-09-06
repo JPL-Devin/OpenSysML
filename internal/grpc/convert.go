@@ -289,10 +289,16 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	case runtime.ValComplex:
 		return &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(val.Complex())}}
-	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity:
-		// The wire Value has no Array or Vector arm, so one is named unsupported
-		// rather than flattened into a sequence that loses its shape or unit.
-		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
+	case runtime.ValArray:
+		return &pb.Value{Kind: &pb.Value_Array{Array: arrayToProto(rt, val.Array(), idx)}}
+	case runtime.ValVector:
+		return &pb.Value{Kind: &pb.Value_Vector{Vector: vectorToProto(val.Vector())}}
+	case runtime.ValVectorQuantity:
+		pvq := vectorQuantityToProto(val.VectorQuantity())
+		if pvq == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: vector quantity with a non-numeric component"}}
+		}
+		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: pvq}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -323,6 +329,39 @@ func ComplexToProto(z complex128) *pb.Complex {
 // message is zero, as every proto3 default is.
 func ProtoToComplex(pc *pb.Complex) complex128 {
 	return complex(pc.GetReal(), pc.GetImaginary())
+}
+
+// arrayToProto marshals an array as its dimensions and its row-major elements,
+// each converted as any value is.
+func arrayToProto(rt *runtime.Context, a *runtime.Array, idx *symbols.Index) *pb.Array {
+	pa := &pb.Array{Dimensions: slices.Clone(a.Dimensions)}
+	for _, elem := range a.Elements {
+		pa.Elements = append(pa.Elements, ValueToProtoIn(rt, elem, idx))
+	}
+	return pa
+}
+
+// vectorToProto marshals a vector's components, Integer and Real kept apart.
+func vectorToProto(v *runtime.Vector) *pb.Vector {
+	pv := &pb.Vector{}
+	for _, elem := range v.Elements {
+		pv.Components = append(pv.Components, ValueToProto(runtime.Value{Kind: runtime.ValConst, Const: elem}, nil))
+	}
+	return pv
+}
+
+// vectorQuantityToProto marshals a vector quantity as one Quantity per axis;
+// nil if a component's magnitude is not a number.
+func vectorQuantityToProto(vq *runtime.VectorQuantity) *pb.VectorQuantity {
+	pvq := &pb.VectorQuantity{}
+	for i := range vq.Num {
+		pq := QuantityToProto(&runtime.Quantity{Num: vq.Num[i], Unit: vq.Units[i]})
+		if pq == nil {
+			return nil
+		}
+		pvq.Components = append(pvq.Components, pq)
+	}
+	return pvq
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -383,22 +422,70 @@ var (
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
 	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
+
+	// ErrArrayDimensionNotPositive reports an array sent with a dimension of no
+	// extent, which Collections::Array declares as dimensions: Positive.
+	ErrArrayDimensionNotPositive = errors.New("array dimension is not positive")
+
+	// ErrArrayShapeMismatch reports an array whose elements do not fill its
+	// dimensions, so no row-major reading of them has that shape.
+	ErrArrayShapeMismatch = errors.New("array elements do not fill its dimensions")
+
+	// ErrVectorComponentNotNumeric reports a vector component sent as something
+	// other than an Integer or a Real, which a numerical vector has none of.
+	ErrVectorComponentNotNumeric = errors.New("vector component is not a number")
+
+	// ErrVectorQuantityEmpty reports a vector quantity of no components, whose
+	// num is Number[1..*].
+	ErrVectorQuantityEmpty = errors.New("vector quantity has no components")
 )
 
-// ValueCarriesComplex reports whether a value, or any element of a sequence,
-// is a Complex: the kind the complex_values capability governs.
+// ValueCarriesComplex reports whether a value, or any value nested in it, is a
+// Complex: the kind the complex_values capability governs.
 func ValueCarriesComplex(pv *pb.Value) bool {
-	switch k := pv.GetKind().(type) {
-	case *pb.Value_Complex:
+	return valueCarries(pv, func(v *pb.Value) bool {
+		_, ok := v.GetKind().(*pb.Value_Complex)
+		return ok
+	})
+}
+
+// ValueCarriesStructured reports whether a value, or any value nested in it, is
+// an Array, a Vector or a VectorQuantity: the kinds structured_values governs.
+func ValueCarriesStructured(pv *pb.Value) bool {
+	return valueCarries(pv, func(v *pb.Value) bool {
+		switch v.GetKind().(type) {
+		case *pb.Value_Array, *pb.Value_Vector, *pb.Value_VectorQuantity:
+			return true
+		}
+		return false
+	})
+}
+
+// valueCarries reports whether is holds of pv or of any value nested in it.
+func valueCarries(pv *pb.Value, is func(*pb.Value) bool) bool {
+	if is(pv) {
 		return true
-	case *pb.Value_Sequence:
-		for _, elem := range k.Sequence.GetElements() {
-			if ValueCarriesComplex(elem) {
-				return true
-			}
+	}
+	for _, nested := range nestedValues(pv) {
+		if valueCarries(nested, is) {
+			return true
 		}
 	}
 	return false
+}
+
+// nestedValues lists the Values a value holds directly: a sequence's elements,
+// an array's elements and a vector's components.
+func nestedValues(pv *pb.Value) []*pb.Value {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Sequence:
+		return k.Sequence.GetElements()
+	case *pb.Value_Array:
+		return k.Array.GetElements()
+	case *pb.Value_Vector:
+		return k.Vector.GetComponents()
+	}
+	return nil
 }
 
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
@@ -427,9 +514,92 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 			}
 		}
 		return runtime.NewSequenceValue(seq), nil
+	case *pb.Value_Array:
+		return protoToArray(k.Array, idx, sem)
+	case *pb.Value_Vector:
+		return protoToVector(k.Vector)
+	case *pb.Value_VectorQuantity:
+		return protoToVectorQuantity(k.VectorQuantity, idx, sem)
 	default:
 		return protoToScalar(pv), nil
 	}
+}
+
+// protoToArray rebuilds an array, refusing a shape its elements do not fill
+// rather than reading them under some other shape.
+func protoToArray(pa *pb.Array, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	dimensions := slices.Clone(pa.GetDimensions())
+	size := int64(1)
+	for i, d := range dimensions {
+		if d < 1 {
+			return runtime.Value{}, fmt.Errorf("%w: dimension %d is %d", ErrArrayDimensionNotPositive, i+1, d)
+		}
+		if size > math.MaxInt64/d {
+			return runtime.Value{}, fmt.Errorf("%w: flattenedSize of dimensions %v exceeds the Integer range", ErrArrayShapeMismatch, dimensions)
+		}
+		size *= d
+	}
+	if size != int64(len(pa.GetElements())) {
+		return runtime.Value{}, fmt.Errorf("%w: %d elements under dimensions %v (flattenedSize %d)",
+			ErrArrayShapeMismatch, len(pa.GetElements()), dimensions, size)
+	}
+	elements := make([]runtime.Value, 0, len(pa.GetElements()))
+	for _, elem := range pa.GetElements() {
+		val, err := ProtoToValueIn(elem, idx, sem)
+		if err != nil {
+			return runtime.Value{}, err
+		}
+		elements = append(elements, val)
+	}
+	return runtime.NewArrayValue(dimensions, elements), nil
+}
+
+// protoToVector rebuilds a vector from components that are each an Integer or
+// a Real, refusing any other arm rather than reading it as a number.
+func protoToVector(pv *pb.Vector) (runtime.Value, error) {
+	components := make([]semantics.Value, 0, len(pv.GetComponents()))
+	for i, comp := range pv.GetComponents() {
+		num, err := protoToNumber(comp)
+		if err != nil {
+			return runtime.Value{}, fmt.Errorf("%w: component %d", err, i+1)
+		}
+		components = append(components, num)
+	}
+	return runtime.NewVectorValue(components), nil
+}
+
+// protoToNumber is the Integer or Real a value holds; any other arm is an error.
+func protoToNumber(pv *pb.Value) (semantics.Value, error) {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_IntValue:
+		return semantics.Value{Kind: semantics.ValInt, Int: k.IntValue}, nil
+	case *pb.Value_RealValue:
+		return semantics.Value{Kind: semantics.ValReal, Real: k.RealValue}, nil
+	}
+	return semantics.Value{}, ErrVectorComponentNotNumeric
+}
+
+// protoToVectorQuantity rebuilds a vector quantity axis by axis, each
+// component read exactly as a scalar Quantity is.
+func protoToVectorQuantity(pvq *pb.VectorQuantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if len(pvq.GetComponents()) == 0 {
+		return runtime.Value{}, ErrVectorQuantityEmpty
+	}
+	num := make([]semantics.Value, 0, len(pvq.GetComponents()))
+	units := make([]runtime.Unit, 0, len(pvq.GetComponents()))
+	for i, comp := range pvq.GetComponents() {
+		if comp == nil {
+			return runtime.Value{}, fmt.Errorf("%w: component %d carries no quantity", ErrVectorComponentNotNumeric, i+1)
+		}
+		val, err := ProtoToQuantity(comp, idx, sem)
+		if err != nil {
+			return runtime.Value{}, fmt.Errorf("component %d: %w", i+1, err)
+		}
+		q := val.Quantity()
+		num = append(num, q.Num)
+		units = append(units, q.Unit)
+	}
+	return runtime.NewVectorQuantityValue(num, units), nil
 }
 
 // ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
@@ -915,13 +1085,11 @@ func instanceRefs(fv *pb.FeatureValue) []int64 {
 	var ids []int64
 	var collect func(*pb.Value)
 	collect = func(v *pb.Value) {
-		switch k := v.GetKind().(type) {
-		case *pb.Value_InstanceId:
+		if k, ok := v.GetKind().(*pb.Value_InstanceId); ok {
 			ids = append(ids, k.InstanceId)
-		case *pb.Value_Sequence:
-			for _, elem := range k.Sequence.GetElements() {
-				collect(elem)
-			}
+		}
+		for _, nested := range nestedValues(v) {
+			collect(nested)
 		}
 	}
 	if fv.Value != nil {

@@ -47,6 +47,86 @@
           "error"
         ]
       }
+    },
+    {
+      "id": "evaluate_calc/a_vector_argument_is_the_vector_the_calc_computes_with",
+      "description": "A vector sent as an argument reaches the calc as a vector, not as a sequence of reals, so norm sees its components.",
+      "rpc": "EvaluateCalc",
+      "requires_capabilities": [
+        "structured_values"
+      ],
+      "model": {
+        "fixture": "structured.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "S::length",
+        "arguments": [
+          {
+            "vector": {
+              "components": [
+                {
+                  "real_value": 3.0
+                },
+                {
+                  "real_value": 4.0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "real_value": 5.0
+          }
+        },
+        "absent": [
+          "error"
+        ]
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "structured_values"
+      }
+    },
+    {
+      "id": "evaluate_calc/a_malformed_vector_argument_is_refused",
+      "description": "A vector whose component is not a number cannot be a runtime vector, so the answer reports the malformed argument in band, as it does a quantity sent without its reduction.",
+      "rpc": "EvaluateCalc",
+      "requires_capabilities": [
+        "structured_values"
+      ],
+      "model": {
+        "fixture": "structured.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "S::length",
+        "arguments": [
+          {
+            "vector": {
+              "components": [
+                {
+                  "real_value": 3.0
+                },
+                {
+                  "string_value": "four"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "expect": {
+        "contains": {
+          "error": "not a number"
+        },
+        "absent": [
+          "result"
+        ]
+      }
     }
   ]
 }

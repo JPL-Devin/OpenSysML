@@ -728,7 +728,7 @@ pub struct AttributeInfo {
 /// Value represents a runtime-evaluable value
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Value {
-    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
+    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
     pub kind: ::core::option::Option<value::Kind>,
 }
 /// Nested message and enum types in `Value`.
@@ -763,7 +763,50 @@ pub mod value {
         /// one complex number, never two Reals
         #[prost(message, tag="11")]
         Complex(super::Complex),
+        /// shape and elements, never a flat sequence
+        #[prost(message, tag="12")]
+        Array(super::Array),
+        /// numeric components, never a sequence
+        #[prost(message, tag="13")]
+        Vector(super::Vector),
+        /// components each with their unit
+        #[prost(message, tag="14")]
+        VectorQuantity(super::VectorQuantity),
     }
+}
+/// Array is a Collections::Array: its dimensions and its elements flattened in
+/// row-major order (the last index varies fastest). Its rank is the number of
+/// dimensions and its flattened size their product, one for an array of rank 0;
+/// the elements number exactly that. Every dimension is positive. An element is
+/// any Value, so an array of quantities or of arrays crosses as such. An array
+/// is compared by content, so the object it may have been read from is not part
+/// of the value and does not cross.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Array {
+    #[prost(int64, repeated, tag="1")]
+    pub dimensions: ::prost::alloc::vec::Vec<i64>,
+    #[prost(message, repeated, tag="2")]
+    pub elements: ::prost::alloc::vec::Vec<Value>,
+}
+/// Vector is a VectorValues::NumericalVectorValue: its components in order, its
+/// dimension their number. Each component is a Value holding an int_value or a
+/// real_value, keeping Integer and Real apart as the rest of Value does; a
+/// component of any other arm is rejected rather than read as a number.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Vector {
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Value>,
+}
+/// VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
+/// each carrying its magnitude, the unit as written and that unit's reduction
+/// exactly as a scalar Quantity does. The axes are usually in one unit but need
+/// not be (`⟨1.0 \[m\], 2.0 \[rad\]⟩`), so the unit travels per component; a
+/// component whose named unit lacks its unit_term is rejected as a Quantity's
+/// is. A vector quantity has at least one component (its num is Number\[1..*\]).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VectorQuantity {
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Quantity>,
 }
 /// Complex is one complex number in rectangular form. It crosses as one value
 /// so `1.0 + 2.0i` cannot be mistaken for a sequence of two Reals.
@@ -906,6 +949,13 @@ pub struct ServerInfoResponse {
     ///                   action input or calc argument is accepted; without it,
     ///                   one is refused with UNIMPLEMENTED rather than read as
     ///                   another value.
+    ///    "structured_values" - a Value carries a Collections::Array, a numerical
+    ///                   vector and a vector quantity as array, vector and
+    ///                   vector_quantity, shape and units intact, rather than
+    ///                   reporting them as unsupported nulls, and one is accepted
+    ///                   as an action input or calc argument; without it, one is
+    ///                   refused with UNIMPLEMENTED rather than read as another
+    ///                   value.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
     ///    "document_query" - the RunDocumentQuery RPC runs a named document query

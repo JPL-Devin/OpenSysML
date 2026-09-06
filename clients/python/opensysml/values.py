@@ -1,7 +1,8 @@
 """Conversion between protobuf Value/FeatureValue messages and Python values."""
 
+import math
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from opensysml.enumeration import EnumLiteral
 from opensysml.errors import FeatureValueError, OpenSysMLError, UnsupportedValueError
@@ -341,6 +342,247 @@ class Quantity:
         return f"Quantity({self.magnitude!r}, {self.unit!r})"
 
 
+def _is_number(value: object) -> bool:
+    """Whether a value is an Integer or a Real as the wire keeps them apart: a bool is neither."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _number_to_pb(value: Magnitude) -> "sysml_pb2.Value":
+    return (
+        sysml_pb2.Value(int_value=value)
+        if isinstance(value, int)
+        else sysml_pb2.Value(real_value=value)
+    )
+
+
+def _format_number(value: Magnitude) -> str:
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+@dataclass(frozen=True)
+class Array:
+    """A multidimensional array: its shape and its elements in row-major order.
+
+    ``attribute grid : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3,
+    4, 5, 6); }`` is ``Array((2, 3), (1, 2, 3, 4, 5, 6))``. An element is any
+    value a feature can hold, an :class:`Array` or a :class:`Quantity` included;
+    ``elements`` holds them flattened as the model states them, with the last
+    dimension varying fastest, and :meth:`nested` unfolds them. A rank-0 array
+    holds exactly one element.
+
+    Attributes:
+        dimensions (tuple[int, ...]): Extent of each dimension, all positive
+        elements (tuple): The elements, row-major
+
+    Raises:
+        ValueError: If a dimension is not positive, or the elements do not fill
+            the dimensions exactly.
+    """
+
+    dimensions: Tuple[int, ...]
+    elements: Tuple[Any, ...]
+
+    def __init__(self, dimensions: Sequence[int], elements: Sequence[Any]) -> None:
+        dims = tuple(dimensions)
+        elems = tuple(elements)
+        for extent in dims:
+            if isinstance(extent, bool) or not isinstance(extent, int) or extent <= 0:
+                raise ValueError(f"array dimension {extent!r} is not a positive integer")
+        if len(elems) != math.prod(dims):
+            raise ValueError(
+                f"array of dimensions {dims} holds {len(elems)} element(s), "
+                f"want {math.prod(dims)}"
+            )
+        object.__setattr__(self, "dimensions", dims)
+        object.__setattr__(self, "elements", elems)
+
+    @property
+    def rank(self) -> int:
+        """Number of dimensions."""
+        return len(self.dimensions)
+
+    def __len__(self) -> int:
+        return len(self.elements)
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self.elements)
+
+    def __getitem__(self, index: Union[int, Tuple[int, ...]]) -> Any:
+        """The element at a row-major position, or at a full multi-index."""
+        if isinstance(index, tuple):
+            if len(index) != self.rank:
+                raise IndexError(
+                    f"index {index} has {len(index)} coordinate(s), array has rank {self.rank}"
+                )
+            flat = 0
+            for extent, coordinate in zip(self.dimensions, index):
+                if not 0 <= coordinate < extent:
+                    raise IndexError(f"index {index} is outside dimensions {self.dimensions}")
+                flat = flat * extent + coordinate
+            return self.elements[flat]
+        return self.elements[index]
+
+    def nested(self) -> Any:
+        """The elements as nested lists, one level per dimension; a rank-0 array is its element."""
+        def unfold(dims: Tuple[int, ...], flat: Sequence[Any]) -> Any:
+            if not dims:
+                return flat[0]
+            stride = len(flat) // dims[0]
+            return [unfold(dims[1:], flat[i * stride:(i + 1) * stride]) for i in range(dims[0])]
+
+        return unfold(self.dimensions, self.elements)
+
+    @classmethod
+    def from_pb(cls, pb_array, resolve_instance=None) -> "Array":
+        """Build from an ``Array`` protobuf message.
+
+        Raises:
+            UnsupportedValueError: If the message's shape and elements disagree,
+                or an element is one the service reported as unsupported.
+        """
+        try:
+            return cls(
+                tuple(pb_array.dimensions),
+                tuple(value_to_python(v, resolve_instance) for v in pb_array.elements),
+            )
+        except ValueError as exc:
+            raise UnsupportedValueError(f"malformed array: {exc}") from exc
+
+    def to_pb(self, encode: Callable[[Any], "sysml_pb2.Value"]) -> "sysml_pb2.Array":
+        """Encode as an ``Array`` message, each element through ``encode``."""
+        return sysml_pb2.Array(
+            dimensions=list(self.dimensions),
+            elements=[encode(element) for element in self.elements],
+        )
+
+    def __str__(self) -> str:
+        dims = ", ".join(str(d) for d in self.dimensions)
+        return f"Array({dims})[{', '.join(str(e) for e in self.elements)}]"
+
+
+@dataclass(frozen=True)
+class Vector:
+    """A vector of numbers, each an Integer or a Real as the model computed it.
+
+    ``VectorOf((3.0, 4.0))`` is ``Vector((3.0, 4.0))``. A component that is a
+    bool or not a number is refused, as the service refuses it.
+
+    Attributes:
+        components (tuple[int | float, ...]): The components, in order
+    """
+
+    components: Tuple[Magnitude, ...]
+
+    def __init__(self, components: Sequence[Magnitude]) -> None:
+        comps = tuple(components)
+        for component in comps:
+            if not _is_number(component):
+                raise ValueError(f"vector component {component!r} is not a number")
+        object.__setattr__(self, "components", comps)
+
+    def __len__(self) -> int:
+        return len(self.components)
+
+    def __iter__(self) -> Iterator[Magnitude]:
+        return iter(self.components)
+
+    def __getitem__(self, index: int) -> Magnitude:
+        return self.components[index]
+
+    @classmethod
+    def from_pb(cls, pb_vector) -> "Vector":
+        """Build from a ``Vector`` protobuf message.
+
+        Raises:
+            UnsupportedValueError: If a component is not an Integer or a Real.
+        """
+        components: List[Magnitude] = []
+        for pb_component in pb_vector.components:
+            kind = pb_component.WhichOneof("kind")
+            if kind == "int_value":
+                components.append(pb_component.int_value)
+            elif kind == "real_value":
+                components.append(pb_component.real_value)
+            else:
+                raise UnsupportedValueError(
+                    f"malformed vector: component is {kind or 'empty'}, not a number"
+                )
+        return cls(components)
+
+    def to_pb(self) -> "sysml_pb2.Vector":
+        """Encode as a ``Vector`` message, Integer and Real components kept apart."""
+        return sysml_pb2.Vector(components=[_number_to_pb(c) for c in self.components])
+
+    def __str__(self) -> str:
+        return "⟨" + ", ".join(_format_number(c) for c in self.components) + "⟩"
+
+
+@dataclass(frozen=True)
+class VectorQuantity:
+    """A vector whose components are quantities, each with its own unit.
+
+    ``VectorOf((3.0, 4.0)) [SI::m]`` is ``VectorQuantity((Quantity(3.0, m),
+    Quantity(4.0, m)))``; the units usually agree but need not — a position in
+    polar coordinates holds a metre and a radian. Each component carries the unit
+    as written and its reduction, as a :class:`Quantity` does.
+
+    Attributes:
+        components (tuple[Quantity, ...]): The components, at least one
+    """
+
+    components: Tuple[Quantity, ...]
+
+    def __init__(self, components: Sequence[Quantity]) -> None:
+        comps = tuple(components)
+        if not comps:
+            raise ValueError("vector quantity has no components")
+        for component in comps:
+            if not isinstance(component, Quantity):
+                raise ValueError(f"vector quantity component {component!r} is not a Quantity")
+        object.__setattr__(self, "components", comps)
+
+    def __len__(self) -> int:
+        return len(self.components)
+
+    def __iter__(self) -> Iterator[Quantity]:
+        return iter(self.components)
+
+    def __getitem__(self, index: int) -> Quantity:
+        return self.components[index]
+
+    @property
+    def unit(self) -> Optional[Unit]:
+        """The one unit every component shares, or ``None`` when they differ."""
+        units = {component.unit for component in self.components}
+        return next(iter(units)) if len(units) == 1 else None
+
+    def magnitudes(self) -> Vector:
+        """The magnitudes as a :class:`Vector`, each in its component's unit."""
+        return Vector([component.magnitude for component in self.components])
+
+    @classmethod
+    def from_pb(cls, pb_vector_quantity) -> "VectorQuantity":
+        """Build from a ``VectorQuantity`` protobuf message.
+
+        Raises:
+            UnsupportedValueError: If it has no components, or a component is a
+                quantity the client cannot read.
+        """
+        if not pb_vector_quantity.components:
+            raise UnsupportedValueError("malformed vector quantity: no components")
+        return cls([Quantity.from_pb(c) for c in pb_vector_quantity.components])
+
+    def to_pb(self) -> "sysml_pb2.VectorQuantity":
+        """Encode as a ``VectorQuantity`` message, one ``Quantity`` per component."""
+        return sysml_pb2.VectorQuantity(components=[c.to_pb() for c in self.components])
+
+    def __str__(self) -> str:
+        unit = self.unit
+        if unit is not None:
+            return f"{self.magnitudes()} [{unit}]"
+        return "⟨" + ", ".join(str(c) for c in self.components) + "⟩"
+
+
 class UnsetType:
     """A feature holding no value: a valueless feature of a value type.
 
@@ -378,11 +620,14 @@ def value_to_python(pb_value, resolve_instance=None):
 
     Returns:
         int, float, complex, bool, str, list, None, :data:`UNSET`, a
-        :class:`Quantity`, an :class:`~opensysml.enumeration.EnumLiteral`, or
-        the resolved instance object. A Complex is one ``complex``, never two floats.
+        :class:`Quantity`, an :class:`Array`, a :class:`Vector`, a
+        :class:`VectorQuantity`, an :class:`~opensysml.enumeration.EnumLiteral`,
+        or the resolved instance object. A Complex is one ``complex``, never two
+        floats; a Vector is one :class:`Vector`, never a list of numbers.
 
     Raises:
-        UnsupportedValueError: If the service reported the value as unsupported.
+        UnsupportedValueError: If the service reported the value as unsupported,
+            or sent a value arm this client predates.
     """
     kind = pb_value.WhichOneof('kind')
     if kind == 'int_value':
@@ -403,6 +648,12 @@ def value_to_python(pb_value, resolve_instance=None):
         return resolve_instance(pb_value.instance_id)
     if kind == 'sequence':
         return [value_to_python(v, resolve_instance) for v in pb_value.sequence.elements]
+    if kind == 'array':
+        return Array.from_pb(pb_value.array, resolve_instance)
+    if kind == 'vector':
+        return Vector.from_pb(pb_value.vector)
+    if kind == 'vector_quantity':
+        return VectorQuantity.from_pb(pb_value.vector_quantity)
     if kind == 'enum_literal':
         lit = pb_value.enum_literal
         return EnumLiteral(lit.literal_id, lit.enumeration_id, lit.name)
@@ -413,7 +664,8 @@ def value_to_python(pb_value, resolve_instance=None):
         if pb_value.null:
             raise UnsupportedValueError(pb_value.null)
         return None
-    return None
+    # A newer service's arm parses as an unknown field: no kind at all.
+    raise UnsupportedValueError("a value arm this client does not know")
 
 
 def feature_value_to_python(feature_name, pb_value_msg, resolve_instance=None):
