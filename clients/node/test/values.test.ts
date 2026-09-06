@@ -8,6 +8,7 @@ import {
   ComplexSchema,
   EnumLiteralSchema,
   FailureReason,
+  MeasurementRefSchema,
   QuantitySchema,
   UnitFactorSchema,
   UnitTermSchema,
@@ -271,6 +272,66 @@ test("a vector quantity carries one quantity per component, each with its unit",
   );
 });
 
+const unitTerm = (scaleNum: number, ...factors: [string, number][]) =>
+  create(UnitTermSchema, {
+    scaleNum,
+    scaleDen: 1,
+    factors: factors.map(([unitId, exponent]) => create(UnitFactorSchema, { unitId, exponent })),
+  });
+const measurementRef = (unit: string, unitId: string, term?: ReturnType<typeof unitTerm>) =>
+  create(ValueSchema, {
+    kind: {
+      case: "measurementRef",
+      value: create(MeasurementRefSchema, { unit, unitId, ...(term === undefined ? {} : { unitTerm: term }) }),
+    },
+  });
+
+test("a measurement reference keeps its unit, its reduction and the declaration it names", () => {
+  const km = decodeValue(measurementRef("km", "SI::kilometre", unitTerm(1000, ["SI::metre", 1])));
+  assert.deepEqual(km, {
+    kind: "measurementRef",
+    unit: "km",
+    unitTerm: { scaleNum: 1000, scaleDen: 1, factors: [{ unitId: "SI::metre", exponent: 1 }] },
+    unitId: "SI::kilometre",
+  });
+  assert.equal(formatValue(km), "km");
+
+  // A unit an operation composed names no declaration, and none is invented.
+  const speed = decodeValue(
+    measurementRef("m/s", "", unitTerm(1, ["SI::metre", 1], ["SI::second", -1])),
+  );
+  assert.equal(speed.kind, "measurementRef");
+  assert.equal(speed.unitId, undefined);
+  assert.deepEqual(
+    speed.unitTerm.factors.map((f) => f.exponent),
+    [1, -1],
+  );
+
+  // A reference the service never wrote down renders from its reduction.
+  const bare = decodeValue(
+    measurementRef("", "", unitTerm(1000, ["SI::metre", 1], ["SI::second", -1])),
+  );
+  assert.equal(formatValue(bare), "1000\u00b7SI::metre\u00b7SI::second^-1");
+
+  // Naming no unit, or a unit without its reduction, is malformed, at any depth.
+  assert.throws(
+    () => decodeValue(measurementRef("", "")),
+    (error: unknown) => error instanceof MalformedValueError && /names no unit/.test(error.message),
+  );
+  assert.throws(
+    () => decodeValue(measurementRef("km", "SI::kilometre")),
+    (error: unknown) =>
+      error instanceof MalformedValueError && /km has no reduction/.test(error.message),
+  );
+  const nested = create(ValueSchema, {
+    kind: {
+      case: "sequence",
+      value: create(ValueSequenceSchema, { elements: [measurementRef("km", "")] }),
+    },
+  });
+  assert.throws(() => decodeValue(nested), MalformedValueError);
+});
+
 test("encodeValue is the inverse of decodeValue, through the wire bytes", () => {
   const values: SysMLValue[] = [
     { kind: "int", value: 9007199254740993n },
@@ -281,6 +342,20 @@ test("encodeValue is the inverse of decodeValue, through the wire bytes", () => 
     { kind: "instance", id: 7n },
     { kind: "quantity", magnitude: { kind: "int", value: 3n }, unit: "m", unitTerm: METRE },
     { kind: "quantity", magnitude: { kind: "real", value: 2 }, unit: "" },
+    { kind: "measurementRef", unit: "m", unitTerm: METRE, unitId: "SI::metre" },
+    {
+      kind: "measurementRef",
+      unit: "m/s",
+      unitTerm: {
+        scaleNum: 1,
+        scaleDen: 1,
+        factors: [
+          { unitId: "SI::metre", exponent: 1 },
+          { unitId: "SI::second", exponent: -1 },
+        ],
+      },
+    },
+    { kind: "sequence", elements: [{ kind: "measurementRef", unit: "m", unitTerm: METRE, unitId: "SI::metre" }] },
     { kind: "enum", value: { name: "red", literalId: "P::Color::red", enumerationId: "P::Color" } },
     { kind: "null", reason: "" },
     { kind: "unset" },

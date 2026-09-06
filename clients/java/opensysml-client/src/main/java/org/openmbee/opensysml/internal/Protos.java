@@ -57,6 +57,7 @@ public final class Protos {
       case ARRAY -> Optional.of(array(value.getArray()));
       case VECTOR -> Optional.of(vector(value.getVector()));
       case VECTOR_QUANTITY -> Optional.of(vectorQuantity(value.getVectorQuantity()));
+      case MEASUREMENT_REF -> Optional.of(measurementRef(value.getMeasurementRef()));
       case KIND_NOT_SET -> Optional.empty();
     };
   }
@@ -102,6 +103,22 @@ public final class Protos {
       components.add(quantity(component));
     }
     return new Value.VectorQuantityValue(components);
+  }
+
+  private static Value measurementRef(org.openmbee.opensysml.proto.MeasurementRef ref) {
+    if (ref.getUnit().isEmpty() && ref.getUnitId().isEmpty() && !ref.hasUnitTerm()) {
+      throw new TransportException(
+          "the service answered a malformed measurement reference: it names no unit", null);
+    }
+    if (!ref.hasUnitTerm()) {
+      throw new TransportException(
+          "the service answered a malformed measurement reference "
+              + (ref.getUnit().isEmpty() ? ref.getUnitId() : ref.getUnit())
+              + ": it has no reduction to base units",
+          null);
+    }
+    return new Value.MeasurementRefValue(
+        ref.getUnit(), unitTerm(ref.getUnitTerm()), present(ref.getUnitId()));
   }
 
   private static Value sequence(org.openmbee.opensysml.proto.Value value) {

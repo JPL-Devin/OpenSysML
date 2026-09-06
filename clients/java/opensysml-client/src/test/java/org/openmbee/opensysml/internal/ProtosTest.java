@@ -13,6 +13,7 @@ import org.openmbee.opensysml.proto.Array;
 import org.openmbee.opensysml.proto.AttributeInfo;
 import org.openmbee.opensysml.proto.Complex;
 import org.openmbee.opensysml.proto.FeatureValue;
+import org.openmbee.opensysml.proto.MeasurementRef;
 import org.openmbee.opensysml.proto.SymbolInfo;
 import org.openmbee.opensysml.proto.UnitFactor;
 import org.openmbee.opensysml.proto.UnitTerm;
@@ -255,6 +256,75 @@ class ProtosTest {
     assertThrows(IllegalArgumentException.class, () -> new Value.VectorQuantityValue(List.of()));
   }
 
+  private static org.openmbee.opensysml.proto.Value measurementRef(MeasurementRef.Builder ref) {
+    return org.openmbee.opensysml.proto.Value.newBuilder().setMeasurementRef(ref).build();
+  }
+
+  private static UnitTerm.Builder unitTerm(double scale, UnitFactor.Builder... factors) {
+    UnitTerm.Builder term = UnitTerm.newBuilder().setScaleNum(scale).setScaleDen(1.0);
+    for (UnitFactor.Builder factor : factors) {
+      term.addFactors(factor);
+    }
+    return term;
+  }
+
+  private static UnitFactor.Builder factor(String unitId, double exponent) {
+    return UnitFactor.newBuilder().setUnitId(unitId).setExponent(exponent);
+  }
+
+  @Test
+  void aMeasurementReferenceReadsItsUnitItsReductionAndTheDeclarationItNames() {
+    Value.MeasurementRefValue km =
+        (Value.MeasurementRefValue)
+            Protos.value(
+                    measurementRef(
+                        MeasurementRef.newBuilder()
+                            .setUnit("km")
+                            .setUnitId("SI::kilometre")
+                            .setUnitTerm(unitTerm(1000.0, factor("SI::metre", 1.0)))))
+                .orElseThrow();
+    assertEquals("km", km.unit());
+    assertEquals(Optional.of("SI::kilometre"), km.unitId());
+    assertEquals(
+        new Quantity.UnitTerm(1000.0, 1.0, List.of(new Quantity.UnitFactor("SI::metre", 1.0))),
+        km.reduction());
+
+    // A unit an operation composed names no declaration, and none is invented for it.
+    Value.MeasurementRefValue speed =
+        (Value.MeasurementRefValue)
+            Protos.value(
+                    measurementRef(
+                        MeasurementRef.newBuilder()
+                            .setUnit("m/s")
+                            .setUnitTerm(
+                                unitTerm(1.0, factor("SI::metre", 1.0), factor("SI::second", -1.0)))))
+                .orElseThrow();
+    assertEquals(Optional.empty(), speed.unitId());
+    assertEquals(
+        List.of(
+            new Quantity.UnitFactor("SI::metre", 1.0), new Quantity.UnitFactor("SI::second", -1.0)),
+        speed.reduction().factors());
+
+    // Naming no unit, or a unit without its reduction, is malformed at any depth.
+    TransportException nothing =
+        assertThrows(
+            TransportException.class,
+            () -> Protos.value(measurementRef(MeasurementRef.newBuilder())));
+    assertTrue(nothing.getMessage().contains("names no unit"), nothing.getMessage());
+    TransportException unreduced =
+        assertThrows(
+            TransportException.class,
+            () -> Protos.value(measurementRef(MeasurementRef.newBuilder().setUnit("km"))));
+    assertTrue(unreduced.getMessage().contains("km: it has no reduction"), unreduced.getMessage());
+    org.openmbee.opensysml.proto.Value nested =
+        org.openmbee.opensysml.proto.Value.newBuilder()
+            .setSequence(
+                ValueSequence.newBuilder()
+                    .addElements(measurementRef(MeasurementRef.newBuilder().setUnitId("SI::kilometre"))))
+            .build();
+    assertThrows(TransportException.class, () -> Protos.value(nested));
+  }
+
   @Test
   void aQuantityWithoutAMagnitudeIsRefusedRatherThanReadAsZero() {
     org.openmbee.opensysml.proto.Quantity noMagnitude =
@@ -277,7 +347,12 @@ class ProtosTest {
         List.of(
             array(List.of(2L, 3L), integer(1), integer(2), integer(3), integer(4), integer(5), integer(6)),
             vector(real(3.0), integer(4)),
-            vectorQuantity(metres(3.0), metres(4.0)))) {
+            vectorQuantity(metres(3.0), metres(4.0)),
+            measurementRef(
+                MeasurementRef.newBuilder()
+                    .setUnit("km")
+                    .setUnitId("SI::kilometre")
+                    .setUnitTerm(unitTerm(1000.0, factor("SI::metre", 1.0)))))) {
       org.openmbee.opensysml.proto.Value again =
           org.openmbee.opensysml.proto.Value.parseFrom(value.toByteArray());
       assertEquals(Protos.value(value), Protos.value(again));

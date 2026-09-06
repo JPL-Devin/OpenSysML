@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import {
   CAPABILITY_COMPLEX_VALUES,
+  CAPABILITY_MEASUREMENT_REFS,
   CAPABILITY_QUERY,
   CAPABILITY_STRUCTURED_VALUES,
   ClosedConnectionError,
@@ -175,6 +176,45 @@ test("an array, a vector and a vector quantity arrive whole over gRPC, Connect p
     ]);
     assert.deepEqual(d.components.map((c) => c.unit), ["m", "m"]);
     assert.deepEqual(d.components[0]?.unitTerm?.factors, [{ unitId: "SI::metre", exponent: 1 }]);
+  }
+});
+
+const MEASUREMENT_REF_MODEL = `package M {
+    private import ScalarValues::*;
+    private import Quantities::*;
+    private import MeasurementReferences::*;
+    private import SI::*;
+    attribute q : ISQ::LengthValue = 3 [km];
+    attribute u : MeasurementUnit = m;
+    attribute speed = m / s;
+}`;
+
+test("a bare measurement reference arrives as a unit with its reduction and declaration", async () => {
+  for (const options of [{ protocol: "grpc" as const }, {}, { encoding: "json" as const }]) {
+    await using connection = await connect(options);
+    assert.ok((await connection.serverInfo()).has(CAPABILITY_MEASUREMENT_REFS));
+    await using model = await connection.loads(MEASUREMENT_REF_MODEL);
+
+    const metre = await model.eval("M::u");
+    assert.deepEqual(metre, {
+      kind: "measurementRef",
+      unit: "m",
+      unitTerm: { scaleNum: 1, scaleDen: 1, factors: [{ unitId: "SI::metre", exponent: 1 }] },
+      unitId: "SI::metre",
+    });
+    const km = await model.eval("M::q.mRef");
+    assert.ok(km.kind === "measurementRef");
+    assert.equal(km.unit, "km");
+    assert.equal(km.unitId, "SI::kilometre");
+    assert.equal(km.unitTerm.scaleNum, 1000);
+    assert.equal(formatValue(km), "km");
+    const speed = await model.eval("M::speed");
+    assert.ok(speed.kind === "measurementRef");
+    assert.equal(speed.unitId, undefined);
+    assert.deepEqual(speed.unitTerm.factors, [
+      { unitId: "SI::metre", exponent: 1 },
+      { unitId: "SI::second", exponent: -1 },
+    ]);
   }
 });
 

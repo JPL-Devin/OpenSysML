@@ -342,6 +342,64 @@ class Quantity:
         return f"Quantity({self.magnitude!r}, {self.unit!r})"
 
 
+@dataclass(frozen=True)
+class MeasurementRef:
+    """A measurement unit held as a value by itself, with no magnitude.
+
+    ``SI::m``, ``km``, or ``m / s`` as an operation composed it: what a
+    ``MeasurementUnit``-typed attribute or a quantity's ``mRef`` evaluates to,
+    and what ``ConvertQuantity`` takes as its target. It carries the unit as a
+    :class:`Quantity` does — text and reduction — plus the declaration it names.
+
+    Attributes:
+        unit (Unit): The unit as written and its reduction to base units
+        unit_id (str): FQN of the one unit declaration the reference names
+            (``SI::kilometre``); empty for a unit an operation composed, which
+            names none
+    """
+
+    unit: Unit
+    unit_id: str = ""
+
+    @classmethod
+    def from_pb(cls, pb_ref) -> "MeasurementRef":
+        """Build from a ``MeasurementRef`` protobuf message.
+
+        Raises:
+            UnsupportedValueError: If the message names no unit at all, or names
+                one without the reduction commensurability is decided over.
+        """
+        if not pb_ref.unit and not pb_ref.unit_id and not pb_ref.HasField('unit_term'):
+            raise UnsupportedValueError("measurement reference naming no unit")
+        if not pb_ref.HasField('unit_term'):
+            raise UnsupportedValueError(
+                f"measurement reference {pb_ref.unit or pb_ref.unit_id} "
+                f"carries no reduction to base units"
+            )
+        return cls(Unit.from_pb(pb_ref.unit, pb_ref.unit_term), pb_ref.unit_id)
+
+    def to_pb(self) -> "sysml_pb2.MeasurementRef":
+        """Encode as a ``MeasurementRef`` message, unit as written.
+
+        Raises:
+            UnsupportedValueError: If the unit is named without its reduction —
+                the service decides commensurability over the reduction and
+                rejects a unit sent without one.
+        """
+        if not self.unit.reduced:
+            raise UnsupportedValueError(
+                f"measurement reference {self.unit.text} carries no reduction to "
+                f"base units, so the service cannot tell what it measures: build it "
+                f"from a unit the service sent, or from one the model declares"
+            )
+        return sysml_pb2.MeasurementRef(
+            unit=self.unit.text, unit_term=self.unit.to_pb(), unit_id=self.unit_id
+        )
+
+    def __str__(self) -> str:
+        return str(self.unit)
+
+
 def _is_number(value: object) -> bool:
     """Whether a value is an Integer or a Real as the wire keeps them apart: a bool is neither."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
@@ -620,8 +678,9 @@ def value_to_python(pb_value, resolve_instance=None):
 
     Returns:
         int, float, complex, bool, str, list, None, :data:`UNSET`, a
-        :class:`Quantity`, an :class:`Array`, a :class:`Vector`, a
-        :class:`VectorQuantity`, an :class:`~opensysml.enumeration.EnumLiteral`,
+        :class:`Quantity`, a :class:`MeasurementRef`, an :class:`Array`, a
+        :class:`Vector`, a :class:`VectorQuantity`, an
+        :class:`~opensysml.enumeration.EnumLiteral`,
         or the resolved instance object. A Complex is one ``complex``, never two
         floats; a Vector is one :class:`Vector`, never a list of numbers.
 
@@ -642,6 +701,8 @@ def value_to_python(pb_value, resolve_instance=None):
         return pb_value.string_value
     if kind == 'quantity':
         return Quantity.from_pb(pb_value.quantity)
+    if kind == 'measurement_ref':
+        return MeasurementRef.from_pb(pb_value.measurement_ref)
     if kind == 'instance_id':
         if resolve_instance is None:
             return pb_value.instance_id
