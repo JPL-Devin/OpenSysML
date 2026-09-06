@@ -27,6 +27,7 @@ const (
 	fqnCollection                 = "Collections::Collection"
 	fqnMetaobject                 = "Metaobjects::Metaobject"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
+	fqnTensorQuantityValue        = "Quantities::TensorQuantityValue"
 )
 
 // Conformance is the outcome of judging an expression's value against a type.

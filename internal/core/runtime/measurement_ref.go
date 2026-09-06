@@ -203,14 +203,14 @@ const (
 	tensorCovariantOrder     = "covariantOrder"
 )
 
-// measurementRefFeature answers the Array/TensorMeasurementReference features a
-// scalar reference fixes; the declaration's other members are a typed error.
+// measurementRefFeature answers what a scalar reference fixes from the value; any other
+// member reads from the named declaration's object, a typed error for a composed unit.
 func (ctx *Context) measurementRefFeature(val Value, name string) (Value, bool, error) {
 	ref := val.MeasurementRef()
 	switch name {
 	case arrayDimensionsFeature:
 		return ctx.answerSequence(nil)
-	case arrayRankFeature:
+	case arrayRankFeature, tensorOrderFeature:
 		return integerValue(0), true, nil
 	case arrayFlattenedSizeFeature:
 		return integerValue(1), true, nil
@@ -221,7 +221,20 @@ func (ctx *Context) measurementRefFeature(val Value, name string) (Value, bool, 
 	case mRefOrthogonalFeature:
 		return boolValue(true), true, nil
 	}
-	if !ctx.measurementRefDeclares(ref, name) {
+	decl := ref.Declaration()
+	if decl == nil {
+		if !ctx.libraryTypeDeclares(derivedUnitFQN, name) {
+			return Value{}, false, nil
+		}
+		return Value{}, true, fmt.Errorf(
+			"%w: %s::%s: %s is a %s reducing to %s, which names no declaration whose member %s could be read",
+			ErrUnevaluableLibraryFunction, derivedUnitFQN, name, ref, derivedUnitFQN, ref.Unit.Term, name,
+		)
+	}
+	if member, ok, err := ctx.declarationMember(decl, name); ok || err != nil {
+		return member, ok, err
+	}
+	if _, ok := ctx.model.LookupMember(decl, name); !ok {
 		return Value{}, false, nil
 	}
 	return Value{}, true, fmt.Errorf(
@@ -230,16 +243,43 @@ func (ctx *Context) measurementRefFeature(val Value, name string) (Value, bool, 
 	)
 }
 
-// measurementRefDeclares reports whether name is a member of the reference's
-// declaration or of every scalar measurement reference.
-func (ctx *Context) measurementRefDeclares(ref *MeasurementRef, name string) bool {
-	if decl := ref.Declaration(); decl != nil {
-		if _, ok := ctx.model.LookupMember(decl, name); ok {
-			return true
-		}
-	}
-	typ, err := ctx.loadedLibraryType(scalarMRefTypeFQN)
+// declarationMember reads a member of the object a declaration materializes as,
+// the one its occurrence is. Reports whether the object carries the member.
+func (ctx *Context) declarationMember(decl *symbols.Symbol, name string) (Value, bool, error) {
+	inst, err := ctx.occurrenceOf(decl)
 	if err != nil {
+		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(decl), err)
+	}
+	if _, ok := inst.FeatureValues[name]; !ok {
+		return Value{}, false, nil
+	}
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		return Value{}, true, err
+	}
+	member, err := ctx.readFeatureValue(fv, name)
+	return member, true, err
+}
+
+// unitObjectValue is the reference a unit declaration's object reads as: the object
+// holds the declaration's members, the reference is what the declaration names.
+func (ctx *Context) unitObjectValue(inst *Instance) (Value, bool, error) {
+	if !ctx.declaresUnit(inst.Type) {
+		return Value{}, false, nil
+	}
+	return ctx.MeasurementUnitValue(inst.Type)
+}
+
+// declaresUnit reports whether sym declares a measurement unit: a usage typed by a
+// unit definition (`attribute <m> metre : LengthUnit`), which a reference names.
+func (ctx *Context) declaresUnit(sym *symbols.Symbol) bool {
+	return sym != nil && sym.Kind == symbols.SymbolAttributeUsage && ctx.model != nil && ctx.model.IsMeasurementUnit(sym)
+}
+
+// libraryTypeDeclares reports whether the loaded library type has a member name.
+func (ctx *Context) libraryTypeDeclares(fqn, name string) bool {
+	typ := ctx.librarySymbol(fqn)
+	if typ == nil {
 		return false
 	}
 	_, ok := ctx.model.LookupMember(typ, name)
