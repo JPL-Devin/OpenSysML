@@ -144,6 +144,19 @@ func TestRelationshipMemberInverseAndFeaturingEnds(t *testing.T) {
 	})
 }
 
+// A named multiplicity is a Feature and so a Type: it may stand at any Type or
+// Feature end, keyword-first or in a declaration clause, but not as a Classifier.
+func TestRelationshipMemberNamedMultiplicityIsAType(t *testing.T) {
+	checkRelationshipEndCases(t, []relationshipEndCase{
+		{"keyword-first type ends", "multiplicity M [1..2]; class B; feature f; " +
+			"subtype M :> B; disjoint M from B; conjugate M ~ B; typing f : M; featuring f by M;", nil},
+		{"keyword-first feature ends", "multiplicity M [1..2]; feature f; subset M :> f; inverse f of M;", nil},
+		{"declaration typing", "multiplicity M [1..2]; feature g : M;", nil},
+		{"not a classifier", "multiplicity M [1..2]; class B; subclassifier M :> B;",
+			[]string{"subclassifier source must be a classifier, found multiplicity"}},
+	})
+}
+
 // An end that resolves through an alias is judged by what the alias names.
 func TestRelationshipMemberEndThroughAlias(t *testing.T) {
 	checkRelationshipEndCases(t, []relationshipEndCase{

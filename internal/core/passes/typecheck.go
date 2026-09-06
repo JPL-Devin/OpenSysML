@@ -1005,10 +1005,13 @@ func isUsageKind(k symbols.SymbolKind) bool {
 }
 
 // typeSymbolKinds is the set of SymbolKinds that classify a Type: every
-// definition and usage kind, plus a KerML type declaration. Enumerated rather
-// than derived by negation so a kind added later is rejected until classified.
+// definition and usage kind, a KerML type declaration, and a named multiplicity,
+// which is a Feature. Enumerated so a kind added later is rejected until classified.
 var typeSymbolKinds = func() map[symbols.SymbolKind]bool {
-	m := map[symbols.SymbolKind]bool{symbols.SymbolKerMLType: true}
+	m := map[symbols.SymbolKind]bool{
+		symbols.SymbolKerMLType:    true,
+		symbols.SymbolMultiplicity: true,
+	}
 	for k := range defSymbolKinds {
 		m[k] = true
 	}
