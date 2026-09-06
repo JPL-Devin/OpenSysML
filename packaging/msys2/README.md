@@ -3,7 +3,7 @@
 `PKGBUILD` is the maintained source of a mingw-w64 style
 [MSYS2](https://www.msys2.org/) package, `mingw-w64-opensysml`, modelled on the Go packages in
 [msys2/MINGW-packages](https://github.com/msys2/MINGW-packages) (`mingw-w64-hugo`,
-`mingw-w64-gh`). It carries `__VERSION__` / `__TAGVER__` / `__SHA256_SOURCE__` placeholders (`pkgver` is the tag without `v` and without the pre-release hyphen, `v0.6.0-rc1` → `0.6.0rc1`, which `vercmp` orders before `0.6.0`; `_tagver` keeps `0.6.0-rc1` for the source URL) and is **not
+`mingw-w64-gh`). It carries `__VERSION__` / `__TAGVER__` / `__SHA256_SOURCE__` placeholders (`pkgver` is the tag without `v` and without the pre-release hyphen, `v0.6.0-rc1` → `0.6.0rc1`, which `vercmp` orders before `0.6.0`; `_tagver` keeps `0.6.0-rc1` for the source URL; the renderer only accepts `vX.Y.Z` or `vX.Y.Z-(alpha|beta|rc)N` tags) and is **not
 buildable as-is**; `scripts/render-msys2-pkgbuild.sh` substitutes them, following the same
 convention as [packaging/homebrew](../homebrew/README.md).
 
