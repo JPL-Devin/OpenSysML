@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -21,9 +22,12 @@ const emptyAggregateModel = `
 		public import SequenceFunctions::size;
 		part def Part {
 			attribute mass : MassValue;
+			attribute spares : MassValue[*];
 		}
 		part def Rig {
 			attribute masses : MassValue[*];
+			attribute heavy : MassValue[*] = (1 [kg], 2 [kg]);
+			part crew : Part[2];
 			attribute lengths : LengthValue[*];
 			attribute forces : ForceValue[*];
 			attribute speeds : SpeedValue[*];
@@ -38,6 +42,7 @@ const emptyAggregateModel = `
 			attribute area : AreaValue = sum(lengths->collect{in l : LengthValue; l * l});
 			attribute mapped : MassValue = sum(parts.{in p : Part; p.mass});
 			attribute mappedTotal : MassValue = mass + parts->collect{in p : Part; p.mass}->sum();
+			attribute spares : MassValue = sum(crew->collect{in p : Part; p.spares});
 		}
 		part rig : Rig;
 	}
@@ -107,6 +112,97 @@ func TestEmptyQuantityAggregateKeepsTheDeclaredKind(t *testing.T) {
 				t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
 			}
 		})
+	}
+}
+
+// TestEmptiedQuantityCollectionKeepsItsKind: a collection operation that leaves
+// none of a nonempty quantity collection's elements, or maps each to nothing,
+// keeps their kind, so its sum is still a zero of that kind.
+func TestEmptiedQuantityCollectionKeepsItsKind(t *testing.T) {
+	ctx, scope := emptyAggregateContext(t)
+
+	cases := []struct{ src, want string }{
+		{"rig.heavy->select{in m; m > 5 [kg]}->sum()", "0 [kg]"},
+		{"rig.heavy->reject{in m; m < 5 [kg]}->sum()", "0 [kg]"},
+		{"rig.mass + rig.heavy->select{in m; m > 5 [kg]}->sum()", "10 [kg]"},
+		{"sum(SequenceFunctions::excluding(rig.heavy, rig.heavy))", "0 [kg]"},
+		{"sum(SequenceFunctions::intersection(rig.heavy, rig.masses))", "0 [kg]"},
+		{"sum(SequenceFunctions::subsequence(rig.heavy, 3))", "0 [kg]"},
+		{"sum(SequenceFunctions::excludingAt(rig.heavy, 1, 2))", "0 [kg]"},
+		{"sum(SequenceFunctions::tail(SequenceFunctions::tail(rig.heavy)))", "0 [kg]"},
+		{"sum(SequenceFunctions::union(rig.masses, rig.masses))", "0 [kg]"},
+		{"sum(SequenceFunctions::including(rig.masses, rig.masses))", "0 [kg]"},
+		{"size(rig.crew)", "2"},
+		{"sum(rig.crew->collect{in p : Part; p.spares})", "0 [kg]"},
+		{"sum(rig.crew->collect{in p; p.spares})", "0 [kg]"},
+		{"rig.spares", "0 [kg]"},
+		{"sum(rig.crew.spares)", "0 [kg]"},
+		{"sum(rig.crew#(1).spares)", "0 [kg]"},
+		{"rig.heavy->select{in m; m > 5 [kg]}->size()", "0"},
+		{"product(rig.heavy->select{in m; m > 5 [kg]})", "1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if rendered := FormatValue(got); rendered != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
+			}
+		})
+	}
+}
+
+// TestAdoptKeepsTheKindOfAWrittenEmptyQuantityCollection: an empty quantity
+// collection written to an object is carried into a re-analysis with its kind,
+// so a sum over it there is still a zero of that kind.
+func TestAdoptKeepsTheKindOfAWrittenEmptyQuantityCollection(t *testing.T) {
+	prev, scope := emptyAggregateContext(t)
+	prev.RegisterSource(source.New("<test>", []byte(emptyAggregateModel)))
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "test::Rig"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	emptied, err := evalIn(t, prev, scope, "rig.heavy->select{in m; m > 5 [kg]}")
+	if err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	if _, ok := emptied.Sequence().ElementUnit(); !ok {
+		t.Fatalf("select yielded %s without an element unit", FormatValue(emptied))
+	}
+	if err := obj.SetFeatureValue(prev, "masses", emptied); err != nil {
+		t.Fatalf("SetFeatureValue(masses): %v", err)
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx, scope := emptyAggregateContext(t)
+	ctx.RegisterSource(source.New("<test>", []byte(emptyAggregateModel)))
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	fv, err := obj.GetFeatureValue(ctx, "masses")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(masses): %v", err)
+	}
+	if !fv.Written {
+		t.Fatal("the written collection was not carried")
+	}
+	if unit, ok := fv.Values.Sequence().ElementUnit(); !ok || unit.Text != "kg" {
+		t.Fatalf("carried masses = %s with element unit %v, %v; want kg, true", FormatValue(fv.Values), unit, ok)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"sum(masses)", "0 [kg]"},
+		{"mass + sum(masses)", "10 [kg]"},
+	} {
+		p := parseExpr(t, tc.src)
+		got, err := ctx.EvalWithScopeOn(p, scope, obj)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		if rendered := FormatValue(got); rendered != tc.want {
+			t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
+		}
 	}
 }
 

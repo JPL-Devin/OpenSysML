@@ -126,6 +126,33 @@ func (ctx *Context) newSequence(elements []Value) (Value, error) {
 	return sequenceOf(elements), nil
 }
 
+// sequenceFrom is the sequence of kept drawn from sources: empty, it keeps the
+// unit the sources' elements measure in, so an aggregate of it keeps their kind.
+func (ec *EvalContext) sequenceFrom(kept []Value, sources ...Value) (Value, error) {
+	if len(kept) == 0 {
+		if unit, ok := elementUnitOf(sources...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
+	}
+	return ec.newSequence(kept)
+}
+
+// elementUnitOf is the unit the first source with one measures its elements in:
+// the unit an empty sequence declares, or that of a quantity it holds.
+func elementUnitOf(sources ...Value) (Unit, bool) {
+	for _, source := range sources {
+		if unit, ok := source.Sequence().ElementUnit(); ok {
+			return unit, true
+		}
+		for _, elem := range elementsOf(source) {
+			if q := elem.Quantity(); q != nil {
+				return q.Unit, true
+			}
+		}
+	}
+	return Unit{}, false
+}
+
 // integerValue wraps a count as an Integer value, which is what the library's
 // Natural-returning functions (size) and Positive parameters (index) carry.
 func integerValue(n int64) Value {
@@ -559,7 +586,7 @@ func (ec *EvalContext) concatSequences(first, second Value) (Value, error) {
 	joined := make([]Value, 0, len(seq1)+len(seq2))
 	joined = append(joined, seq1...)
 	joined = append(joined, seq2...)
-	return ec.newSequence(joined)
+	return ec.sequenceFrom(joined, first, second)
 }
 
 // builtinSequenceIntersection is SequenceFunctions::intersection, the elements
@@ -576,7 +603,7 @@ func builtinSequenceIntersection(ec *EvalContext, args []Value) (Value, error) {
 			common = append(common, elem)
 		}
 	}
-	return ec.newSequence(common)
+	return ec.sequenceFrom(common, args[0])
 }
 
 // builtinSequenceIncluding is SequenceFunctions::including, the sequence with
@@ -602,7 +629,7 @@ func builtinSequenceExcluding(ec *EvalContext, args []Value) (Value, error) {
 			kept = append(kept, elem)
 		}
 	}
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
 }
 
 // builtinSequenceIncludingAt inserts values before the 1-based index, shifting
@@ -661,13 +688,13 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 			ErrIndexOutOfRange, start, len(elements))
 	}
 	if start > end {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
 	if end > int64(len(elements)) {
 		return Value{}, fmt.Errorf("%w: SequenceFunctions::subsequence end index %d is outside 1..%d",
 			ErrIndexOutOfRange, end, len(elements))
 	}
-	return ec.newSequence(elements[start-1 : end])
+	return ec.sequenceFrom(elements[start-1:end], args[0])
 }
 
 // builtinSequenceExcludingAt is SequenceFunctions::excludingAt, the sequence
@@ -702,7 +729,7 @@ func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 	kept := make([]Value, 0, len(elements)-int(end-start+1))
 	kept = append(kept, elements[:start-1]...)
 	kept = append(kept, elements[end:]...)
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
 }
 
 // builtinSequenceHead is SequenceFunctions::head, `seq#(1)`: the first element,
@@ -722,9 +749,9 @@ func builtinSequenceTail(ec *EvalContext, args []Value) (Value, error) {
 	}
 	elements := elementsOf(args[0])
 	if len(elements) == 0 {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
-	return ec.newSequence(elements[1:])
+	return ec.sequenceFrom(elements[1:], args[0])
 }
 
 // builtinSequenceLast is SequenceFunctions::last, `seq#(size(seq))`.
@@ -780,11 +807,8 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 		return Value{}, err
 	}
 	// A filter keeps the elements' type (KerML checkSelectExpressionResultSpecialization).
-	if unit, ok := args[0].Sequence().ElementUnit(); ok {
-		return NewEmptySequenceOf(unit), nil
-	}
 	if !applied {
-		return ec.newSequence(nil)
+		return ec.sequenceFrom(nil, args[0])
 	}
 	var kept []Value
 	for _, elem := range elements {
@@ -796,7 +820,7 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 			kept = append(kept, elem)
 		}
 	}
-	return ec.newSequence(kept)
+	return ec.sequenceFrom(kept, args[0])
 }
 
 // emptyMapping is the result of mapping no element through body: empty, and
@@ -845,7 +869,7 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if !applied || len(elements) == 0 {
 		return ec.emptyMapping(args[1]), nil
 	}
-	var mapped []Value
+	var mapped, answers []Value
 	for _, elem := range elements {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
@@ -858,6 +882,13 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 			return Value{}, err
 		}
 		mapped = append(mapped, contributed...)
+		answers = append(answers, val)
+	}
+	if len(mapped) == 0 {
+		if unit, ok := elementUnitOf(answers...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
+		return ec.emptyMapping(args[1]), nil
 	}
 	return sequenceOf(mapped), nil
 }

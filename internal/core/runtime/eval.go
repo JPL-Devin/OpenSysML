@@ -414,7 +414,20 @@ func (ctx *Context) emptyOfDeclared(scope *symbols.Scope, node ast.Node) (Value,
 	if ctx.model == nil || scope == nil {
 		return Value{}, false
 	}
-	dim, ok := ctx.model.DimensionOfExpr(scope, node)
+	return ctx.emptyOfDimension(ctx.model.DimensionOfExpr(scope, node))
+}
+
+// emptyOfFeature is emptyOfDeclared for the values a feature declares it holds.
+func (ctx *Context) emptyOfFeature(feat *EffectiveFeature) (Value, bool) {
+	if ctx.model == nil || feat == nil {
+		return Value{}, false
+	}
+	return ctx.emptyOfDimension(ctx.model.DimensionOfFeature(feat.heldBy()))
+}
+
+// emptyOfDimension is the empty sequence of quantities of a dimension, in its
+// coherent unit; false where none is fixed or it is dimensionless.
+func (ctx *Context) emptyOfDimension(dim semantics.Dimension, ok bool) (Value, bool) {
 	if !ok || dim.Term.Dimensionless() {
 		return Value{}, false
 	}
@@ -423,6 +436,19 @@ func (ctx *Context) emptyOfDeclared(scope *symbols.Scope, node ast.Node) (Value,
 		return Value{}, false
 	}
 	return NewEmptySequenceOf(unit), true
+}
+
+// readFeatureValue is what fv reads as in an expression, an empty read typed by
+// the quantities its feature declares.
+func (ctx *Context) readFeatureValue(fv *FeatureValue, name string) (Value, error) {
+	val, err := fv.ReadValue(name)
+	if err != nil || val.Kind != ValSequence || val.Sequence().Size() != 0 {
+		return val, err
+	}
+	if typed, ok := ctx.emptyOfFeature(fv.Feature); ok {
+		return typed, nil
+	}
+	return val, nil
 }
 
 // evalFeatureReference evaluates a feature reference (variable lookup).
@@ -849,7 +875,7 @@ func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
-	value, err := fv.ReadValue(name)
+	value, err := ec.ctx.readFeatureValue(fv, name)
 	return value, true, err
 }
 
@@ -1061,7 +1087,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	if err != nil {
 		return Value{}, err
 	}
-	member, err := fv.ReadValue(name)
+	member, err := ec.ctx.readFeatureValue(fv, name)
 	if err != nil {
 		return Value{}, err
 	}
@@ -1071,7 +1097,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 // chainOverElements reads the rest of a chain from every element of a
 // multi-valued member, concatenating the values each contributes.
 func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, from string) (Value, error) {
-	var collected []Value
+	var collected, reads []Value
 	for _, elem := range elementsOf(value) {
 		val, err := ec.chainMemberValue(elem, parts, from)
 		if err != nil {
@@ -1082,6 +1108,12 @@ func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, f
 			return Value{}, err
 		}
 		collected = append(collected, contributed...)
+		reads = append(reads, val)
+	}
+	if len(collected) == 0 {
+		if unit, ok := elementUnitOf(reads...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
 	}
 	return sequenceOf(collected), nil
 }
