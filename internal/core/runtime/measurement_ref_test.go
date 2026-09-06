@@ -291,6 +291,7 @@ func TestMeasurementRefReport(t *testing.T) {
 		{"-m", ErrTypeMismatch, "unary '-' requires numeric operand, got measurement reference"},
 		{"m < s", nil, "comparison operands must be constants, got measurement reference and measurement reference"},
 		{"m.unitConversion", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::unitConversion: a measurement reference value holds the unit m and its reduction metre, not the declaration's member unitConversion"},
+		{"km.unitConversion", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::unitConversion: a measurement reference value holds the unit km and its reduction 1000·metre, not the declaration's member unitConversion"},
 		{"m.quantityDimension", ErrUnevaluableLibraryFunction, "MeasurementReferences::ScalarMeasurementReference::quantityDimension: a measurement reference value holds the unit m"},
 		{"m.definitionalQuantityValues", ErrUnevaluableLibraryFunction, "not the declaration's member definitionalQuantityValues"},
 		{"(m / s).quantityDimension", ErrUnevaluableLibraryFunction, "a measurement reference value holds the unit m/s and its reduction metre·second^-1"},

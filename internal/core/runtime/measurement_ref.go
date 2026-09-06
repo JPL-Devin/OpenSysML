@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -211,12 +212,14 @@ func (ctx *Context) measurementRefFeature(val Value, name string) (Value, bool, 
 	if !ctx.measurementRefDeclares(ref, name) {
 		return Value{}, false, nil
 	}
-	// A member the unit's own declaration states (`K.temperatureOfWaterAtTriplePointInK`)
-	// is read as a declaration of its own.
+	// A valued member the unit's own declaration states (`K.temperatureOfWaterAtTriplePointInK`)
+	// is read as a declaration of its own; one without a value (`km.unitConversion`) is not held.
 	if decl := ref.Declaration(); decl != nil {
 		if member, ok := ctx.ownMember(decl, name); ok {
 			val, err := ctx.declaredMemberValue(member)
-			return val, true, err
+			if !errors.Is(err, ErrNoValue) {
+				return val, true, err
+			}
 		}
 	}
 	return Value{}, true, fmt.Errorf(

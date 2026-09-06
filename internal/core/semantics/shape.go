@@ -242,6 +242,13 @@ var describedReferenceRoots = []string{
 	"MeasurementReferences::DefinitionalQuantityValue",
 }
 
+// referenceSelfRoots are the described-reference members that name the featuring
+// frame itself (`transformation { :>> target = that; }`), which the runtime
+// supplies as that frame rather than reads from the object.
+var referenceSelfRoots = map[string]bool{
+	"MeasurementReferences::CoordinateFrame::transformation::target": true,
+}
+
 // IsDescribedReference reports whether objects of typ carry their library
 // members: a coordinate frame, a measurement scale, a coordinate transformation
 // or a definitional value, but not a measurement unit.
@@ -266,7 +273,12 @@ func (m *Model) DescribesReference(typ, member *symbols.Symbol) bool {
 	if member == nil || member.Kind != symbols.SymbolAttributeUsage || IsParameter(member) {
 		return false
 	}
-	if m.restatesFrameRoot(member) {
+	// The Kernel Semantic Library (Anything::that) frames a reference as it does
+	// every object; the Collections and domain members describe it.
+	if tier := m.libraryTier(member); tier == symbols.TierKernelSemantic || tier == symbols.TierLibrary {
+		return false
+	}
+	if m.restatesRoot(member, frameRoots) || m.restatesRoot(member, referenceSelfRoots) {
 		return false
 	}
 	// A usage nested in a described reference (a transformation's rotationMatrix)
@@ -296,7 +308,7 @@ func (m *Model) FrameFeature(sym *symbols.Symbol) bool {
 	case IsParameter(sym):
 		return true
 	default:
-		return m.restatesFrameRoot(sym)
+		return m.restatesRoot(sym, frameRoots)
 	}
 }
 
@@ -318,14 +330,14 @@ func IsParameter(sym *symbols.Symbol) bool {
 	return ok && (usage.Direction != ast.DirNone || usage.IsResult)
 }
 
-// restatesFrameRoot reports whether sym redefines or subsets a frame root,
-// directly or through the features those name.
-func (m *Model) restatesFrameRoot(sym *symbols.Symbol) bool {
+// restatesRoot reports whether sym redefines or subsets one of the roots, directly
+// or through the features those name.
+func (m *Model) restatesRoot(sym *symbols.Symbol, roots map[string]bool) bool {
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
 		queue = queue[1:]
-		if frameRoots[symbols.FQNOf(cur)] {
+		if roots[symbols.FQNOf(cur)] {
 			return true
 		}
 		for _, rel := range RelationshipsOf(cur) {

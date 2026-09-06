@@ -1,6 +1,9 @@
 package repl
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // coordinateFrameSession declares the Annex A frames, a vector over one, a placed
 // frame with a translation-rotation sequence, and a part holding a composed frame.
@@ -13,6 +16,7 @@ func coordinateFrameSession(t *testing.T) *Session {
 		private import SI::*;
 		private import Time::*;
 		private import MeasurementReferences::*;
+		private import SpatialItems::*;
 		private import QuantityCalculations::*;
 		private import VectorCalculations::*;
 		attribute spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }
@@ -29,6 +33,7 @@ func coordinateFrameSession(t *testing.T) *Session {
 		}
 		part def Vehicle { attribute body : CoordinateFrame; attribute clock : TimeScale; }
 		part vehicle : Vehicle { :>> body = spatialCF / s; :>> clock = UTC; }
+		part car : SpatialItem { attribute carDatum :>> coordinateFrame { :>> mRefs = (mm, mm, mm); } }
 	}`)
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
@@ -46,6 +51,8 @@ func TestEvalCoordinateFrames(t *testing.T) {
 	wants(t, run(t, s, "%eval Frames::spatialCF / s == Frames::velocityCF"), "= true")
 	wants(t, run(t, s, "%eval Frames::spatialCF.mRefs"), "= [m, m, m]")
 	wants(t, run(t, s, "%eval Frames::spatialCF.dimensions"), "= [3]")
+	wants(t, run(t, s, "%eval Frames::car.carDatum"), "= carDatum [mm, mm, mm]")
+	wants(t, run(t, s, "%eval Frames::car.coordinateFrame == Frames::car.carDatum"), "= true")
 	wants(t, run(t, s, "%eval Frames::spatialCF istype MeasurementReferences::VectorMeasurementReference"), "= true")
 	wants(t, run(t, s, "%eval Frames::p"), "= ⟨1.0, 2.0, 3.0⟩ [spatialCF]")
 	wants(t, run(t, s, "%eval Frames::p.mRef"), "= spatialCF [m, m, m]")
@@ -75,6 +82,8 @@ func TestEvalTransform(t *testing.T) {
 	s := coordinateFrameSession(t)
 	wants(t, run(t, s, "%eval Frames::lbcf.transformation"), "= transformation (datum → lbcf)")
 	wants(t, run(t, s, "%eval Frames::lbcf.transformation == Frames::lbcf.transformation"), "= true")
+	wants(t, run(t, s, "%eval Frames::lbcf.transformation.source"), "= datum [mm, mm, mm]")
+	wants(t, run(t, s, "%eval Frames::lbcf.transformation.target == Frames::lbcf"), "= true")
 	wants(t, run(t, s, "%eval Frames::transform(Frames::lbcf.transformation, (11.0, 2.0, 0.0) [Frames::datum])"),
 		"= ⟨-0.99999", "-2.00000", "0.0⟩ [lbcf]")
 	wants(t, run(t, s, "%eval Frames::transform(Frames::lbcf.transformation, (11.0, 2.0, 0.0) [Frames::datum]).mRef == Frames::lbcf"), "= true")
@@ -99,4 +108,19 @@ func TestFeaturesListCoordinateFrames(t *testing.T) {
 	s := coordinateFrameSession(t)
 	run(t, s, "%instantiate Frames::vehicle")
 	wants(t, run(t, s, "%features Frames::vehicle"), "\n  body = body [m/s, m/s, m/s]", "\n  clock = UTC [s]")
+}
+
+// A frame's own transformation lists its source and steps; the library's
+// `target = that`, which the runtime answers as the frame, is not an object member.
+func TestFeaturesListFrameTransformation(t *testing.T) {
+	s := coordinateFrameSession(t)
+	run(t, s, "%instantiate Frames")
+	got := run(t, s, "%features Frames::lbcf")
+	wants(t, got, "\n  mRefs = [mm, mm, mm]", "\n  transformation = Instance(ID: ", "\n    source = datum [mm, mm, mm]",
+		"\n      translationVector = ⟨10.0, 0.0, 0.0⟩ [datum]", "\n      angle = 180 ['°']", "\n  dimensions = 3")
+	for _, absent := range []string{"target", "that"} {
+		if strings.Contains(got, absent) {
+			t.Errorf("%%features Frames::lbcf lists %q:\n%s", absent, got)
+		}
+	}
 }

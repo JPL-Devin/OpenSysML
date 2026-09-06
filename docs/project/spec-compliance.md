@@ -947,8 +947,15 @@ the flat sequence of its elements:
   validation suite's `MissionElapsedTimeScale` — and the library itself places
   `SI::'°C_abs' : IntervalScale` on `K`. A model-owned usage typed
   `CoordinateFrame` (or a subtype) with its `:>> mRefs` evaluates to the frame it
-  declares (`referenceValueOfObject`, `readFrame`): the value carries the
-  declaration, its type, the `dimensions` the type fixes (`'3dCoordinateFrame'`
+  declares (`referenceValueOfObject`, `readFrame`), the geometry example's
+  `datum :>> coordinateFrame { :>> mRefs = (mm, mm, mm); }` included: a renamed
+  redefinition whose body describes the value governs over the `default` it
+  inherits as a same-named one does (`subsetting.go` `sharedRedefinitionName`,
+  `declarationValues`; `TestRenamedRedefinitionBodyGovernsAnInheritedValue`),
+  while that example's component frames, whose `mRefs` default to
+  `(that.that as SpatialItem).coordinateFrame.mRefs`, stay the `as` cast's typed
+  error — the runtime does not evaluate `as` (`eval.go` `ast.OpAs`). The value
+  carries the declaration, its type, the `dimensions` the type fixes (`'3dCoordinateFrame'`
   states `3`; a scalar reference `()`, one axis), one `ValMeasurementRef` per
   axis read from `mRefs` (the flattened size of `dimensions` gates the count: a
   frame stating no `mRefs` is `ErrNoValue` naming
@@ -963,7 +970,15 @@ the flat sequence of its elements:
   [mm/s, mm/s, mm/s]` — a scale as its name, `SI::'°C_abs'`; `describe` says
   *coordinate frame* or *measurement scale*; `%features` shows `mRefs`,
   `dimensions`, `transformation`, and for a scale `unit`,
-  `transformation.origin` (`structuredFeature`). It conforms to its declared
+  `transformation.origin` (`structuredFeature`). The object a frame usage
+  materializes carries the `MeasurementReferences` and `Collections` members
+  that describe it (`semantics/shape.go` `DescribesReference`); the library's
+  `transformation { :>> target = that; }` is not one of them, since the runtime
+  answers the target of a frame's own transformation as that frame
+  (`frame_read.go` `readTarget`), and a `%features` listing of the object still
+  reports `flattenedSize` as an error, `dimensions->reduce '*'` naming a reducer
+  the runtime does not evaluate (the *Found, not fixed* row below), while
+  `frame.flattenedSize` reads from the value. It conforms to its declared
   type and that type's generals (`CartesianSpatial3dCoordinateFrame`,
   `'3dCoordinateFrame'`, `CoordinateFrame`, `VectorMeasurementReference`,
   `TensorMeasurementReference`; a scale to `IntervalScale`, `MeasurementScale`,

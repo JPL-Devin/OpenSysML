@@ -123,7 +123,7 @@ package test {
 		attribute warmBack : ThermodynamicTemperatureValue = ConvertQuantity(26.85 [SI::'°C_abs'], K);
 		attribute freezing : ThermodynamicTemperatureValue = ConvertQuantity(0.0 [SI::'°C_abs'], K);
 		attribute onScale : ThermodynamicTemperatureValue = 21.5 [SI::'°C_abs'];
-		attribute onScaleRef : IntervalScale = onScale.mRef;
+		attribute onScaleRef = onScale.mRef;
 		attribute onScaleIsCelsius : Boolean = onScale.mRef == celsius;
 		attribute utc : Time::TimeScale = Time::UTC;
 		attribute utcUnit : DurationUnit = Time::UTC.unit;
