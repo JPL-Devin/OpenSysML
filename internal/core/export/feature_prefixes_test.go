@@ -203,6 +203,30 @@ func TestPortionFlagIsCarriedOrRefused(t *testing.T) {
 			}
 		})
 	}
+	// A graph stating a portion kind alone, as graphs written before isPortion was
+	// exported do, reads back by its kind; re-exported, the implied flag is all it gains.
+	t.Run("sysml_portion_kind_without_flag", func(t *testing.T) {
+		src := []byte("package Portions {\n    occurrence def Car;\n    occurrence car : Car {\n        snapshot start : Car;\n    }\n}\n")
+		graph, err := export.Convert("m.sysml", src, export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		current := withoutSourceLayout(t, graph)
+		legacy := withoutTriples(t, current, "sysml:isPortion")
+		back, err := export.Convert("m.ttl", legacy, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		checkSpelling(t, string(back), []string{"snapshot start : Car;"}, []string{"portion ", "composite"})
+		again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lost, gained := tripleSetDiff(t, current, withoutSourceLayout(t, again)); len(lost)+len(gained) > 0 {
+			t.Errorf("a legacy portion graph should re-export as the current one\n--- lost ---\n%s\n--- gained ---\n%s",
+				strings.Join(lost, "\n"), strings.Join(gained, "\n"))
+		}
+	})
 	// A KerML graph whose root states no language reads as SysML, and the
 	// spelling follows: the language triple is what selects `const`.
 	t.Run("kerml_root_without_language", func(t *testing.T) {

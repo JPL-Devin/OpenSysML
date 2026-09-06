@@ -214,7 +214,9 @@ triples come); a set of classes with no such member is refused, naming the subje
 - `sysml:portionKind`, `"snapshot"` or `"timeslice"`, for a usage declared as a
   portion (`snapshot :>> start`, `timeslice occurrence t`); the two are the
   metamodel's `OccurrenceUsage::portionKind`, so no flag spells them. Such a
-  usage also carries `sysml:isPortion`, the fact its kind implies
+  usage also carries `sysml:isPortion`, the fact its kind implies; a graph
+  stating the kind alone reads back by its kind, and gains the flag when
+  re-exported
 - Declaration-head relationships, as element IRIs where the target resolves
   inside the model — by name resolution, so a name reached through an import,
   an alias or a nested package qualification links to the same element its
