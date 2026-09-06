@@ -33,17 +33,10 @@ func (ctx *Context) stateTypes() lower.EndpointResolver {
 	return &stateTypes{Resolver: ctx.resolver, frame: ctx.librarySymbol(stateActionFQN)}
 }
 
-// TypeDecl resolves qn through the name-resolution tier, reporting the library's
-// StateAction as withheld so lowering takes no content from it and looks no further.
-func (s *stateTypes) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, lower.TypeLookup) {
-	decl, body, ok := s.Resolver.TypeDecl(scope, qn)
-	switch {
-	case !ok:
-		return nil, nil, lower.TypeUnresolved
-	case s.frame != nil && decl == s.frame.Decl:
-		return nil, nil, lower.TypeWithheld
-	}
-	return decl, body, lower.TypeResolved
+// WithholdsStateType reports the library's StateAction, whose content lowering
+// must not take: TypeDecl still resolves it, so lowering looks no further.
+func (s *stateTypes) WithholdsStateType(decl ast.Node) bool {
+	return s.frame != nil && decl == s.frame.Decl
 }
 
 // StateConfiguration represents the active state configuration (simple or multi-region).

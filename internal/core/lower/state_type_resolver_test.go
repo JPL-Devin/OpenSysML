@@ -11,28 +11,38 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// typeLookup is how lookupEndpoints answers for one type declaration.
+type typeLookup int
+
+const (
+	resolved typeLookup = iota
+	unresolved
+	withheld
+)
+
 // lookupEndpoints resolves endpoints and type names from the scope tree, but
-// reports the type declarations named in lookups as that lookup says.
+// answers for the type declarations named in lookups as that lookup says.
 type lookupEndpoints struct {
 	scopeEndpoints
-	lookups map[string]TypeLookup
+	lookups map[string]typeLookup
 	asked   []string
 }
 
-func (l *lookupEndpoints) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, TypeLookup) {
+func (l *lookupEndpoints) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
 	decl, body, ok := resolve.TypeDeclInScope(scope, qn)
 	if !ok {
-		return nil, nil, TypeUnresolved
+		return nil, nil, false
 	}
 	name := declName(decl)
 	l.asked = append(l.asked, name)
-	switch l.lookups[name] {
-	case TypeWithheld:
-		return nil, nil, TypeWithheld
-	case TypeUnresolved:
-		return nil, nil, TypeUnresolved
+	if l.lookups[name] == unresolved {
+		return nil, nil, false
 	}
-	return decl, body, TypeResolved
+	return decl, body, true
+}
+
+func (l *lookupEndpoints) WithholdsStateType(decl ast.Node) bool {
+	return l.lookups[declName(decl)] == withheld
 }
 
 // stateTypeResolverSource holds Lib, whose content names Lib again the way the
@@ -55,7 +65,7 @@ const stateTypeResolverSource = `
 `
 
 // stateGraphWithLookups lowers Machine through a resolver answering lookups.
-func stateGraphWithLookups(t *testing.T, lookups map[string]TypeLookup) (*StateGraph, *lookupEndpoints, error) {
+func stateGraphWithLookups(t *testing.T, lookups map[string]typeLookup) (*StateGraph, *lookupEndpoints, error) {
 	t.Helper()
 	p := parser.New(source.New("test.sysml", []byte(stateTypeResolverSource)))
 	root := p.ParseFile()
@@ -76,7 +86,7 @@ func stateGraphWithLookups(t *testing.T, lookups map[string]TypeLookup) (*StateG
 // A withheld type contributes no content and is never looked up again through
 // the scope tree, where Lib's self-reference would be found and recursed into.
 func TestStateTypeResolverWithheldTypeContributesNothing(t *testing.T) {
-	graph, endpoints, err := stateGraphWithLookups(t, map[string]TypeLookup{"Lib": TypeWithheld})
+	graph, endpoints, err := stateGraphWithLookups(t, map[string]typeLookup{"Lib": withheld})
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
@@ -98,7 +108,7 @@ func TestStateTypeResolverWithheldTypeContributesNothing(t *testing.T) {
 // An unresolved type falls back to the scope tree: finite content is inherited
 // from there, and a self-referencing one is reported as recursive.
 func TestStateTypeResolverUnresolvedTypeFallsBackToTheScopeTree(t *testing.T) {
-	graph, _, err := stateGraphWithLookups(t, map[string]TypeLookup{"Inner": TypeUnresolved, "Lib": TypeWithheld})
+	graph, _, err := stateGraphWithLookups(t, map[string]typeLookup{"Inner": unresolved, "Lib": withheld})
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
@@ -110,7 +120,7 @@ func TestStateTypeResolverUnresolvedTypeFallsBackToTheScopeTree(t *testing.T) {
 		t.Fatalf("parent of i1 = %v, want nested", parent)
 	}
 
-	_, _, err = stateGraphWithLookups(t, map[string]TypeLookup{"Lib": TypeUnresolved})
+	_, _, err = stateGraphWithLookups(t, map[string]typeLookup{"Lib": unresolved})
 	if !errors.Is(err, ErrRecursiveStateTyping) {
 		t.Fatalf("error = %v, want the scope tree's Lib recursed into", err)
 	}
@@ -118,7 +128,7 @@ func TestStateTypeResolverUnresolvedTypeFallsBackToTheScopeTree(t *testing.T) {
 
 // A type the resolver resolves is inherited from the declaration it returns.
 func TestStateTypeResolverResolvedTypeIsInherited(t *testing.T) {
-	graph, endpoints, err := stateGraphWithLookups(t, map[string]TypeLookup{"Inner": TypeResolved, "Lib": TypeWithheld})
+	graph, endpoints, err := stateGraphWithLookups(t, map[string]typeLookup{"Inner": resolved, "Lib": withheld})
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
@@ -131,6 +141,58 @@ func TestStateTypeResolverResolvedTypeIsInherited(t *testing.T) {
 	}
 	if got := countOf(endpoints.asked, "Inner"); got != 1 {
 		t.Fatalf("the resolver was asked about Inner %d times, want once", got)
+	}
+}
+
+// A plain resolver, withholding nothing, still resolves a type imported from
+// another document, which the scope tree alone cannot reach.
+func TestPlainResolverInheritsAnImportedStateDefinition(t *testing.T) {
+	const lib = `
+		package Lib {
+			state def Inner {
+				entry; then i1;
+				state i1;
+			}
+		}
+	`
+	const model = `
+		package test {
+			private import Lib::*;
+			state def Machine {
+				entry; then nested;
+				state nested : Inner;
+			}
+		}
+	`
+	parse := func(name, src string) *ast.RootNamespace {
+		p := parser.New(source.New(name, []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("%s: parse diagnostics: %v", name, p.Diagnostics)
+		}
+		return root
+	}
+	idx := symbols.NewIndex()
+	idx.AddDocument("lib.sysml", parse("lib.sysml", lib))
+	modelRoot := parse("model.sysml", model)
+	idx.AddDocument("model.sysml", modelRoot)
+	idx.ExpandWildcardImports()
+	decl := stateDefinition(t, modelRoot, "Machine")
+	scope := scopeOfDecl(idx.DocumentRoot("model.sysml"), decl)
+	if scope == nil {
+		t.Fatal("scope for Machine missing")
+	}
+
+	graph, err := ToStateGraphWithEndpoints(decl, scope, resolve.New(idx))
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	i1 := stateNamed(graph, "i1")
+	if i1 == nil {
+		t.Fatal("content of the imported definition was not inherited")
+	}
+	if parent := graph.ParentState[i1]; parent == nil || parent.Name != "nested" {
+		t.Fatalf("parent of i1 = %v, want nested", parent)
 	}
 }
 
