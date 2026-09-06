@@ -133,7 +133,7 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 }
 
 // shapeHoldsValue reports whether an object of typ carries a value of its own: a record's
-// features, or a model restatement (`:>> mRefs = (m, m)`) of what a value-held type carries.
+// features, or a feature the model adds to a value-held type (`:>> mRefs = (m, m)`, `label`).
 func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
 	features := ctx.FeaturesOf(typ)
 	if len(features) == 0 {
@@ -143,7 +143,7 @@ func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
 		return true
 	}
 	for _, feat := range features {
-		if !ctx.libraryDeclared(feat.Symbol) && ctx.model.RestatesHeldByValue(feat.Symbol) {
+		if !ctx.libraryDeclared(feat.Symbol) {
 			return true
 		}
 	}
@@ -965,15 +965,15 @@ func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
 	return false
 }
 
-// bindsAFeature reports whether a declaration's body binds a value to a feature, directly
-// or under a nested member that exists whenever it does (not an optional or abstract one).
+// bindsAFeature reports whether a declaration's body binds a value to a feature of its object,
+// directly or under a nested one that exists whenever it does (not an optional or abstract one).
 func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
 	if sym == nil || sym.Scope == nil {
 		return false
 	}
 	for _, member := range sym.Scope.AllMembers() {
 		usage, ok := member.Decl.(*ast.Usage)
-		if !ok {
+		if !ok || !holdsRecordField(member) {
 			continue
 		}
 		if usage.Value != nil {
@@ -984,6 +984,17 @@ func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+// holdsRecordField reports a member whose value is its object's own: a structural shape
+// feature, not a behavior, a constraint or a parameter, whose values bind no field.
+func holdsRecordField(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolActionUsage, symbols.SymbolStateUsage,
+		symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage:
+		return false
+	}
+	return semantics.IsShapeFeature(sym) && !semantics.IsParameter(sym)
 }
 
 // valuesAFeature reports whether a usage states a value: its own, or one its

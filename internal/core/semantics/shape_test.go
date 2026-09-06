@@ -221,17 +221,6 @@ func TestHeldByValueKeepsTheValuesOwnMembersOutOfTheShape(t *testing.T) {
 		fqn  string
 		want bool
 	}{
-		{"T::stressRef::mRefs", true},
-		{"T::conv::prefix", false},
-	} {
-		if got := m.RestatesHeldByValue(dimensionSymbol(t, idx, c.fqn)); got != c.want {
-			t.Errorf("RestatesHeldByValue(%s) = %v, want %v", c.fqn, got, c.want)
-		}
-	}
-	for _, c := range []struct {
-		fqn  string
-		want bool
-	}{
 		{"Base::Anything::self", true},
 		{"Base::DataValue::self", true},
 		{"Clocks::Clock::thisClock", true},

@@ -263,12 +263,6 @@ func (m *Model) HeldByValue(sym *symbols.Symbol) bool {
 	return usage.Value == nil && m.ValueHeld(sym)
 }
 
-// RestatesHeldByValue reports whether sym redefines or subsets, transitively, a
-// member the value of a value-held type carries: `:>> mRefs = (m, m)` states a value.
-func (m *Model) RestatesHeldByValue(sym *symbols.Symbol) bool {
-	return m != nil && m.restates(sym, m.HeldByValue)
-}
-
 // ValueHeld reports whether sym is held as a value, not an object: a scalar, an enumeration, or
 // a TensorQuantityValue/TensorMeasurementReference by specialization (frames and scales included).
 func (m *Model) ValueHeld(sym *symbols.Symbol) bool {

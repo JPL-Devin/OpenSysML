@@ -11,7 +11,9 @@
 // declaration too, so a conversion can follow the declared reference unit. An
 // optional record whose body binds a feature only at depth (`:>> conv { :>>
 // prefix { :>> conversionFactor = 1000.0; } }`) is one object, not none; one whose only
-// binding sits under an abstract member stays none, as the abstract member holds nothing.
+// binding sits under an abstract member stays none, as the abstract member holds nothing,
+// and so does one whose body only values a calc's parameters, which bind no field. A field
+// the model adds to a TensorMeasurementReference (`label`) is state of its own and reads.
 package test {
 	public import ISQ::*;
 	public import SI::*;
@@ -27,6 +29,9 @@ package test {
 	attribute def Box { attribute conv : ConversionByPrefix[0..1]; }
 	attribute deep : Box { :>> conv { :>> prefix { :>> conversionFactor = 1000.0; } } }
 	attribute hollow : Box { :>> conv { abstract attribute extra : UnitPrefix { :>> conversionFactor = 1000.0; } } }
+	attribute computing : Box { :>> conv { calc scaled { in x : Real = 1000.0; return : Real = x; } } }
+	attribute def LabeledRef :> TensorMeasurementReference { attribute label : String = "stress"; }
+	attribute labeled : LabeledRef;
 
 	part def Survey {
 		attribute side : LengthValue = 3 [km];
@@ -49,5 +54,8 @@ package test {
 		attribute deepPrefixFactor : Real = deep.conv.prefix.conversionFactor;
 		attribute deepFactor : Real = deep.conv.conversionFactor;
 		attribute hollowConv : ConversionByPrefix[0..1] = hollow.conv;
+		attribute computingConv : ConversionByPrefix[0..1] = computing.conv;
+		attribute label : String = labeled.label;
+		attribute labeledBound : Boolean = labeled.isBound;
 	}
 }
