@@ -1448,7 +1448,7 @@ func (ec *EvalContext) evalConditional(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 3 {
 		return Value{}, fmt.Errorf("conditional requires 3 operands, got %d", len(n.Operands))
 	}
-	cond, err := ec.Eval(n.Operands[0])
+	cond, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1541,11 +1541,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) < 2 {
 		return Value{}, fmt.Errorf("arithmetic operator requires 2 operands")
 	}
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
-	right, err := ec.Eval(n.Operands[1])
+	right, err := ec.valueOperand(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1732,12 +1732,12 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("comparison requires 2 operands, got %d", len(n.Operands))
 	}
 
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
 
-	right, err := ec.Eval(n.Operands[1])
+	right, err := ec.valueOperand(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1827,7 +1827,7 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
 	}
 
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1882,6 +1882,19 @@ func combineBooleans(op ast.OperatorKind, l, r bool) (Value, error) {
 	return Value{}, fmt.Errorf("%w: '%s' is not a Boolean operator", ErrUnsupportedOperator, op)
 }
 
+// valueOperand evaluates an operand an operator needs a value of: a feature
+// holding none is reported as such, not as an operand of the wrong type.
+func (ec *EvalContext) valueOperand(node ast.Node) (Value, error) {
+	val, err := ec.Eval(node)
+	if err != nil {
+		return Value{}, err
+	}
+	if ec.ctx.HoldsNoValue(val) {
+		return Value{}, ec.ctx.noValueError(val, node)
+	}
+	return val, nil
+}
+
 // boolOperand reads a Boolean out of a value, naming what was expected when the
 // value is not one.
 func boolOperand(what string, v Value) (bool, error) {
@@ -1910,7 +1923,7 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 		}
 	}
 
-	operand, err := ec.Eval(n.Operands[0])
+	operand, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}

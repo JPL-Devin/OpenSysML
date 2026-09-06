@@ -1279,7 +1279,7 @@ func testQuantityWriteOfAnotherDimension(t *testing.T) {
 
 // testExpressionOverAFeatureValueHoldingNoValue: a valueless feature of a value type is
 // read without an error and reports that it holds no value, while an expression
-// computing over it reports a type mismatch rather than a number or a panic.
+// computing over it reports which feature holds none rather than a number or a panic.
 func testExpressionOverAFeatureValueHoldingNoValue(t *testing.T) {
 	src := `
 		package test {
@@ -1308,8 +1308,13 @@ func testExpressionOverAFeatureValueHoldingNoValue(t *testing.T) {
 		t.Errorf("feature value d holds %v, want no value", fv.HeldValue())
 	}
 
-	if _, err := inst.GetFeatureValue(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("feature value n err = %v, want ErrTypeMismatch", err)
+	_, err = inst.GetFeatureValue(ctx, "n")
+	var noValue *NoValueError
+	if !errors.As(err, &noValue) {
+		t.Fatalf("feature value n err = %v, want *NoValueError", err)
+	}
+	if noValue.Feature != "d" || noValue.Symbol == nil || noValue.Symbol.Name != "d" {
+		t.Errorf("feature value n reports no value for %q (%v), want feature d", noValue.Feature, noValue.Symbol)
 	}
 
 	// A value naming an object the context does not hold answers the question

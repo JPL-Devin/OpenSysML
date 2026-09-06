@@ -1,6 +1,7 @@
 package queryexec
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"regexp"
@@ -282,7 +283,7 @@ func (e *executor) evaluateWhereFeature(expression queryplan.Expression) (sequen
 		sym, _ := value.Element()
 		values, present, valueErr := e.propertyValues(sym, property)
 		if valueErr != nil {
-			return sequence{}, e.featureError(expression, property, sym)
+			return sequence{}, e.unevaluable(expression, property, sym, valueErr)
 		}
 		known = known || present
 		for _, actual := range values {
@@ -367,7 +368,7 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 			var valueErr error
 			values, present, valueErr = e.propertyValues(sym, property)
 			if valueErr != nil {
-				return sequence{}, e.featureError(expression, property, sym)
+				return sequence{}, e.unevaluable(expression, property, sym, valueErr)
 			}
 		}
 		known = known || present
@@ -492,7 +493,7 @@ func (e *executor) evaluateProject(expression queryplan.Expression) (sequence, e
 		for column, property := range properties {
 			values, present, valueErr := e.propertyValues(sym, property)
 			if valueErr != nil {
-				return sequence{}, e.featureError(expression, property, sym)
+				return sequence{}, e.unevaluable(expression, property, sym, valueErr)
 			}
 			known[column] = known[column] || present
 			result.cells[row][column] = Cell{
@@ -551,6 +552,10 @@ func (e *executor) declaredFeatureValues(sym *symbols.Symbol, property string) (
 		if !ok {
 			if value.Kind == symbols.FilterValueEmpty {
 				continue
+			}
+			if value.Kind == symbols.FilterValueUnknown {
+				derived, err := e.derivedFeatureValues(sym, property)
+				return derived, true, err
 			}
 			return nil, true, e.featureError(queryplan.Expression{}, property, sym)
 		}
@@ -952,6 +957,15 @@ func (e *executor) invalidOrder(expression queryplan.Expression, property string
 }
 
 func (e *executor) featureError(expression queryplan.Expression, property string, sym *symbols.Symbol) error {
+	return e.unevaluable(expression, property, sym, nil)
+}
+
+// unevaluable is featureError carrying the evaluator's reason, when one is known.
+func (e *executor) unevaluable(expression queryplan.Expression, property string, sym *symbols.Symbol, cause error) error {
+	var inner *Error
+	if errors.As(cause, &inner) && inner.Kind == ErrorUnevaluableFeature {
+		cause = inner.Cause
+	}
 	return &Error{
 		Kind:      ErrorUnevaluableFeature,
 		Query:     e.definition.Name(),
@@ -959,5 +973,6 @@ func (e *executor) featureError(expression queryplan.Expression, property string
 		Property:  property,
 		Target:    symbols.FQNOf(sym),
 		Origin:    expression.Origin(),
+		Cause:     cause,
 	}
 }
