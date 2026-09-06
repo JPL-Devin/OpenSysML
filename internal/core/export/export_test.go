@@ -2104,7 +2104,10 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 		"bind [0..1] a = [0..1] b;",
 		"bind a = [1] b;",
 		"binding ab bind [2] a = b;",
-		"binding ab of [0..1] a = [1..*] b;",
+		"binding ab bind [0..1] a = [1..*] b;",
+		"bind e1 ::> a = e2 references b;",
+		"bind [1] e1 ::> a = b;",
+		"binding ab bind e1 ::> a = e2 ::> b;",
 		"connect [1] left to [0..1] right;",
 		"connect ([1] left, [2] right);",
 		"allocate a to b;",
@@ -2149,19 +2152,21 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 	graph := string(turtle)
 	for _, triple := range []string{
-		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pvalue ;",
+		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pend1 ;",
 		"expr:P__Car___402_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"a\" ;",
 		"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend0_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend0_pupperBound .",
-		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pvalue_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pvalue_pupperBound .",
+		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend1_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend1_pupperBound .",
 		"expr:P__Car___402_pend0_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
-		"expr:P__Car___402_pvalue_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+		"expr:P__Car___402_pend1_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
 	} {
 		if !strings.Contains(graph, triple) {
 			t.Errorf("the graph should state %q:\n%s", triple, graph)
 		}
 	}
-	if strings.Contains(graph, "expr:P__Car___402_pend1") {
-		t.Errorf("the value end is the value node itself, not a second copy of it:\n%s", graph)
+	for _, legacy := range []string{"sysml:value expr:", "sysml:references", "_pvalue"} {
+		if strings.Contains(graph, legacy) {
+			t.Errorf("a binding's ends are connector ends, not a reference and a value (%s):\n%s", legacy, graph)
+		}
 	}
 	// Without the bounds the ends come back bare: the notation reads the graph.
 	stripped := withoutTriples(t, turtle, "sysx:sourceText")
@@ -2174,6 +2179,107 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 	if !strings.Contains(string(back), "bind a = b;") {
 		t.Fatalf("ends without bounds should be written bare:\n%s", back)
+	}
+}
+
+// A KerML connector written without `of`/`first` has no declaration, so a leading
+// multiplicity is the first end's: bounds on the end node, not the connector.
+func TestKerMLConnectorEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
+	const endNodes = "sysx:relatedFeature expr:P__C___402_pend0, expr:P__C___402_pend1 ;"
+	cases := []struct {
+		// head is the connector as written; bare is how it reads without bounds.
+		head, bare string
+		// bounds are the bound triples the graph must state; onConnector says
+		// they hang on the connector node rather than on its ends.
+		bounds      []string
+		onConnector bool
+	}{
+		{
+			head: "binding [1] a = [0..1] b;",
+			bare: "binding a = b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+				"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__C___402_pend1_plowerBound ;\n    sysml:upperBound expr:P__C___402_pend1_pupperBound .",
+				"expr:P__C___402_pend0_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+				"expr:P__C___402_pend1_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
+			},
+		},
+		{
+			head: "binding [1] a = b;",
+			bare: "binding a = b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+			},
+		},
+		{
+			head: "succession [1] a then [*] b;",
+			bare: "succession a then b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+				"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend1_pupperBound .",
+				"expr:P__C___402_pend1_pupperBound\n    a sysml:LiteralInfinity ;\n    sysx:sourceText \"*\" ;",
+			},
+		},
+		{
+			head:        "binding [1] of a = b;",
+			bounds:      []string{"sysml:upperBound expr:P__C___402_pupperBound ;\n    sysx:relatedFeature"},
+			onConnector: true,
+		},
+		{
+			head:        "succession [1] first a then b;",
+			bounds:      []string{"sysml:upperBound expr:P__C___402_pupperBound ;\n    sysx:relatedFeature"},
+			onConnector: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.head, func(t *testing.T) {
+			src := "package P {\n    class C {\n        step a;\n        step b;\n        " + c.head + "\n    }\n}\n"
+			turtle, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			graph := string(turtle)
+			for _, triple := range append([]string{endNodes}, c.bounds...) {
+				if !strings.Contains(graph, triple) {
+					t.Errorf("the graph should state %q:\n%s", triple, graph)
+				}
+			}
+			for _, bound := range []string{"pend0_plowerBound", "pend0_pupperBound", "pend1_plowerBound", "pend1_pupperBound"} {
+				if c.onConnector && strings.Contains(graph, bound) {
+					t.Errorf("a declared connector's multiplicity is not an end's:\n%s", graph)
+				}
+			}
+			for _, bound := range []string{"expr:P__C___402_plowerBound", "expr:P__C___402_pupperBound"} {
+				if !c.onConnector && strings.Contains(graph, bound) {
+					t.Errorf("an undeclared connector has no multiplicity of its own:\n%s", graph)
+				}
+			}
+			// A declared connector's own multiplicity is written after its ends,
+			// which does not read back yet; only the end forms round-trip bare.
+			if c.onConnector {
+				return
+			}
+			// The bounds alone carry the multiplicities back into notation.
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), c.head) {
+				t.Fatalf("the head should come back from the bounds:\n%s", back)
+			}
+			// Without the bounds the connector comes back bare.
+			stripped := withoutTriples(t, turtle, "sysx:sourceText")
+			for _, property := range []string{"sysml:lowerBound", "sysml:upperBound"} {
+				stripped = withoutTriples(t, stripped, property)
+			}
+			back, err = export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation without bounds: %v", err)
+			}
+			if !strings.Contains(string(back), c.bare) {
+				t.Fatalf("a connector without bounds should be written bare:\n%s", back)
+			}
+		})
 	}
 }
 

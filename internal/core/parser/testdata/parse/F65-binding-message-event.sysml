@@ -14,7 +14,7 @@ package F65 {
 		binding ab bind a = b;
 		binding ab1 : AB bind a = b;
 		binding : AB bind a = b;
-		binding [1] ab2 : AB bind a = b;
+		binding ab2 : AB [1] bind a = b;
 
 		part producer[1] {
 			event occurrence publish_source_event;

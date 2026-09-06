@@ -2724,20 +2724,21 @@ func (d *decoder) effectiveName(el *element) (string, bool) {
 	return "", false
 }
 
-// namingFeature is the feature an unnamed usage takes its name from, the one
-// it references, else the one it alone redefines (KerML 7.3.4.5).
+// namingFeature is the feature an unnamed usage takes its name from: the one it
+// references, else the first it redefines unless that is a chain (ast.NamingFeature).
 func (d *decoder) namingFeature(el *element) (rdf.Term, bool) {
 	if _, usage := metaclassUsage[el.metaclass]; !usage {
 		return rdf.Term{}, false
 	}
 	subject := rdf.IRI(el.iri)
-	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
+	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) > 0 {
 		return refs[0], true
 	}
-	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
-		return redefs[0], true
+	redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines])
+	if len(redefs) == 0 || ast.IsFeatureChain(literalTarget(redefs[0])) {
+		return rdf.Term{}, false
 	}
-	return rdf.Term{}, false
+	return redefs[0], true
 }
 
 // relativeName strips from qname the longest prefix of scope it is declared
@@ -2785,8 +2786,16 @@ func literalTargetName(term rdf.Term) (string, bool) {
 	if term.Datatype != rdf.OpenSysML+dtExpression {
 		return lastSegment(term.Value), true
 	}
-	name, _ := ast.TargetName(parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression())
+	name, _ := ast.TargetName(literalTarget(term))
 	return name, name != ""
+}
+
+// literalTarget parses a relationship target the graph keeps as expression text.
+func literalTarget(term rdf.Term) ast.Node {
+	if !term.IsLiteral() || term.Datatype != rdf.OpenSysML+dtExpression {
+		return nil
+	}
+	return parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression()
 }
 
 func lastSegment(qname string) string {

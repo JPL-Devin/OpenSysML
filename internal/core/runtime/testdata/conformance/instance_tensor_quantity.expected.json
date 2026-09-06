@@ -1,0 +1,101 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Block",
+  "slots": {
+    "stress": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 3.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4.0, "unit": "Pa"}
+    ]},
+    "bound": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 3.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4.0, "unit": "Pa"}
+    ]},
+    "mixed": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 2.0, "unit": "kPa"},
+      {"type": "Quantity", "value": 3.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4.0, "unit": "kPa"}
+    ]},
+    "inertia": {"type": "TensorQuantity", "dimensions": [3, 3], "elements": [
+      {"type": "Quantity", "value": 1, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 1, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 0, "unit": "kg*m**2"},
+      {"type": "Quantity", "value": 1, "unit": "kg*m**2"}
+    ]},
+    "dims": {"type": "Sequence", "elements": [{"type": "Integer", "value": 2}, {"type": "Integer", "value": 2}]},
+    "order": {"type": "Integer", "value": 2},
+    "flattenedSize": {"type": "Integer", "value": 4},
+    "num": {"type": "Sequence", "elements": [
+      {"type": "Real", "value": 1.0}, {"type": "Real", "value": 2.0}, {"type": "Real", "value": 3.0}, {"type": "Real", "value": 4.0}
+    ]},
+    "unbound": {"type": "Boolean", "value": false},
+    "isBound": {"type": "Boolean", "value": true},
+    "mRef": {"type": "Array", "dimensions": [2, 2], "elements": [
+      {"type": "MeasurementRef", "unit": "Pa"},
+      {"type": "MeasurementRef", "unit": "Pa"},
+      {"type": "MeasurementRef", "unit": "Pa"},
+      {"type": "MeasurementRef", "unit": "Pa"}
+    ]},
+    "mRefDims": {"type": "Sequence", "elements": [{"type": "Integer", "value": 2}, {"type": "Integer", "value": 2}]},
+    "row1col2": {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+    "row2col1": {"type": "Quantity", "value": 3.0, "unit": "Pa"},
+    "corner": {"type": "Quantity", "value": 1, "unit": "kg*m**2"},
+    "sum": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 2002.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 6.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4004.0, "unit": "Pa"}
+    ]},
+    "difference": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 0.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 1.998, "unit": "kPa"},
+      {"type": "Quantity", "value": 0.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 3.996, "unit": "kPa"}
+    ]},
+    "doubled": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 6.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 8.0, "unit": "Pa"}
+    ]},
+    "doubledRight": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 4.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 6.0, "unit": "Pa"},
+      {"type": "Quantity", "value": 8.0, "unit": "Pa"}
+    ]},
+    "stretched": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 3.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 6.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 9.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 12.0, "unit": "Pa*m"}
+    ]},
+    "stretchedRight": {"type": "TensorQuantity", "dimensions": [2, 2], "elements": [
+      {"type": "Quantity", "value": 3.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 6.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 9.0, "unit": "Pa*m"},
+      {"type": "Quantity", "value": 12.0, "unit": "Pa*m"}
+    ]},
+    "zero": {"type": "Boolean", "value": false},
+    "isZero": {"type": "Boolean", "value": true},
+    "isUnit": {"type": "Boolean", "value": true},
+    "notUnit": {"type": "Boolean", "value": false},
+    "vectorZero": {"type": "Boolean", "value": true},
+    "vectorSum": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1001.0, "unit": "m"},
+      {"type": "Quantity", "value": 2002.0, "unit": "m"}
+    ]},
+    "scalarSum": {"type": "Quantity", "value": 3, "unit": "m"},
+    "scalarBuilt": {"type": "Quantity", "value": 5, "unit": "m"}
+  }
+}

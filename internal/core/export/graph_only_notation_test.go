@@ -267,3 +267,30 @@ func TestExpressionBodiesAndChainsFromTheGraphAlone(t *testing.T) {
 		"feature slice redefines xs = (sub as C).xs;",
 		"notEmpty(xs) implies sub.xs->size() > 0 xor false")
 }
+
+// An unnamed usage takes its name from the first feature it redefines, so a
+// chain through it reads that name back however many features it redefines.
+func TestNameFromTheFirstOfSeveralRedefinitionsFromTheGraphAlone(t *testing.T) {
+	src := `package NP {
+    item def Disc {
+        attribute innerSpaceDimension;
+    }
+    item def Shell {
+        item faces {
+            attribute innerSpaceDimension;
+        }
+    }
+    item def ConeOrCylinder :> Shell {
+        item :>> faces;
+        item base : Disc :> faces {
+            attribute :>> Disc::innerSpaceDimension, faces::innerSpaceDimension;
+        }
+        attribute dim = base.innerSpaceDimension;
+    }
+}
+`
+	back := notationFromTheGraphAlone(t, "np.sysml", src)
+	wantFragments(t, back,
+		"attribute redefines innerSpaceDimension, faces::innerSpaceDimension;",
+		"attribute dim = base.innerSpaceDimension;")
+}

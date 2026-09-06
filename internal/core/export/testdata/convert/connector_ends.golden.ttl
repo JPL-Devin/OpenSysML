@@ -546,7 +546,8 @@ expr:ConnectorEnds__Vehicle___409_pend0
     sysml:elementId "ConnectorEnds__Vehicle___409_pend0" ;
     sysml:referent elmt:ConnectorEnds__Vehicle__eng ;
     sysx:endIndex "0"^^xsd:integer ;
-    sysx:endName "r" .
+    sysx:endName "r" ;
+    sysx:endReferencesKeyword "references" .
 
 expr:ConnectorEnds__Vehicle___409_pend1
     a sysml:FeatureChainExpression ;

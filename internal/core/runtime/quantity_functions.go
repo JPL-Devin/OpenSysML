@@ -8,15 +8,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// Reasons the domain library's calculations this runtime does not evaluate are
-// reported with, named per representation the runtime lacks.
-const (
-	noTensorQuantity = "a tensor quantity has no representation: the runtime has no tensor value kind, " +
-		"and TensorCalculations gives its calculations no bodies to compute one by"
-	noTensorTransform = "a tensor quantity has no representation to transform: the runtime applies a " +
-		"CoordinateTransformation to a vector quantity (VectorCalculations::transform) and holds no tensor"
-)
-
 // init registers the Quantities and Units domain library's calculation packages:
 // computed over the quantity or vector representation, or unevaluable by name.
 func init() {
@@ -91,29 +82,30 @@ func registerVectorCalculations() {
 	registerValueFunction("VectorCalculations::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
 	registerValueFunction("VectorCalculations::vectorScalarQuantityDiv", []string{anonymous, anonymous}, 2, vectorScalarQuantityDiv)
 	registerValueFunction("VectorCalculations::inner", []string{"v", "w"}, 2, vectorInner)
-	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
+	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noOuterProductType)
 	registerValueFunction("VectorCalculations::norm", []string{"v"}, 1, vectorNorm)
 	registerValueFunction("VectorCalculations::angle", []string{"v", "w"}, 2, vectorAngle)
 	registerValueFunction("VectorCalculations::transform", []string{"transformation", "sourceVector"}, 2, transformVector)
 }
 
-// registerTensorCalculations registers TensorCalculations as unevaluable: the
-// runtime has no tensor value.
+// registerTensorCalculations registers TensorCalculations over the tensor quantity
+// representation; the products the library states no contraction for, and the
+// transformation needing a frame, are named.
 func registerTensorCalculations() {
-	registerUnevaluable("TensorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::isZeroTensorQuantity", []declaredParam{param("x")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::isUnitTensorQuantity", []declaredParam{param("x")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::+", []declaredParam{param("x"), param("y")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::-", []declaredParam{param("x"), param("y")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarQuantityTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarQuantityMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
+	registerValueFunction("TensorCalculations::[", []string{"elements", "mRef"}, 2, tensorOf)
+	registerValueFunction("TensorCalculations::isZeroTensorQuantity", []string{"x"}, 1, tensorIsZero)
+	registerValueFunction("TensorCalculations::isUnitTensorQuantity", []string{"x"}, 1, tensorIsUnit)
+	registerValueFunction("TensorCalculations::+", []string{"x", "y"}, 2, tensorAdditive(ast.OpAdd))
+	registerValueFunction("TensorCalculations::-", []string{"x", "y"}, 2, tensorAdditive(ast.OpSub))
+	registerValueFunction("TensorCalculations::scalarTensorMult", []string{anonymous, anonymous}, 2, scalarTensorMult(0, 1))
+	registerValueFunction("TensorCalculations::TensorScalarMult", []string{anonymous, anonymous}, 2, scalarTensorMult(1, 0))
+	registerValueFunction("TensorCalculations::scalarQuantityTensorMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(0, 1))
+	registerValueFunction("TensorCalculations::TensorScalarQuantityMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(1, 0))
+	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorVectorMultDecl))
+	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(vectorTensorMultDecl))
+	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorTensorMultDecl))
 	registerUnevaluable("TensorCalculations::transform",
-		[]declaredParam{param("transformation"), param("sourceTensor")}, noTensorTransform)
+		[]declaredParam{param("transformation"), param("sourceTensor")}, noTensorTransformation)
 }
 
 // registerAngleFunction adds a trigonometric function of an angle in radians,

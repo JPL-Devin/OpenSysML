@@ -77,7 +77,7 @@ func anythingToString(name string, _ *Context, args []Value) (Value, error) {
 		return NewStringValue(FormatValue(x)), nil
 	case ValComplex:
 		return Value{}, fmt.Errorf("%w: %s: no string notation for a Complex value is defined", ErrUnevaluableLibraryFunction, name)
-	case ValArray, ValVector, ValVectorQuantity:
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
 		return Value{}, fmt.Errorf("%w: %s: no string notation for %s is defined", ErrUnevaluableLibraryFunction, name, describeOperand(x))
 	}
 	return Value{}, fmt.Errorf(

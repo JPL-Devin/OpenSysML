@@ -358,9 +358,9 @@ func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
 }
 
 // namesAbandonedObject reports whether a value is, or a variant standing for, an
-// object that is gone, or an array or vector read from one or an array holding one.
+// object that is gone, or an array, vector or tensor keeping one or an array holding one.
 func namesAbandonedObject(val Value, abandoned map[int64]bool) bool {
-	if abandoned[backingObject(val)] {
+	if abandoned[keptObject(val)] {
 		return true
 	}
 	switch val.Kind {

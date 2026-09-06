@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 266,
-        "digest": "sha256:a916556b16cfbdd32e7b389d6867e9c926dc129df88dc9bb691d403c07a04744"
+        "files": 285,
+        "digest": "sha256:bab393e696cd3c90cd76aac6af4c08b39ef9ec7da03210fa6cdc2ee0d345051c"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 266,
-    "bothReject": 257,
+    "cases": 285,
+    "bothReject": 276,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 132,
-      "bothReject": 123,
+      "cases": 151,
+      "bothReject": 142,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1576,6 +1576,177 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/k55-subtype-specific-is-package.kerml",
+      "source": "semantic",
+      "rule": "the specific of a keyword-first specialization must be a type, not a package (KerML 8.3.3.1 Specialization::specific is typed Type; pilot fails to link the Specialization — `Couldn't resolve reference to Type 'Q'` — because that position admits only Types).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k56-subtype-general-is-package.kerml",
+      "source": "semantic",
+      "rule": "the general of a keyword-first specialization must be a type, not a package (KerML 8.3.3.1 Specialization::general is typed Type; pilot fails to link the Specialization — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k57-subclassifier-subclassifier-is-package.kerml",
+      "source": "semantic",
+      "rule": "the subclassifier of a keyword-first subclassification must be a classifier, not a package (KerML 8.3.3.2 Subclassification::subclassifier is typed Classifier; pilot fails to link the Subclassification — `Couldn't resolve reference to Classifier 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k58-subclassifier-superclassifier-is-feature.kerml",
+      "source": "semantic",
+      "rule": "the superclassifier of a keyword-first subclassification must be a classifier, not a feature (KerML 8.3.3.2 Subclassification::superclassifier is typed Classifier and 8.3.4 a Feature is not a Classifier; pilot fails to link the Subclassification — `Couldn't resolve reference to Classifier 'f'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k59-typing-typed-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the typed feature of a keyword-first feature typing must be a feature, not a package (KerML 8.3.4.4 FeatureTyping::typedFeature is typed Feature; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k60-typing-typed-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the typed feature of a keyword-first feature typing must be a feature, not a class (KerML 8.3.4.4 FeatureTyping::typedFeature is typed Feature; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k61-typing-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the type of a keyword-first feature typing must be a type, not a package (KerML 8.3.4.4 FeatureTyping::type is typed Type; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k62-subset-subsetting-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the subsetting feature of a keyword-first subsetting must be a feature, not a package (KerML 8.3.4.5 Subsetting::subsettingFeature is typed Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k63-subset-subsetted-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the subsetted feature of a keyword-first subsetting must be a feature, not a class (KerML 8.3.4.5 Subsetting::subsettedFeature is typed Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k64-redefinition-redefining-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the redefining feature of a keyword-first redefinition must be a feature, not a class (KerML 8.3.4.6 Redefinition::redefiningFeature is typed Feature; pilot fails to link the Redefinition — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 4
+    },
+    {
+      "path": "semantic/k65-redefinition-redefined-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the redefined feature of a keyword-first redefinition must be a feature, not a package (KerML 8.3.4.6 Redefinition::redefinedFeature is typed Feature; pilot fails to link the Redefinition — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k66-conjugate-conjugated-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the conjugated type of a keyword-first conjugation must be a type, not a package (KerML 8.3.3.4 Conjugation::conjugatedType is typed Type; pilot fails to link the Conjugation — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k67-conjugate-original-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the original type of a keyword-first conjugation must be a type, not a package (KerML 8.3.3.4 Conjugation::originalType is typed Type; pilot fails to link the Conjugation — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k68-inverse-feature-inverted-is-package.kerml",
+      "source": "semantic",
+      "rule": "the inverted feature of a keyword-first feature inverting must be a feature, not a package (KerML 8.3.4.8 FeatureInverting::featureInverted is typed Feature; pilot fails to link the FeatureInverting — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k69-inverse-inverting-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the inverting feature of a keyword-first feature inverting must be a feature, not a class (KerML 8.3.4.8 FeatureInverting::invertingFeature is typed Feature; pilot fails to link the FeatureInverting — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k70-disjoint-type-disjoined-is-package.kerml",
+      "source": "semantic",
+      "rule": "the disjoined type of a keyword-first disjoining must be a type, not a package (KerML 8.3.3.3 Disjoining::typeDisjoined is typed Type; pilot fails to link the Disjoining — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k71-disjoint-disjoining-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the disjoining type of a keyword-first disjoining must be a type, not a package (KerML 8.3.3.3 Disjoining::disjoiningType is typed Type; pilot fails to link the Disjoining — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k72-featuring-feature-of-type-is-class.kerml",
+      "source": "semantic",
+      "rule": "the featured feature of a type featuring must be a feature, not a class (KerML 8.3.4.3 TypeFeaturing::featureOfType is typed Feature; pilot fails to link the TypeFeaturing — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k73-featuring-featuring-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the featuring type of a type featuring must be a type, not a package (KerML 8.3.4.3 TypeFeaturing::featuringType is typed Type; pilot fails to link the TypeFeaturing — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2547,8 +2718,8 @@
       }
     ],
     "totals": {
-      "cases": 266,
-      "bothReject": 257,
+      "cases": 285,
+      "bothReject": 276,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

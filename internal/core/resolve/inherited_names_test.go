@@ -343,6 +343,66 @@ func TestRequirementParametersAreNotNameConflicts(t *testing.T) {
 	}
 }
 
+// A redefinition removes what its owner inherits, never a feature declared
+// beside it: a chain through a feature typed by the owner still reaches the
+// sibling (KerML 8.3.3.3.6) — pilot-refereed, both cases.
+func TestRedefiningASiblingMasksNothingThroughAChain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		src      string
+		resolves bool
+	}{
+		{
+			name: "sibling",
+			src: `package K {
+				classifier C {
+					feature xs;
+					feature sub : C[0..1];
+					feature slice redefines xs;
+					inv { sub.xs }
+				}
+			}`,
+			resolves: true,
+		},
+		{
+			name: "inherited",
+			src: `package K {
+				classifier G { feature xs; }
+				classifier C specializes G {
+					feature sub : C[0..1];
+					feature slice redefines xs;
+					inv { sub.xs }
+				}
+			}`,
+			resolves: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, root, docRoot := resolvedDocNamed(t, "k.kerml", tc.src)
+			var chains []resolve.Reference
+			for _, ref := range resolve.References(root, docRoot) {
+				if ref.Chain != nil && nameText(ref.QN) == "xs" {
+					chains = append(chains, ref)
+				}
+			}
+			if len(chains) != 1 {
+				t.Fatalf("chain references = %d, want the one sub.xs", len(chains))
+			}
+			got, ok := r.ResolveReference(chains[0])
+			if ok != tc.resolves {
+				t.Fatalf("sub.xs resolved = %v, want %v", ok, tc.resolves)
+			}
+			if !ok {
+				return
+			}
+			want := local(t, local(t, local(t, docRoot, "K").Scope, "C").Scope, "xs")
+			if got != want {
+				t.Errorf("sub.xs = %s, want the xs C declares", got.Name)
+			}
+		})
+	}
+}
+
 // local is the single member scope holds under name.
 func local(t *testing.T, scope *symbols.Scope, name string) *symbols.Symbol {
 	t.Helper()

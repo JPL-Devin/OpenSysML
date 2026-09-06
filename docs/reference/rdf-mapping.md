@@ -309,7 +309,8 @@ The `sysx:` properties:
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assume` of `assume constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. The `assert` of `assert constraint c : C` is not written here: that usage is a `sysml:AssertConstraintUsage`, and the metaclass states it; a graph stating both with another prefix is refused. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`, `connector c from a to b`). Without it the verb would be missing or doubled. |
-| `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
+| `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`, `bind e1 ::> a = e2 ::> b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
+| `sysx:endReferencesKeyword` | On a named end, the ReferencesKeyword written between the name and the feature when it is the word `references` (`bind e1 references a = …`). Absent, the end is written with `::>`; a value other than the two spellings is refused. |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
@@ -972,16 +973,23 @@ expr:P__Car___402.end0
 `payload`). An end written behind a multiplicity (`connect [1] a to [0..1] b`,
 `bind [0..1] a = [0..1] b`) carries its bounds on that node as `sysml:lowerBound`
 and `sysml:upperBound` expression nodes, the way a feature carries its own; the
-decoder writes them back ahead of the end. A `bind` head's second end is the
-value node the head already states as `sysml:value`, so a `bind a = b` relates
-`sysml:references` and `sysml:value` as its two ends without a copy of either
-(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). An end that
+decoder writes them back ahead of the end. A binding's two ends are two such
+nodes like a succession's or a connector's — `bind a = b` relates `end0` for `a`
+and `end1` for `b` — and neither is the connector's `sysml:value`: a binding
+states no value and no `sysml:references` of its own
+(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`,
+`binding_connector_ends_test.go`). An end that
 declares a name of its own and reference-subsets the feature it attaches to
-(`connect bead ::> t.bead to …`, KerML `connector a ::> a.x to b;`) relates that
+(`connect bead ::> t.bead to …`, KerML `connector a ::> a.x to b;`,
+`bind e1 ::> a = e2 references b;`) relates that
 feature — `sysml:referent` or `sysml:targetFeature` is `t.bead`, not `bead` —
-and carries the name as `sysx:endName` on the same node; the decoder writes it
-back as `<name> ::> <feature>`, whichever of `::>` and `references` the source
-spelled (`export_test.go:TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText`).
+and carries the name as `sysx:endName` on the same node, with
+`sysx:endReferencesKeyword "references"` where the source spelled the word; the
+decoder writes it back as `<name> ::> <feature>` unless that spelling is recorded
+(`export_test.go:TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText`,
+`binding_connector_ends_test.go:TestKerMLBindingConnectorEndsCarryTheRoundTripWithoutSourceText`).
+A named end that relates no feature, or one the graph names twice, is refused as
+that connector end rather than written (`TestBindingEndsWithoutANotationAreRefused`).
 A KerML binary connector without `from` starts with its first end, so
 `connector eng to t;` is an anonymous connector whose `end0` is `eng`, and a
 named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
@@ -990,7 +998,7 @@ named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
 |----------------|----------|------|
 | `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b`, `connector c from a to b` |
 | `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
-| `equals` | `<end0> = <end1>` | `bind a = b`, `binding [1] of a = b` |
+| `equals` | `<end0> = <end1>` | `bind a = b`, `bind e1 ::> a = e2 references b`, `binding [1] of a = b`, `binding of e1 ::> a = e2 ::> b` |
 | `firstThen` | `<end0> then <end1>` | `succession first a then b`, `succession [n] first a then b` |
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
