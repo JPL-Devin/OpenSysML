@@ -486,12 +486,18 @@ func TestExternalSpecializationsAreNotWritten(t *testing.T) {
       <ownedAttribute xmi:type="uml:Property" xmi:id="_p2" name="b">
         <subsettedProperty href="other.xmi#_ext_b"/>
       </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="_i" name="h1" classifier="_h">
+      <slot xmi:type="uml:Slot" xmi:id="_slot">
+        <definingFeature href="other.xmi#_ext_a"/>
+        <value xmi:type="uml:LiteralInteger" xmi:id="_v" value="1"/>
+      </slot>
     </packagedElement>`, `
   <sysml:Block xmi:id="_s1" base_Class="_h"/>`)
 	wantLine(t, r.Notation, "ref a;")
 	wantLine(t, r.Notation, "ref b;")
-	if strings.Contains(string(r.Notation), ":>>") || strings.Contains(string(r.Notation), ":> ") {
-		t.Errorf("notation specializes an external feature:\n%s", r.Notation)
+	if strings.Contains(string(r.Notation), "_ext") || strings.Contains(string(r.Notation), "unnamed") {
+		t.Errorf("notation refers to an external feature:\n%s", r.Notation)
 	}
 	for id, want := range map[string]string{
 		"_p1": "redefinedProperty (other.xmi#_ext_a) is not written",
@@ -501,6 +507,10 @@ func TestExternalSpecializationsAreNotWritten(t *testing.T) {
 		if len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, want) {
 			t.Errorf("entries for %s = %+v, want one approximation noting %q", id, es, want)
 		}
+	}
+	slot := entriesFor(r, "_slot")
+	if len(slot) != 1 || slot[0].Verdict != migrate.Unmapped || !strings.Contains(slot[0].Note, "defining feature is not in the document") {
+		t.Errorf("entries for _slot = %+v, want one unmapped entry for the external defining feature", slot)
 	}
 	for _, d := range errors(t, "external.sysml", r.Notation) {
 		t.Errorf("%v", d)

@@ -516,7 +516,7 @@ func (m *migration) individualBody(e *xmi.Element) {
 	m.comments(e)
 	for _, slot := range e.Owned("slot") {
 		f := m.model.Ref(slot, "definingFeature")
-		if f == nil {
+		if f == nil || f.IsProxy() {
 			m.unmapped(slot, "the slot's defining feature is not in the document")
 			continue
 		}
