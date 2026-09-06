@@ -3185,6 +3185,46 @@ func TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText(t *testing.T
 	}
 }
 
+// A comment in a head spelling a verb (`connect /* from */ a to b`) is not the
+// verb: the head's form is read from its tokens, so the graph still states it.
+func TestEndVerbsInCommentsAreNotVerbs(t *testing.T) {
+	src := `package Comments {
+	class T { feature eng; feature t; feature u; }
+	class V :> T {
+		connector /* from */ eng to t;
+		connector /* ( */ [1] eng to /* allocate */ [0..1] u;
+		connector link /* to */ from eng to u;
+	}
+	part def P { part a; part b; part c; }
+	part p : P {
+		connect /* from */ a to b;
+		connect /* ( */ (a, b, c);
+		binding /* of */ bind a = b;
+	}
+}
+`
+	turtle, err := export.Convert("comments.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if n := strings.Count(string(turtle), "sysx:endForm "); n != 6 {
+		t.Errorf("the graph should state all 6 heads' forms, got %d\n%s", n, turtle)
+	}
+	back := backFromTheGraphAlone(t, string(turtle))
+	for _, want := range []string{
+		"connector eng to t;",
+		"connector [1] eng to [0..1] u;",
+		"connector link from eng to u;",
+		"connect a to b;",
+		"connect (a, b, c);",
+		"binding bind a = b;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
 // backFromTheGraphAlone writes turtle back to notation without its source text,
 // and checks that notation yields the same structural graph again. The notation
 // is canonical spelling, so the graphs are compared as sets of triples.

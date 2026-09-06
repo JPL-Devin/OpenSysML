@@ -267,33 +267,33 @@ func (e *encoder) endVerb(n *ast.Usage, form string) (string, int) {
 	if at <= start {
 		return "", at
 	}
-	head := e.file.Text(source.Span{Offset: start, Len: at - start})
+	head := source.Span{Offset: start, Len: at - start}
 	for _, verb := range endVerbs[form] {
 		// A head whose own keyword is the verb (`connect a to b`) writes it
 		// once; the keyword the graph already carries is that verb.
 		if verb == n.Keyword {
 			continue
 		}
-		if index := strings.LastIndex(head, verb); index >= 0 && isWord(head, index, len(verb)) {
-			return verb, start + index
+		if index := e.src.lastToken(head, verb); index >= 0 {
+			return verb, index
 		}
 	}
 	if form == formNary {
-		if index := strings.LastIndex(head, "("); index >= 0 {
-			return "", start + index
+		if index := e.src.lastToken(head, "("); index >= 0 {
+			return "", index
 		}
 	}
 	if form == formFromTo {
-		if index := strings.LastIndex(head, "of "); index >= 0 && isWord(head, index, 2) {
-			return "", start + index
+		if index := e.src.lastToken(head, "of"); index >= 0 {
+			return "", index
 		}
-		if index := strings.LastIndex(head, "from"); index >= 0 && isWord(head, index, 4) {
-			return "", start + index
+		if index := e.src.lastToken(head, "from"); index >= 0 {
+			return "", index
 		}
 	}
 	if form == formFlowTo && n.FlowEnds != nil && n.FlowEnds.Payload != nil {
-		if index := strings.LastIndex(head, "of "); index >= 0 && isWord(head, index, 2) {
-			return "", start + index
+		if index := e.src.lastToken(head, "of"); index >= 0 {
+			return "", index
 		}
 	}
 	return "", at
@@ -341,32 +341,14 @@ func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
 	return strings.TrimSpace(strings.TrimSuffix(text, ";")), true
 }
 
-// isWord reports whether the match at index in text stands alone rather than
-// inside a longer name.
-func isWord(text string, index, length int) bool {
-	isNameByte := func(b byte) bool {
-		return b == '_' || b == '\'' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
-	}
-	if index > 0 && isNameByte(text[index-1]) {
-		return false
-	}
-	after := index + length
-	return after >= len(text) || !isNameByte(text[after])
-}
-
-// wroteBefore reports whether word appears in the head ahead of an end, which
+// wroteBefore reports whether word is a token of the head ahead of an end, which
 // is what tells the parenthesized and `from` forms from the ones without them.
 func (e *encoder) wroteBefore(n *ast.Usage, end ast.Node, word string) bool {
 	start, at := n.Span().Offset, end.Span().Offset
 	if at <= start {
 		return false
 	}
-	head := e.file.Text(source.Span{Offset: start, Len: at - start})
-	if word == "(" {
-		return strings.Contains(head, word)
-	}
-	index := strings.LastIndex(head, word)
-	return index >= 0 && isWord(head, index, len(word))
+	return e.src.lastToken(source.Span{Offset: start, Len: at - start}, word) >= 0
 }
 
 // relationshipTarget returns the target of the first relationship of a kind.
