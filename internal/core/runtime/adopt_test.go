@@ -1177,7 +1177,7 @@ const adoptDependentSrc = `package Demo {
 }`
 
 // A value derived from another object's feature is listed as that feature's
-// dependent, an edge of the analysis both were read in: carrying the objects over
+// dependent, an edge of the analysis both were read in: carrying either object over
 // drops it, and the value derived again there follows a write here.
 func TestAdoptDropsDependencyEdgesAndDerivesAgain(t *testing.T) {
 	prev := contextOver(t, adoptDependentSrc)
@@ -1195,6 +1195,9 @@ func TestAdoptDropsDependencyEdgesAndDerivesAgain(t *testing.T) {
 	ctx := contextOver(t, adoptDependentSrc+"\npart def Widget;")
 	if _, err := ctx.Adopt(prev, readerShapes, reader); err != nil {
 		t.Fatalf("Adopt(reader): %v", err)
+	}
+	if len(x.dependents) != 0 {
+		t.Errorf("src.x, left behind, still lists %d dependents carried over", len(x.dependents))
 	}
 	if _, err := ctx.Adopt(prev, srcShapes, src); err != nil {
 		t.Fatalf("Adopt(src): %v", err)

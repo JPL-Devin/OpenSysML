@@ -85,6 +85,9 @@ type FeatureValue struct {
 	// dependents are the derived values that read this one, to unmaterialize when
 	// it changes; nil until one does (see dependents.go).
 	dependents []*FeatureValue
+	// reads are the feature values a `=` value listed itself on, to delist from when
+	// derived again; nil until it is derived.
+	reads []*FeatureValue
 	// changing is set while a write to this value is under way, so a write nested
 	// in it counts as part of it (see beforeWrite).
 	changing bool

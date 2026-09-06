@@ -57,6 +57,13 @@ const derivedInvalidationModel = `
 			attribute n : Integer = 1;
 			perform action set { action go { assign host.a := 9; } first go; }
 		}
+		part def Switch {
+			attribute which : Integer default 1;
+			attribute a : Integer default 1;
+			attribute b : Integer default 2;
+			attribute pick : Integer = if which == 1 ? a else b;
+			attribute twice : Integer = pick * 2;
+		}
 		part def Bin {
 			attribute weights [*] default null;
 			attribute grams :> ISQ::mass [*] = (1 [g])->select {in x; false};
@@ -67,6 +74,7 @@ const derivedInvalidationModel = `
 		part box : Box;
 		part rod : Rod;
 		part bin : Bin;
+		part sw : Switch;
 		part host : Host;
 		part writer : Writer;
 		part stack : Stack;
@@ -225,6 +233,51 @@ func TestWriteOfAnEmptyCollectionInAnotherUnitRecomputesDerivedValues(t *testing
 	}
 	if total := bin.FeatureValues["total"]; !total.Materialized {
 		t.Fatal("writing weights' own value again unmaterialized total")
+	}
+}
+
+// TestDerivedValueForgetsTheBranchItNoLongerReads: derived again down another
+// branch, a value is delisted from what only the old branch read, so a write there
+// leaves it and what depends on it materialized; a probe restores the old listing.
+func TestDerivedValueForgetsTheBranchItNoLongerReads(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, derivedInvalidationModel))
+	sw := instantiateNamed(t, ctx, idx, "test::sw")
+	if got := readInt(t, ctx, sw, "twice"); got != 2 {
+		t.Fatalf("twice = %d, want 2", got)
+	}
+	a, b, pick, twice := sw.FeatureValues["a"], sw.FeatureValues["b"], sw.FeatureValues["pick"], sw.FeatureValues["twice"]
+	if !slices.Contains(a.dependents, pick) || slices.Contains(b.dependents, pick) {
+		t.Fatalf("pick is listed on a: %t, on b: %t after reading a; want true, false", slices.Contains(a.dependents, pick), slices.Contains(b.dependents, pick))
+	}
+
+	end := ctx.beginProbe()
+	setInt(t, ctx, sw, "which", 2)
+	if got := readInt(t, ctx, sw, "twice"); got != 4 {
+		t.Fatalf("twice = %d in the probe, want 4", got)
+	}
+	if slices.Contains(a.dependents, pick) || !slices.Contains(b.dependents, pick) {
+		t.Fatalf("pick is listed on a: %t, on b: %t after reading b; want false, true", slices.Contains(a.dependents, pick), slices.Contains(b.dependents, pick))
+	}
+	end()
+	if !slices.Contains(a.dependents, pick) || slices.Contains(b.dependents, pick) || !slices.Contains(pick.reads, a) {
+		t.Fatalf("the probe left pick listed on a: %t, on b: %t, reading a: %t; want true, false, true", slices.Contains(a.dependents, pick), slices.Contains(b.dependents, pick), slices.Contains(pick.reads, a))
+	}
+	setInt(t, ctx, sw, "a", 5)
+	if got := readInt(t, ctx, sw, "twice"); got != 10 {
+		t.Fatalf("twice = %d after a := 5, want 10", got)
+	}
+
+	setInt(t, ctx, sw, "which", 2)
+	if got := readInt(t, ctx, sw, "twice"); got != 4 {
+		t.Fatalf("twice = %d after which := 2, want 4", got)
+	}
+	setInt(t, ctx, sw, "a", 50)
+	if !pick.Materialized || !twice.Materialized {
+		t.Fatalf("a := 50 unmaterialized pick (%t) or twice (%t), which no longer read a", pick.Materialized, twice.Materialized)
+	}
+	setInt(t, ctx, sw, "b", 7)
+	if got := readInt(t, ctx, sw, "twice"); got != 14 {
+		t.Fatalf("twice = %d after b := 7, want 14", got)
 	}
 }
 

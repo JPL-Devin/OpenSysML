@@ -23,10 +23,43 @@ func (ctx *Context) deriveFeatureValue(inst *Instance, fv *FeatureValue, name st
 		return ctx.evalFeatureValueDefault(inst, fv, name)
 	}
 	for {
+		ctx.forgetReads(fv)
 		val, stale, err := ctx.deriveOnce(inst, fv, name)
 		if err != nil || !stale {
 			return val, err
 		}
+	}
+}
+
+// forgetReads delists fv from what its last derivation read: this one reads afresh,
+// and a branch it no longer takes must not unmaterialize it.
+func (ctx *Context) forgetReads(fv *FeatureValue) {
+	if len(fv.reads) == 0 {
+		return
+	}
+	ctx.noteProbeWrite(fv)
+	reads := fv.reads
+	fv.reads = nil
+	for _, src := range reads {
+		ctx.delist(src, fv)
+	}
+}
+
+// delist drops dep from src's dependents, copying rather than writing in place: a
+// journal snapshot shares the array.
+func (ctx *Context) delist(src, dep *FeatureValue) {
+	for i, listed := range src.dependents {
+		if listed != dep {
+			continue
+		}
+		ctx.noteProbeWrite(src)
+		if len(src.dependents) == 1 {
+			src.dependents = nil
+			return
+		}
+		kept := make([]*FeatureValue, 0, len(src.dependents)-1)
+		src.dependents = append(append(kept, src.dependents[:i]...), src.dependents[i+1:]...)
+		return
 	}
 }
 
@@ -42,7 +75,8 @@ func (ctx *Context) deriveOnce(inst *Instance, fv *FeatureValue, name string) (v
 	return val, false, err
 }
 
-// noteRead lists the value being derived, if any, as a dependent of the fv just read.
+// noteRead lists the value being derived, if any, as a dependent of the fv just read,
+// and fv among what it reads.
 func (ctx *Context) noteRead(fv *FeatureValue) {
 	if len(ctx.deriving) == 0 {
 		return
@@ -57,7 +91,9 @@ func (ctx *Context) noteRead(fv *FeatureValue) {
 		}
 	}
 	ctx.noteProbeWrite(fv)
+	ctx.noteProbeWrite(dep)
 	fv.dependents = append(fv.dependents, dep)
+	dep.reads = append(dep.reads, fv)
 }
 
 // held is what a feature value held before a write, with what depended on it then.

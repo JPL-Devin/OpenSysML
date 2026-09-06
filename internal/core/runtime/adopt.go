@@ -670,9 +670,10 @@ func (a *adoption) commit() {
 			}
 			done[fv] = true
 			fv.Feature = plan.featureFor(name, fv)
-			// What read fv did so in the previous analysis, where its dependents stay
-			// or derive again here; no edge is kept between the two.
+			// What fv read, and what read it, did so in the previous analysis: no edge
+			// is kept between the two, and a value derived again here lists itself anew.
 			fv.dependents = nil
+			a.ctx.forgetReads(fv)
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
 			if a.ctx.derivedFeatureValue(fv) {
