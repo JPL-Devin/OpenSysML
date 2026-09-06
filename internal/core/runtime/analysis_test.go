@@ -394,6 +394,53 @@ func TestCaseConditionsOfInherited(t *testing.T) {
 	}
 }
 
+// A case stating a result expression over an inherited one, or inheriting two,
+// records the conflict ahead of its required conditions; inheriting one does not.
+func TestCaseConditionsOfConflict(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Base {
+				attribute size : Integer;
+				require constraint { size >= 1 }
+				size > 0
+			}
+			analysis def Other {
+				attribute size : Integer;
+				size <= 9
+			}
+			analysis def Stated :> Base { size <= 4 }
+			analysis def Inherited :> Base, Other;
+			analysis def Kept :> Base;
+		}
+	`)
+	for _, tc := range []struct{ name, want string }{
+		{"Stated", "required conflicting result expression; required size >= 1"},
+		{"Inherited", "required conflicting result expression; required size >= 1"},
+		{"Kept", "required size >= 1"},
+	} {
+		sym := requirementNamed(t, scope, tc.name)
+		conds := ctx.CaseConditionsOf(sym, sym.OwnerScope)
+		if got := labelsOf(conds); got != tc.want {
+			t.Errorf("%s: conditions are [%s], want [%s]", tc.name, got, tc.want)
+		}
+		conflict := conflictingResultExpression(conds)
+		if tc.name == "Kept" {
+			if conflict != nil {
+				t.Errorf("Kept: records a conflict %+v, want none", conflict)
+			}
+			continue
+		}
+		if conflict == nil || conflict.Node == nil {
+			t.Fatalf("%s: records no conflict node", tc.name)
+		}
+		if conds[0].Scope == nil || conds[0].Scope.Owner() != sym {
+			t.Errorf("%s: the conflict's scope is not the case's own", tc.name)
+		}
+	}
+}
+
 // Asking about no symbol collects nothing rather than failing.
 func TestAnalysisAccessorsWithoutSymbol(t *testing.T) {
 	ctx, _ := analysisFixture(t, `package test { }`)

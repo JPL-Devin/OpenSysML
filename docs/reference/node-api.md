@@ -95,6 +95,9 @@ switch (value.kind) {
   case "boolean":
   case "string":   value.value;
   case "quantity": value.magnitude; value.unit;
+  case "array":    value.dimensions; value.elements;   // row-major SysMLValue[]
+  case "vector":   value.components;             // Magnitude[]: int | real, kept apart
+  case "vectorQuantity": value.components;       // QuantityValue[], one unit each
   case "enum":     value.value.name;             // and its literal/enumeration ids
   case "instance": value.id;                     // an object in the same tree
   case "sequence": value.elements;               // SysMLValue[]

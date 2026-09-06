@@ -93,6 +93,10 @@ Mermaid source)
 Leave the default stylesheet out, so only \-html\-css sheets style the
 document
 .TP
+.BI \-html\-theme " string"
+Style the HTML page with a bundled theme layered over the default stylesheet:
+default, modern, print or report (default: the default stylesheet alone)
+.TP
 .BI \-instantiate " value"
 Create an object of this definition before the checks, so a verdict is about
 it (repeatable)
@@ -374,6 +378,9 @@ sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
 sysml model.sysml \-render\-documents rendered
 sysml model.sysml \-render\-documents site \-doc\-form html \-html\-css \e
     theme.css
+# a bundled theme
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
+    \-html\-theme report \-o report.html
 # diagrams drawn in the browser
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
     \-html\-mermaid cdn \-o report.html
@@ -382,6 +389,8 @@ sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
     \-o report.pdf
 # the default stylesheet
 sysml \-html\-default\-css \-o sysml\-document.css
+# a theme's full sheet
+sysml \-html\-default\-css \-html\-theme modern \-o modern.css
 .fi
 .RE
 .PP
@@ -399,13 +408,15 @@ subprocess, never linked in; diagrams are pre\-rendered to SVG with
 mermaid\-cli (mmdc). None of these tools is needed until PDF output is asked
 for; scripts/download\-doc\-pdf\-toolchain.sh provisions pinned copies.
 .PP
-HTML output needs nothing external and loads nothing by default: \-html\-css
+HTML output needs nothing external and loads nothing by default: \-html\-theme
+picks one of the bundled looks (default, modern, print, report), \-html\-css
 adds your own stylesheets, \-html\-no\-default\-css drops the default one,
 \-html\-fragment writes the document element alone to embed in a page of
-yours, and \-html\-default\-css writes the default sheet out to start from.
-Diagrams are written as Mermaid source; \-html\-mermaid cdn has the page load
-a pinned Mermaid release from jsDelivr so a browser draws them, or names a URL
-of your own to load it from.
+yours, and \-html\-default\-css writes the default sheet out \(em or, with
+\-html\-theme, a theme's whole sheet \(em to start from. Diagrams are written
+as Mermaid source; \-html\-mermaid cdn has the page load a pinned Mermaid
+release from jsDelivr so a browser draws them, or names a URL of your own to
+load it from.
 .SH FLAG ORDER
 Flags may be written before or after the model they apply to. A file named
 like a flag is read as a file after \-\-, which ends the flags: sysml \-trace

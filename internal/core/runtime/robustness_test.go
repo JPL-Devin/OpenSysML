@@ -486,7 +486,7 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
 		}
 		if got, want := err.Error(), "binding end cannot be resolved: Sys.edges is bound by `bind [0..1] edges = [0..1] leftEdge`, "+
-			"which links one unspecified value of each end; the model does not determine which value edges holds"; got != want {
+			"which makes some value of edges a value of leftEdge without saying which value of either; the model does not state what edges holds"; got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
 		fv := inst.FeatureValues["edges"]

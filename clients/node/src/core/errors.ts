@@ -49,6 +49,9 @@ export class ServiceTimeoutError extends ServiceError {}
 /** The connected service does not implement the call at all. */
 export class UnsupportedOperationError extends ServiceError {}
 
+/** A value contradicts itself on the wire, such as an array whose elements do not fill its dimensions. */
+export class MalformedValueError extends OpenSysMLError {}
+
 /** A release binary could not be downloaded, or could not be installed once it was. */
 export class DownloadError extends ServiceError {}
 

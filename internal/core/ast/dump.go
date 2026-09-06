@@ -352,6 +352,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsParallel {
 			b.WriteString(` parallel=true`)
 		}
+		if v.IsAll {
+			b.WriteString(` all=true`)
+		}
 		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
 		return true
 	case *Usage:
@@ -391,6 +394,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		}
 		if v.IsParallel {
 			b.WriteString(` parallel=true`)
+		}
+		if v.IsAll {
+			b.WriteString(` all=true`)
 		}
 		if kw := v.Portion.Keyword(); kw != "" {
 			fmt.Fprintf(b, ` %s=true`, kw)

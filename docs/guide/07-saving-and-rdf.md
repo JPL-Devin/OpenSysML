@@ -184,8 +184,8 @@ declarations and survive either way.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
-also convert, as do most `parser_features_demo_*.kerml` files. The exceptions are a file that
-declares one name twice and one whose `feature` declarations name no element of their own. The
+also convert, as do the `parser_features_demo_*.kerml` files but one, whose `feature`
+declarations name no element of their own. The
 behavior written in a body converts too: states, regions, substates, action nodes, assignments,
 transitions and the result expression a calculation ends in all have a mapping. Conversion is
 refused for constructs the notation could not be rebuilt from, such as a name shared by two
@@ -199,12 +199,12 @@ wrote /tmp/action-semantics.ttl (ttl, 21671 bytes)
 0
 ```
 
-For example, a body that declares the same name twice is refused:
+For example, a `feature` declaration that names no element is refused:
 
 ```bash
-$ sysml examples/parser_features_demo_advanced_connectors.kerml -convert ttl; echo $?
+$ sysml examples/parser_features_demo_declarations.kerml -convert ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-sysml: cannot convert the duplicate declaration of "transitionLink" at examples/parser_features_demo_advanced_connectors.kerml:21:5: a name identifies an element in the graph, so two members of one namespace cannot share it
+sysml: cannot convert the `feature` declaration at examples/parser_features_demo_declarations.kerml:69:9: it names no element of its own, so the notation cannot be rebuilt from the graph and would come back as `attribute`, a different declaration
 2
 ```
 

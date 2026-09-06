@@ -213,5 +213,86 @@ public interface ValueOrBuilder extends
    */
   org.openmbee.opensysml.proto.ComplexOrBuilder getComplexOrBuilder();
 
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   * @return Whether the array field is set.
+   */
+  boolean hasArray();
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   * @return The array.
+   */
+  org.openmbee.opensysml.proto.Array getArray();
+  /**
+   * <pre>
+   * shape and elements, never a flat sequence
+   * </pre>
+   *
+   * <code>.sysml.Array array = 12 [json_name = "array"];</code>
+   */
+  org.openmbee.opensysml.proto.ArrayOrBuilder getArrayOrBuilder();
+
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   * @return Whether the vector field is set.
+   */
+  boolean hasVector();
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   * @return The vector.
+   */
+  org.openmbee.opensysml.proto.Vector getVector();
+  /**
+   * <pre>
+   * numeric components, never a sequence
+   * </pre>
+   *
+   * <code>.sysml.Vector vector = 13 [json_name = "vector"];</code>
+   */
+  org.openmbee.opensysml.proto.VectorOrBuilder getVectorOrBuilder();
+
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   * @return Whether the vectorQuantity field is set.
+   */
+  boolean hasVectorQuantity();
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   * @return The vectorQuantity.
+   */
+  org.openmbee.opensysml.proto.VectorQuantity getVectorQuantity();
+  /**
+   * <pre>
+   * components each with their unit
+   * </pre>
+   *
+   * <code>.sysml.VectorQuantity vector_quantity = 14 [json_name = "vectorQuantity"];</code>
+   */
+  org.openmbee.opensysml.proto.VectorQuantityOrBuilder getVectorQuantityOrBuilder();
+
   org.openmbee.opensysml.proto.Value.KindCase getKindCase();
 }

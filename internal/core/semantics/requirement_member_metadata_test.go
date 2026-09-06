@@ -1,6 +1,7 @@
 package semantics_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -222,6 +223,51 @@ func TestRequirementConstraintUsageBases(t *testing.T) {
 		got := supertypeNames(m, lookupFQN(t, idx, fqn))
 		if !containsName(got, redefined) {
 			t.Errorf("supertypes of %s = %v, want %s", fqn, got, redefined)
+		}
+	}
+}
+
+// A prefix written ahead of the keyword is a syntax error, but the member the
+// parser recovers keeps the annotation and its semantic base, so the editor's
+// resolution and validation carry on past the misplaced run.
+func TestMisplacedMetadataOnRequirementMembersStillAnnotatesOnRecovery(t *testing.T) {
+	src := strings.NewReplacer(
+		"subject #vehicle v", "#vehicle subject v",
+		"assume #check constraint a", "#check assume constraint a",
+		"require #check constraint r", "#check require constraint r",
+	).Replace(requirementMemberSrc)
+	const name = "<t>.sysml"
+	p := parser.New(source.New(name, []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 3 {
+		t.Fatalf("parse diagnostics = %v, want one per misplaced run", p.Diagnostics)
+	}
+	for _, d := range p.Diagnostics {
+		if !strings.HasPrefix(d.Message, "prefix metadata follows '") || src[d.Span.Offset] != '#' {
+			t.Errorf("diagnostic %q at %q, want the placement error at the '#'", d.Message, src[d.Span.Offset:d.Span.End()])
+		}
+	}
+	idx := libs.NewModelIndex()
+	idx.AddDocument(name, root)
+	idx.ExpandWildcardImports()
+	r := resolve.New(idx)
+	m := semantics.NewModel(r)
+	r.SetModel(m)
+	r.ResolveDocument(name, root)
+
+	cases := []struct{ fqn, keyword, base string }{
+		{"P::R::v", "vehicle", "P::vehicles"},
+		{"P::R::a", "check", "P::checks"},
+		{"P::R::r", "check", "P::checks"},
+	}
+	for _, tc := range cases {
+		sym := lookupFQN(t, idx, tc.fqn)
+		annots := semantics.MetadataAnnotationsOf(sym.Decl)
+		if len(annots) != 1 || !annots[0].Prefix || annots[0].Node.Type.Parts[len(annots[0].Node.Type.Parts)-1].Text != tc.keyword {
+			t.Errorf("%s: annotations = %+v, want the one prefix %q", tc.fqn, annots, tc.keyword)
+		}
+		if got := supertypeNames(m, sym); !containsName(got, tc.base) {
+			t.Errorf("supertypes of %s = %v, want %s", tc.fqn, got, tc.base)
 		}
 	}
 }
