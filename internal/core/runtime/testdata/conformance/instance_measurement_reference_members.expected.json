@@ -21,6 +21,8 @@
       {"type": "MeasurementRef", "unit": "m"}
     ]},
     "noConversion": {"type": "Sequence", "elements": []},
-    "stressBound": {"type": "Boolean", "value": false}
+    "stressBound": {"type": "Boolean", "value": false},
+    "deepPrefixFactor": {"type": "Real", "value": 1000.0},
+    "deepFactor": {"type": "Real", "value": 1000.0}
   }
 }

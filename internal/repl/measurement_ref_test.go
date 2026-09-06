@@ -116,7 +116,8 @@ func TestEvalMeasurementReferenceDeclarationMembers(t *testing.T) {
 }
 
 // A model's own object typed by a library record carries the record's members, redefinitions
-// and defaults followed; a model's own reference answers the inherited `isBound default false`.
+// and defaults followed, an optional record whose body binds only at depth included; a
+// model's own reference answers the inherited `isBound default false`.
 func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
 	s := NewSession()
 	res := s.Submit(`package Lab {
@@ -126,6 +127,9 @@ func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
 		attribute myConv : ConversionByPrefix { :>> prefix = kilo; :>> referenceUnit = m; }
 		attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 201.168; } }
 		attribute stressRef : TensorMeasurementReference { :>> mRefs = (Pa, Pa); :>> dimensions = (2); }
+		attribute def Box { attribute conv : ConversionByPrefix[0..1]; }
+		attribute deep : Box { :>> conv { :>> prefix { :>> conversionFactor = 1000.0; } } }
+		attribute bare : Box;
 	}`)
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
@@ -136,6 +140,9 @@ func TestFeaturesOfModelOwnedLibraryRecords(t *testing.T) {
 	wants(t, run(t, s, "%eval Lab::myConv.conversionFactor"), "= 1000.0")
 	wants(t, run(t, s, "%eval Lab::furlong.unitConversion.conversionFactor"), "= 201.168")
 	wants(t, run(t, s, "%eval QuantityCalculations::ConvertQuantity(2 [Lab::furlong], m)"), "= 402.336 [m]")
+	wants(t, run(t, s, "%eval Lab::deep.conv.prefix.conversionFactor"), "= 1000.0")
+	wants(t, run(t, s, "%eval Lab::deep.conv.conversionFactor"), "= 1000.0")
+	wants(t, run(t, s, "%eval Lab::bare.conv"), "= []")
 	wants(t, run(t, s, "%eval Lab::stressRef.isBound"), "= false")
 	run(t, s, "%instantiate Lab::stressRef")
 	wantsInOrder(t, run(t, s, "%features Lab::stressRef"), "mRefs = [Pa, Pa]", "dimensions = [2]", "isBound = false")

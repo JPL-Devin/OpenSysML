@@ -954,21 +954,32 @@ func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
 	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
 		return false
 	}
-	if bindsAFeature(feat.Symbol) {
+	if ctx.bindsAFeature(feat.Symbol) {
 		return true
 	}
 	for _, redefined := range ctx.redefinedFeatures(feat.Symbol, feat.OwnerType) {
-		if bindsAFeature(redefined) {
+		if ctx.bindsAFeature(redefined) {
 			return true
 		}
 	}
 	return false
 }
 
-// bindsAFeature reports whether a declaration's own body binds a value to a feature.
-func bindsAFeature(sym *symbols.Symbol) bool {
-	for _, member := range declMembers(sym.Decl) {
-		if usage, ok := member.(*ast.Usage); ok && usage.Value != nil {
+// bindsAFeature reports whether a declaration's body binds a value to a feature, directly
+// or under a nested member that exists whenever it does (not under an optional one).
+func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Scope == nil {
+		return false
+	}
+	for _, member := range sym.Scope.AllMembers() {
+		usage, ok := member.Decl.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		if usage.Value != nil {
+			return true
+		}
+		if !ctx.optionalValueless(member) && ctx.bindsAFeature(member) {
 			return true
 		}
 	}

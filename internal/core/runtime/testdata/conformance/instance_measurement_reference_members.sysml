@@ -8,7 +8,9 @@
 // (isBound, mRefs, isOrthogonal, dimensions) are answered by the value, and a
 // model-owned TensorMeasurementReference stating no isBound inherits the
 // library's `default false`. A reference read from a quantity's mRef names its
-// declaration too, so a conversion can follow the declared reference unit.
+// declaration too, so a conversion can follow the declared reference unit. An
+// optional record whose body binds a feature only at depth (`:>> conv { :>>
+// prefix { :>> conversionFactor = 1000.0; } }`) is one object, not none.
 package test {
 	public import ISQ::*;
 	public import SI::*;
@@ -20,6 +22,9 @@ package test {
 		:>> mRefs = (Pa, Pa, Pa, Pa);
 		:>> dimensions = (2, 2);
 	}
+
+	attribute def Box { attribute conv : ConversionByPrefix[0..1]; }
+	attribute deep : Box { :>> conv { :>> prefix { :>> conversionFactor = 1000.0; } } }
 
 	part def Survey {
 		attribute side : LengthValue = 3 [km];
@@ -39,5 +44,7 @@ package test {
 		attribute axes : MeasurementUnit[*] = SI::m.mRefs;
 		attribute noConversion : UnitConversion[0..1] = SI::m.unitConversion;
 		attribute stressBound : Boolean = stressRef.isBound;
+		attribute deepPrefixFactor : Real = deep.conv.prefix.conversionFactor;
+		attribute deepFactor : Real = deep.conv.conversionFactor;
 	}
 }
