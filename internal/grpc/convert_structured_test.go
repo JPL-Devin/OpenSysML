@@ -522,3 +522,19 @@ func TestStructuredInputNeedsStructuredValues(t *testing.T) {
 		}
 	}
 }
+
+// The wire Value has no measurement-reference arm, so a bare unit crosses as an
+// unsupported null naming it, never as a sequence, a string or a quantity of one.
+func TestMeasurementRefCrossesAsUnsupported(t *testing.T) {
+	metre := runtime.NewMeasurementRefValue(semantics.Unit{
+		Text:    "m",
+		Product: semantics.OpaqueUnitProduct("m", semantics.UnitTerm{Scale: semantics.UnitScale(1)}),
+	})
+	pv := ValueToProto(metre, nil)
+	if pv.GetSequence() != nil || pv.GetQuantity() != nil || pv.GetStringValue() != "" {
+		t.Fatalf("a measurement reference crossed as %T: %v", pv.GetKind(), pv)
+	}
+	if got, want := pv.GetNull(), "unsupported: measurement reference m"; got != want {
+		t.Errorf("ValueToProto(m) = %v, want null %q", pv, want)
+	}
+}

@@ -127,3 +127,137 @@ func TestRecursiveRollupThroughACall(t *testing.T) {
 		attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);
 	}`)
 }
+
+// TestBoundMeasurementUnit: a unit binds to the unit definition typing it, to any
+// measurement-reference supertype, and to no quantity value type; the checker
+// judges each as the runtime's write conformance does. A quantity bound to a
+// unit-typed feature (`hp : PowerUnit = 745.7 [W]` in the OMG examples) is not
+// judged, as the pilot implementation accepts it.
+func TestBoundMeasurementUnit(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute u : LengthUnit = m;`)
+	wantNoDimensionDiags(t, `attribute u : LengthUnit = km;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::ScalarMeasurementReference = m;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::MeasurementUnit = m;`)
+	wantOneDimensionError(t, `attribute u : LengthUnit = s;`,
+		"cannot bind a value of type DurationUnit to a feature typed by LengthUnit")
+	wantOneDimensionError(t, `attribute q : LengthValue = m;`,
+		"cannot bind a value of type LengthUnit to a feature typed by LengthValue")
+	wantNoDimensionDiags(t, `attribute u : PowerUnit = 745.7 [W];`)
+}
+
+// TestBoundComposedMeasurementUnit: a product, quotient or power of units is a
+// DerivedUnit of the composed dimension, so it binds to a unit definition of
+// that dimension and is refused by one of another with the dimension named.
+func TestBoundComposedMeasurementUnit(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute a : AreaUnit = m * m;`)
+	wantNoDimensionDiags(t, `attribute kpl : MeasurementReferences::DerivedUnit = km / L;`)
+	wantNoDimensionDiags(t, `attribute v : SpeedUnit = m / s;`)
+	wantNoDimensionDiags(t, `attribute v : SpeedUnit = km / h;`)
+	wantNoDimensionDiags(t, `attribute c : VolumeUnit = m ** 3;`)
+	wantNoDimensionDiags(t, `attribute u : MeasurementReferences::MeasurementUnit = m / s;`)
+	wantOneDimensionError(t, `attribute a : AreaUnit = m * s;`,
+		"cannot bind a measurement reference of dimension L·T to a feature typed by AreaUnit")
+	wantOneDimensionError(t, `attribute u : LengthUnit = m / s;`,
+		"cannot bind a measurement reference of dimension L·T^-1 to a feature typed by LengthUnit")
+	// A quantity value type of the same dimension is no type of a unit: the
+	// runtime refuses the write, so the checker refuses the binding.
+	wantOneDimensionError(t, `attribute a : AreaValue = m * m;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by AreaValue")
+	wantOneDimensionError(t, `attribute v : SpeedValue = km / h;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by SpeedValue")
+	wantNoDimensionDiags(t, `attribute a : AreaValue = 2 [m] * 3 [m];`)
+	wantNoDimensionDiags(t, `attribute n : ScalarValues::Natural = 1 * 1;`)
+}
+
+// TestBoundMeasurementScale: a measurement scale measures in a unit's dimension
+// but no unit is a scale, so a unit of that dimension, however composed, is
+// refused by a scale-typed feature, while a scale binds to its own types.
+func TestBoundMeasurementScale(t *testing.T) {
+	wantOneDimensionError(t, `attribute t : Time::TimeScale = s;`,
+		"cannot bind a value of type DurationUnit to a feature typed by TimeScale")
+	wantOneDimensionError(t, `attribute t : Time::TimeScale = s * s / s;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by TimeScale")
+	wantOneDimensionError(t, `attribute t : MeasurementReferences::IntervalScale = h * s / min;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by IntervalScale")
+	wantOneDimensionError(t, `attribute t : MeasurementReferences::MeasurementScale = K * K / K;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by MeasurementScale")
+	wantNoDimensionDiags(t, `attribute t : DurationUnit = s * s / s;`)
+	wantNoDimensionDiags(t, `attribute t : Time::TimeScale = Time::UTC;`)
+	wantNoDimensionDiags(t, `attribute t : MeasurementReferences::IntervalScale = SI::'°C_abs';`)
+	wantNoDimensionDiags(t, `attribute t : MeasurementReferences::ScalarMeasurementReference = SI::'°C_abs';`)
+	wantOneDimensionError(t, `attribute t : ThermodynamicTemperatureUnit = SI::'°C_abs';`,
+		"cannot bind a value of type IntervalScale to a feature typed by ThermodynamicTemperatureUnit")
+}
+
+// TestComposedMeasurementUnitAsAnArgument: an operator expression over units is
+// a measurement reference where an overload is chosen by argument type, so
+// ToString(m / s) selects MeasurementRefCalculations::ToString and a quantity
+// parameter refuses it by name; one over numbers (`1 * 1`) is the number it
+// evaluates to, not the DerivedUnit unit notation would read it as.
+func TestComposedMeasurementUnitAsAnArgument(t *testing.T) {
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute text : ScalarValues::String = ToString(m / s);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(3 [km], m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(3 [km], km / m * m);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(m, m);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found LengthUnit")
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(m / m, m);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 * 1, m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 / 1, m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 ** 2, m);`)
+}
+
+// TestMeasurementUnitPowerOfAnUnknownExponent: a unit raised to a Real the checker
+// cannot fold is a DerivedUnit whose dimension only the runtime knows, so it is an
+// argument for a measurement-reference parameter and refused by a quantity one,
+// while a binding to a unit definition is left to the runtime to judge.
+func TestMeasurementUnitPowerOfAnUnknownExponent(t *testing.T) {
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : AreaUnit = m ** e;`)
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : LengthUnit = m ** e;`)
+	wantNoDimensionDiags(t, `attribute e : ScalarValues::Real = 2.0;
+		attribute a : MeasurementReferences::DerivedUnit = m ** e;`)
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute text : ScalarValues::String = ToString(m ** e);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : AreaValue = ConvertQuantity(3 [m ** 2], m ** e);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : AreaValue = ConvertQuantity(m ** e, m ** 2);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute e : ScalarValues::Real = 2.0;
+		attribute q : LengthValue = ConvertQuantity(2 ** e, m);`)
+}
+
+// TestInferredMeasurementUnitFeature: an untyped feature bound to a unit expression
+// is typed by its value, a DerivedUnit, so it passes for a measurement reference
+// and selects the overload taking one, and a quantity parameter refuses it by name.
+func TestInferredMeasurementUnitFeature(t *testing.T) {
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute area = m * m;
+		attribute q : AreaValue = ConvertQuantity(3 [m ** 2], area);`)
+	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
+		attribute area = m * m;
+		attribute text : ScalarValues::String = ToString(area);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		private import MeasurementRefCalculations::*;
+		attribute area = m * m;
+		attribute again = area;
+		attribute text : ScalarValues::String = ToString(again);`)
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute area = m * m;
+		attribute q : AreaValue = ConvertQuantity(area, m ** 2);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+}

@@ -44,10 +44,7 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 	if declared == nil {
 		return
 	}
-	want, ok := ec.model.DimensionOfType(declared)
-	if !ok {
-		return
-	}
+	want, known := ec.model.DimensionOfType(declared)
 	for _, element := range valueElements(value) {
 		if ec.judgedByType(valueScope, element) {
 			// A named value is judged against the target by specialization,
@@ -57,6 +54,9 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		if statesNoMeasurement(element) {
 			continue
 		}
+		if ec.judgedAsMeasurementRef(valueScope, declared, element) || !known {
+			continue
+		}
 		got, ok := ec.model.DimensionOfExpr(valueScope, element)
 		if !ok || want.Term.Commensurable(got.Term) {
 			continue
@@ -64,6 +64,23 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s",
 			describeDimension(got), describeDimension(want))
 	}
+}
+
+// judgedAsMeasurementRef judges a unit composed by `*`, `/` or `**` as the DerivedUnit
+// it evaluates to (`m * s` refused by AreaUnit, `m * m` by AreaValue); false otherwise.
+func (ec *exprChecker) judgedAsMeasurementRef(scope *symbols.Scope, declared *symbols.Symbol, element ast.Node) bool {
+	e, ok := element.(*ast.OperatorExpr)
+	if !ok {
+		return false
+	}
+	c, ok := ec.model.MeasurementRefExprConformance(scope, e, declared)
+	if !ok {
+		return false
+	}
+	if c.Known && !c.Holds {
+		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s", c.Found, declared.Name)
+	}
+	return true
 }
 
 // judgedByType reports whether value conformance already types the element,

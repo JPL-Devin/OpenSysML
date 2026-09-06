@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Block",
+  "slots": {
+    "side": {"type": "Quantity", "value": 3, "unit": "m"},
+    "inSeconds": {"error": "incommensurable units: cannot express m (metre) in s (second)"},
+    "scaled": {"error": "operator '*' is not defined for a measurement reference and an Integer"},
+    "summed": {"error": "operator '+' is not defined for a measurement reference and a measurement reference"},
+    "conversion": {"error": "not evaluable: MeasurementReferences::ScalarMeasurementReference::unitConversion: a measurement reference value holds the unit m and its reduction metre, not the declaration's member unitConversion"},
+    "dimension": {"error": "not evaluable: MeasurementReferences::ScalarMeasurementReference::quantityDimension"},
+    "notAUnit": {"error": "parameter \"targetMRef\" requires a measurement reference such as SI::m, got an Integer"},
+    "mixed": {"error": "not evaluable: VectorCalculations::'[': a VectorMeasurementReference is a CoordinateFrame, whose mRefs and basisDirections the runtime holds no value of"},
+    "turned": {"error": "not evaluable: VectorCalculations::transform: a CoordinateTransformation has no representation"},
+    "spread": {"error": "not evaluable: VectorCalculations::outer: a tensor quantity has no representation: the runtime has no tensor value kind"}
+  }
+}
