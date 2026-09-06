@@ -218,6 +218,11 @@ func TestMeasurementRefRendersAsSysMLWrites(t *testing.T) {
 		{opensysml.MeasurementRef{Unit: "km", UnitID: "SI::kilometre"}, "km"},
 		{opensysml.MeasurementRef{Unit: "m/s"}, "m/s"},
 		{opensysml.Sequence{opensysml.MeasurementRef{Unit: "m"}, opensysml.MeasurementRef{Unit: "s"}}, "[m s]"},
+		{opensysml.MeasurementRef{Term: &opensysml.UnitTerm{ScaleNum: 1, ScaleDen: 1}}, "1"},
+		{opensysml.MeasurementRef{Term: &opensysml.UnitTerm{ScaleNum: 1000, ScaleDen: 3600, Factors: []opensysml.UnitFactor{
+			{UnitID: "SI::metre", Exponent: 1}, {UnitID: "SI::second", Exponent: -1},
+		}}}, "1000/3600·SI::metre·SI::second^-1"},
+		{opensysml.MeasurementRef{Unit: "km/h", Term: &opensysml.UnitTerm{ScaleNum: 1000, ScaleDen: 3600}}, "km/h"},
 	} {
 		if got := fmt.Sprintf("%v", testcase.value); got != testcase.want {
 			t.Errorf("%#v renders as %q, want %q", testcase.value, got, testcase.want)

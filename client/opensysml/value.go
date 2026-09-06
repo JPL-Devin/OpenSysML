@@ -185,9 +185,33 @@ func (vq VectorQuantity) String() string {
 	return out
 }
 
-// String renders the reference as SysML writes the unit: `km`, `m/s`.
+// String renders the reference as SysML writes the unit: `km`, `m/s`; one
+// never written down renders its reduction.
 func (r MeasurementRef) String() string {
-	return r.Unit
+	if r.Unit != "" || r.Term == nil {
+		return r.Unit
+	}
+	return r.Term.String()
+}
+
+// String renders the reduction over its base units, `1000/3600·SI::m·SI::s^-1`,
+// a scale of one and an exponent of one left implicit; `1` for dimension one.
+func (t UnitTerm) String() string {
+	var parts []string
+	if t.ScaleNum != t.ScaleDen {
+		parts = append(parts, fmt.Sprintf("%g/%g", t.ScaleNum, t.ScaleDen))
+	}
+	for _, f := range t.Factors {
+		if f.Exponent == 1 {
+			parts = append(parts, f.UnitID)
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s^%g", f.UnitID, f.Exponent))
+	}
+	if len(parts) == 0 {
+		return "1"
+	}
+	return strings.Join(parts, "·")
 }
 
 // String is the literal as a reader writes it, the Name the service reported.
