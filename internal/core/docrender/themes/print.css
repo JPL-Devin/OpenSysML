@@ -72,6 +72,9 @@
   .sysml-document .sysml-diagram pre {
     border: var(--sysml-border-width) solid var(--sysml-rule);
     padding: var(--sysml-space-tight);
+    overflow-x: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .sysml-document .sysml-link,
