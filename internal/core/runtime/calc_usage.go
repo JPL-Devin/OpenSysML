@@ -209,6 +209,17 @@ func (shape *calcShape) outputNames() string {
 	return strings.Join(names, ", ")
 }
 
+// declaresUsage reports whether the calc's body declares a calc or analysis
+// usage named name among its own members, which a read from outside may name.
+func (shape *calcShape) declaresUsage(name string) bool {
+	for _, stmt := range shape.Body {
+		if decl, ok := stmt.(lower.DeclareUsage); ok && decl.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // designatedOutput returns the output feature an invocation of the calc yields
 // as its result: the one declared with `return`, or, failing that, the only
 // output the calc binds a value to. A calc binding several of them designates
@@ -242,7 +253,7 @@ func (shape *calcShape) designatedOutput() (calcOutput, error) {
 	case 0:
 		// The calc computed nothing to hand back: a body that fell off its end,
 		// or outputs none of which states a value.
-		return calcOutput{}, fmt.Errorf("%w: calc %s ended without a return", ErrCalcNoReturn, shape.Name)
+		return calcOutput{}, fmt.Errorf("%w: %s ended without a return", ErrCalcNoReturn, shape.Label)
 	case 1:
 		return valued[0], nil
 	default:
@@ -251,8 +262,8 @@ func (shape *calcShape) designatedOutput() (calcOutput, error) {
 			names = append(names, out.Name)
 		}
 		return calcOutput{}, fmt.Errorf(
-			"%w: calc %s computes %d output features (%s) and designates no result; read them from a calc usage instead: %s",
-			ErrAmbiguousResult, shape.Name, len(valued), strings.Join(names, ", "), shape.usageSpelling(valued[0].Name),
+			"%w: %s computes %d output features (%s) and designates no result; read them from a usage instead: %s",
+			ErrAmbiguousResult, shape.Label, len(valued), strings.Join(names, ", "), shape.usageSpelling(valued[0].Name),
 		)
 	}
 }
@@ -261,7 +272,7 @@ func (shape *calcShape) designatedOutput() (calcOutput, error) {
 // a calc that designates no result, with the inputs it has to bind.
 func (shape *calcShape) usageSpelling(output string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "calc c : %s {", shape.Name)
+	fmt.Fprintf(&b, "%s c : %s {", shape.Kind, shape.Name)
 	for _, param := range shape.Params {
 		fmt.Fprintf(&b, " in %s = ...;", param.Name)
 	}
@@ -506,18 +517,8 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 // members or in a body-local block of it, which declares no owner of its own —
 // rather than in a part or a package, whose members hold no running values.
 func enclosedByBehaviorBody(sym *symbols.Symbol) bool {
-	if sym == nil {
-		return false
-	}
-	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
-		if owner := scope.Owner(); owner != nil {
-			return isCalcSymbol(owner) || isActionSymbol(owner) || isStateSymbol(owner)
-		}
-		if !scope.BodyLocal() {
-			return false
-		}
-	}
-	return false
+	owner := enclosingBehavior(sym)
+	return isCalcSymbol(owner) || isActionSymbol(owner) || isStateSymbol(owner)
 }
 
 // checkCalcTyping rejects a calc usage typed by something that is not a calc: it
@@ -549,7 +550,7 @@ func (ctx *Context) runCalcUsage(
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
-		return nil, fmt.Errorf("calc %s: %w", shape.Name, err)
+		return nil, fmt.Errorf("%s: %w", shape.Label, err)
 	}
 	if ec.trace != nil {
 		if returned {
@@ -583,8 +584,8 @@ func (run *calcRun) output(ctx *Context, name string) (Value, error) {
 	out, ok := run.shape.output(name)
 	if !ok {
 		return Value{}, fmt.Errorf(
-			"%w: calc %s declares no output %s (it declares: %s)",
-			ErrUnknownOutput, run.shape.Name, name, run.shape.outputNames(),
+			"%w: %s declares no output %s (it declares: %s)",
+			ErrUnknownOutput, run.shape.Label, name, run.shape.outputNames(),
 		)
 	}
 	value, err := run.value(ctx, out)
@@ -613,13 +614,13 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 			return value, nil
 		}
 		return Value{}, fmt.Errorf(
-			"%w: output %s of calc %s", ErrOutputNotAssigned, run.outputDescription(out), run.shape.Name,
+			"%w: output %s of %s", ErrOutputNotAssigned, run.outputDescription(out), run.shape.Label,
 		)
 	}
 	if run.computing[out.Name] {
 		return Value{}, fmt.Errorf(
-			"%w: output %s of calc %s depends on itself",
-			ErrCyclicOutput, run.outputDescription(out), run.shape.Name,
+			"%w: output %s of %s depends on itself",
+			ErrCyclicOutput, run.outputDescription(out), run.shape.Label,
 		)
 	}
 	run.computing[out.Name] = true
@@ -635,12 +636,12 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 
 	value, err := run.bindingEnv(ctx, out.Owner).Eval(out.Value)
 	if err != nil {
-		return Value{}, fmt.Errorf("calc %s: output %s: %w", run.shape.Name, run.outputDescription(out), err)
+		return Value{}, fmt.Errorf("%s: output %s: %w", run.shape.Label, run.outputDescription(out), err)
 	}
 	// A binding gives the output its value as a write does, so it answers to the
 	// output's declared type and multiplicity the same way.
 	if err := out.Decl.check(ctx, &value, func() string {
-		return fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
+		return fmt.Sprintf("%s: output %s", run.shape.Label, run.outputDescription(out))
 	}); err != nil {
 		return Value{}, err
 	}
@@ -705,23 +706,24 @@ func (run *calcRun) lookupOutput(ctx *Context, name string) (Value, bool, error)
 	return value, true, err
 }
 
-// isCalcUsageSymbol reports whether sym declares a calc usage, the form that
-// carries an evaluation whose outputs are features. A calc definition is a type:
-// it is invoked, not read.
+// isCalcUsageSymbol reports whether sym declares a calc usage or an analysis case
+// usage, the forms that carry an evaluation whose outputs are features. A
+// definition is a type: it is invoked, not read.
 func isCalcUsageSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
 	if sym.Decl != nil {
 		usage, ok := sym.Decl.(*ast.Usage)
-		return ok && usage.Kind == ast.UsageCalc
+		return ok && (usage.Kind == ast.UsageCalc || usage.Kind == ast.UsageAnalysisCase)
 	}
-	return sym.Kind == symbols.SymbolCalcUsage
+	return sym.Kind == symbols.SymbolCalcUsage || sym.Kind == symbols.SymbolAnalysisCaseUsage
 }
 
 // evalCalcUsageMembers reads a name written after a calc usage: its first part
 // is an output feature of the usage, evaluated from one run of the usage's body,
-// and any further part is read through the object that output names.
+// or a usage the body declares, whose own members the parts after it read; any
+// further part is read through the object that output names.
 func (ec *EvalContext) evalCalcUsageMembers(sym *symbols.Symbol, parts []ast.NameSegment) (Value, error) {
 	if len(parts) == 0 {
 		return Value{}, fmt.Errorf("empty member chain")
@@ -730,11 +732,49 @@ func (ec *EvalContext) evalCalcUsageMembers(sym *symbols.Symbol, parts []ast.Nam
 	if err != nil {
 		return Value{}, err
 	}
+	for {
+		nested, ok, err := run.nestedUsage(ec.ctx, parts[0].Text)
+		if err != nil {
+			return Value{}, err
+		}
+		if !ok {
+			break
+		}
+		run, parts = nested, parts[1:]
+		if len(parts) == 0 {
+			return Value{}, fmt.Errorf(
+				"%w: %s computes output features (%s); read one of them",
+				ErrNoValue, run.shape.Label, run.shape.outputNames(),
+			)
+		}
+	}
 	value, err := run.output(ec.ctx, parts[0].Text)
 	if err != nil {
 		return Value{}, err
 	}
 	return ec.chainMemberValue(value, parts[1:], parts[0].Text)
+}
+
+// nestedUsage is the evaluation of a calc or analysis usage this run's body
+// declares under name, read over this run's environment so its bindings see the
+// values the body holds; false when the body declares no such usage.
+func (run *calcRun) nestedUsage(ctx *Context, name string) (*calcRun, bool, error) {
+	if _, isOutput := run.shape.output(name); isOutput || ctx.resolver == nil {
+		return nil, false, nil
+	}
+	if !run.shape.declaresUsage(name) {
+		return nil, false, nil
+	}
+	scope := ctx.calcScope(run.shape.BodyOwner, run.shape.Sym, run.scope)
+	sym, ok := ctx.resolver.LookupName(scope, name)
+	if !ok || !isCalcUsageSymbol(sym) {
+		return nil, false, nil
+	}
+	nested, err := ctx.calcUsageRun(run.bindingEnv(ctx, run.shape.BodyOwner), sym)
+	if err != nil {
+		return nil, true, err
+	}
+	return nested, true, nil
 }
 
 // calcUsageOperand reports whether the operand of a feature chain names a calc

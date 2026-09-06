@@ -418,12 +418,16 @@ func (e *NoValueError) Unwrap() error { return ErrNoValue }
 // UnboundSubjectError reports a check whose subject nothing supplied, naming
 // the subject and how a caller supplies one.
 type UnboundSubjectError struct {
-	Kind    string // "constraint" or "requirement"
+	Kind    string // "constraint", "requirement" or "analysis"
 	Element string // name of the element declaring the subject
 	Subject string // name of the subject parameter
 }
 
 func (e *UnboundSubjectError) Error() string {
+	if e.Kind == "analysis" {
+		return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`) or pass the object as the first argument",
+			e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject)
+	}
 	return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`), check it on an object, or assert `satisfy %s by <element>`",
 		e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject, e.Element)
 }

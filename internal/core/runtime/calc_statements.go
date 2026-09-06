@@ -48,8 +48,8 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, s low
 	out, _ := h.shape.output(name)
 	if out.Value != nil {
 		return fmt.Errorf(
-			"%w: output %s of calc %s is both given a value by its declaration and assigned in its body",
-			ErrConflictingOutput, name, h.shape.Name,
+			"%w: output %s of %s is both given a value by its declaration and assigned in its body",
+			ErrConflictingOutput, name, h.shape.Label,
 		)
 	}
 	// Written to the body's own data, so later statements read the output bound —
