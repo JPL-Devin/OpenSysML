@@ -115,3 +115,156 @@ func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
 		t.Fatalf("AllRedefinedFeatures(C's subject) = %v, want [A::s B::s]", got)
 	}
 }
+
+// An analysis case may state several objectives; each redefines the general's
+// objective at its own position, so a later one keeps that one's type and members.
+func TestAnalysisObjectivesRedefineByPosition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		requirement def Min { attribute a; }
+		requirement def Max { attribute b; }
+		analysis def Base {
+			objective cheapest : Min;
+			objective widestMargin : Max;
+		}
+		analysis def Derived :> Base { objective; objective; objective; }
+		analysis derived : Base { objective; objective; objective; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	cheapest := nested(t, base.Scope, "cheapest")
+	widestMargin := nested(t, base.Scope, "widestMargin")
+	minDef := nested(t, p.Scope, "Min")
+	maxDef := nested(t, p.Scope, "Max")
+	for _, name := range []string{"Derived", "derived"} {
+		owner := nested(t, p.Scope, name)
+		owned, inherited := m.ObjectivesOf(owner)
+		if len(owned) != 3 || len(inherited) != 0 {
+			t.Fatalf("ObjectivesOf(%s) = %v, %v; want three owned, none inherited", name, owned, inherited)
+		}
+		first, second, third := owned[0], owned[1], owned[2]
+		if got := m.ImplicitRoleRedefinitions(first); len(got) != 1 || got[0] != cheapest {
+			t.Errorf("ImplicitRoleRedefinitions(%s's first objective) = %v, want [cheapest]", name, got)
+		}
+		if got := m.AllSupertypes(first); len(got) != 2 || got[0] != cheapest || got[1] != minDef {
+			t.Errorf("AllSupertypes(%s's first objective) = %v, want [cheapest Min]", name, got)
+		}
+		if got := m.ImplicitRoleRedefinitions(second); len(got) != 1 || got[0] != widestMargin {
+			t.Errorf("ImplicitRoleRedefinitions(%s's second objective) = %v, want [widestMargin]", name, got)
+		}
+		if got := m.AllSupertypes(second); len(got) != 2 || got[0] != widestMargin || got[1] != maxDef {
+			t.Errorf("AllSupertypes(%s's second objective) = %v, want [widestMargin Max]", name, got)
+		}
+		if got, ok := m.LookupMember(second, "b"); !ok || got != nested(t, maxDef.Scope, "b") {
+			t.Errorf("LookupMember(%s's second objective, b) = %v, %v; want Max::b", name, got, ok)
+		}
+		if _, ok := m.LookupMember(second, "a"); ok {
+			t.Errorf("%s's second objective sees Min::a through the first general objective", name)
+		}
+		if got := m.ImplicitRoleRedefinitions(third); len(got) != 0 {
+			t.Errorf("ImplicitRoleRedefinitions(%s's third objective) = %v, want none: the general states two", name, got)
+		}
+		if got := m.AllSupertypes(third); len(got) != 0 {
+			t.Errorf("AllSupertypes(%s's third objective) = %v, want none", name, got)
+		}
+	}
+}
+
+// A general restating only some objectives still presents the rest at their
+// positions, so a specialization's later objective finds the one it redefines.
+func TestAnalysisObjectivesRedefineThroughPartialRestatement(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		requirement def Min { attribute a; }
+		requirement def Max { attribute b; }
+		analysis def Base {
+			objective cheapest : Min;
+			objective widestMargin : Max;
+		}
+		analysis def Mid :> Base { objective; }
+		analysis def Derived :> Mid { objective; objective; }
+		analysis derived : Mid { objective; objective; }
+		analysis def Deep :> Derived { objective; objective; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	cheapest := nested(t, base.Scope, "cheapest")
+	widestMargin := nested(t, base.Scope, "widestMargin")
+	minA := nested(t, nested(t, p.Scope, "Min").Scope, "a")
+	maxB := nested(t, nested(t, p.Scope, "Max").Scope, "b")
+
+	midOwned, midInherited := m.ObjectivesOf(nested(t, p.Scope, "Mid"))
+	if len(midOwned) != 1 || len(midInherited) != 1 || midInherited[0] != widestMargin {
+		t.Fatalf("ObjectivesOf(Mid) = %v, %v; want [<restated>], [widestMargin]", midOwned, midInherited)
+	}
+	restated := midOwned[0]
+	for _, name := range []string{"Derived", "derived"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 2 || len(inherited) != 0 {
+			t.Fatalf("ObjectivesOf(%s) = %v, %v; want two owned, none inherited", name, owned, inherited)
+		}
+		if got := m.AllRedefinedFeatures(owned[0]); len(got) != 2 || got[0] != restated || got[1] != cheapest {
+			t.Errorf("AllRedefinedFeatures(%s's first objective) = %v, want [Mid's restatement cheapest]", name, got)
+		}
+		if got, ok := m.LookupMember(owned[0], "a"); !ok || got != minA {
+			t.Errorf("LookupMember(%s's first objective, a) = %v, %v; want Min::a", name, got, ok)
+		}
+		if got := m.ImplicitRoleRedefinitions(owned[1]); len(got) != 1 || got[0] != widestMargin {
+			t.Errorf("ImplicitRoleRedefinitions(%s's second objective) = %v, want [widestMargin]", name, got)
+		}
+		if got, ok := m.LookupMember(owned[1], "b"); !ok || got != maxB {
+			t.Errorf("LookupMember(%s's second objective, b) = %v, %v; want Max::b", name, got, ok)
+		}
+	}
+	derivedOwned, _ := m.ObjectivesOf(nested(t, p.Scope, "Derived"))
+	deepOwned, _ := m.ObjectivesOf(nested(t, p.Scope, "Deep"))
+	if got := m.ImplicitRoleRedefinitions(deepOwned[1]); len(got) != 1 || got[0] != derivedOwned[1] {
+		t.Errorf("ImplicitRoleRedefinitions(Deep's second objective) = %v, want [Derived's second]", got)
+	}
+	if got := m.AllRedefinedFeatures(deepOwned[1]); len(got) != 2 || got[0] != derivedOwned[1] || got[1] != widestMargin {
+		t.Errorf("AllRedefinedFeatures(Deep's second objective) = %v, want [Derived's second widestMargin]", got)
+	}
+}
+
+// Only the first owned objective redefines, and it takes the first objective
+// of each general; ObjectivesOf then reports what remains inherited.
+func TestObjectivesOfMasksOnlyTheFirstOfEachGeneral(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		case def C { objective o1; objective o2; }
+		case def C1 :> C { objective o5; }
+		case def B1 { objective b1; }
+		case def B2 { objective b2; }
+		case def D :> B1, B2;
+		case def D2 :> B1, B2 { objective d; }
+		case def E :> B1 { objective e1; objective e2; }
+		case def C3 :> C { objective o6 :>> o2; }
+	}`)
+	p := sym(t, root, "P")
+	c := nested(t, p.Scope, "C")
+	o1 := nested(t, c.Scope, "o1")
+	o2 := nested(t, c.Scope, "o2")
+	b1 := nested(t, nested(t, p.Scope, "B1").Scope, "b1")
+	b2 := nested(t, nested(t, p.Scope, "B2").Scope, "b2")
+
+	o5 := nested(t, nested(t, p.Scope, "C1").Scope, "o5")
+	if got := m.ImplicitRoleRedefinitions(o5); len(got) != 1 || got[0] != o1 {
+		t.Errorf("ImplicitRoleRedefinitions(C1::o5) = %v, want [o1]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "C1")); len(owned) != 1 || len(inherited) != 1 || inherited[0] != o2 {
+		t.Errorf("ObjectivesOf(C1) = %v, %v; want [o5], [o2]", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "D")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != b1 || inherited[1] != b2 {
+		t.Errorf("ObjectivesOf(D) = %v, %v; want [], [b1 b2]", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "D2")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(D2) = %v, %v; want [d], []", owned, inherited)
+	}
+	e := nested(t, p.Scope, "E")
+	if got := m.ImplicitRoleRedefinitions(nested(t, e.Scope, "e2")); len(got) != 0 {
+		t.Errorf("ImplicitRoleRedefinitions(E::e2) = %v, want none: only the first owned objective redefines", got)
+	}
+	if owned, inherited := m.ObjectivesOf(e); len(owned) != 2 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(E) = %v, %v; want [e1 e2], []", owned, inherited)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "C3")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(C3) = %v, %v; want [o6], []: o6 redefines o2 by clause and o1 by role", owned, inherited)
+	}
+}

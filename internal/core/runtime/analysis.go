@@ -120,8 +120,8 @@ func RequireAnalysis(sym *symbols.Symbol) error {
 }
 
 // ObjectivesOf returns the objectives sym states, its inherited ones first and
-// in declaration order. An objective restating an inherited one by name stands
-// where it is restated.
+// in declaration order. An objective restating an inherited one, by name or by
+// redefinition, stands where it is restated.
 func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Objective {
 	if sym == nil {
 		return nil
@@ -139,22 +139,27 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 		if objSym == nil {
 			continue
 		}
-		out = replaceObjective(out, ctx.objectiveOf(objSym, sym))
+		out = ctx.replaceObjective(out, ctx.objectiveOf(objSym, sym))
 	}
 	return out
 }
 
-// replaceObjective appends obj, dropping the objective it restates by name: a
-// redeclared objective is the same objective declared again.
-func replaceObjective(out []Objective, obj Objective) []Objective {
-	if obj.Name != "" {
-		for i, prev := range out {
-			if prev.Name == obj.Name {
-				return append(append(out[:i:i], out[i+1:]...), obj)
-			}
-		}
+// replaceObjective appends obj, dropping the objectives it restates by name or
+// redefines, by clause or by role: a redeclared objective is the same objective
+// declared again.
+func (ctx *Context) replaceObjective(out []Objective, obj Objective) []Objective {
+	redefined := map[*symbols.Symbol]bool{}
+	for _, target := range ctx.model.AllRedefinedFeatures(obj.Symbol) {
+		redefined[target] = true
 	}
-	return append(out, obj)
+	kept := out[:0:0]
+	for _, prev := range out {
+		if (obj.Name != "" && prev.Name == obj.Name) || redefined[prev.Symbol] {
+			continue
+		}
+		kept = append(kept, prev)
+	}
+	return append(kept, obj)
 }
 
 // objectiveOf reads one objective usage: its direction from the definition it is
