@@ -85,6 +85,7 @@ const (
 	xRelatedFeature  = "relatedFeature"
 	xEndIndex        = "endIndex"
 	xEndRole         = "endRole"
+	xEndName         = "endName"
 	xEndForm         = "endForm"
 	xEndVerb         = "endVerb"
 	xSourceMember    = "sourceMember"
@@ -1165,11 +1166,17 @@ func verbatimUsage(n *ast.Usage) bool {
 // bindingEnds states the features a binding head relates as structure beside the
 // text it is kept as, so a consumer reads the ends without reading notation.
 func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
+	// A named end (`connect bead ::> t.bead`) relates the feature it attaches
+	// to and carries its own name beside it.
 	for i, end := range n.ConnectorEnds {
 		if end == nil {
 			continue
 		}
-		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target, end.Multiplicity)
+		slot := fmt.Sprintf("end%d", i)
+		e.bindingEnd(subject, owner, slot, i, "", end.AttachedTarget(), end.Multiplicity)
+		if id, named := end.DeclaredName(); named {
+			e.graph.Add(rdf.ExpressionIRI(subject, slot), e.sysx(xEndName), rdf.String(id.Name))
+		}
 	}
 	if n.FlowEnds != nil {
 		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)

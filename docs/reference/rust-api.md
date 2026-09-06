@@ -104,6 +104,9 @@ match value {
     Value::InstanceRef(id) => (),
     Value::Sequence(values) => (),
     Value::Quantity(q) => (),          // Magnitude::Integer | ::Real, unit, unit_term
+    Value::Array(a) => (),             // a.dimensions(), a.elements() row-major, a.get(&[i, j])
+    Value::Vector(v) => (),            // v.components: Vec<Magnitude>, Integer and Real apart
+    Value::VectorQuantity(q) => (),    // q.components(): one Quantity per component; q.unit() when shared
     Value::EnumLiteral(l) => (),       // literal_id, enumeration_id, name
     Value::Null => (),                 // evaluated, no value
     Value::Unset => (),                // a materialized feature with no value

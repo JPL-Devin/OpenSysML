@@ -97,8 +97,13 @@ within the page; in a `-render-documents` set it resolves across pages, whose
 file names are the Markdown names with `.html` instead of `.md`. Diagram
 blocks embed their Mermaid source in `<pre class="mermaid">`, which a page
 that loads Mermaid renders as a diagram and any other page shows as source.
-The output loads nothing over the network, runs no JavaScript of its own,
-and is byte-identical between runs.
+By default the output loads nothing over the network, runs no JavaScript of
+its own, and is byte-identical between runs. To have a browser draw the
+diagrams, `-html-mermaid cdn` adds a `<script>` loading a pinned Mermaid
+release from jsDelivr, and `-html-mermaid <url>` loads it from a URL of your
+own; the page keeps the source, so it still reads where the script cannot
+load. A fragment has no page shell for the script, so a page embedding one
+loads Mermaid itself.
 
 ### Styling it
 

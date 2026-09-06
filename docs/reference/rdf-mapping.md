@@ -276,7 +276,8 @@ The `sysx:` properties:
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, KerML's `feature` and `attribute`, `snapshot` and `occurrence`), on a named declaration and on an anonymous one alike (`feature :>> x;`, `snapshot :>> start { … }`). The AST records one kind for all of them, so without this the notation would come back rewritten. Where the graph types the fact the keyword states — `sysml:portionKind` for `snapshot`/`timeslice`, the metaclass `sysml:EventOccurrenceUsage` for `event`, `sysml:AssertConstraintUsage` for `assert` — the typed fact is authoritative and this predicate only chooses between two spellings of it (`snapshot :>> start` against `snapshot occurrence :>> start`; `event m.start` against `event occurrence references m.start`; `assert c` against `assert constraint references c`); a keyword the typing contradicts (`snapshot` with `sysml:portionKind "timeslice"` or none, `event` on a `sysml:PartUsage`, `assert` on a `sysml:ConstraintUsage`) is refused rather than one of the two written. KerML's `feature` has no typed counterpart — an attribute usage is what the AST records for it and `sysx:sourceLanguage` does not decide between the two — so it is carried as this spelling alone. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assume` of `assume constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. The `assert` of `assert constraint c : C` is not written here: that usage is a `sysml:AssertConstraintUsage`, and the metaclass states it; a graph stating both with another prefix is refused. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
-| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`, `connector c from a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
@@ -908,12 +909,20 @@ and `sysml:upperBound` expression nodes, the way a feature carries its own; the
 decoder writes them back ahead of the end. A `bind` head's second end is the
 value node the head already states as `sysml:value`, so a `bind a = b` relates
 `sysml:references` and `sysml:value` as its two ends without a copy of either
-(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). The forms
-and what each writes:
+(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). An end that
+declares a name of its own and reference-subsets the feature it attaches to
+(`connect bead ::> t.bead to …`, KerML `connector a ::> a.x to b;`) relates that
+feature — `sysml:referent` or `sysml:targetFeature` is `t.bead`, not `bead` —
+and carries the name as `sysx:endName` on the same node; the decoder writes it
+back as `<name> ::> <feature>`, whichever of `::>` and `references` the source
+spelled (`export_test.go:TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText`).
+A KerML binary connector without `from` starts with its first end, so
+`connector eng to t;` is an anonymous connector whose `end0` is `eng`, and a
+named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
 
 | `sysx:endForm` | Notation | Head |
 |----------------|----------|------|
-| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b` |
+| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b`, `connector c from a to b` |
 | `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
 | `equals` | `<end0> = <end1>` | `bind a = b` |
 | `firstThen` | `<end0> then <end1>` | `succession first a then b` |
@@ -933,9 +942,9 @@ source, whitespace and comments aside, before recording it — a head written ov
 several lines, or with a note inside it, records its form like any other
 (`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
 cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
-more than their ends: an end with a `references` clause, an inline payload
-declaration (`flow of x : P from a to b`), or a satisfy that declares a name of
-its own (`satisfy s : R by v`).
+more than their ends: an end that redefines, an inline payload declaration
+(`flow of x : P from a to b`), or a satisfy that declares a name of its own
+(`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).

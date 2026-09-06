@@ -247,6 +247,43 @@ def test_enum_literal_is_an_added_value_arm():
     assert older.SerializeToString() == payload
 
 
+def test_structured_values_are_added_value_arms():
+    """The array, vector and vector quantity arms are new fields 12-14."""
+    fields = sysml_pb2.Value.DESCRIPTOR.fields_by_name
+    assert fields["complex"].number == 11
+    assert fields["array"].number == 12
+    assert fields["vector"].number == 13
+    assert fields["vector_quantity"].number == 14
+
+    metre = sysml_pb2.Quantity(
+        real_magnitude=3.0,
+        unit="m",
+        unit_term=sysml_pb2.UnitTerm(
+            scale_num=1.0, scale_den=1.0,
+            factors=[sysml_pb2.UnitFactor(unit_id="SI::metre", exponent=1.0)],
+        ),
+    )
+    for value in (
+        sysml_pb2.Value(array=sysml_pb2.Array(
+            dimensions=[2, 1],
+            elements=[sysml_pb2.Value(int_value=1), sysml_pb2.Value(int_value=2)],
+        )),
+        sysml_pb2.Value(vector=sysml_pb2.Vector(
+            components=[sysml_pb2.Value(real_value=3.0), sysml_pb2.Value(int_value=4)],
+        )),
+        sysml_pb2.Value(vector_quantity=sysml_pb2.VectorQuantity(components=[metre, metre])),
+    ):
+        payload = value.SerializeToString()
+        again = sysml_pb2.Value()
+        again.ParseFromString(payload)
+        assert again == value
+
+        # A client whose schema predates the arm keeps the bytes intact.
+        older = sysml_pb2.ServerInfoRequest()
+        older.ParseFromString(payload)
+        assert older.SerializeToString() == payload
+
+
 def test_apply_edits_is_an_added_rpc():
     """The edit RPC is new, so it displaces nothing a client already calls."""
     service = sysml_pb2.DESCRIPTOR.services_by_name["SysMLService"]

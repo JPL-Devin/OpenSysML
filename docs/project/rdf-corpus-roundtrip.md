@@ -83,15 +83,13 @@ carries](../reference/rdf-mapping.md#what-each-element-carries)): the portion as
 `sysml:portionKind`, the event and the assertion as `sysml:EventOccurrenceUsage` and
 `sysml:AssertConstraintUsage` with the occurrence or constraint they name as `sysml:references`,
 and KerML's `feature` as `sysx:declaredKeyword`, on anonymous and named declarations alike. All 40
-moved to `stable`; none hid a second refusal behind the first. Fourteen of them do still stop on
+moved to `stable`; none hid a second refusal behind the first. Seven of them do still stop on
 the graph-only trip — `sysx:sourceText` stripped, the notation written from the structure alone —
 at constructs the decoder does not yet write back and that stop on `main` in a file without any
-anonymous keyword: a named connector's `from a to b` ends (the KerML Annex A `A-3-*` connector
-files, `TimeVaryingCarDriver.kerml`, `TimeVaryingFeaturesEnhanced.kerml`), a `message m of T;`
-or `connector a ::> a.x to b;` head with no `sysx:endForm` (`Interaction Example-2.sysml`,
-`17b-Sequence-Modeling.sysml`, `AHFSequences.sysml`, `ArgumentResolution.kerml`), a `disjoint a
-from b;` statement (`parser_features_demo_declarations.kerml`), a succession whose ends are body
-members (`Simple Tests/Connectors.kerml`), and an invocation expression (`Simple
+anonymous keyword: a `message m of T;` head with no `sysx:endForm` (`Interaction
+Example-2.sysml`, `17b-Sequence-Modeling.sysml`, `AHFSequences.sysml`), a `disjoint a from b;`
+statement (`parser_features_demo_declarations.kerml`), a succession whose ends are body members
+(`Simple Tests/Connectors.kerml`), and an invocation expression (`Simple
 Tests/Expressions.kerml`, `SimpleVehicleModel.sysml`); one more, `TimeVaryingFeatures.kerml`,
 comes back from the graph alone with a `featured by` name the second conversion no longer
 resolves, which a named feature reproduces on `main`. The gate measures the source-backed trip,
@@ -100,7 +98,11 @@ where all of these are `stable`; the graph-only shapes are the open items in
 
 Three files were once refused as a `duplicate-declaration` because the parser read the anonymous
 binary connector `connector a to b;` as a connector *named* `a`; they convert now that the ends are
-read as ends. No file is refused for an expression any longer: a body's result expression is mapped
+read as ends. The ends themselves — bare, behind a multiplicity, or named ahead of the feature they
+reference (`connector a ::> a.x to b;`, carried as `sysx:endName`) — are structure the decoder
+writes back without the source text
+([rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)). No file is
+refused for an expression any longer: a body's result expression is mapped
 ([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
 took the 13 files refused for one from `refused` to `stable` (12) or, for `Simple
 Tests/Expressions.kerml`, to the anonymous `feature` refusal that has since been lifted, and the

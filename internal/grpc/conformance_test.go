@@ -538,29 +538,6 @@ func describeQuantity(q *pb.Quantity) string {
 	return fmt.Sprintf("%s [%s] = %s", magnitude, q.GetUnit(), describeUnitTerm(q.GetUnitTerm()))
 }
 
-// describeUnitTerm renders a unit's reduction as "1000/3600·SI::m·SI::s^-1",
-// leaving a scale of one and an exponent of one implicit.
-func describeUnitTerm(term *pb.UnitTerm) string {
-	if term == nil {
-		return "absent"
-	}
-	var parts []string
-	if term.GetScaleNum() != term.GetScaleDen() {
-		parts = append(parts, fmt.Sprintf("%g/%g", term.GetScaleNum(), term.GetScaleDen()))
-	}
-	for _, factor := range term.GetFactors() {
-		if factor.GetExponent() == 1 {
-			parts = append(parts, factor.GetUnitId())
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s^%g", factor.GetUnitId(), factor.GetExponent()))
-	}
-	if len(parts) == 0 {
-		return "1"
-	}
-	return strings.Join(parts, "·")
-}
-
 func mustFloat(t *testing.T, ev expectedValue) float64 {
 	t.Helper()
 

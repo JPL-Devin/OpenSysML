@@ -21,6 +21,7 @@ import org.openmbee.opensysml.proto.UnitTerm;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -53,8 +54,54 @@ public final class Protos {
       case QUANTITY -> Optional.of(new Value.QuantityValue(quantity(value.getQuantity())));
       case ENUM_LITERAL -> Optional.of(new Value.EnumerationValue(literal(value.getEnumLiteral())));
       case UNSET -> Optional.of(new Value.UnsetValue());
+      case ARRAY -> Optional.of(array(value.getArray()));
+      case VECTOR -> Optional.of(vector(value.getVector()));
+      case VECTOR_QUANTITY -> Optional.of(vectorQuantity(value.getVectorQuantity()));
       case KIND_NOT_SET -> Optional.empty();
     };
+  }
+
+  private static Value array(org.openmbee.opensysml.proto.Array array) {
+    List<Value> elements = new ArrayList<>(array.getElementsCount());
+    for (org.openmbee.opensysml.proto.Value element : array.getElementsList()) {
+      elements.add(readable(element));
+    }
+    try {
+      return new Value.ArrayValue(array.getDimensionsList(), elements);
+    } catch (IllegalArgumentException | ArithmeticException malformed) {
+      throw new TransportException(
+          "the service answered a malformed array: " + malformed.getMessage(), malformed);
+    }
+  }
+
+  private static Value vector(org.openmbee.opensysml.proto.Vector vector) {
+    List<Value> components = new ArrayList<>(vector.getComponentsCount());
+    for (org.openmbee.opensysml.proto.Value component : vector.getComponentsList()) {
+      components.add(
+          switch (component.getKindCase()) {
+            case INT_VALUE -> new Value.IntegerValue(component.getIntValue());
+            case REAL_VALUE -> new Value.RealValue(component.getRealValue());
+            default ->
+                throw new TransportException(
+                    "the service answered a malformed vector: component is "
+                        + component.getKindCase().name().toLowerCase(Locale.ROOT)
+                        + ", not a number",
+                    null);
+          });
+    }
+    return new Value.VectorValue(components);
+  }
+
+  private static Value vectorQuantity(org.openmbee.opensysml.proto.VectorQuantity vector) {
+    if (vector.getComponentsCount() == 0) {
+      throw new TransportException(
+          "the service answered a malformed vector quantity: it has no components", null);
+    }
+    List<Quantity> components = new ArrayList<>(vector.getComponentsCount());
+    for (org.openmbee.opensysml.proto.Quantity component : vector.getComponentsList()) {
+      components.add(quantity(component));
+    }
+    return new Value.VectorQuantityValue(components);
   }
 
   private static Value sequence(org.openmbee.opensysml.proto.Value value) {
@@ -82,12 +129,20 @@ public final class Protos {
    *
    * @param quantity the generated quantity
    * @return the immutable quantity
+   * @throws TransportException when the quantity carries no magnitude, which no number stands in for
    */
   public static Quantity quantity(org.openmbee.opensysml.proto.Quantity quantity) {
     Number magnitude =
-        quantity.getMagnitudeCase() == org.openmbee.opensysml.proto.Quantity.MagnitudeCase.INT_MAGNITUDE
-            ? Long.valueOf(quantity.getIntMagnitude())
-            : Double.valueOf(quantity.getRealMagnitude());
+        switch (quantity.getMagnitudeCase()) {
+          case INT_MAGNITUDE -> Long.valueOf(quantity.getIntMagnitude());
+          case REAL_MAGNITUDE -> Double.valueOf(quantity.getRealMagnitude());
+          case MAGNITUDE_NOT_SET ->
+              throw new TransportException(
+                  "the service answered a malformed quantity in ["
+                      + quantity.getUnit()
+                      + "]: it has no magnitude",
+                  null);
+        };
     Optional<Quantity.UnitTerm> reduction =
         quantity.hasUnitTerm() ? Optional.of(unitTerm(quantity.getUnitTerm())) : Optional.empty();
     return new Quantity(magnitude, present(quantity.getUnit()), reduction);
