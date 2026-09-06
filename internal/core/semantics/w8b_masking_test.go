@@ -84,12 +84,34 @@ func TestRedefinitionClosureMasksThroughNamesakeIntermediate(t *testing.T) {
 	}
 }
 
+// Siblings redefining each other close cyclically; the closure terminates and
+// masks nothing, since a type never inherits its own members — pilot-refereed.
 func TestCyclicRedefinitionMaskTerminates(t *testing.T) {
 	m, root := buildModel(t,
 		"part def A { part a redefines b; part b redefines a; }"+
 			" part def B specializes A {}")
-	if names := visibleNames(m, sym(t, root, "B")); len(names) != 0 {
-		t.Fatalf("cyclic redefinitions should mask both inherited features: %v", names)
+	if names := visibleNames(m, sym(t, root, "B")); names["a"] != 1 || names["b"] != 1 {
+		t.Fatalf("B inherits both of A's features whatever they redefine: %v", names)
+	}
+}
+
+// A chain that crosses a sibling edge masks only its inherited links — on the
+// cached closure path and on the exact fallback alike. Pilot-refereed.
+func TestTransitiveMaskStopsAtSiblingEdge(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; part b redefines a; }"+
+			" part def B specializes A { part c redefines b; }")
+	b := sym(t, root, "B")
+	a := sym(t, root, "A")
+	aa, _ := a.Scope.LookupLocal("a")
+	ab, _ := a.Scope.LookupLocal("b")
+	c, _ := b.Scope.LookupLocal("c")
+	if !m.InheritanceMasked(b, ab) || m.InheritanceMasked(b, aa) {
+		t.Fatalf("B masks b and keeps a: %v", visibleNames(m, b))
+	}
+	exact := m.buildMask(b, []*symbols.Symbol{c})
+	if !exact[ab] || exact[aa] {
+		t.Fatalf("exact expansion = %v, want {b}", exact)
 	}
 }
 
