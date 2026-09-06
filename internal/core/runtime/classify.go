@@ -121,12 +121,10 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 		carried[name] = true
 	}
 	features := ctx.FeaturesOf(typ)
-	var added []*EffectiveFeature
 	for i := range features {
 		feat := &features[i]
 		if !carried[feat.Name] {
 			inst.FeatureValues[feat.Name] = ctx.newFeatureValue(inst, feat)
-			added = append(added, feat)
 			continue
 		}
 		if err := ctx.refineFeatureValue(inst, inst.FeatureValues[feat.Name], feat, typ); err != nil {
@@ -134,7 +132,7 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 			return err
 		}
 	}
-	ctx.unfoldSubsettedDefaults(inst, typ, added)
+	ctx.unfoldSubsettedDefaults(inst, typ, features)
 	if err := ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried); err != nil {
 		rollback()
 		return err

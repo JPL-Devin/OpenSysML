@@ -205,6 +205,8 @@ const defaultNullCollectionModel = `
 		part def Plain;
 		part def Scored { attribute score : Integer default 5; }
 		part def Measuring :> Scored { attribute measured : Integer :> score = 7; }
+		part def Gauged { attribute level : Integer default 5; attribute reading : Integer = 7; }
+		part def Reporting :> Gauged { attribute :>> reading :> level; }
 		part def Wheel;
 		part def Mistyped {
 			part engines : Engine [*] default null;
@@ -231,6 +233,7 @@ const defaultNullCollectionModel = `
 		part rated : Rated;
 		part plain : Plain;
 		part scored : Scored;
+		part gauged : Gauged;
 		part mistyped : Mistyped;
 		part sized : Sized;
 	}
@@ -335,11 +338,13 @@ func TestDefaultIsFallbackOnlyWhereWrittenDefault(t *testing.T) {
 
 // TestClassifierSubsetterSupersedesAFoldedDefault: a classifier added to an object
 // brings its subsetters with it, whether the constant default it supersedes comes
-// along with it or was folded when the object was created.
+// along with it or was folded when the object was created, and whether the
+// subsetter is a new feature or redefines one the object already has.
 func TestClassifierSubsetterSupersedesAFoldedDefault(t *testing.T) {
 	cases := []struct{ usage, classifier, feature string }{
 		{"plain", "Rated", "rating"},
 		{"scored", "Measuring", "score"},
+		{"gauged", "Reporting", "level"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.usage, func(t *testing.T) {

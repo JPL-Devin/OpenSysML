@@ -232,13 +232,13 @@ func (ctx *Context) defaultYieldsToSubsetters(inst *Instance, feat *EffectiveFea
 }
 
 // unfoldSubsettedDefaults reopens the folded fallback defaults of inst that the
-// features typ adds subset, so the next read takes their contributions.
-func (ctx *Context) unfoldSubsettedDefaults(inst *Instance, typ *symbols.Symbol, added []*EffectiveFeature) {
-	for _, feat := range added {
-		if feat.Symbol == nil {
+// features of classifier typ subset, so the next read takes their contributions.
+func (ctx *Context) unfoldSubsettedDefaults(inst *Instance, typ *symbols.Symbol, features []EffectiveFeature) {
+	for i := range features {
+		if features[i].Symbol == nil {
 			continue
 		}
-		for _, name := range ctx.subsettedNames(feat.Symbol, typ) {
+		for _, name := range ctx.subsettedNames(features[i].Symbol, typ) {
 			fv, ok := inst.FeatureValues[name]
 			if !ok || !fv.Materialized || fv.Written || !ctx.valueBinds(fv.Feature) || !fv.Feature.DefaultIsFallback() {
 				continue
