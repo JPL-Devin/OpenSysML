@@ -79,7 +79,15 @@ type HTMLOptions struct {
 
 	// Lang is the page language, "en" when empty.
 	Lang string
+
+	// MermaidScript is the URL of a Mermaid script a standalone page loads to
+	// draw its diagrams; empty loads none, leaving each as source.
+	MermaidScript string
 }
+
+// MermaidScriptURL is the pinned Mermaid release a page loads from a public
+// CDN when a script is asked for by name rather than URL.
+const MermaidScriptURL = "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
 
 // HTML renders an evaluated document as deterministic, semantic HTML: an
 // <article> holding nested <section> elements, real tables with <caption> and
@@ -145,6 +153,9 @@ func (w *htmlWriter) writeDocument(document *docir.Document) error {
 	}
 	w.b.WriteString("</article>\n")
 	if !w.opts.Fragment {
+		if w.opts.MermaidScript != "" {
+			w.b.WriteString("<script" + attr("src", w.opts.MermaidScript) + "></script>\n")
+		}
 		w.b.WriteString("</body>\n</html>\n")
 	}
 	return nil
@@ -441,8 +452,8 @@ func (w *htmlWriter) writeDefinitions(node docir.Content, id string) {
 }
 
 // writeDiagram writes one diagram as a figure: a table-kind view as a table,
-// every other supported kind as Mermaid source, which renders as readable text
-// where no Mermaid renderer is loaded.
+// every other supported kind as Mermaid source, which a loaded Mermaid script
+// draws and any other page shows as readable text.
 func (w *htmlWriter) writeDiagram(node docir.Content, id string) error {
 	return w.writeFigure(id, node.Name(), node.Caption(), node.Rendering(), node.Direction())
 }

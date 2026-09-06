@@ -69,6 +69,32 @@ func TestHTMLTelescopeReportFragmentGolden(t *testing.T) {
 	checkGolden(t, got, filepath.Join("testdata", "telescope_report.fragment.golden.html"))
 }
 
+// TestHTMLMermaidScript checks a page asked to load Mermaid carries one
+// script element after the document, a fragment none, and a default page none.
+func TestHTMLMermaidScript(t *testing.T) {
+	path := filepath.Join("testdata", "telescope_report.sysml")
+	url := `https://cdn.example/mermaid.js?a=1&b="2"`
+	got := renderFixtureHTML(t, path, "Observatory::MassReport", HTMLOptions{MermaidScript: url})
+	script := `<script src="https://cdn.example/mermaid.js?a=1&amp;b=&#34;2&#34;"></script>`
+	if strings.Count(got, "<script") != 1 || !strings.Contains(got, script) {
+		t.Errorf("page lacks the one script element %s:\n%s", script, got)
+	}
+	if strings.Index(got, "</article>") > strings.Index(got, script) || !strings.HasSuffix(got, script+"\n</body>\n</html>\n") {
+		t.Errorf("script must follow the document, before </body>:\n%s", got)
+	}
+	if !strings.Contains(got, `<pre class="mermaid">`) {
+		t.Errorf("diagram source must stay for the script to draw:\n%s", got)
+	}
+	for name, opts := range map[string]HTMLOptions{
+		"default":  {},
+		"fragment": {Fragment: true, MermaidScript: url},
+	} {
+		if out := renderFixtureHTML(t, path, "Observatory::MassReport", opts); strings.Contains(out, "<script") {
+			t.Errorf("%s page loads a script:\n%s", name, out)
+		}
+	}
+}
+
 // TestHTMLSemanticStructure checks the semantic skeleton and the model facts
 // carried on it: the document element, nested sections at valid heading
 // levels, typed rows and cells, and a diagram figure.
