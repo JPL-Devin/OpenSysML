@@ -206,7 +206,7 @@ func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *Fea
 func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature) {
 	*fv = FeatureValue{Feature: feat}
 	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
-		ctx.restatedInValuedBody(feat) == "" && !ctx.defaultYieldsToSubsetters(inst.Type, feat) {
+		ctx.restatedInValuedBody(feat) == "" && !ctx.defaultYieldsToSubsetters(inst, feat) {
 		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 			val := Value{Kind: ValConst, Const: semVal}
 			if ctx.checkDefault(inst, fv, feat.Name, val, admitDeclared) == nil {
@@ -217,10 +217,36 @@ func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *Eff
 	}
 }
 
-// defaultYieldsToSubsetters reports whether feat's `default` may be superseded by
-// a feature of typ subsetting it, so it must wait to be read rather than be folded.
-func (ctx *Context) defaultYieldsToSubsetters(typ *symbols.Symbol, feat *EffectiveFeature) bool {
-	return feat.DefaultIsFallback() && len(ctx.SubsettingFeatures(nil, typ, feat.Name)) > 0
+// defaultYieldsToSubsetters reports whether feat's `default` may be superseded by a
+// feature of one of inst's types subsetting it, so it must wait to be read rather than be folded.
+func (ctx *Context) defaultYieldsToSubsetters(inst *Instance, feat *EffectiveFeature) bool {
+	if !feat.DefaultIsFallback() {
+		return false
+	}
+	for _, typ := range inst.types() {
+		if len(ctx.SubsettingFeatures(nil, typ, feat.Name)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// unfoldSubsettedDefaults reopens the folded fallback defaults of inst that the
+// features typ adds subset, so the next read takes their contributions.
+func (ctx *Context) unfoldSubsettedDefaults(inst *Instance, typ *symbols.Symbol, added []*EffectiveFeature) {
+	for _, feat := range added {
+		if feat.Symbol == nil {
+			continue
+		}
+		for _, name := range ctx.subsettedNames(feat.Symbol, typ) {
+			fv, ok := inst.FeatureValues[name]
+			if !ok || !fv.Materialized || fv.Written || !ctx.valueBinds(fv.Feature) || !fv.Feature.DefaultIsFallback() {
+				continue
+			}
+			ctx.noteProbeWrite(fv)
+			fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
+		}
+	}
 }
 
 // materialize builds the object and its feature values and registers it, before

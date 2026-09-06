@@ -202,6 +202,9 @@ const defaultNullCollectionModel = `
 			attribute measured : Integer :> rating = 7;
 			attribute limit : Integer default 9;
 		}
+		part def Plain;
+		part def Scored { attribute score : Integer default 5; }
+		part def Measuring :> Scored { attribute measured : Integer :> score = 7; }
 		part def Wheel;
 		part def Mistyped {
 			part engines : Engine [*] default null;
@@ -226,6 +229,8 @@ const defaultNullCollectionModel = `
 		part optional : Optional;
 		part crowded : Crowded;
 		part rated : Rated;
+		part plain : Plain;
+		part scored : Scored;
 		part mistyped : Mistyped;
 		part sized : Sized;
 	}
@@ -325,6 +330,32 @@ func TestDefaultIsFallbackOnlyWhereWrittenDefault(t *testing.T) {
 		if got := FormatValue(fv.HeldValue()); got != want {
 			t.Errorf("%s = %s, want %s", name, got, want)
 		}
+	}
+}
+
+// TestClassifierSubsetterSupersedesAFoldedDefault: a classifier added to an object
+// brings its subsetters with it, whether the constant default it supersedes comes
+// along with it or was folded when the object was created.
+func TestClassifierSubsetterSupersedesAFoldedDefault(t *testing.T) {
+	cases := []struct{ usage, classifier, feature string }{
+		{"plain", "Rated", "rating"},
+		{"scored", "Measuring", "score"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.usage, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, defaultNullCollectionModel))
+			inst := instantiateNamed(t, ctx, idx, "test::"+tc.usage)
+			if err := ctx.classify(inst, idx.LookupQualified("test::" + tc.classifier)[0]); err != nil {
+				t.Fatalf("classify(%s): %v", tc.classifier, err)
+			}
+			fv, err := inst.GetFeatureValue(ctx, tc.feature)
+			if err != nil {
+				t.Fatalf("GetFeatureValue(%s): %v", tc.feature, err)
+			}
+			if got := FormatValue(fv.HeldValue()); got != "7" {
+				t.Errorf("%s = %s after classifying as %s, want the subsetter's 7", tc.feature, got, tc.classifier)
+			}
+		})
 	}
 }
 
