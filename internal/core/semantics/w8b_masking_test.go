@@ -95,6 +95,26 @@ func TestCyclicRedefinitionMaskTerminates(t *testing.T) {
 	}
 }
 
+// A chain that crosses a sibling edge masks only its inherited links — on the
+// cached closure path and on the exact fallback alike. Pilot-refereed.
+func TestTransitiveMaskStopsAtSiblingEdge(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; part b redefines a; }"+
+			" part def B specializes A { part c redefines b; }")
+	b := sym(t, root, "B")
+	a := sym(t, root, "A")
+	aa, _ := a.Scope.LookupLocal("a")
+	ab, _ := a.Scope.LookupLocal("b")
+	c, _ := b.Scope.LookupLocal("c")
+	if !m.InheritanceMasked(b, ab) || m.InheritanceMasked(b, aa) {
+		t.Fatalf("B masks b and keeps a: %v", visibleNames(m, b))
+	}
+	exact := m.buildMask(b, []*symbols.Symbol{c})
+	if !exact[ab] || exact[aa] {
+		t.Fatalf("exact expansion = %v, want {b}", exact)
+	}
+}
+
 func TestRedefinitionMaskFallsBackWhenClosureReachesOwner(t *testing.T) {
 	m := NewModel(nil)
 	owner := &symbols.Symbol{Name: "Owner", Scope: symbols.NewScope(nil, nil)}

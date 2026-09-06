@@ -318,9 +318,7 @@ func (m *Model) buildMaskFromCandidates(
 			return false
 		}
 		for target := range closure {
-			if !redefinesSibling(candidate, target) {
-				mask[target] = true
-			}
+			mask[target] = true
 		}
 		return true
 	})
@@ -350,7 +348,8 @@ func redefinesSibling(redefining, target *symbols.Symbol) bool {
 	return target.OwnerScope != nil && target.OwnerScope == redefining.OwnerScope
 }
 
-// redefinitionClosure returns the targets reached from candidate, transitively.
+// redefinitionClosure returns what candidate's redefinitions remove from a type
+// inheriting it, transitively; a sibling edge removes nothing but is followed.
 func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Symbol]bool, bool) {
 	if candidate == nil {
 		return nil, false
@@ -365,7 +364,9 @@ func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Sym
 	out := make(map[*symbols.Symbol]bool)
 	cyclic := false
 	for _, target := range m.RedefinedFeatures(candidate) {
-		out[target] = true
+		if !redefinesSibling(candidate, target) {
+			out[target] = true
+		}
 		child, childCyclic := m.redefinitionClosure(target)
 		if childCyclic {
 			cyclic = true
