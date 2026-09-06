@@ -273,7 +273,7 @@ func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map
 	pending := candidates
 	for i := 0; i < len(pending); i++ {
 		redefining := pending[i]
-		for _, target := range m.RedefinedFeatures(redefining) {
+		for _, target := range m.maskingRedefinedFeatures(redefining) {
 			if target == sym || mask[target] {
 				continue
 			}
@@ -336,6 +336,20 @@ func (m *Model) buildMaskFromCandidates(
 	return mask
 }
 
+// maskingRedefinedFeatures is RedefinedFeatures less the targets redefining's own
+// owner declares: a redefinition affects only what its owner inherits.
+func (m *Model) maskingRedefinedFeatures(redefining *symbols.Symbol) []*symbols.Symbol {
+	targets := m.RedefinedFeatures(redefining)
+	out := make([]*symbols.Symbol, 0, len(targets))
+	for _, target := range targets {
+		if redefining.OwnerScope != nil && target.OwnerScope == redefining.OwnerScope {
+			continue
+		}
+		out = append(out, target)
+	}
+	return out
+}
+
 // redefinitionClosure returns the targets reached from candidate, transitively.
 func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Symbol]bool, bool) {
 	if candidate == nil {
@@ -350,7 +364,7 @@ func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Sym
 	m.computingRedefClosure[candidate] = true
 	out := make(map[*symbols.Symbol]bool)
 	cyclic := false
-	for _, target := range m.RedefinedFeatures(candidate) {
+	for _, target := range m.maskingRedefinedFeatures(candidate) {
 		out[target] = true
 		child, childCyclic := m.redefinitionClosure(target)
 		if childCyclic {

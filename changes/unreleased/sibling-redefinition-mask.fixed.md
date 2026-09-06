@@ -1,0 +1,1 @@
+- **A redefinition no longer hides a feature its own owner declares.** `part def A { part a; part b redefines a; }` left every specialization and every usage typed by `A` without `a` (`d.a` reported `unresolved member` and the RDF export spelled feature chains through the owner), although `A` still declares it. Redefinition affects only what the owner inherits, as the pilot does.

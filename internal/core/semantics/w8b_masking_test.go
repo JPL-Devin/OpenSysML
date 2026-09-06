@@ -88,8 +88,9 @@ func TestCyclicRedefinitionMaskTerminates(t *testing.T) {
 	m, root := buildModel(t,
 		"part def A { part a redefines b; part b redefines a; }"+
 			" part def B specializes A {}")
-	if names := visibleNames(m, sym(t, root, "B")); len(names) != 0 {
-		t.Fatalf("cyclic redefinitions should mask both inherited features: %v", names)
+	// Sibling redefinitions mask nothing: A declares both, so B inherits both.
+	if names := visibleNames(m, sym(t, root, "B")); names["a"] != 1 || names["b"] != 1 {
+		t.Fatalf("B inherits both of A's own features: %v", names)
 	}
 }
 
@@ -289,6 +290,31 @@ func TestRedefinitionMasksTheNameOnlyAtItsOwnLevel(t *testing.T) {
 	nested := visibleNames(m, bb)
 	if nested["y"] != 1 || nested["x"] != 1 {
 		t.Fatalf("b offers its own y and the inherited x of the feature it redefines: %v", nested)
+	}
+}
+
+// A redefinition affects only what its owner inherits: a feature the owner
+// declares stays its member, and so a member of everything specializing or
+// typed by the owner, whatever sibling redefines it (KerML 8.3.3.3.6).
+func TestSiblingRedefinitionMasksNothingInSpecializations(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; part b redefines a; part sub : A; }"+
+			" part def B specializes A; part d : B;")
+	for _, name := range []string{"A", "B", "d"} {
+		if names := visibleNames(m, sym(t, root, name)); names["a"] != 1 || names["b"] != 1 {
+			t.Fatalf("%s must offer both a and b: %v", name, names)
+		}
+	}
+	a := sym(t, root, "A")
+	sub, ok := a.Scope.LookupLocal("sub")
+	if !ok {
+		t.Fatalf("A declares sub")
+	}
+	if names := visibleNames(m, sub); names["a"] != 1 {
+		t.Fatalf("sub : A must offer A's own a: %v", names)
+	}
+	if found, ok := m.LookupMember(sub, "a"); !ok || found.Name != "a" {
+		t.Fatalf("LookupMember(sub, a) = %v, %v", found, ok)
 	}
 }
 
