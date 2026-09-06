@@ -371,6 +371,15 @@ func backingObject(value Value) int64 {
 	return 0
 }
 
+// keptObject is the object a value keeps: the one an array or vector was read
+// from, or a tensor quantity built over; 0 for none.
+func keptObject(value Value) int64 {
+	if value.Kind == ValTensorQuantity {
+		return value.TensorQuantity().MRef
+	}
+	return backingObject(value)
+}
+
 // structuredObject is the live object an array or vector was read from, if any.
 func (ctx *Context) structuredObject(value Value) (*Instance, bool) {
 	inst, ok := ctx.instances[backingObject(value)]

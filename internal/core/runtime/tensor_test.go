@@ -193,4 +193,48 @@ func TestTensorQuantityMRefOutlivesItsReferenceOnly(t *testing.T) {
 	if got := FormatValue(tq); !strings.HasPrefix(got, "Tensor(2, 2)[1.0 [m], 2.0 [s]") {
 		t.Errorf("a tensor of mixed units formats as %s", got)
 	}
+	ctx.maxElements = ctx.elements + 3
+	if _, _, err := ctx.structuredFeature(tq, "mRef"); !errors.Is(err, ErrElementLimitExceeded) {
+		t.Errorf("mRef of four references over a budget of three = %v, want ErrElementLimitExceeded", err)
+	}
+}
+
+// TestAbandonedTensorReferenceIsForgottenByItsHolders: a tensor written over a
+// reference object keeps it, and is unmaterialized with it when its creation is undone.
+func TestAbandonedTensorReferenceIsForgottenByItsHolders(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+		private import ISQ::*;
+		private import SI::*;
+		private import MeasurementReferences::*;
+		private import Quantities::*;
+		attribute def Labeled :> TensorMeasurementReference { attribute label : ScalarValues::String; }
+		attribute stressRef : Labeled { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); :>> label = "stress"; }
+		part def Holder { attribute stress : TensorQuantityValue; }
+		part holder : Holder;
+	}`)
+	pkg, _ := idx.DocumentRoot("<test>").LookupLocal("test")
+	holder, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mark := len(ctx.created)
+	val := tensorEval(t, ctx, pkg.Scope, "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), stressRef)")
+	if ref := val.TensorQuantity().MRef; ctx.instances[ref] == nil {
+		t.Fatalf("the tensor is built over object %d, which the session does not hold", ref)
+	}
+	if err := holder.SetFeatureValue(ctx, "stress", val); err != nil {
+		t.Fatalf("write stress: %v", err)
+	}
+	if label := tensorEval(t, ctx, pkg.Scope, "holder.stress.mRef.label"); FormatValue(label) != `"stress"` {
+		t.Fatalf("holder.stress.mRef.label = %s, want \"stress\"", FormatValue(label))
+	}
+	stress := holder.FeatureValues["stress"]
+	if stress == nil || !stress.Materialized || stress.Value.Kind != ValTensorQuantity {
+		t.Fatalf("stress = %+v, want a materialized tensor quantity", stress)
+	}
+
+	ctx.abandonInstancesSince(mark)
+	if stress.Materialized {
+		t.Error("stress still holds a tensor built over an abandoned reference")
+	}
 }

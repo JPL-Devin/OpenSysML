@@ -110,9 +110,9 @@ func registerTensorCalculations() {
 	registerValueFunction("TensorCalculations::TensorScalarMult", []string{anonymous, anonymous}, 2, scalarTensorMult(1, 0))
 	registerValueFunction("TensorCalculations::scalarQuantityTensorMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(0, 1))
 	registerValueFunction("TensorCalculations::TensorScalarQuantityMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(1, 0))
-	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention)
-	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention)
-	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention)
+	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorVectorMultDecl))
+	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(vectorTensorMultDecl))
+	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorTensorMultDecl))
 	registerUnevaluable("TensorCalculations::transform",
 		[]declaredParam{param("transformation"), param("sourceTensor")}, noTensorTransformation)
 }

@@ -163,6 +163,9 @@ func (ctx *Context) tensorQuantityMRef(tq *TensorQuantity) (Value, error) {
 			return val, err
 		}
 	}
+	if err := ctx.chargeElements(int64(len(tq.Units))); err != nil {
+		return Value{}, err
+	}
 	refs := make([]Value, len(tq.Units))
 	for i, unit := range tq.Units {
 		refs[i] = measurementRefOf(unit)

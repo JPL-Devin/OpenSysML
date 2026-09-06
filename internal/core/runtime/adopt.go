@@ -207,13 +207,13 @@ func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
 	return !object
 }
 
-// carriedObject is the object a value denotes or, for an array or vector, was read
-// from: what a carry-over takes along with the value.
+// carriedObject is the object a value denotes or holds (an array's or vector's
+// source, a tensor's reference): what a carry-over takes along with the value.
 func carriedObject(v Value) (int64, bool) {
 	if id, ok := v.Object(); ok {
 		return id, true
 	}
-	id := backingObject(v)
+	id := keptObject(v)
 	return id, id != 0
 }
 

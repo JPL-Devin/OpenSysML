@@ -10,17 +10,26 @@ import (
 // TensorCalculations: the calculations the library defines over a TensorQuantityValue's
 // data. Those it gives no convention for stay unevaluable.
 
-// Reasons the TensorCalculations the library leaves undetermined are reported with.
+// Reasons the TensorCalculations the library leaves undetermined are reported with,
+// each quoting the declaration that determines nothing more.
 const (
-	noContractionConvention = "the declaration states only the parameter and result types; neither TensorCalculations nor " +
+	tensorVectorMultDecl = "calc def tensorVectorMult { in : TensorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }"
+	vectorTensorMultDecl = "calc def vectorTensorMult { in : VectorQuantityValue[1]; in : TensorQuantityValue[1]; return : VectorQuantityValue[1]; }"
+	tensorTensorMultDecl = "calc def tensorTensorMult { in : TensorQuantityValue[1]; in : TensorQuantityValue[1]; return : TensorQuantityValue[1]; }"
+	noOuterProductType   = "the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` " +
+		"returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two, which no VectorQuantityValue is"
+	noTensorTransformation = "the declaration `calc def transform { in transformation : CoordinateTransformation; in sourceTensor : TensorQuantityValue; " +
+		"return targetTensor : TensorQuantityValue; }` has no body, and a CoordinateTransformation has no representation: the runtime " +
+		"holds a scalar measurement reference but no coordinate frame with an origin and basisDirections, and a tensor quantity " +
+		"carries a unit per component and no source frame"
+)
+
+// noContractionConvention is the reason a tensor product with the given declaration is not evaluable.
+func noContractionConvention(decl string) string {
+	return "the declaration `" + decl + "` states only the parameter and result types; neither TensorCalculations nor " +
 		"the Kernel says which indices contract or how the operands' contravariantOrder and covariantOrder combine, " +
 		"so no product is determined"
-	noOuterProductType = "the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` " +
-		"returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two, which no VectorQuantityValue is"
-	noTensorTransformation = "a CoordinateTransformation has no representation: the runtime holds a scalar measurement reference " +
-		"but no coordinate frame with an origin and basisDirections, a tensor quantity carries a unit per component and no " +
-		"source frame, and transform has no body applying one"
-)
+}
 
 // tensorMRefTypeFQN is the type TensorCalculations::'[' declares its mRef parameter by.
 const tensorMRefTypeFQN = "MeasurementReferences::TensorMeasurementReference"
@@ -382,11 +391,11 @@ func (ctx *Context) tensorArithmetic(op ast.OperatorKind, left, right Value) (Va
 			val, err := scalarTensorMult(0, 1)("TensorCalculations::scalarTensorMult", ctx, args)
 			return val, true, err
 		case lt && rt:
-			return Value{}, true, fmt.Errorf("%w: TensorCalculations::tensorTensorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention)
+			return Value{}, true, fmt.Errorf("%w: TensorCalculations::tensorTensorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention(tensorTensorMultDecl))
 		case lt && isVectorKind(right):
-			return Value{}, true, fmt.Errorf("%w: TensorCalculations::tensorVectorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention)
+			return Value{}, true, fmt.Errorf("%w: TensorCalculations::tensorVectorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention(tensorVectorMultDecl))
 		case rt && isVectorKind(left):
-			return Value{}, true, fmt.Errorf("%w: TensorCalculations::vectorTensorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention)
+			return Value{}, true, fmt.Errorf("%w: TensorCalculations::vectorTensorMult: %s", ErrUnevaluableLibraryFunction, noContractionConvention(vectorTensorMultDecl))
 		}
 	}
 	return Value{}, true, fmt.Errorf("%w: TensorCalculations declares no '%s' over %s and %s",

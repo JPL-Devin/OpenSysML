@@ -1183,12 +1183,13 @@ func TestAdoptRebindsTheUnitsAWrittenValueNames(t *testing.T) {
 }
 
 // A tensor a run wrote is carried over as a tensor: its shape and magnitudes
-// intact, every component's unit rebound to the re-analysis's declaration.
+// intact, every component's unit rebound to the re-analysis's declaration, and
+// the reference object it was built over carried along so `mRef` still answers it.
 func TestAdoptRebindsATensorsComponentUnits(t *testing.T) {
 	src := strings.Replace(adoptUnitSrc,
 		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
 		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute strain : Quantities::TensorQuantityValue; }\n"+
-			"attribute strainRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (furlong, m, furlong, m); }", 1)
+			"attribute strainRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (furlong, m, furlong, m); :>> isBound = true; attribute label : ScalarValues::String = \"strain\"; }", 1)
 	prev := libraryContextOver(t, src)
 	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
 	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
@@ -1225,6 +1226,10 @@ func TestAdoptRebindsATensorsComponentUnits(t *testing.T) {
 		"field.strain.dimensions":            "[2, 2]",
 		"field.strain#(1, 1) == 201.168 [m]": "true",
 		"field.strain.mRef":                  "Array(2, 2)[furlong, m, furlong, m]",
+		"field.strain.mRef.mRefs":            "[furlong, m, furlong, m]",
+		"field.strain.mRef.isBound":          "true",
+		"field.strain.isBound":               "true",
+		"field.strain.mRef.label":            "\"strain\"",
 		"TensorCalculations::scalarTensorMult(2, field.strain)#(2, 1)": "6.0 [furlong]",
 	} {
 		got, err := evalIn(t, ctx, newScope, expr)
