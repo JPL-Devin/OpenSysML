@@ -2177,9 +2177,8 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 }
 
-// A KerML connector written without `of`/`first` has no declaration, so a
-// leading multiplicity is the first end's crossing multiplicity — bounds on the
-// end node, never on the connector; with `of`/`first` it is the connector's.
+// A KerML connector written without `of`/`first` has no declaration, so a leading
+// multiplicity is the first end's: bounds on the end node, not the connector.
 func TestKerMLConnectorEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	const endNodes = "sysx:relatedFeature expr:P__C___402_pend0, expr:P__C___402_pend1 ;"
 	cases := []struct {

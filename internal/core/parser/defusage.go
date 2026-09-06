@@ -739,9 +739,8 @@ func (p *Parser) atEnumeratedValueDeclaration() bool {
 	return p.atFeatureSpecializationPartAt(off)
 }
 
-// atLeadingEndMultiplicity reports whether the multiplicity at the current
-// token is followed directly by a connector end (a name, chain or `$::` path)
-// rather than by a declaration part, so it is that end's crossing multiplicity.
+// atLeadingEndMultiplicity reports whether the multiplicity at the current token
+// is followed directly by a connector end (name, chain or `$::` path), not a declaration.
 func (p *Parser) atLeadingEndMultiplicity() bool {
 	if !p.at(lexer.LBracket) {
 		return false
@@ -2151,9 +2150,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			after := p.peekN(p.pastBracketed(0))
 			bindFollows := after.Kind == lexer.Keyword && after.KeywordID == "bind"
 			if keyword == "bind" || (p.src.Kind() == source.KindKerML && !bindFollows && p.atLeadingEndMultiplicity()) {
-				// `bind [mult] a = b` and KerML `binding [mult] a = b` declare no
-				// connector, so the multiplicity is the first end's (SysML.xtext:1020
-				// BindingConnectorAsUsage; KerML.xtext:875 alternative 2, ConnectorEnd).
+				// `bind [mult] a = b` and KerML `binding [mult] a = b` declare no connector,
+				// so the multiplicity is the first end's (SysML.xtext:1020; KerML.xtext:875).
 				p.parseBindingEnd(u)
 			} else {
 				u.Multiplicity = p.parseMultiplicity()
@@ -2283,9 +2281,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		isAnonymous = p.atConnectorBinaryEnds()
 	}
 	anonymousConnector := kind == ast.UsageConnector && isAnonymous
-	// `succession [mult] a then b` declares no connector, so the multiplicity is
-	// the first end's (KerML.xtext:891 alternative 2); `succession [mult] first a
-	// then b` still declares the connector's own.
+	// `succession [mult] a then b` declares no connector, so the multiplicity is the
+	// first end's (KerML.xtext:891); `succession [mult] first a then b` keeps its own.
 	leadingEndMultiplicity := kind == ast.UsageSuccession && isAnonymous && p.atLeadingEndMultiplicity()
 	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && !leadingEndMultiplicity && p.at(lexer.LBracket) {
 		earlyMultiplicity = p.parseMultiplicity()
@@ -3602,8 +3599,7 @@ func (p *Parser) parsePreNameRelationships(isUsage bool) []*ast.Relationship {
 }
 
 // parseFeatureSpecializationPart parses a usage's
-// `FeatureSpecialization* MultiplicityPart? FeatureSpecialization*`
-// (KerML.xtext:574) onto u; a multiplicity it states replaces none.
+// `FeatureSpecialization* MultiplicityPart? FeatureSpecialization*` (KerML.xtext:574) onto u.
 func (p *Parser) parseFeatureSpecializationPart(u *ast.Usage) {
 	u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 	if p.at(lexer.LBracket) {

@@ -679,9 +679,8 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
 		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
 
-		// An end's crossing multiplicity is followed by the end it belongs to
-		// (KerML.xtext:854 ConnectorEnd), so a multiplicity followed by nothing,
-		// by the other end's keyword or left unclosed is reported.
+		// An end's crossing multiplicity is followed by its end (KerML.xtext:854), so
+		// one followed by nothing or the other end's keyword, or left unclosed, is reported.
 		{"binding_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] = b; }"},
 		{"binding_end_multiplicity_unclosed", "package P { feature a; feature b; binding [1 a = b; }"},
 		{"binding_second_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] a = [1] ; }"},
