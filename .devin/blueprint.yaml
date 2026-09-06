@@ -1,0 +1,110 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+# One-time setup (e.g., install system tools, global CLIs).
+initialize: |
+  sudo apt-get update && sudo apt-get install -y z3 unzip
+  if ! command -v cvc5 >/dev/null; then
+    curl -sSL -o /tmp/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+    echo "dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip" | sha256sum -c -
+    unzip -q -o /tmp/cvc5.zip -d /tmp/cvc5 && sudo install -m 0755 /tmp/cvc5/cvc5-Linux-x86_64-static/bin/cvc5 /usr/local/bin/cvc5
+  fi
+  go install honnef.co/go/tools/cmd/staticcheck@latest
+  go install github.com/securego/gosec/v2/cmd/gosec@latest
+  # Needed to regenerate the gRPC service stubs after api/proto/sysml.proto changes.
+  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+  # Advisory pilot-implementation differential (docs/project/pilot-differential.md).
+  # Uses the image's Java 21 + Maven; never fails the build.
+  ./scripts/download-pilot-validator.sh || echo "pilot validator not provisioned; run scripts/download-pilot-validator.sh"
+  # The corpora the differential compares over; without them it runs on a fraction of the files.
+  ./scripts/download-pilot-corpora.sh || echo "pilot corpora not provisioned; run scripts/download-pilot-corpora.sh"
+  # The KerML side of the same differential (needs the image's javac).
+  ./scripts/download-pilot-kerml-validator.sh || echo "kerml validator not provisioned; run scripts/download-pilot-kerml-validator.sh"
+  # The batch SysML oracle cmd/pilot-diff defaults to; compiles against the jar above.
+  ./scripts/download-pilot-sysml-validator.sh || echo "batch sysml validator not provisioned; run scripts/download-pilot-sysml-validator.sh"
+  # Headless pilot expression evaluator for the execution referee
+  # (docs/project/pilot-execution-referee.md); seconds, given the validator above.
+  ./scripts/download-pilot-evaluator.sh || echo "pilot evaluator not provisioned; run scripts/download-pilot-evaluator.sh"
+  # Grammars for the advisory grammar-coverage measurement (docs/project/grammar-coverage.md).
+  ./scripts/download-pilot-grammars.sh || echo "pilot grammars not provisioned; run scripts/download-pilot-grammars.sh"
+  # The pilot's own Xpect suites, the declared-expectation oracle (docs/project/pilot-xpect.md).
+  ./scripts/download-pilot-xpect.sh || echo "pilot xpect suites not provisioned; run scripts/download-pilot-xpect.sh"
+  # The editor the extension in editors/vscode is tested in: `code` on PATH is the
+  # Devin CLI standalone, not VS Code. wmctrl/xdotool drive its window.
+  sudo apt-get install -y wmctrl xdotool
+  # A GUI terminal for recorded end-to-end REPL/service runs.
+  sudo apt-get install -y xterm
+  # Compiles the Mermaid the view engine and document diagrams emit, to validate rendered output.
+  npm install --prefix ~/.local/mermaid @mermaid-js/mermaid-cli
+  # Pinned PDF toolchain (WeasyPrint + mermaid) for docpdf integration tests and
+  # `-doc-form pdf`; prints the OPENSYSML_* env exports to use it.
+  ./scripts/download-doc-pdf-toolchain.sh || echo "doc-pdf toolchain not provisioned; run scripts/download-doc-pdf-toolchain.sh"
+  # pypdf in the toolchain venv for structural PDF verification (fonts, link annotations).
+  build/doc-pdf/weasyprint/bin/pip install pypdf || echo "pypdf not installed into doc-pdf venv"
+  if ! dpkg -s code >/dev/null 2>&1; then
+    curl -sL -o /tmp/code.deb https://update.code.visualstudio.com/latest/linux-deb-x64/stable
+    sudo dpkg -i /tmp/code.deb || sudo apt-get -f install -y
+  fi
+# Install project dependencies (runs during builds, surfaced to agent at session start).
+maintenance: |
+  go mod download
+  # Each pilot fetch verifies the pinned commit and re-downloads a directory whose
+  # .pilot-pin stamp is stale or missing, so re-running the scripts is the refresh
+  # when scripts/pilot-pin.sh moves. The gates then only verify.
+  ./scripts/download-training-examples.sh
+  ./scripts/download-pilot-corpora.sh
+  ./scripts/download-pilot-xpect.sh
+  OPENSYSML_REQUIRE_TRAINING_CORPUS=1 OPENSYSML_REQUIRE_PILOT_CORPORA=1 go test -count=1 ./internal/core/model -run 'TestTrainingExamples|TestPilotCorpora'
+  go test -count=1 ./cmd/pilot-diff ./cmd/pilot-xpect
+  # download-pilot-validator.sh exits early when build/pilot-validator exists, so a
+  # snapshot keeps whichever pilot release it was first built at even after the pin
+  # moves, and every oracle then measures the wrong reference. Compare the built
+  # release with scripts/pilot-pin.sh and rebuild all four Java oracles when it drifts.
+  ( . ./scripts/pilot-pin.sh; grep -qx "sysml.artifact.version=$PILOT_ARTIFACT_VERSION" build/pilot-sysml-validator/pilot-pin.txt ) \
+    || { rm -rf build/pilot-validator build/pilot-sysml-validator build/pilot-kerml-validator build/pilot-evaluator \
+         && ./scripts/download-pilot-validator.sh \
+         && ./scripts/download-pilot-sysml-validator.sh \
+         && ./scripts/download-pilot-kerml-validator.sh \
+         && ./scripts/download-pilot-evaluator.sh; }
+  python3 -m venv ~/pv
+  ~/pv/bin/pip install -q -U pip 'protobuf>=7.35.1' 'grpcio>=1.83.0' grpcio-tools pytest pytest-mock psutil
+  # rdflib compares Turtle hops as triple sets in the RDF round-trip skill (.agents/skills/testing-rdf-roundtrip).
+  ~/pv/bin/pip install -q rdflib
+  # An editable install can be absent from a venv that otherwise looks complete,
+  # which fails every client test on import, so verify rather than assume.
+  ~/pv/bin/pip install -q -e clients/python/
+  ~/pv/bin/python -c "import opensysml" || ~/pv/bin/pip install -e clients/python/
+  # Say which interpreter the client is importable from, and fail here rather
+  # than in every client test if it is none.
+  ~/pv/bin/python -c "import opensysml, sys; print('opensysml ready in', sys.executable)"
+  # The client verifies the sigstore bundle over a release's checksum manifest;
+  # without it every signing test fails on the import, so verify it too.
+  ~/pv/bin/python -c "import sigstore" || ~/pv/bin/pip install 'sigstore>=4.5.0,<5'
+  # Needed to regenerate api/proto/protoconnect (the Connect transport prototype).
+  go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
+  # The docs site toolchain, so `mkdocs build --strict` (make docs) is runnable
+  # without depending on another repo's venv shadowing python3 on PATH.
+  # A quiet install that failed leaves the site unbuildable, so verify it.
+  ~/pv/bin/pip install -q -r docs-requirements.txt
+  ~/pv/bin/python -m mkdocs --version || ~/pv/bin/pip install -r docs-requirements.txt
+  # The Python client resolves the service from ~/.pysysml/bin; without it the
+  # integration tests skip instead of exercising anything.
+  # (~/.opensysml/bin is where the installed client looks; the older path is kept.)
+  make build-grpc && mkdir -p ~/.pysysml/bin ~/.opensysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/ && cp bin/sysml-grpc ~/.opensysml/bin/
+  # esbuild/vsce for the VS Code extension, so `make vscode-package` can build a
+  # .vsix for editor-level LSP testing against the image's `code` binary.
+  npm install --prefix editors/vscode
+  # The Node client's own toolchain (tsc, eslint, its test runner); without it
+  # every check in clients/node fails on a missing binary rather than a finding.
+  npm install --prefix clients/node
+knowledge:
+  - name: lint
+    contents: |
+      go vet ./... && gofmt -l . && staticcheck ./... && gosec -quiet ./...
+  - name: test
+    contents: |
+      go test ./...
+      OPENSYSML_REQUIRE_SMT=1 OPENSYSML_SMT=/usr/bin/z3 go test -count=1 ./internal/core/solve ./internal/repl
+      OPENSYSML_REQUIRE_SMT=1 OPENSYSML_SMT=/usr/local/bin/cvc5 go test -count=1 ./internal/core/solve ./internal/repl
+      OPENSYSML_REQUIRE_TRAINING_CORPUS=1 OPENSYSML_REQUIRE_PILOT_CORPORA=1 go test -count=1 ./internal/core/model -run 'TestTrainingExamples|TestPilotCorpora|TestCorpusGates'
+  - name: build
+    contents: |
+      make build
