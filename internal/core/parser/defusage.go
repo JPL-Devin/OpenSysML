@@ -3,9 +3,11 @@ package parser
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -1155,6 +1157,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
 		}
 
+		if len(prefixes) > 0 && prefixMetadataFollowsKeyword(kw) {
+			p.reportMisplacedPrefixMetadata(prefixes, t)
+		}
+
 		// A subject, actor, stakeholder, objective or rendering the body does
 		// not own is parsed as itself and then replaced by an ErrorNode.
 		if !p.bodyAdmitsMember(kw) {
@@ -1166,14 +1172,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// A subject, actor, stakeholder or objective takes prefix metadata after
-		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
-		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
-		// declaration after it: `variant #B part v;`, `assume #B constraint c;`
-		// (VariantUsageElement, RequirementConstraintUsage) — not `assert`, whose
-		// OccurrenceUsagePrefix puts them ahead of it: `#B assert not constraint c;`.
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kw == "assume" || kw == "require" {
+		if prefixMetadataFollowsKeyword(kw) {
 			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
@@ -3544,6 +3543,53 @@ func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
 		}
 	}
 	return false
+}
+
+// prefixMetadataFollowsKeyword reports whether kw takes its prefix metadata after itself
+// (`subject #M s;`, SysML.xtext `'keyword' UsageExtensionKeyword* …`), unlike `#B assert …`.
+func prefixMetadataFollowsKeyword(kw string) bool {
+	switch kw {
+	case "subject", "actor", "stakeholder", "objective", "variant", "assume", "require":
+		return true
+	}
+	return false
+}
+
+// reportMisplacedPrefixMetadata reports prefix metadata written ahead of the keyword
+// at the cursor that it must follow, with the edit that moves it there.
+func (p *Parser) reportMisplacedPrefixMetadata(prefixes []*ast.PrefixMetadata, kw lexer.Token) {
+	content := p.src.Bytes()
+	texts := make([]string, 0, len(prefixes))
+	edits := make([]quickfix.Edit, 0, len(prefixes)+1)
+	var span source.Span
+	for i, pm := range prefixes {
+		// A node span runs to the next token, so it is trimmed back to the text.
+		sp := pm.Span()
+		text := strings.TrimRight(p.src.Text(sp), " \t\r\n")
+		texts = append(texts, text)
+		end := sp.Offset + len(text)
+		if i == 0 {
+			span.Offset = sp.Offset
+		}
+		span.Len = end - span.Offset
+		for end < kw.Span.Offset && (content[end] == ' ' || content[end] == '\t') {
+			end++
+		}
+		edits = append(edits, quickfix.Replace(source.Span{Offset: sp.Offset, Len: end - sp.Offset}, ""))
+	}
+	run := strings.Join(texts, " ")
+	edits = append(edits, quickfix.Insert(kw.Span.End(), " "+run))
+
+	example := kw.KeywordID + " " + run
+	switch next := p.peekN(1); next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+		example += " " + p.src.Text(next.Span)
+	}
+	p.errorWithFixes(span, "prefix metadata follows '"+kw.KeywordID+"': write `"+example+"`", quickfix.Fix{
+		Title:     "move the prefix metadata after '" + kw.KeywordID + "'",
+		Edits:     edits,
+		Preferred: true,
+	})
 }
 
 // parseReferenceMemberUsage parses the reference form that SysML.xtext spells
