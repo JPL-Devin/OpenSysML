@@ -111,7 +111,7 @@ systematically from four sources, one subdirectory each:
    pilot's grammar rejects before its validator would), and a constructed payload whose `new`
    names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 259
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 265
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-259 case(s): 250 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
+265 case(s): 256 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 91 | 91 | 0 | 0 | 0 |
-| semantic | 125 | 116 | 0 | 9 | 0 |
+| semantic | 131 | 122 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
 Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -197,7 +197,13 @@ other, subsetting a data type), and to 259 with `g70`/`k21` (a name written ahea
 feature keyword, `foo attribute bar : A;`: no production puts a name before its kind keyword, so the
 pilot stops at the keyword, `no viable alternative at input 'attribute'`, while we report the stray
 name as `expected a body member` — a shape the parser once accepted silently as a member named
-`foo`, dropping `bar`).
+`foo`, dropping `bar`), and to 263 with the inherited case-role cases (`s89`/`s90`, a case or
+requirement definition specializing two generals that each declare an objective or subject;
+`s91`/`s92`, one that references a second objective or subject through a referenced usage — all
+four both-reject, the pilot's `Only one objective/subject is allowed` counting inherited roles),
+and to 265 with `k54`/`s88` (a cross feature declared ahead of its end's kind keyword and typed
+by a subtype of the end's type: `validateFeatureCrossFeatureType` asks for the same type, so both
+reject).
 The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
@@ -240,7 +246,7 @@ when it was first written, six were closed by the validation work itself — `p0
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 259 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 265 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 

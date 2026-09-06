@@ -71,3 +71,35 @@ func TestEndFeatureKerMLSilent(t *testing.T) {
 		t.Fatalf("end-feature-kind lines = %v, want none", got)
 	}
 }
+
+// The prefix between `end` and a cross feature's declaration is the cross
+// feature's: the pilot accepts `end in x1 : A [1] item x : A`.
+func TestEndFeaturePrefixBelongsToCrossFeature(t *testing.T) {
+	const sysml = `package P {
+		part def A;
+		connection def K1 { end in x1 : A [1] item x : A; end b : A; }
+		connection def K2 { end derived x1 [1] item x : A; end b : A; }
+		connection def K3 { end variation x1 : A [1] item x : A; end b : A; }
+		connection def K4 { end in derived ref x1 : A [1] item x : A; end b : A; }
+		connection def K5 { end in a : A; end derived b : A; }
+	}`
+	if got, want := endFeatureLines(t, sysml, "end-feature-direction", msgEndFeatureDirection, false), []int{7}; !sameLines(got, want) {
+		t.Fatalf("end-feature-direction lines = %v, want %v", got, want)
+	}
+	if got, want := endFeatureLines(t, sysml, "end-feature-kind", msgEndFeatureKind, false), []int{7}; !sameLines(got, want) {
+		t.Fatalf("end-feature-kind lines = %v, want %v", got, want)
+	}
+
+	const kerml = `package P {
+		class A;
+		assoc K1 { end in x1 : A [1] feature x : A; end feature b : A; }
+		assoc K2 { end derived abstract composite x2 : A [1] feature x : A; end feature b : A; }
+		assoc K3 { end out [1] feature x : A; end feature b : A; }
+	}`
+	if got := endFeatureLines(t, kerml, "end-feature-direction", msgEndFeatureDirection, true); len(got) != 0 {
+		t.Fatalf("end-feature-direction lines = %v, want none", got)
+	}
+	if got := endFeatureLines(t, kerml, "end-feature-kind", msgEndFeatureKind, true); len(got) != 0 {
+		t.Fatalf("end-feature-kind lines = %v, want none", got)
+	}
+}

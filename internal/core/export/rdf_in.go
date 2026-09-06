@@ -2294,12 +2294,26 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 		words[len(words)-1] += mult
 	case mult != "":
 		words = append(words, mult)
-	default:
-		return nil, &UnsupportedError{
-			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
-			Note: "it declares neither a name nor a multiplicity, and one or the other introduces a cross feature ahead of its end",
+	}
+	for _, flag := range []struct {
+		property string
+		keyword  string
+	}{{"isOrdered", "ordered"}, {"isNonunique", "nonunique"}} {
+		if d.boolOf(cross, rdf.SysML+flag.property) {
+			words = append(words, flag.keyword)
 		}
 	}
+	if len(words) == 0 {
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
+			Note: "it declares neither a name nor a multiplicity part, and one or the other introduces a cross feature ahead of its end",
+		}
+	}
+	prefix, err := d.crossFeaturePrefixWords(cross)
+	if err != nil {
+		return nil, err
+	}
+	words = append(prefix, words...)
 	typed, err := d.referenceList(cross, rdf.SysML+relationshipProperty[ast.RelTyping])
 	if err != nil {
 		return nil, err
@@ -2312,6 +2326,50 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 		return nil, err
 	}
 	return append(words, relationships...), nil
+}
+
+// crossFeaturePrefixWords writes the prefix a cross feature owns ahead of its name
+// (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix, SysML.xtext BasicUsagePrefix),
+// its flags spelled in the grammar of its root as a usage head's are.
+func (d *decoder) crossFeaturePrefixWords(cross *element) ([]string, error) {
+	kerml := d.kerml(cross)
+	isPortion, err := d.portionPrefix(cross, kerml, "")
+	if err != nil {
+		return nil, err
+	}
+	var words []string
+	if direction, ok := d.stringOf(cross, rdf.SysML+pDirection); ok {
+		words = append(words, direction)
+	}
+	for _, flag := range []struct {
+		keyword string
+		set     bool
+	}{
+		{"derived", d.boolOf(cross, rdf.SysML+"isDerived")},
+		{"abstract", d.boolOf(cross, rdf.SysML+"isAbstract")},
+		{"variation", d.boolOf(cross, rdf.SysML+"isVariation")},
+		{"portion", isPortion},
+		{"composite", d.boolOf(cross, rdf.SysML+"isComposite") && !isPortion},
+	} {
+		if flag.set {
+			words = append(words, flag.keyword)
+		}
+	}
+	if prefix, ok := d.stringOf(cross, rdf.OpenSysML+xDeclaredPrefix); ok {
+		words = append(words, prefix)
+	}
+	for _, flag := range []struct {
+		keyword string
+		set     bool
+	}{
+		{constantKeyword(kerml), d.boolOf(cross, rdf.SysML+"isConstant")},
+		{"ref", d.boolOf(cross, rdf.SysML+"isReference")},
+	} {
+		if flag.set {
+			words = append(words, flag.keyword)
+		}
+	}
+	return words, nil
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the

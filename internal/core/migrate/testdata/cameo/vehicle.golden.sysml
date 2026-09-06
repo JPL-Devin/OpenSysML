@@ -34,7 +34,7 @@ package 'Vehicle Design' {
         attribute mass : 'Vehicle Design'::'Value Types'::Mass default = 1200.0;
         attribute color : 'Vehicle Design'::'Value Types'::Color default = 'Vehicle Design'::'Value Types'::Color::red;
         attribute 'vehicle name' : ScalarValues::String default = "the \"demo\" car";
-        readonly attribute isElectric : ScalarValues::Boolean default = false;
+        constant attribute isElectric : ScalarValues::Boolean default = false;
         derived attribute totalMass : 'Vehicle Design'::'Value Types'::Mass default = mass + engine.mass;
         part engine : Engine[1..2];
         part wheels : Wheel[4..*];

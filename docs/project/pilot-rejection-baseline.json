@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 259,
-        "digest": "sha256:4bedb650478ed9eb8f98e1d976b6751114640f3850615dc159a96636784df4f4"
+        "files": 265,
+        "digest": "sha256:27d5f7e16135c539d878b36819cf949e6a46e3dbb5bad7c1229f81fde03f2ae9"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 259,
-    "bothReject": 250,
+    "cases": 265,
+    "bothReject": 256,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 125,
-      "bothReject": 116,
+      "cases": 131,
+      "bothReject": 122,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1567,6 +1567,15 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/k54-cross-feature-typed-narrower-than-end.kerml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2110,6 +2119,51 @@
       "pilotErrors": 3
     },
     {
+      "path": "semantic/s88-cross-feature-typed-narrower-than-end.sysml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
+      "source": "semantic",
+      "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s90-requirement-def-inherits-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A requirement definition inheriting a subject from each of two generals has two subjects (SysML 7.20 Requirements; pilot validateRequirementDefinitionOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s91-case-references-second-objective.sysml",
+      "source": "semantic",
+      "rule": "A case usage inherits an objective from its definition and another from the case it reference-subsets, so it has two (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s92-requirement-references-second-subject.sysml",
+      "source": "semantic",
+      "rule": "A requirement usage inherits a subject from its definition and another from the requirement it reference-subsets, so it has two (SysML 7.20 Requirements; pilot validateRequirementUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2484,8 +2538,8 @@
       }
     ],
     "totals": {
-      "cases": 259,
-      "bothReject": 250,
+      "cases": 265,
+      "bothReject": 256,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

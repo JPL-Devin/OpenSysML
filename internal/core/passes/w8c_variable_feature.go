@@ -52,8 +52,26 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 			Source:   "constraint",
 		})
 	}
+	kerml := ctx.Kind == source.KindKerML
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
+		if cross, ok := sym.Decl.(*ast.CrossFeatureMember); ok {
+			if ctx.downstreamSpan(cross.Span()) {
+				return
+			}
+			if derivable && cross.IsConstant && !model.FeatureIsVariable(sym) {
+				report(cross.Span(), msgConstantNotVariable, "constant-feature-not-variable")
+			}
+			if !cross.IsVariable && !(cross.IsConstant && kerml) {
+				return
+			}
+			if cross.IsPortion {
+				report(cross.Span(), msgPortionFeatureVariable, "feature-portion-not-variable")
+			}
+			// A cross feature's membership is no FeatureMembership: no owning type.
+			report(cross.Span(), msgVariableFeatureOwner, "variable-feature-owner")
+			return
+		}
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || w8cVariabilityDownstream(ctx, sym, u) {
 			return
@@ -65,7 +83,7 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 			report(u.Span(), msgConstantNotVariable, "constant-feature-not-variable")
 		}
 		// KerML `const` declares a variable feature too; SysML's `constant` does not.
-		if !u.IsVariable && !(u.IsConstant && ctx.Kind == source.KindKerML) {
+		if !u.IsVariable && !(u.IsConstant && kerml) {
 			return
 		}
 		if u.IsPortion {

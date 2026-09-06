@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -120,8 +122,8 @@ func RequireAnalysis(sym *symbols.Symbol) error {
 }
 
 // ObjectivesOf returns the objectives sym states, its inherited ones first and
-// in declaration order. An objective restating an inherited one by name stands
-// where it is restated.
+// in declaration order. An objective restating an inherited one, by name or by
+// redefinition, is the same objective declared again and keeps its place.
 func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Objective {
 	if sym == nil {
 		return nil
@@ -139,22 +141,29 @@ func (ctx *Context) ObjectivesOf(sym *symbols.Symbol, scope *symbols.Scope) []Ob
 		if objSym == nil {
 			continue
 		}
-		out = replaceObjective(out, ctx.objectiveOf(objSym, sym))
+		out = ctx.placeObjective(out, ctx.objectiveOf(objSym, sym))
 	}
 	return out
 }
 
-// replaceObjective appends obj, dropping the objective it restates by name: a
-// redeclared objective is the same objective declared again.
-func replaceObjective(out []Objective, obj Objective) []Objective {
-	if obj.Name != "" {
-		for i, prev := range out {
-			if prev.Name == obj.Name {
-				return append(append(out[:i:i], out[i+1:]...), obj)
-			}
+// placeObjective adds obj to out: in place of the first objective it restates,
+// nowhere when it is already placed or redefined by a placed one, at the end otherwise.
+func (ctx *Context) placeObjective(out []Objective, obj Objective) []Objective {
+	for i, prev := range out {
+		if prev.Symbol == obj.Symbol || ctx.redefines(prev, obj) {
+			return out
+		}
+		if ctx.redefines(obj, prev) || (obj.Name != "" && obj.Name == prev.Name) {
+			out[i] = obj
+			return out
 		}
 	}
 	return append(out, obj)
+}
+
+// redefines reports whether obj redefines prev, by clause, position or role.
+func (ctx *Context) redefines(obj, prev Objective) bool {
+	return slices.Contains(ctx.model.AllRedefinedFeatures(obj.Symbol), prev.Symbol)
 }
 
 // objectiveOf reads one objective usage: its direction from the definition it is
@@ -164,7 +173,7 @@ func replaceObjective(out []Objective, obj Objective) []Objective {
 func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 	typ := ctx.extractType(objSym)
 	obj := Objective{
-		Name:       objSym.Name,
+		Name:       ctx.model.EffectiveNameOf(objSym),
 		Symbol:     objSym,
 		Type:       typ,
 		Direction:  ctx.objectiveDirection(typ),
@@ -189,7 +198,7 @@ func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 		return obj
 	}
 	// An objective restating another takes the value the restated one states.
-	for _, restated := range ctx.relatedFeatures(objSym, owner, ast.RelRedefines) {
+	for _, restated := range ctx.restatedObjectives(objSym, owner) {
 		if obj.ReboundBest == nil {
 			obj.ReboundBest = ctx.reboundBestOf(restated)
 		}
@@ -198,6 +207,27 @@ func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 		}
 	}
 	return obj
+}
+
+// restatedObjectives returns what objSym restates as seen from owner, nearest
+// first: its clause's targets, then positional and role redefinitions, transitively.
+func (ctx *Context) restatedObjectives(objSym, owner *symbols.Symbol) []*symbols.Symbol {
+	seen := map[*symbols.Symbol]bool{objSym: true}
+	var out []*symbols.Symbol
+	add := func(syms []*symbols.Symbol) {
+		for _, sym := range syms {
+			if !seen[sym] {
+				seen[sym] = true
+				out = append(out, sym)
+			}
+		}
+	}
+	add(ctx.relatedFeatures(objSym, owner, ast.RelRedefines))
+	for i := 0; i < len(out); i++ {
+		add(ctx.model.AllRedefinedFeatures(out[i]))
+	}
+	add(ctx.model.AllRedefinedFeatures(objSym))
+	return out
 }
 
 // readEvalValue reads the objective's value from the lowered body of its own
