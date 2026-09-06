@@ -614,10 +614,11 @@ nothing is `mass` (`100 [kg] + 0 [kg]`), and a `default null` collection holds
 the parts that subset it (`part b1 : Bolt :> subcomponents;`, or with
 `subsets`) — the default is only its value where nothing populates it — so
 the sum rolls up through them recursively. The kind is the collection's
-declared one: a collection typed `Real[*]` or mapped through an untyped body
-parameter (`->collect { in x; x * x }`) still sums to the number `0`, and
-`10 [kg] + 0 [m]` or `10 [kg] + 5` remain the `incommensurable units` error
-above.
+declared one, and survives a `select`, `reject` or `collect` that leaves
+nothing: a collection typed `Real[*]`, or an empty one mapped through an
+untyped body parameter (`->collect { in x; x * x }`), still sums to the
+number `0`, and `10 [kg] + 0 [m]` or `10 [kg] + 5` remain the
+`incommensurable units` error above.
 
 ## Computed columns
 
