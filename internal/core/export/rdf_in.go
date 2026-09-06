@@ -1023,6 +1023,10 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 		if err != nil {
 			return err
 		}
+		// The behavioral writer prints a whole declaration with no place for `member`.
+		if d.typeFeatureMember(el) {
+			return d.typeFeatureUnwritable(el, "its notation is written whole by the behavioral mapping")
+		}
 		return d.unwrittenPrefix(el)
 	}
 	head, err := d.head(el)
@@ -1104,8 +1108,60 @@ func identityAnnotations(el *element) []string {
 	return out
 }
 
-// head builds the declaration text up to the body or terminator.
+// head builds the declaration text up to the body or terminator, with the
+// `member` of a KerML TypeFeatureMember ahead of it where the membership states one.
 func (d *decoder) head(el *element) (string, error) {
+	head, err := d.declarationHead(el)
+	if err != nil || !d.typeFeatureMember(el) {
+		return head, err
+	}
+	return d.memberPrefixed(el, head)
+}
+
+// typeFeatureMember reports whether a type owns el, a feature, through a plain
+// OwningMembership rather than a FeatureMembership (KerML.xtext TypeFeatureMember).
+func (d *decoder) typeFeatureMember(el *element) bool {
+	if el.owner == nil || el.metaclass == usageMetaclass[ast.UsageMetadata] ||
+		!ontology.IsAncestorOrSelf(el.metaclass, "Feature") || !isType(el.owner.metaclass) {
+		return false
+	}
+	// A variant is flagged as one whatever its membership is typed; an end's
+	// cross feature is written in the end's head (ownedCrossFeature).
+	if d.boolOf(el, rdf.SysML+"isVariant") || d.enumeratedValue(el) || d.ownedCrossFeature(el.owner) == el {
+		return false
+	}
+	m, owned := d.owningMembership[el.iri]
+	return owned && d.metaclass(rdf.IRI(m.iri)) == mOwningMembership
+}
+
+// memberPrefixed writes `member` between a head's visibility and its declaration
+// (KerML.xtext TypeFeatureMember); SysML has no such keyword, so a SysML root refuses.
+func (d *decoder) memberPrefixed(el *element, head string) (string, error) {
+	if !d.kerml(el) {
+		return "", d.typeFeatureUnwritable(el, "SysML has no `member` keyword, and writing it as a feature of the type would be a different model")
+	}
+	visibility := d.visibility(el)
+	if visibility == "" {
+		return "member " + head, nil
+	}
+	rest, ok := strings.CutPrefix(head, visibility+" ")
+	if !ok {
+		return "", d.typeFeatureUnwritable(el, "its head does not open with the visibility `member` follows")
+	}
+	return visibility + " member " + rest, nil
+}
+
+// typeFeatureUnwritable refuses a feature its type owns through a plain
+// OwningMembership that the notation cannot state as such.
+func (d *decoder) typeFeatureUnwritable(el *element, why string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the feature <%s>", el.iri),
+		Note: fmt.Sprintf("its type owns it through a plain sysml:OwningMembership, which KerML writes `member`, but %s", why),
+	}
+}
+
+// declarationHead builds the declaration text up to the body or terminator.
+func (d *decoder) declarationHead(el *element) (string, error) {
 	if d.isResultExpression(el) {
 		return d.expressionNodeText(rdf.IRI(el.iri), el)
 	}
@@ -2273,14 +2329,14 @@ func (d *decoder) bodyChildren(el *element) []*element {
 	return out
 }
 
-// ownedCrossFeature is the feature an end owns through a plain OwningMembership
-// (KerML.xtext OwnedCrossingFeatureMember), as FeatureUtil.getOwnedCrossFeatureOf finds it.
+// ownedCrossFeature is the kindless feature an end owns through a plain OwningMembership,
+// written in its head (KerML.xtext OwnedCrossingFeature); a keyworded one is a body `member`.
 func (d *decoder) ownedCrossFeature(el *element) *element {
 	if !d.boolOf(el, rdf.SysML+"isEnd") || !ontology.IsAncestorOrSelf(el.metaclass, "Feature") {
 		return nil
 	}
 	for _, child := range el.children {
-		if child.metaclass == usageMetaclass[ast.UsageMetadata] || !ontology.IsAncestorOrSelf(child.metaclass, "Feature") {
+		if child.metaclass != crossFeatureMetaclass(d.kerml(el)) {
 			continue
 		}
 		if m, owned := d.owningMembership[child.iri]; owned && d.metaclass(rdf.IRI(m.iri)) == mOwningMembership {

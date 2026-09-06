@@ -83,6 +83,8 @@ elmt:CompositeMultiplicity__Vehicle
     sysml:ownedMember elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:ownedMembership elmt:CompositeMultiplicity__Vehicle__w_om ;
     sysml:ownedRelationship elmt:CompositeMultiplicity__Vehicle__w_om ;
+    sysml:ownedFeature elmt:CompositeMultiplicity__Vehicle__w ;
+    sysml:ownedFeatureMembership elmt:CompositeMultiplicity__Vehicle__w_om ;
     sysx:sourceText "    class Vehicle {\n" ;
     sysx:sourceTail "    }\n" .
 
@@ -120,14 +122,16 @@ elmt:CompositeMultiplicity__Vehicle__w
     sysx:sourceTail "        }\n" .
 
 elmt:CompositeMultiplicity__Vehicle__w_om
-    a sysml:OwningMembership ;
+    a sysml:FeatureMembership ;
     sysml:elementId "CompositeMultiplicity__Vehicle__w_om" ;
     sysml:owner elmt:CompositeMultiplicity__Vehicle ;
     sysml:memberElement elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:ownedMemberElement elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:ownedRelatedElement elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:owningRelatedElement elmt:CompositeMultiplicity__Vehicle ;
-    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Vehicle .
+    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Vehicle ;
+    sysml:ownedMemberFeature elmt:CompositeMultiplicity__Vehicle__w ;
+    sysml:owningType elmt:CompositeMultiplicity__Vehicle .
 
 expr:CompositeMultiplicity__Vehicle__w_pupperBound
     a sysml:LiteralInteger ;
@@ -192,11 +196,15 @@ elmt:CompositeMultiplicity__Car
     sysml:ownedMember elmt:CompositeMultiplicity__Car__frontWheel, elmt:CompositeMultiplicity__Car__rearWheel ;
     sysml:ownedMembership elmt:CompositeMultiplicity__Car__frontWheel_om, elmt:CompositeMultiplicity__Car__rearWheel_om ;
     sysml:ownedRelationship elmt:CompositeMultiplicity__Car__frontWheel_om, elmt:CompositeMultiplicity__Car__rearWheel_om ;
+    sysml:ownedFeature elmt:CompositeMultiplicity__Car__frontWheel, elmt:CompositeMultiplicity__Car__rearWheel ;
+    sysml:ownedFeatureMembership elmt:CompositeMultiplicity__Car__frontWheel_om, elmt:CompositeMultiplicity__Car__rearWheel_om ;
     sysx:sourceText "    class Car specializes Vehicle {\n" ;
     sysx:sourceTail "    }\n" ;
     json:ownedMember "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel\"}]" ;
     json:ownedMembership "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" ;
-    json:ownedRelationship "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" .
+    json:ownedRelationship "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" .
 
 elmt:CompositeMultiplicity__Car_om
     a sysml:OwningMembership ;
@@ -232,14 +240,16 @@ elmt:CompositeMultiplicity__Car__frontWheel
     sysx:sourceTail "        }\n" .
 
 elmt:CompositeMultiplicity__Car__frontWheel_om
-    a sysml:OwningMembership ;
+    a sysml:FeatureMembership ;
     sysml:elementId "CompositeMultiplicity__Car__frontWheel_om" ;
     sysml:owner elmt:CompositeMultiplicity__Car ;
     sysml:memberElement elmt:CompositeMultiplicity__Car__frontWheel ;
     sysml:ownedMemberElement elmt:CompositeMultiplicity__Car__frontWheel ;
     sysml:ownedRelatedElement elmt:CompositeMultiplicity__Car__frontWheel ;
     sysml:owningRelatedElement elmt:CompositeMultiplicity__Car ;
-    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Car .
+    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Car ;
+    sysml:ownedMemberFeature elmt:CompositeMultiplicity__Car__frontWheel ;
+    sysml:owningType elmt:CompositeMultiplicity__Car .
 
 expr:CompositeMultiplicity__Car__frontWheel_pupperBound
     a sysml:LiteralInteger ;
@@ -301,14 +311,16 @@ elmt:CompositeMultiplicity__Car__rearWheel
     sysx:sourceText "        composite rearWheel[2] ordered :>> w;\n" .
 
 elmt:CompositeMultiplicity__Car__rearWheel_om
-    a sysml:OwningMembership ;
+    a sysml:FeatureMembership ;
     sysml:elementId "CompositeMultiplicity__Car__rearWheel_om" ;
     sysml:owner elmt:CompositeMultiplicity__Car ;
     sysml:memberElement elmt:CompositeMultiplicity__Car__rearWheel ;
     sysml:ownedMemberElement elmt:CompositeMultiplicity__Car__rearWheel ;
     sysml:ownedRelatedElement elmt:CompositeMultiplicity__Car__rearWheel ;
     sysml:owningRelatedElement elmt:CompositeMultiplicity__Car ;
-    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Car .
+    sysml:membershipOwningNamespace elmt:CompositeMultiplicity__Car ;
+    sysml:ownedMemberFeature elmt:CompositeMultiplicity__Car__rearWheel ;
+    sysml:owningType elmt:CompositeMultiplicity__Car .
 
 expr:CompositeMultiplicity__Car__rearWheel_pupperBound
     a sysml:LiteralInteger ;
