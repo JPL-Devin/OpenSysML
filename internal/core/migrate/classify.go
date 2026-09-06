@@ -98,15 +98,67 @@ var libraryRoots = map[string]bool{
 	"Libraries":                         true,
 }
 
-// isLibrary reports whether e sits in profile or bundled-library content: a
-// profile, a document root beside the user's model with a library name, or a
-// package the model marks as a library or auxiliary resource.
-func isLibrary(e *xmi.Element) bool {
-	for cur := e; cur != nil; cur = cur.Parent {
-		if cur.Type == "Profile" || cur.HasStereotype("ModelLibrary", "modelLibrary", "auxiliaryResource") {
+// standardStereotypeNamespaces are the XML namespaces of the profiles whose
+// stereotypes the mapping reads: OMG SysML and UML standard profiles, the
+// MagicDraw profile and customizations, and Papyrus' SysML serialization.
+var standardStereotypeNamespaces = []string{
+	"omg.org/spec/SysML", "omg.org/spec/UML/", "magicdraw.com/spec/", "eclipse.org/papyrus/",
+}
+
+// isStandard reports whether s comes from a standard profile rather than a
+// user's own, whose same-named stereotypes carry no SysML meaning.
+func isStandard(s *xmi.Stereotype) bool {
+	for _, ns := range standardStereotypeNamespaces {
+		if strings.Contains(s.Namespace, ns) {
 			return true
 		}
-		if cur.Parent == nil && cur.Type != "Model" && libraryRoots[cur.Name] {
+	}
+	return false
+}
+
+// stereo returns e's application of the named standard-profile stereotype, or nil.
+func stereo(e *xmi.Element, name string) *xmi.Stereotype {
+	for _, s := range e.Stereotypes {
+		if s.Name == name && isStandard(s) {
+			return s
+		}
+	}
+	return nil
+}
+
+// has reports whether any of the named standard-profile stereotypes applies to e.
+func has(e *xmi.Element, names ...string) bool {
+	for _, n := range names {
+		if stereo(e, n) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// isLibrary reports whether e sits in profile or bundled-library content: a
+// profile, a package the model marks as a library or auxiliary resource, or a
+// document root with a library name that sits beside the user's Model.
+func (m *migration) isLibrary(e *xmi.Element) bool {
+	for cur := e; cur != nil; cur = cur.Parent {
+		if cur.Type == "Profile" || has(cur, "ModelLibrary", "modelLibrary", "auxiliaryResource") {
+			return true
+		}
+		if cur.Parent == nil && cur.Type != "Model" && libraryRoots[cur.Name] && m.besideUserModel(cur) {
+			return true
+		}
+	}
+	return false
+}
+
+// besideUserModel reports whether another root of root's document is a Model
+// or a package not named like a library, which the user's content then is.
+func (m *migration) besideUserModel(root *xmi.Element) bool {
+	for _, r := range m.model.Roots {
+		if r == root || r.IsProxy() {
+			continue
+		}
+		if r.Type == "Model" || (r.Type == "Package" && !libraryRoots[r.Name]) {
 			return true
 		}
 	}
@@ -131,7 +183,7 @@ func primitiveLibraryHref(href string) bool {
 // scalarValue returns the ScalarValues type a v1 type maps to, or "" when the
 // type is the user's own: a primitive the UML or SysML libraries define, whether
 // referenced by href or bundled in the document.
-func scalarValue(t *xmi.Element) string {
+func (m *migration) scalarValue(t *xmi.Element) string {
 	if t == nil {
 		return ""
 	}
@@ -145,7 +197,7 @@ func scalarValue(t *xmi.Element) string {
 		}
 		return ""
 	}
-	if (t.Type == "PrimitiveType" || t.Type == "DataType") && isLibrary(t) {
+	if (t.Type == "PrimitiveType" || t.Type == "DataType") && m.isLibrary(t) {
 		return name
 	}
 	return ""
@@ -157,7 +209,7 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 	if e.IsProxy() {
 		return catNone, ""
 	}
-	if isLibrary(e) {
+	if m.isLibrary(e) {
 		return catLibrary, ""
 	}
 	switch e.Type {
@@ -167,19 +219,19 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 		return catLibrary, ""
 	case "Class", "Component":
 		switch {
-		case e.HasStereotype(requirementStereotypes...):
+		case has(e, requirementStereotypes...):
 			return catRequirementDef, ""
-		case e.HasStereotype("ConstraintBlock"):
+		case has(e, "ConstraintBlock"):
 			return catConstraintDef, ""
-		case e.HasStereotype("InterfaceBlock"):
+		case has(e, "InterfaceBlock"):
 			return catPortDef, ""
-		case e.HasStereotype("Block"):
+		case has(e, "Block"):
 			return catPartDef, ""
-		case e.HasStereotype("Stakeholder"):
+		case has(e, "Stakeholder"):
 			return catPartDef, "a v1 «Stakeholder» is written as a part def"
-		case e.HasStereotype("View"):
+		case has(e, "View"):
 			return catUnmapped, "views are not migrated yet"
-		case e.HasStereotype("Viewpoint"):
+		case has(e, "Viewpoint"):
 			return catUnmapped, "viewpoints are not migrated yet"
 		}
 		return catPartDef, "a plain UML class without «Block» is written as a part def"
@@ -190,7 +242,7 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 	case "Association":
 		return catConnectionDef, ""
 	case "DataType":
-		if e.HasStereotype("ValueType") {
+		if has(e, "ValueType") {
 			return catAttributeDef, ""
 		}
 		return catAttributeDef, "a UML data type without «ValueType» is written as an attribute def"
@@ -203,7 +255,7 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 	case "Interface":
 		return catPortDef, "a UML interface is written as a port def"
 	case "InstanceSpecification":
-		if e.HasStereotype("Unit", "QuantityKind") {
+		if has(e, "Unit", "QuantityKind") {
 			return catUnmapped, "units and quantity kinds are not migrated; use the SI and ISQ libraries"
 		}
 		if len(m.model.Refs(e, "classifier")) == 0 {
@@ -215,7 +267,7 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 		}
 		return catIndividualDef, note
 	case "Activity", "OpaqueBehavior", "Interaction", "StateMachine", "FunctionBehavior":
-		if e.HasStereotype("TestCase") {
+		if has(e, "TestCase") {
 			return catVerificationDef, "the test case's behavior is not migrated; only its verified requirements are"
 		}
 		return catUnmapped, "behaviors are not migrated yet"
@@ -231,10 +283,12 @@ func (m *migration) classify(e *xmi.Element) (category, string) {
 // stereotype in guillemets, else its UML metaclass.
 func kindOf(e *xmi.Element) string {
 	for _, s := range e.Stereotypes {
-		switch s.Name {
-		case "PartProperty", "ValueProperty", "ReferenceProperty", "SharedProperty", "ConstraintProperty", "ConstraintParameter":
-			// MagicDraw's property customizations restate what the type says.
-			continue
+		if isStandard(s) {
+			switch s.Name {
+			case "PartProperty", "ValueProperty", "ReferenceProperty", "SharedProperty", "ConstraintProperty", "ConstraintParameter":
+				// MagicDraw's property customizations restate what the type says.
+				continue
+			}
 		}
 		return "«" + s.Name + "»" + " " + e.Type
 	}
@@ -263,7 +317,7 @@ func (m *migration) instanceClassifiers(e *xmi.Element) ([]*xmi.Element, string)
 	var written []*xmi.Element
 	var notes []string
 	for _, c := range m.model.Refs(e, "classifier") {
-		if c.IsProxy() || isLibrary(c) {
+		if c.IsProxy() || m.isLibrary(c) {
 			notes = append(notes, "the instance's classifier "+c.Name+" is outside the document or in a library, so it has no v2 definition to specialize")
 			continue
 		}

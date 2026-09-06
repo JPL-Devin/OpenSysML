@@ -271,3 +271,91 @@ func TestCommentAboutUnwrittenElementIsApproximated(t *testing.T) {
 		t.Errorf("%v", d)
 	}
 }
+
+// packageRootDocument is an XMI document whose only UML root is a package.
+func packageRootDocument(name, members, applications string) []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmi:version="2.5.1" xmlns:xmi="http://www.omg.org/spec/XMI/20131001"
+         xmlns:uml="http://www.omg.org/spec/UML/20161101"
+         xmlns:sysml="http://www.omg.org/spec/SysML/20181001/SysML">
+  <uml:Package xmi:type="uml:Package" xmi:id="_p" name="` + name + `">
+` + members + `
+  </uml:Package>
+` + applications + `
+</xmi:XMI>`)
+}
+
+func TestSolePackageRootWithLibraryNameMigrates(t *testing.T) {
+	for _, name := range []string{"SysML", "Libraries", "QUDV"} {
+		r, err := migrate.Migrate("t.xmi", packageRootDocument(name, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing"/>`, `<sysml:Block xmi:id="_st" base_Class="_b"/>`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantLine(t, r.Notation, "part def Thing;")
+		if es := entriesFor(r, "_b"); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+			t.Errorf("%s::Thing: entries = %+v", name, es)
+		}
+	}
+	t.Run("beside the user's model", func(t *testing.T) {
+		r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_own" name="Own"/>`,
+			`<uml:Package xmi:type="uml:Package" xmi:id="_lib" name="SysML">
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing"/>
+  </uml:Package>
+  <sysml:Block xmi:id="_s1" base_Class="_own"/><sysml:Block xmi:id="_st" base_Class="_b"/>`)
+		wantLine(t, r.Notation, "part def Own;")
+		wantNoLine(t, r.Notation, "part def Thing")
+		if es := entriesFor(r, "_lib"); len(es) != 1 || es[0].Verdict != migrate.Skipped {
+			t.Errorf("entries = %+v", es)
+		}
+	})
+}
+
+func TestEmptyUpperBoundIsZero(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p1" name="none" type="_a" aggregation="composite">
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_l1" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_u1"/>
+      </ownedAttribute>
+    </packagedElement>`, `<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/>`)
+	wantLine(t, r.Notation, "part none : A[0];")
+}
+
+func TestCustomStereotypesWithStandardNamesAreNotConsumed(t *testing.T) {
+	custom := func(name, base, id string) string {
+		return `<custom:` + name + ` xmlns:custom="http://example.com/custom" xmi:id="_c` + id + `" base_` + base + `="` + id + `"/>`
+	}
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_fp" name="x" type="_r"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Package" xmi:id="_lib" name="Lib">
+      <packagedElement xmi:type="uml:Class" xmi:id="_lb" name="InLib"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_d" name="link" client="_b" supplier="_r"/>`,
+		custom("Requirement", "Class", "_r")+custom("Block", "Class", "_b")+custom("ModelLibrary", "Package", "_lib")+
+			custom("FlowProperty", "Property", "_fp")+custom("Satisfy", "Abstraction", "_d")+`<sysml:Block xmi:id="_s" base_Class="_lb"/>`)
+	wantNoLine(t, r.Notation, "requirement def")
+	wantLine(t, r.Notation, "part def Req {")
+	wantLine(t, r.Notation, "applied stereotype «Requirement»")
+	wantLine(t, r.Notation, "applied stereotype «Block»")
+	wantLine(t, r.Notation, "applied stereotype «ModelLibrary»")
+	wantLine(t, r.Notation, "applied stereotype «FlowProperty»")
+	wantLine(t, r.Notation, "part def InLib;")
+	wantLine(t, r.Notation, "ref part x : Req {")
+	wantLine(t, r.Notation, "dependency link from Thing to Req;")
+	wantNoLine(t, r.Notation, "satisfy")
+	if es := entriesFor(r, "_r"); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "without «Block»") {
+		t.Errorf("_r entries = %+v", es)
+	}
+	if es := entriesFor(r, "_lib"); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+		t.Errorf("_lib entries = %+v", es)
+	}
+	if es := entriesFor(r, "_d"); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "«Satisfy» is written as a plain dependency") {
+		t.Errorf("_d entries = %+v", es)
+	}
+}

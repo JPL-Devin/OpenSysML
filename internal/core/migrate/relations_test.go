@@ -757,3 +757,79 @@ func TestCollectionModifiersAreWritten(t *testing.T) {
 		}
 	}
 }
+
+// namedRelationModel is a block, a requirement and a test case joined by one
+// named dependency of each SysML relationship stereotype.
+const namedRelationModel = `
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_bp" name="piece" type="_b2" aggregation="composite"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b2" name="Piece"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r2" name="Req2"/>
+    <packagedElement xmi:type="uml:Activity" xmi:id="_tc" name="Check"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_sat" name="sat" client="_bp" supplier="_r"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_ver" name="ver" client="_tc" supplier="_r"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_ref" name="ref" client="_b" supplier="_r"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_alloc" name="alloc" client="_b" supplier="_b2"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_trace" name="trace" client="_b" supplier="_r"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_copy" name="copy" client="_r2" supplier="_r"/>`
+
+const namedRelationApplications = `
+  <sysml:Block xmi:id="_s1" base_Class="_b"/>
+  <sysml:Block xmi:id="_s2" base_Class="_b2"/>
+  <sysml:Requirement xmi:id="_s3" base_Class="_r" Id="R1" Text="Shall."/>
+  <sysml:Requirement xmi:id="_s4" base_Class="_r2" Id="R2" Text="Shall too."/>
+  <sysml:TestCase xmi:id="_s5" base_Behavior="_tc"/>
+  <sysml:Satisfy xmi:id="_s6" base_Abstraction="_sat"/>
+  <sysml:Verify xmi:id="_s7" base_Abstraction="_ver"/>
+  <sysml:Refine xmi:id="_s8" base_Abstraction="_ref"/>
+  <sysml:Allocate xmi:id="_s9" base_Abstraction="_alloc"/>
+  <sysml:Trace xmi:id="_s10" base_Abstraction="_trace"/>
+  <sysml:Copy xmi:id="_s11" base_Abstraction="_copy"/>`
+
+func TestNamedRelationshipsKeepTheirNames(t *testing.T) {
+	r := migrateDocument(t, namedRelationModel, namedRelationApplications)
+	wantLine(t, r.Notation, "satisfy requirement sat : Req by piece;")
+	wantLine(t, r.Notation, "verify requirement ver : Req;")
+	wantLine(t, r.Notation, "dependency 'ref' from Thing to Req {")
+	wantLine(t, r.Notation, "allocation alloc allocate Thing to Piece;")
+	wantLine(t, r.Notation, "dependency trace from Thing to Req; /* «Trace» */")
+	wantLine(t, r.Notation, "dependency copy from Req2 to Req; /* «Copy» */")
+	for id, want := range map[string]struct {
+		verdict migrate.Verdict
+		target  string
+	}{
+		"_sat":   {migrate.Mapped, "Thing::sat"},
+		"_ver":   {migrate.Mapped, "Check::ver"},
+		"_ref":   {migrate.Mapped, "'ref'"},
+		"_alloc": {migrate.Mapped, "alloc"},
+		"_trace": {migrate.Approximated, "trace"},
+		"_copy":  {migrate.Approximated, "copy"},
+	} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != want.verdict || es[0].Target != want.target {
+			t.Errorf("%s: entries = %+v, want %v %q", id, es, want.verdict, want.target)
+		}
+	}
+	if _, err := export.Convert("t.sysml", r.Notation, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatalf("migrated notation does not convert: %v", err)
+	}
+}
+
+func TestPlacedRelationshipNameYieldsToAMember(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="Thing">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_bp" name="sat" type="_b2" aggregation="composite"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b2" name="Piece"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req"/>
+    <packagedElement xmi:type="uml:Abstraction" xmi:id="_sat" name="sat" client="_bp" supplier="_r"/>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_b"/>
+  <sysml:Block xmi:id="_s2" base_Class="_b2"/>
+  <sysml:Requirement xmi:id="_s3" base_Class="_r" Id="R1" Text="Shall."/>
+  <sysml:Satisfy xmi:id="_s6" base_Abstraction="_sat"/>`)
+	wantLine(t, r.Notation, "satisfy requirement 'sat 2' : Req by sat;")
+	if es := entriesFor(r, "_sat"); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "sat 2") {
+		t.Errorf("entries = %+v", es)
+	}
+}

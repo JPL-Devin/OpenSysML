@@ -43,8 +43,14 @@ returned over the service yet.
 - `xmi:Extension` elements — diagrams, layout, MagicDraw-internal state — are skipped; the
   report says so once per skipped profile or library package. A package is library content
   when it is a profile, is marked «ModelLibrary» or «auxiliaryResource», or is a document root
-  beside the model bearing a standard library name; a user package named `SysML` or
-  `Libraries` inside the model is migrated like any other.
+  beside the user's Model or package bearing a standard library name; a user package named
+  `SysML` or `Libraries` inside the model, or standing alone as the document's only root, is
+  migrated like any other.
+- Only stereotypes from the OMG SysML and UML standard profiles, the MagicDraw profile and
+  customizations, and Papyrus' SysML serialization classify elements; a custom profile's own
+  «Block» or «Requirement» is preserved as an applied-stereotype comment like any other.
+- Multiplicity follows UML's defaults: an omitted bound is 1, and a bound element without a
+  `value` is 0.
 - A type referenced by `href` is a `ScalarValues` type only when the href points into the UML
   or SysML primitive libraries; a used project's own `Real` stays external.
 
@@ -80,9 +86,9 @@ returned over the service yet.
 | «Satisfy» | `satisfy requirement … by …` in the satisfying usage's owner | mapped |
 | «Verify» from a test case | `verify` in the verification def | mapped |
 | «DeriveReqt» | `connection … :> RequirementDerivation::Derivation` | mapped |
-| «Allocate» | `allocate a to b` | mapped |
+| «Allocate» | `allocate a to b`, or `allocation name allocate a to b` when named | mapped |
 | «Refine» | `dependency` carrying `@ModelingMetadata::Refinement` | mapped |
-| «Trace», «Copy», other stereotyped dependencies | plain `dependency` with the stereotype as a comment | approximated |
+| «Trace», «Copy», other stereotyped dependencies | plain `dependency` with the stereotype as a comment; named relationships keep their name | approximated |
 | Comment, Documentation | `doc` (first) / `comment`, HTML tags stripped | mapped |
 | Custom-profile stereotypes and tags | preserved as `/* applied stereotype «Name»: tag = value */` | mapped |
 | SysML stereotype tags without a v2 form (`Block.isEncapsulated`, `ValueType.unit`, …) | preserved as `/* «Name» tags with no v2 form: tag = value */` | approximated |

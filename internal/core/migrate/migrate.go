@@ -132,7 +132,7 @@ func (m *migration) prepare() {
 					m.nameFor(r)
 				}
 			}
-			if nce := e.Stereotype("NestedConnectorEnd"); nce != nil {
+			if nce := stereo(e, "NestedConnectorEnd"); nce != nil {
 				for _, id := range nce.Tags["propertyPath"] {
 					if p := m.model.Lookup(id); p != nil {
 						m.nameFor(p)
@@ -152,7 +152,7 @@ func (m *migration) prepare() {
 		}
 	}
 	for _, r := range m.model.Roots {
-		if !isLibrary(r) {
+		if !m.isLibrary(r) {
 			walk(r)
 		}
 	}
@@ -194,7 +194,7 @@ func ownerWritten(role string) bool {
 // root writes a top-level element: a Model's members are written at the top
 // level, any other root as a declaration of its own.
 func (m *migration) root(e *xmi.Element) {
-	if e.Type == "Model" && !isLibrary(e) {
+	if e.Type == "Model" && !m.isLibrary(e) {
 		m.add(e, Mapped, "", "the root model's members are written at the top level")
 		m.body(e)
 		return
@@ -262,7 +262,7 @@ func (m *migration) imports(e *xmi.Element) {
 		return
 	}
 	target := m.model.Ref(e, "importedPackage")
-	if target == nil || target.IsProxy() || isLibrary(target) {
+	if target == nil || target.IsProxy() || m.isLibrary(target) {
 		m.add(e, Skipped, "", "import of a profile or library package")
 		return
 	}
@@ -370,11 +370,11 @@ func (m *migration) generals(e *xmi.Element, cat category) (string, string) {
 			notes = append(notes, "a generalization refers to nothing in the document")
 			continue
 		}
-		if sv := scalarValue(target); sv != "" {
+		if sv := m.scalarValue(target); sv != "" {
 			refs = append(refs, "ScalarValues::"+sv)
 			continue
 		}
-		if target.IsProxy() || isLibrary(target) {
+		if target.IsProxy() || m.isLibrary(target) {
 			notes = append(notes, "generalization of library type "+target.Name+" is not written")
 			continue
 		}
@@ -686,7 +686,7 @@ func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, pre
 	if t == nil {
 		return "ref", "", "the untyped property is written as a reference usage"
 	}
-	if scalarValue(t) != "" {
+	if m.scalarValue(t) != "" {
 		return "attribute", "", ""
 	}
 	tc, _ := m.classify(t)
@@ -751,7 +751,7 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString(dir)
 		note = joinNotes(note, dnote)
 	} else if ownerCat == catPortDef {
-		if fp := p.Stereotype("FlowProperty"); fp != nil {
+		if fp := stereo(p, "FlowProperty"); fp != nil {
 			switch fp.Tag("direction") {
 			case "in":
 				b.WriteString("in ")
@@ -781,7 +781,7 @@ func (m *migration) feature(p *xmi.Element) {
 	payload := ""
 	if kw == "port" && p.Type == "Port" && typ != "" {
 		switch tc, _ := m.classify(t); {
-		case scalarValue(t) != "", tc == catAttributeDef, tc == catEnumDef:
+		case m.scalarValue(t) != "", tc == catAttributeDef, tc == catEnumDef:
 			payload = "attribute"
 		case tc == catPartDef:
 			payload = "item"
@@ -850,7 +850,7 @@ func (m *migration) feature(p *xmi.Element) {
 
 // portDirection writes the direction prefix of a flow port.
 func portDirection(p *xmi.Element) (string, string) {
-	fp := p.Stereotype("FlowPort")
+	fp := stereo(p, "FlowPort")
 	if fp == nil {
 		return "", ""
 	}
@@ -919,7 +919,7 @@ func (m *migration) typeRef(t *xmi.Element, scope *xmi.Element) (string, string)
 	if t == nil {
 		return "", ""
 	}
-	if sv := scalarValue(t); sv != "" {
+	if sv := m.scalarValue(t); sv != "" {
 		return "ScalarValues::" + sv, ""
 	}
 	if t.IsProxy() {
@@ -948,10 +948,10 @@ func (m *migration) multiplicity(p *xmi.Element) (string, string) {
 	if uv := firstOwned(p, "upperValue"); uv != nil {
 		upper = uv.Attrs["value"]
 		if upper == "" {
-			upper = "1"
+			upper = "0"
 		}
 	}
-	// UML defaults an omitted bound to 1.
+	// UML defaults an omitted bound to 1, and a bound's omitted value to 0.
 	switch {
 	case lower == "" && upper == "":
 		return "", ""
@@ -1021,7 +1021,7 @@ func (m *migration) connector(c *xmi.Element) {
 	}
 	note := strings.Join(notes, "; ")
 	decl, kw := "connect "+paths[0]+" to "+paths[1]+";", "connection "
-	if c.HasStereotype("BindingConnector") {
+	if has(c, "BindingConnector") {
 		decl, kw = "bind "+paths[0]+" = "+paths[1]+";", "binding "
 	}
 	target := ""
@@ -1054,7 +1054,7 @@ func (m *migration) endPath(end *xmi.Element) (string, string) {
 		return "", "a connector end names no role in the document"
 	}
 	var segs []*xmi.Element
-	if nce := end.Stereotype("NestedConnectorEnd"); nce != nil {
+	if nce := stereo(end, "NestedConnectorEnd"); nce != nil {
 		for _, id := range nce.Tags["propertyPath"] {
 			p := m.model.Lookup(id)
 			if p == nil {
@@ -1171,7 +1171,7 @@ func (m *migration) flowProperty(port, item *xmi.Element) *xmi.Element {
 		return nil
 	}
 	for _, p := range t.Owned("ownedAttribute") {
-		if p.HasStereotype("FlowProperty") && m.model.Ref(p, "type") == item && p.Name != "" {
+		if has(p, "FlowProperty") && m.model.Ref(p, "type") == item && p.Name != "" {
 			return p
 		}
 	}
@@ -1250,7 +1250,7 @@ type placement struct {
 // of the element each pair is written in, which may precede the dependency
 // itself; the dependency's report entry is written where it stands.
 func (m *migration) placeDependency(d *xmi.Element) {
-	if !d.HasStereotype("Satisfy", "Verify") {
+	if !has(d, "Satisfy", "Verify") {
 		return
 	}
 	pl := &placement{}
@@ -1260,27 +1260,45 @@ func (m *migration) placeDependency(d *xmi.Element) {
 	if note != "" {
 		pl.notes = append(pl.notes, note)
 	}
+	name := m.nameOf(d)
 	for _, p := range pairs {
 		var target, note string
-		if d.HasStereotype("Satisfy") {
-			target, note = m.satisfy(p.client, p.supplier)
+		var ok bool
+		if has(d, "Satisfy") {
+			target, note, ok = m.satisfy(p.client, p.supplier, name)
 		} else {
-			target, note = m.verify(p.client, p.supplier)
+			target, note, ok = m.verify(p.client, p.supplier, name)
 		}
-		if note != "" {
-			pl.failed++
-			pl.notes = append(pl.notes, note)
-		} else {
+		if ok {
 			pl.written++
 			pl.target = target
+		} else {
+			pl.failed++
+		}
+		if note != "" {
+			pl.notes = append(pl.notes, note)
 		}
 	}
+}
+
+// placedName reserves name in scope's body for a Satisfy or Verify written
+// there, distinct from the members and from any earlier pair of the same name;
+// the note says when the name had to change.
+func (m *migration) placedName(scope *xmi.Element, name string) (string, string) {
+	if name == "" {
+		return "", ""
+	}
+	fresh := m.freshName(scope, name)
+	if fresh != name {
+		return fresh, "the pair in " + m.v2Name(scope) + " is named " + fresh + " so it stays distinct"
+	}
+	return fresh, ""
 }
 
 // dependency writes a dependency by the SysML stereotype it carries, one
 // relationship per client–supplier pair.
 func (m *migration) dependency(d *xmi.Element) {
-	if d.HasStereotype("Satisfy", "Verify") {
+	if has(d, "Satisfy", "Verify") {
 		m.relationship(d, m.unplaced[d])
 		return
 	}
@@ -1363,7 +1381,7 @@ func uniqueStrings(in []string) []string {
 // dependencyPair writes one client–supplier pair of a dependency, returning
 // the v2 target written, if any, whether it was written, and a note.
 func (m *migration) dependencyPair(d *xmi.Element, name string, client, supplier *xmi.Element) (string, bool, string) {
-	if d.HasStereotype("DeriveReqt") {
+	if has(d, "DeriveReqt") {
 		target, note := m.derive(d, name, client, supplier)
 		return target, target != "", note
 	}
@@ -1373,55 +1391,79 @@ func (m *migration) dependencyPair(d *xmi.Element, name string, client, supplier
 		}
 	}
 	from, to := m.ref(client, m.scope), m.ref(supplier, m.scope)
-	switch {
-	case d.HasStereotype("Refine"):
-		m.w.block("dependency "+from+" to "+to, func() {
-			m.w.line("@ModelingMetadata::Refinement;")
-		})
-		return "", true, ""
-	case d.HasStereotype("Allocate"):
-		m.w.line("allocate " + from + " to " + to + ";")
-		return "", true, ""
-	case d.HasStereotype("Trace"):
-		m.w.line("dependency " + from + " to " + to + "; /* «Trace» */")
-		return "", true, "a trace is written as a plain dependency"
-	case d.HasStereotype("Copy"):
-		m.w.line("dependency " + from + " to " + to + "; /* «Copy» */")
-		return "", true, "a copy is written as a plain dependency; the text is not kept in step"
+	target := ""
+	if name != "" {
+		target = m.qualified(append(m.segments(m.scope), name))
 	}
 	decl := "dependency "
 	if name != "" {
 		decl += writeName(name) + " from "
 	}
-	m.w.line(decl + from + " to " + to + ";")
+	decl += from + " to " + to
+	switch {
+	case has(d, "Refine"):
+		m.w.block(decl, func() {
+			m.w.line("@ModelingMetadata::Refinement;")
+		})
+		return target, true, ""
+	case has(d, "Allocate"):
+		alloc := "allocate " + from + " to " + to + ";"
+		if name != "" {
+			alloc = "allocation " + writeName(name) + " " + alloc
+		}
+		m.w.line(alloc)
+		return target, true, ""
+	case has(d, "Trace"):
+		m.w.line(decl + "; /* «Trace» */")
+		return target, true, "a trace is written as a plain dependency"
+	case has(d, "Copy"):
+		m.w.line(decl + "; /* «Copy» */")
+		return target, true, "a copy is written as a plain dependency; the text is not kept in step"
+	}
+	m.w.line(decl + ";")
 	var names []string
 	for _, s := range d.Stereotypes {
 		names = append(names, "«"+s.Name+"»")
 	}
 	if len(names) > 0 {
-		return "", true, strings.Join(names, " ") + " is written as a plain dependency"
+		return target, true, strings.Join(names, " ") + " is written as a plain dependency"
 	}
-	return "", true, ""
+	return target, true, ""
 }
 
 // satisfy places `satisfy requirement` in the body of the satisfying block, or
-// of the block owning the satisfying property, returning that body's v2 name.
-func (m *migration) satisfy(client, req *xmi.Element) (string, string) {
+// of the block owning the satisfying property, returning the v2 name written,
+// a note, and whether it was written.
+func (m *migration) satisfy(client, req *xmi.Element, name string) (string, string, bool) {
 	if rc, _ := m.classify(req); rc != catRequirementDef {
-		return "", "the supplier " + qualifiedName(req) + " is not a requirement"
+		return "", "the supplier " + qualifiedName(req) + " is not a requirement", false
 	}
 	scope, by := m.usageContext(client)
 	if scope == nil {
-		return "", "a satisfy whose client is a " + kindOf(client) + " has no v2 form"
+		return "", "a satisfy whose client is a " + kindOf(client) + " has no v2 form", false
 	}
+	name, note := m.placedName(scope, name)
 	m.extras[scope] = append(m.extras[scope], func() {
-		decl := "satisfy requirement : " + m.ref(req, scope)
+		decl := "satisfy requirement "
+		if name != "" {
+			decl += writeName(name) + " "
+		}
+		decl += ": " + m.ref(req, scope)
 		if by != "" {
 			decl += " by " + by
 		}
 		m.w.line(decl + ";")
 	})
-	return m.v2Name(scope), ""
+	return m.placedTarget(scope, name), note, true
+}
+
+// placedTarget is the report target of a Satisfy or Verify written in scope:
+// the usage itself when named, else the body it was written in.
+func (m *migration) placedTarget(scope *xmi.Element, name string) string {
+	if name == "" {
+		return m.v2Name(scope)
+	}
+	return m.qualified(append(m.segments(scope), name))
 }
 
 // usageContext finds the body a client's satisfy is written in: the
@@ -1444,17 +1486,22 @@ func (m *migration) usageContext(client *xmi.Element) (*xmi.Element, string) {
 }
 
 // verify places `verify requirement` in the objective of the test case.
-func (m *migration) verify(client, req *xmi.Element) (string, string) {
+func (m *migration) verify(client, req *xmi.Element, name string) (string, string, bool) {
 	if rc, _ := m.classify(req); rc != catRequirementDef {
-		return "", "the supplier " + qualifiedName(req) + " is not a requirement"
+		return "", "the supplier " + qualifiedName(req) + " is not a requirement", false
 	}
 	if cc, _ := m.classify(client); cc != catVerificationDef {
-		return "", "a verify whose client is not a test case has no v2 form"
+		return "", "a verify whose client is not a test case has no v2 form", false
 	}
+	name, note := m.placedName(client, name)
 	m.extras[client] = append(m.extras[client], func() {
-		m.w.line("verify requirement : " + m.ref(req, client) + ";")
+		decl := "verify requirement "
+		if name != "" {
+			decl += writeName(name) + " "
+		}
+		m.w.line(decl + ": " + m.ref(req, client) + ";")
 	})
-	return m.v2Name(client), ""
+	return m.placedTarget(client, name), note, true
 }
 
 // derive writes a requirement derivation as a connection def specializing the
@@ -1593,9 +1640,9 @@ var consumedTags = map[string]map[string]bool{
 // body; an unread tag makes the element's migration an approximation.
 func (m *migration) stereotypeComments(e *xmi.Element) {
 	for _, s := range e.Stereotypes {
-		classifying := classifyingStereotypes[s.Name]
+		classifying := isStandard(s) && classifyingStereotypes[s.Name]
 		consumed := consumedTags[s.Name]
-		if isRequirementStereotype(s.Name) {
+		if isStandard(s) && isRequirementStereotype(s.Name) {
 			if !classifying {
 				m.w.line("/* «" + s.Name + "» */")
 			}
