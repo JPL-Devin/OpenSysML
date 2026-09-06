@@ -990,7 +990,7 @@ func isNatural(s string) bool {
 func (m *migration) connector(c *xmi.Element) {
 	ends := c.Owned("end")
 	if len(ends) != 2 {
-		m.unmapped(c, fmt.Sprintf("a connector with %d ends is not migrated", len(ends)))
+		m.unmappedConnector(c, fmt.Sprintf("a connector with %d ends is not migrated", len(ends)))
 		return
 	}
 	paths := make([]string, 2)
@@ -998,10 +998,7 @@ func (m *migration) connector(c *xmi.Element) {
 	for i, end := range ends {
 		path, note := m.endPath(end)
 		if path == "" {
-			m.unmapped(c, note)
-			for _, f := range m.flows[c] {
-				m.flowDone(f, nil, []string{"realizing connector " + describe(c) + " is not migrated"})
-			}
+			m.unmappedConnector(c, note)
 			return
 		}
 		paths[i] = path
@@ -1024,6 +1021,15 @@ func (m *migration) connector(c *xmi.Element) {
 	m.stereotypeComments(c)
 	for _, f := range m.flows[c] {
 		m.itemFlow(f, ends, paths)
+	}
+}
+
+// unmappedConnector records a connector with no v2 form and settles the item
+// flows it realizes.
+func (m *migration) unmappedConnector(c *xmi.Element, note string) {
+	m.unmapped(c, note)
+	for _, f := range m.flows[c] {
+		m.flowDone(f, nil, []string{"realizing connector " + describe(c) + " is not migrated: " + note})
 	}
 }
 

@@ -560,7 +560,7 @@ func TestBrokenNestedPathFailsTheConnector(t *testing.T) {
 			}
 			for id, want := range map[string]string{
 				"_conn": "property path names _missing, which is not in the document",
-				"_if":   "realizing connector 'feed' is not migrated",
+				"_if":   "realizing connector 'feed' is not migrated: the nested connector end's property path names _missing",
 			} {
 				es := entriesFor(r, id)
 				if len(es) != 1 || es[0].Verdict != migrate.Unmapped || !strings.Contains(es[0].Note, want) {
@@ -646,4 +646,37 @@ func TestFlowOverSeveralConnectorsIsReportedOnce(t *testing.T) {
 			t.Errorf("entries for _if = %+v, want one mapped entry", es)
 		}
 	})
+}
+
+// TestMalformedRealizingConnectorSettlesItsFlow covers a flow whose realizing
+// connector has three ends: the flow's entry names that failure, not an
+// unmigrated owner.
+func TestMalformedRealizingConnectorSettlesItsFlow(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_gas" name="Gas"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_fuel" name="Fuel">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_fp" name="fuel" type="_gas"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_car" name="Car">
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_a" name="a" type="_fuel"/>
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_b" name="b" type="_fuel"/>
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_c" name="c" type="_fuel"/>
+      <ownedConnector xmi:type="uml:Connector" xmi:id="_c1" name="tee">
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e1" role="_pt_a"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e2" role="_pt_b"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e3" role="_pt_c"/>
+      </ownedConnector>
+      <packagedElement xmi:type="uml:InformationFlow" xmi:id="_if" informationSource="_pt_a" informationTarget="_pt_b" conveyed="_gas" realizingConnector="_c1"/>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s0" base_Class="_gas"/>
+  <sysml:InterfaceBlock xmi:id="_s1" base_Class="_fuel"/>
+  <sysml:FlowProperty xmi:id="_s1f" base_Property="_fp" direction="inout"/>
+  <sysml:Block xmi:id="_s4" base_Class="_car"/>
+  <sysml:ItemFlow xmi:id="_st_if" base_InformationFlow="_if"/>`)
+	es := entriesFor(r, "_if")
+	if len(es) != 1 || es[0].Verdict != migrate.Unmapped ||
+		!strings.Contains(es[0].Note, "realizing connector 'tee' is not migrated: a connector with 3 ends is not migrated") ||
+		strings.Contains(es[0].Note, "owned by elements that are not migrated") {
+		t.Errorf("entries for _if = %+v, want one unmapped entry naming the three-ended connector", es)
+	}
 }
