@@ -228,6 +228,34 @@ func TestBooleanLiteralForms(t *testing.T) {
 	}
 }
 
+func TestModifiersFollowTheGrammarOrder(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_ib" name="IF">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_in" name="a" isReadOnly="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_out" name="b" isReadOnly="true" isDerived="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_inout" name="c" isReadOnly="true" isDerived="true" isAbstract="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_d" name="d" isAbstract="true" isDerived="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Boolean"/>
+      </ownedAttribute>
+    </packagedElement>`, `<sysml:InterfaceBlock xmi:id="_s1" base_Class="_ib"/>
+  <sysml:FlowProperty xmi:id="_s2" base_Property="_in" direction="in"/>
+  <sysml:FlowProperty xmi:id="_s3" base_Property="_out" direction="out"/>
+  <sysml:FlowProperty xmi:id="_s4" base_Property="_inout" direction="inout"/>
+  <sysml:Block xmi:id="_s5" base_Class="_b"/>`)
+	wantLine(t, r.Notation, "in constant attribute a : ScalarValues::Boolean;")
+	wantLine(t, r.Notation, "out derived constant attribute b : ScalarValues::Boolean;")
+	wantLine(t, r.Notation, "inout derived abstract constant attribute c : ScalarValues::Boolean;")
+	wantLine(t, r.Notation, "derived abstract attribute d : ScalarValues::Boolean;")
+}
+
 func TestInstanceWithSeveralClassifiers(t *testing.T) {
 	r := migrateDocument(t, `
     <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
