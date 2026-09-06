@@ -654,6 +654,7 @@ var relationshipMetaclassNames = map[ast.RelationshipKind]string{
 	ast.RelRedefines:   "Redefinition",
 	ast.RelInverseOf:   "FeatureInverting",
 	ast.RelFeaturedBy:  "TypeFeaturing",
+	ast.RelDisjoint:    "Disjoining",
 }
 
 // sysmlMetaclassPrefix qualifies the reflective metadata types of the SysML
