@@ -80,6 +80,7 @@ var w11aDefFamilies = map[ast.DefinitionKind]w11aFamily{
 	ast.DefState:            {class: true, behavior: true},
 	ast.DefCalc:             {class: true, behavior: true},
 	ast.DefConstraint:       {class: true, behavior: true},
+	ast.DefBool:             {class: true, behavior: true},
 	ast.DefRequirement:      {class: true, behavior: true},
 	ast.DefConcern:          {class: true, behavior: true},
 	ast.DefViewpoint:        {class: true, behavior: true},

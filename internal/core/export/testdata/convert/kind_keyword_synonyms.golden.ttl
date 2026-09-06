@@ -130,7 +130,7 @@ elmt:Synonyms__atStart
     sysml:owningMembership elmt:Synonyms__atStart_om ;
     sysml:declaredName "atStart" ;
     sysx:declaredKeyword "snapshot" ;
-    sysml:isSnapshot "true"^^xsd:boolean ;
+    sysml:portionKind "snapshot" ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    snapshot atStart;\n" .
 
@@ -155,7 +155,7 @@ elmt:Synonyms__during
     sysml:owningMembership elmt:Synonyms__during_om ;
     sysml:declaredName "during" ;
     sysx:declaredKeyword "timeslice" ;
-    sysml:isTimeslice "true"^^xsd:boolean ;
+    sysml:portionKind "timeslice" ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    timeslice during;\n" .
 
@@ -362,7 +362,7 @@ elmt:Synonyms__Vehicle___400_om
     sysml:owningType elmt:Synonyms__Vehicle .
 
 elmt:Synonyms__Vehicle__safe
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Synonyms::Vehicle::safe" ;
     sysml:elementId "Synonyms__Vehicle__safe" ;
     sysx:memberIndex "1"^^xsd:integer ;

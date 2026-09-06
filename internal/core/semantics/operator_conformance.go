@@ -33,8 +33,15 @@ func (m *Model) CastConformance(scope *symbols.Scope, e *ast.OperatorExpr) Confo
 	return Conformance{Known: true, Found: strings.Join(names, " and ")}
 }
 
-// resultTypes is every type an expression's result is declared with, where
+// ExprResultTypes is every type an expression's result is declared with, where
 // ExprResultType picks one; empty when not statically known.
+func (m *Model) ExprResultTypes(scope *symbols.Scope, node ast.Node) []*symbols.Symbol {
+	if m == nil || m.resolver == nil || node == nil {
+		return nil
+	}
+	return m.resultTypes(scope, node)
+}
+
 func (m *Model) resultTypes(scope *symbols.Scope, node ast.Node) []*symbols.Symbol {
 	switch n := node.(type) {
 	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
@@ -48,6 +55,12 @@ func (m *Model) resultTypes(scope *symbols.Scope, node ast.Node) []*symbols.Symb
 			return m.featureResultTypes(result)
 		}
 		return nil
+	case *ast.IndexExpr:
+		if !n.Bracket {
+			return m.indexResultTypes(scope, n)
+		}
+	case *ast.SelectExpr:
+		return m.resultTypes(scope, n.Operand)
 	}
 	if typ := m.ExprResultType(scope, node); typ != nil {
 		return []*symbols.Symbol{typ}
@@ -55,8 +68,29 @@ func (m *Model) resultTypes(scope *symbols.Scope, node ast.Node) []*symbols.Symb
 	return nil
 }
 
-// featureResultTypes is the types a feature declares or inherits, else the one
-// its value gives it.
+// indexResultTypes is indexResultType over every type of seq: each Collection
+// among them selects an Anything.
+func (m *Model) indexResultTypes(scope *symbols.Scope, n *ast.IndexExpr) []*symbols.Symbol {
+	seq := m.resultTypes(scope, n.Operand)
+	anything, collection := m.libSymbol(fqnAnything), m.libSymbol(fqnCollection)
+	var out []*symbols.Symbol
+	for _, typ := range seq {
+		if collection != nil && m.Conforms(typ, collection) {
+			typ = anything
+		}
+		if typ != nil && !containsElement(out, typ) {
+			out = append(out, typ)
+		}
+	}
+	if len(out) == 0 && anything != nil {
+		return []*symbols.Symbol{anything}
+	}
+	return out
+}
+
+// featureResultTypes is the types a feature declares or inherits, else those
+// its value gives it. A calculation usage named as a value is the calculation,
+// not its result (the pilot warns on `calc n : Name; n as String`).
 func (m *Model) featureResultTypes(sym *symbols.Symbol) []*symbols.Symbol {
 	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = alias
@@ -66,6 +100,11 @@ func (m *Model) featureResultTypes(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	if defs := m.declaredTypes(sym, map[*symbols.Symbol]bool{}); len(defs) > 0 {
 		return defs
+	}
+	if value := m.typingValue(sym); value != nil && !m.valuing[sym] {
+		m.valuing[sym] = true
+		defer delete(m.valuing, sym)
+		return m.resultTypes(sym.OwnerScope, value)
 	}
 	if typ := m.featureResultType(sym); typ != nil {
 		return []*symbols.Symbol{typ}
@@ -104,15 +143,20 @@ func (m *Model) resultConformance(scope *symbols.Scope, node ast.Node, want *sym
 	default:
 		return m.ExprConformsTo(scope, node, want)
 	}
-	result := m.ExprResultType(scope, node)
-	if result == nil {
+	results := m.resultTypes(scope, node)
+	if len(results) == 0 {
 		return conformanceUnknown()
 	}
-	if m.Conforms(result, want) {
-		return Conformance{Known: true, Holds: true}
+	wider, names := false, make([]string, 0, len(results))
+	for _, result := range results {
+		if m.Conforms(result, want) {
+			return Conformance{Known: true, Holds: true}
+		}
+		wider = wider || m.Conforms(want, result)
+		names = append(names, leafName(result.Name))
 	}
-	found := Conformance{Known: true, Found: "the result of `" + operatorText(node) + "`, typed by " + leafName(result.Name)}
-	if !m.Conforms(want, result) {
+	found := Conformance{Known: true, Found: "the result of `" + operatorText(node) + "`, typed by " + strings.Join(names, " and ")}
+	if !wider {
 		return found
 	}
 	unknown := false

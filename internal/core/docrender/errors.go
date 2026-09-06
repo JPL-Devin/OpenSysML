@@ -1,6 +1,9 @@
 package docrender
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ErrorKind classifies a document-rendering failure.
 type ErrorKind string
@@ -13,6 +16,7 @@ const (
 	ErrorEmptyStylesheet     ErrorKind = "empty-stylesheet"
 	ErrorAmbiguousStylesheet ErrorKind = "ambiguous-stylesheet"
 	ErrorUnsafeStylesheet    ErrorKind = "unsafe-stylesheet"
+	ErrorUnknownTheme        ErrorKind = "unknown-theme"
 )
 
 // Error is a typed document-rendering failure.
@@ -48,6 +52,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("stylesheet %s carries both content to inline and a URL to link; it can be one or the other", e.Actual)
 	case ErrorUnsafeStylesheet:
 		return "stylesheet content closes the style element it would be inlined in; link it by URL instead"
+	case ErrorUnknownTheme:
+		return fmt.Sprintf("no bundled theme is named %q; the themes are %s", e.Actual, strings.Join(Themes(), ", "))
 	default:
 		return "document rendering failed"
 	}

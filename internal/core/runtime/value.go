@@ -372,14 +372,31 @@ func (v Value) Object() (int64, bool) {
 	}
 }
 
-// Sequence is an ordered collection (slice-backed).
+// Sequence is an ordered collection (slice-backed). One read empty from a
+// quantity-typed declaration remembers the unit its elements would measure in.
 type Sequence struct {
-	elements []Value
+	elements    []Value
+	elementUnit *Unit
 }
 
 // NewSequence creates an empty Sequence.
 func NewSequence() *Sequence {
 	return &Sequence{elements: make([]Value, 0)}
+}
+
+// NewEmptySequenceOf is the empty sequence of quantities measured in unit, which
+// types the identity an aggregate of it yields.
+func NewEmptySequenceOf(unit Unit) Value {
+	return NewSequenceValue(&Sequence{elements: make([]Value, 0), elementUnit: &unit})
+}
+
+// ElementUnit is the unit an empty sequence's elements are declared in; false for
+// a sequence holding elements or read from no quantity-typed declaration.
+func (s *Sequence) ElementUnit() (Unit, bool) {
+	if s == nil || s.elementUnit == nil || len(s.elements) != 0 {
+		return Unit{}, false
+	}
+	return *s.elementUnit, true
 }
 
 // Append adds a value to the end of the sequence.

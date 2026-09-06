@@ -13,6 +13,7 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
@@ -127,6 +128,7 @@ var (
 	htmlShowCSS   bool
 	htmlFragment  bool
 	htmlMermaid   string
+	htmlTheme     string
 	strictMode    bool
 	modelChecks   checks
 	compileCalc   string
@@ -237,6 +239,10 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
 		return 2
 	}
+	if flagGiven("html-theme") && htmlTheme == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -html-theme is empty; name one of the themes: "+strings.Join(docrender.Themes(), ", "))
+		return 2
+	}
 	if flagGiven("html-mermaid") && htmlMermaid == "" {
 		fmt.Fprintln(os.Stderr, "sysml: -html-mermaid is empty; give it cdn or the URL of a Mermaid script")
 		return 2
@@ -262,7 +268,7 @@ func runCLI() int {
 			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
 			return 2
-		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering || htmlFlagsGiven():
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering || htmlPageFlagsGiven():
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
 			return 2
 		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||

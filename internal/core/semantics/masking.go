@@ -86,26 +86,38 @@ func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 
 // EffectiveNameOf returns a declaration's name, including one inherited through a unique redefinition.
 func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
-	return inheritedIdentifier(sym, declaredName, m.soleRedefinedFeature)
+	return inheritedIdentifier(sym, hasName, declaredName, m.soleRedefinedFeature)
 }
 
-// EffectiveShortNameOf is Element::shortName: the declared short name, or the
-// one of the feature an unnamed feature takes its identifiers from (KerML 1.1
-// §8.2.4, §8.3.3.3).
+// EffectiveShortNameOf is Element::shortName: the declared short name, or, for
+// a feature declaring neither identifier, that of the feature it takes its
+// identifiers from (KerML 1.1 §8.2.4, §8.3.3.3).
 func (m *Model) EffectiveShortNameOf(sym *symbols.Symbol) string {
-	return inheritedIdentifier(sym, declaredShortName, m.namingFeature)
+	return inheritedIdentifier(sym, declaresIdentifier, declaredShortName, m.namingFeature)
 }
 
+func hasName(sym *symbols.Symbol) bool             { return sym.Name != "" }
 func declaredName(sym *symbols.Symbol) string      { return sym.Name }
 func declaredShortName(sym *symbols.Symbol) string { return sym.ShortName }
 
-// inheritedIdentifier reads the identifier sym declares, or the one the feature
-// from names has, following that relation until a declared identifier or a cycle.
-func inheritedIdentifier(sym *symbols.Symbol, declared func(*symbols.Symbol) string, from func(*symbols.Symbol) *symbols.Symbol) string {
+// declaresIdentifier reports whether sym's declaration states a name or a
+// short name of its own, a derived name not counting.
+func declaresIdentifier(sym *symbols.Symbol) bool {
+	return sym.ShortName != "" || (sym.Name != "" && !sym.EffectiveName)
+}
+
+// inheritedIdentifier reads identifier id from the first of sym and the
+// features from leads to that declares one; "" past a cycle or the chain's end.
+func inheritedIdentifier(
+	sym *symbols.Symbol,
+	declares func(*symbols.Symbol) bool,
+	id func(*symbols.Symbol) string,
+	from func(*symbols.Symbol) *symbols.Symbol,
+) string {
 	seen := make(map[*symbols.Symbol]bool)
 	for sym != nil && !seen[sym] {
-		if id := declared(sym); id != "" {
-			return id
+		if declares(sym) {
+			return id(sym)
 		}
 		seen[sym] = true
 		sym = from(sym)

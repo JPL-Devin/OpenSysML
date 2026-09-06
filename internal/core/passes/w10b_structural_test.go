@@ -186,6 +186,48 @@ func TestW10BVariantPortMustBeReferential(t *testing.T) {
 	}
 }
 
+// A variant is reached through its variation's owner alone, so a composite variant
+// port nested in a variation port is reported once, like the pilot; under a part
+// owner no variant is reported, and a variant that is no port is no nested usage.
+func TestW10BNestedVariantPortsReportOnce(t *testing.T) {
+	const src = `package P {
+		port def PD;
+		part def D;
+		port def Q {
+			variation port vp : PD {
+				variant variation port a : PD {
+					variant port b : PD;
+					variant ref port ok : PD;
+				}
+				variant port c : PD;
+				variant part x : D;
+			}
+		}
+		part def Owner {
+			variation port vp : PD {
+				variant variation port a : PD {
+					variant port b : PD;
+				}
+				variant port c : PD;
+				variant part x : D;
+			}
+		}
+	}`
+	var got []int
+	for _, d := range typeDiags(t, src) {
+		switch d.Message {
+		case msgVariantPortComposite:
+			got = append(got, 1+strings.Count(src[:d.Span.Offset], "\n"))
+		case msgPortDefComposite, msgPortUsageComposite:
+			t.Errorf("unexpected %q at offset %d", d.Message, d.Span.Offset)
+		}
+	}
+	sort.Ints(got)
+	if want := []int{6, 7, 10}; !slices.Equal(got, want) {
+		t.Errorf("variant port diagnostics on lines %v, want %v", got, want)
+	}
+}
+
 // Only a port that restates `variation` is a variation to the pilot: a variant under
 // a plain redefinition of one is reported as misplaced instead, never as composite.
 func TestW10BVariantPortUnderRedefinedVariation(t *testing.T) {

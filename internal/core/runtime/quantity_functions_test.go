@@ -211,7 +211,7 @@ func TestQuantityCalculations(t *testing.T) {
 		{"(2 [m], 3 [m])->product()", "6 [m**2]"},
 		{"(2 [m], 3 [s])->product()", "6 [m*s]"},
 		{"(2 [m])->sum()", "2 [m]"},
-		{"none->sum()", "0"},
+		{"none->sum()", "0 [m]"},
 		{"none->product()", "1"},
 		{"QuantityCalculations::'+'(1 [m], 2 [m])", "3 [m]"},
 		{"QuantityCalculations::'+'(2 [m])", "2 [m]"},

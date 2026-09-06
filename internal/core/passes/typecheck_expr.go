@@ -291,6 +291,8 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 		return ec.inferSelect(scope, e)
 	case *ast.BodyExpr:
 		return ec.inferBody(scope, e)
+	case *ast.CastExpr:
+		ec.checkBoundOperators(scope, e.Multiplicity)
 	}
 	return semantics.PrimUnknown
 }
@@ -461,10 +463,10 @@ func (ec *exprChecker) bodyScope(scope *symbols.Scope, body *ast.BodyExpr) *symb
 	return symbols.BodyExprScope(scope, body)
 }
 
-// checkBodyMembers types the declarations an expression body owns, once per
-// body, in the scope they are members of.
+// checkBodyMembers types the declarations an expression body owns — its
+// parameters' bounds and its members — once per body, in the scope they are members of.
 func (ec *exprChecker) checkBodyMembers(scope *symbols.Scope, body *ast.BodyExpr) {
-	if ec.walkMembers == nil || body == nil || len(body.Members) == 0 {
+	if body == nil || (len(body.Params) == 0 && len(body.Members) == 0) {
 		return
 	}
 	if ec.bodiesChecked == nil {
@@ -473,7 +475,13 @@ func (ec *exprChecker) checkBodyMembers(scope *symbols.Scope, body *ast.BodyExpr
 		return
 	}
 	ec.bodiesChecked[body] = true
-	ec.walkMembers(ec.bodyScope(scope, body), body.Members)
+	inner := ec.bodyScope(scope, body)
+	for i := range body.Params {
+		ec.checkBoundOperators(inner, body.Params[i].Multiplicity)
+	}
+	if ec.walkMembers != nil {
+		ec.walkMembers(inner, body.Members)
+	}
 }
 
 func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {
