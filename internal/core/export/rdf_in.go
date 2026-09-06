@@ -191,14 +191,16 @@ func legacyNamespaceError(iri string) error {
 }
 
 // supersededPredicates are properties an earlier version wrote for metadata
-// annotations, each with the term that carries the same fact now.
+// annotations and portions, each with the term that carries the same fact now.
 var supersededPredicates = map[string]string{
 	rdf.OpenSysML + "prefixMetadata": "an owned sysml:MetadataUsage with sysx:declaredKeyword \"#\"",
 	rdf.SysML + "annotates":          "sysml:" + pAnnotatedElement,
+	rdf.SysML + "isSnapshot":         "sysml:" + pPortionKind + " \"snapshot\"",
+	rdf.SysML + "isTimeslice":        "sysml:" + pPortionKind + " \"timeslice\"",
 }
 
-// checkSupersededPredicates refuses a graph stating a metadata annotation with
-// a predicate this version no longer reads, which would otherwise be dropped.
+// checkSupersededPredicates refuses a graph stating a fact with a predicate
+// this version no longer reads, which would otherwise be dropped.
 func checkSupersededPredicates(graph *rdf.Graph) error {
 	for _, triple := range graph.Triples() {
 		now, superseded := supersededPredicates[triple.Predicate.Value]
@@ -207,7 +209,7 @@ func checkSupersededPredicates(graph *rdf.Graph) error {
 		}
 		return &UnsupportedError{
 			What: fmt.Sprintf("the property <%s> of <%s>", triple.Predicate.Value, triple.Subject.Value),
-			Note: fmt.Sprintf("an earlier version wrote a metadata annotation this way; it is now %s, which this version reads, so convert the model from source again", now),
+			Note: fmt.Sprintf("an earlier version wrote this fact this way; it is now %s, which this version reads, so convert the model from source again", now),
 		}
 	}
 	return nil
@@ -333,14 +335,14 @@ var multiValuedProperties = map[string]bool{
 }
 
 // singleValued reports a property the decoder reads one value of: every sysx:
-// property not listed above, and the ontology's boolean `is…` flags.
+// property not listed above, the ontology's boolean `is…` flags and its portion kind.
 func singleValued(predicate string) bool {
 	name := rdf.LocalName(predicate)
 	switch {
 	case strings.HasPrefix(predicate, rdf.OpenSysML):
 		return !multiValuedProperties[name]
 	case strings.HasPrefix(predicate, rdf.SysML):
-		return strings.HasPrefix(name, "is")
+		return strings.HasPrefix(name, "is") || name == pPortionKind
 	}
 	return false
 }
@@ -1301,39 +1303,51 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if keyword == "accept" {
 		keyword = ""
 	}
+	identWords := d.identWords(el)
+	references, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	if err != nil {
+		return "", err
+	}
+	portion, err := d.portionKind(el)
+	if err != nil {
+		return "", err
+	}
+	event := d.boolOf(el, rdf.SysML+"isEvent") || el.metaclass == mEventOccurrenceUsage
+	// A `snapshot`, `timeslice`, `event` or `assert` keyword states a typed
+	// fact; a spelling the typing contradicts is refused, not respelled.
+	if err := d.keywordTyped(el, keyword, portion, event); err != nil {
+		return "", err
+	}
 	for _, flag := range []struct {
-		property string
-		keyword  string
+		keyword string
+		set     bool
 	}{
-		{"isVariation", "variation"},
-		{"isVariant", "variant"},
-		{"isComposite", "composite"},
-		{"isPortion", "portion"},
-		{"isDerived", "derived"},
-		{"isConstant", "constant"},
-		{"isIndividual", "individual"},
-		{"isSnapshot", "snapshot"},
-		{"isTimeslice", "timeslice"},
-		{"isEvent", "event"},
-		{"isEnd", "end"},
-		{"isReference", "ref"},
+		{"variation", d.boolOf(el, rdf.SysML+"isVariation")},
+		// An enumerated value is a variant by what it is, not by a keyword
+		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
+		{"variant", d.boolOf(el, rdf.SysML+"isVariant") && !d.enumeratedValue(el)},
+		{"composite", d.boolOf(el, rdf.SysML+"isComposite") && !d.portionSubsumes(el, "isComposite")},
+		{"portion", d.boolOf(el, rdf.SysML+"isPortion")},
+		{"derived", d.boolOf(el, rdf.SysML+"isDerived")},
+		{"constant", d.boolOf(el, rdf.SysML+"isConstant")},
+		{"individual", d.boolOf(el, rdf.SysML+"isIndividual")},
+		{"snapshot", portion == "snapshot"},
+		{"timeslice", portion == "timeslice"},
+		{"event", event},
+		{"end", d.boolOf(el, rdf.SysML+"isEnd")},
+		{"ref", d.boolOf(el, rdf.SysML+"isReference")},
 	} {
 		// A keyword such as `snapshot` is both a modifier and a kind keyword;
 		// writing it here as well as below would declare it twice.
 		if flag.keyword == keyword {
 			continue
 		}
-		// An enumerated value is a variant by what it is, not by a keyword
-		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
-		if flag.property == "isVariant" && d.enumeratedValue(el) {
-			continue
-		}
-		if d.boolOf(el, rdf.SysML+flag.property) && !d.portionSubsumes(el, flag.property) {
+		if flag.set {
 			words = append(words, flag.keyword)
 		}
 		// The cross feature an end owns is written right after `end`
 		// (SysML.xtext EndUsagePrefix `'end' OwnedCrossFeatureMember?`).
-		if flag.property == "isEnd" {
+		if flag.keyword == "end" {
 			if cross := d.ownedCrossFeature(el); cross != nil {
 				crossWords, err := d.crossFeatureWords(cross)
 				if err != nil {
@@ -1356,6 +1370,21 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// Negation on its own has no notation, so it is reported rather than dropped.
 	prefix, hasPrefix := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix)
 	negated := d.boolOf(el, rdf.SysML+"isNegated")
+	// An asserted constraint's metaclass is its `assert`, which prefixes
+	// `constraint` or, written as the keyword itself, stands in for it.
+	asserted := false
+	if el.metaclass == mAssertConstraintUsage {
+		if hasPrefix && prefix != "assert" {
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the asserted constraint <%s>", el.iri),
+				Note: fmt.Sprintf("its sysx:%s %q is not the `assert` its metaclass states", xDeclaredPrefix, prefix),
+			}
+		}
+		prefix, hasPrefix = "assert", true
+		if keyword == "assert" {
+			keyword, asserted = "", true
+		}
+	}
 	switch {
 	case hasPrefix:
 		// `#M assert not constraint c` ends the occurrence prefix ahead of the
@@ -1452,22 +1481,30 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		}
 	}
 	// A `perform` or a state's `entry`/`do`/`exit` names the action it performs,
-	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration).
-	identWords := d.identWords(el)
-	if len(identWords) == 0 && referenceMemberKeyword(keyword) {
-		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
-		if err != nil {
-			return "", err
+	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration),
+	// as `event m.start` and `assert c` name an occurrence or a constraint.
+	referencing := referenceMemberKeyword(keyword) || keyword == "event" || asserted
+	if referencing && len(identWords) == 0 && len(references) == 0 {
+		// With neither, `perform;` would come back as a feature named `perform`.
+		written := keyword
+		if asserted {
+			written = "assert"
 		}
-		if len(targets) > 0 {
-			words = append(words, strings.Join(targets, ", "))
-			skip = append(skip, ast.RelReferences)
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `%s` declaration <%s>", written, el.iri),
+			Note: fmt.Sprintf("it neither declares a name nor names the feature it refers to (sysml:references), the two shapes `%s` is written in, so the notation cannot be rebuilt from the graph", written),
 		}
+	}
+	referenced := referencing && len(identWords) == 0
+	if referenced {
+		words = append(words, strings.Join(references, ", "))
+		skip = append(skip, ast.RelReferences)
 	}
 	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
 	// follows, so it goes with the typing clause and ahead of any further
-	// specialization; with no type it follows the name (`x[2] redefines y`),
-	// and with neither it closes the head (`:>> y[2]`).
+	// specialization; with no type it follows the name (`x[2] redefines y`) or
+	// the reference (`event m.start[1] redefines e`), and with neither it closes
+	// the head (`:>> y[2]`).
 	multPart := d.multiplicityText(el)
 	if d.boolOf(el, rdf.SysML+"isOrdered") {
 		multPart += " ordered"
@@ -1485,6 +1522,9 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		typedPart, multPart = multPart, ""
 	case len(identWords) > 0 && multPart != "":
 		identWords[len(identWords)-1] += multPart
+		multPart = ""
+	case referenced && multPart != "":
+		words[len(words)-1] += multPart
 		multPart = ""
 	}
 	words = append(words, identWords...)
@@ -1926,6 +1966,55 @@ func (d *decoder) keywordOr(el *element, canonical string) string {
 		return ""
 	}
 	return canonical
+}
+
+// keywordTyped checks that a keyword the graph types agrees with its typing:
+// the portion kind, the event typing or the AssertConstraintUsage metaclass.
+func (d *decoder) keywordTyped(el *element, keyword, portion string, event bool) error {
+	var stated, expected string
+	switch keyword {
+	case "snapshot", "timeslice":
+		if portion == keyword {
+			return nil
+		}
+		stated, expected = "sysml:"+pPortionKind+" "+strconv.Quote(portion), "the "+strconv.Quote(keyword)+" its keyword states"
+		if portion == "" {
+			stated = "no sysml:" + pPortionKind
+		}
+	case "event":
+		if event {
+			return nil
+		}
+		stated, expected = "the metaclass "+el.metaclass, "the "+mEventOccurrenceUsage+" its keyword states"
+	case "assert":
+		if el.metaclass == mAssertConstraintUsage {
+			return nil
+		}
+		stated, expected = "the metaclass "+el.metaclass, "the "+mAssertConstraintUsage+" its keyword states"
+	default:
+		return nil
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the `%s` declaration <%s>", keyword, el.iri),
+		Note: fmt.Sprintf("it has %s, not %s, so the notation cannot be rebuilt without declaring something else", stated, expected),
+	}
+}
+
+// portionKind reads the portion a usage is declared as, `snapshot` or
+// `timeslice`; any other value has no notation and is refused.
+func (d *decoder) portionKind(el *element) (string, error) {
+	portion, ok := d.stringOf(el, rdf.SysML+pPortionKind)
+	if !ok {
+		return "", nil
+	}
+	switch portion {
+	case "snapshot", "timeslice":
+		return portion, nil
+	}
+	return "", &UnsupportedError{
+		What: fmt.Sprintf("the portion kind %q of <%s>", portion, el.iri),
+		Note: "sysml:" + pPortionKind + " is `snapshot` or `timeslice`, the two portions the notation declares",
+	}
 }
 
 func (d *decoder) identWords(el *element) []string {

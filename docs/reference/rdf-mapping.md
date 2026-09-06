@@ -12,8 +12,8 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 306 of the 346 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 40 are refused. Of the 306, a second
+  the construct. Every one of the 346 models under `examples/` (committed, training and
+  pilot corpora) converts to Turtle, and a second
   conversion of the written-back notation reproduces the Turtle byte for byte for
   every one — the notation is written from the [source text](#source-text) the
   graph carries. These figures are the
@@ -83,8 +83,10 @@ rather than read without what those terms said: the pre-rename namespace
 `urn:systemica:sysml:`, and the metadata properties `sysx:prefixMetadata` and
 `sysml:annotates` that release 0.4.3 wrote for a `#` prefix and an `about`
 target (now a `sysml:MetadataUsage` and `sysml:annotatedElement`, see
-[What each element carries](#what-each-element-carries)). The error names the
-term; re-export the model from its notation source.
+[What each element carries](#what-each-element-carries)), and the flags
+`sysml:isSnapshot` and `sysml:isTimeslice` that release 0.5.1 wrote for a
+portion (now `sysml:portionKind`). The error names the term; re-export the
+model from its notation source.
 
 ### Element IRIs
 
@@ -197,8 +199,12 @@ triples come); a set of classes with no such member is refused, naming the subje
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
   `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isPortion`,
-  `isDerived`, `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
-  `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
+  `isDerived`, `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isIndividual`,
+  `isConjugated`, `isAll`, `isAccept`, `isResult`, and `isEvent` for an `event`
+  modifier on a usage whose metaclass is not itself `sysml:EventOccurrenceUsage`
+- `sysml:portionKind`, `"snapshot"` or `"timeslice"`, for a usage declared as a
+  portion (`snapshot :>> start`, `timeslice occurrence t`); the two are the
+  metamodel's `OccurrenceUsage::portionKind`, so no flag spells them
 - Declaration-head relationships, as element IRIs where the target resolves
   inside the model — by name resolution, so a name reached through an import,
   an alias or a nested package qualification links to the same element its
@@ -267,8 +273,8 @@ The `sysx:` properties:
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. Also marks an expression body node, so `{}` rebuilds from structure. |
 | `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
 | `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
-| `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, KerML's `feature` and `attribute`, `snapshot` and `occurrence`), on a named declaration and on an anonymous one alike (`feature :>> x;`, `snapshot :>> start { … }`). The AST records one kind for all of them, so without this the notation would come back rewritten. Where the graph types the fact the keyword states — `sysml:portionKind` for `snapshot`/`timeslice`, the metaclass `sysml:EventOccurrenceUsage` for `event`, `sysml:AssertConstraintUsage` for `assert` — the typed fact is authoritative and this predicate only chooses between two spellings of it (`snapshot :>> start` against `snapshot occurrence :>> start`; `event m.start` against `event occurrence references m.start`; `assert c` against `assert constraint references c`); a keyword the typing contradicts (`snapshot` with `sysml:portionKind "timeslice"` or none, `event` on a `sysml:PartUsage`, `assert` on a `sysml:ConstraintUsage`) is refused rather than one of the two written. KerML's `feature` has no typed counterpart — an attribute usage is what the AST records for it and `sysx:sourceLanguage` does not decide between the two — so it is carried as this spelling alone. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
+| `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assume` of `assume constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. The `assert` of `assert constraint c : C` is not written here: that usage is a `sysml:AssertConstraintUsage`, and the metaclass states it; a graph stating both with another prefix is refused. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`, `connector c from a to b`). Without it the verb would be missing or doubled. |
 | `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
@@ -1057,12 +1063,28 @@ value — is reported rather than the condition written and the rest dropped.
 The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.
 
-**A synonym keyword on a declaration with no name of its own is refused.** `snapshot s;`
-shares its AST kind with `occurrence`, and a declaration that carries no name of
-its own has nothing for `sysx:declaredKeyword` to attach to, so writing it back as
-the canonical `occurrence` would be a different declaration. It is reported
-instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
-was written with.
+**A synonym keyword on a declaration with no name of its own is carried like a
+named one.** `feature :>> x;`, `composite :>> e = v;`, `snapshot :>> start { … }`,
+`timeslice :>> portionOfLife { … }`, `event m.start;`, `event occurrence e;`,
+`assert constraint { … }`, `assert c { … }` and `assert not c;` all come back from
+the graph alone: the portion, the event and the assertion are typed
+(`sysml:portionKind`, `sysml:EventOccurrenceUsage`, `sysml:AssertConstraintUsage`
+with `sysml:isNegated`), the occurrence or constraint an `event m.start` or
+`assert c` names is its `sysml:references`, and KerML's `feature` is
+`sysx:declaredKeyword` — see [What each element carries](#what-each-element-carries)
+for how the decoder chooses the spelling. Reading back, the head is spelled from
+the typed facts: `snapshot`/`timeslice` from the portion kind, `event` from the
+metaclass or `sysml:isEvent`, `assert` from the metaclass with `not` from
+`sysml:isNegated`, each as the kind keyword itself where `sysx:declaredKeyword`
+says it was written so and as a modifier ahead of `occurrence`/`constraint`
+otherwise. What is still refused is a keyword that takes a reference in place
+of a name — `perform`, `exhibit`, a state's `entry`/`do`/`exit`, `event`,
+`assert` — with neither a `sysml:declaredName` nor a `sysml:references`, since
+the two shapes such a keyword is written in are `perform a` and `perform action
+a`, and the graph has nothing to put in either place. The parser never produces
+that shape (`perform;` declares a feature named `perform`), so only a graph from
+another tool, or one edited by hand, states it; the decoder's refusal names the
+keyword and the predicate missing.
 
 **A metadata annotation is carried structurally**, as described under [What
 each element carries](#what-each-element-carries): its type, its `about`
@@ -1138,8 +1160,9 @@ would be refused as a duplicate.
   the graph is refused naming both rather than the first being kept. Every
   `sysx:` property is single-valued but the members and parameters of a body,
   `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
-  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
-  is one triple to the graph, so only differing objects are a conflict
+  the `sysml:` properties, the boolean `is…` flags and `sysml:portionKind`
+  are. A triple stated twice is one triple to the graph, so only differing
+  objects are a conflict
 - a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
   with no `sysml:value`: the flags spell the operator a feature value is
   written with (`default =`, `:=`), so without a value there is nothing to
