@@ -25,6 +25,9 @@ domain-mismatch AttributeUsage upperBound        # MultiplicityRange_upperBound:
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
 domain-mismatch OperatorExpression lowerBound    # MultiplicityRange_lowerBound: a cast's `(as T[m])` multiplicity is written on the operator expression
 domain-mismatch OperatorExpression upperBound    # MultiplicityRange_upperBound: same collapse on a cast's multiplicity
+domain-mismatch FeatureReferenceExpression lowerBound # MultiplicityRange_lowerBound: a connector end's `[0..1] a` multiplicity is written on the end's expression node
+domain-mismatch FeatureReferenceExpression upperBound # MultiplicityRange_upperBound: same collapse on a connector end
+domain-mismatch FeatureChainExpression upperBound     # MultiplicityRange_upperBound: same collapse on a connector end written as a chain
 domain-mismatch ConstraintUsage isNegated        # Invariant_isNegated: a negated constraint is not materialized as an Invariant
 domain-mismatch TransitionUsage sourceFeature    # Connector_sourceFeature: a transition's ends are written on the transition, not on a Connector
 domain-mismatch TransitionUsage targetFeature    # Connector_targetFeature: a transition's ends are written on the transition, not on a Connector
@@ -99,4 +102,5 @@ unknown-property OccurrenceUsage isTimeslice                 # notation flag for
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
 unknown-property PartUsage isVariant                         # Usage::isVariant, which the 202407 rendering omits; the metamodel derives it from the VariantMembership
 unknown-property EnumerationUsage isVariant                  # Usage::isVariant on an enumerated value, a variant of its enumeration definition; omitted the same way
+unknown-property ConnectorAsUsage isAll                      # Type::isSufficient (`connector all from a to b`), written under the notation's own name
 literal-for-object-property FeatureChainExpression targetFeature                   # FeatureChainExpression_targetFeature: a library feature such as an action's done resolves outside the graph and is written as a name (D7)
