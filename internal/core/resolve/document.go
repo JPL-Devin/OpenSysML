@@ -162,8 +162,6 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// names are not all references (see resolveTrigger).
 		if d.IsAccept {
 			r.resolveTrigger(scope, d.Value)
-		} else if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, d.Value) {
-			// A calc binding may name its implicit result feature as the value end.
 		} else {
 			r.resolveExpr(scope, d.Value)
 		}
@@ -193,6 +191,10 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 			endpointKind := d.Kind == ast.UsageSuccession || d.Kind == ast.UsageTransition
 			resolveAsEndpoint := endpointKind && inStateMachine(endScope) && !declaresName
 			resolveEnd := func(target ast.Node) {
+				// A calc's binding may name its implicit result feature as an end.
+				if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, target) {
+					return
+				}
 				// A machine succession/transition end names a vertex like a transition endpoint.
 				if qn, ok := target.(*ast.QualifiedName); ok {
 					if resolveAsEndpoint {

@@ -147,7 +147,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_multiple_collection_contributors", testBindingMultipleCollectionContributors)
 	t.Run("binding_propagation_spends_element_budget", testBindingPropagationSpendsElementBudget)
 	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
-	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
+	t.Run("binding_bare_ends_bind", testBindingBareEndsBind)
 	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
 	t.Run("binding_single_valueless", testBindingSingleValueless)
 	t.Run("binding_cycle", testBindingCycle)
@@ -831,10 +831,13 @@ func testBindingDistinctMaterializedObjectsConflict(t *testing.T) {
 	}
 }
 
-func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-named-single-end>", parseAndBuild(t, `package P {
+// `binding bnd = a` states two ends (KerML.xtext BindingConnectorDeclaration);
+// `bnd` is the first end, not the binding's name.
+func testBindingBareEndsBind(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-bare-ends>", parseAndBuild(t, `package P {
 		part def Sys {
 			attribute a = 5;
+			attribute bnd;
 			binding bnd = a;
 		}
 	}`))
@@ -842,12 +845,12 @@ func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate: %v", err)
 	}
-	fv, err := inst.GetFeatureValue(ctx, "a")
+	fv, err := inst.GetFeatureValue(ctx, "bnd")
 	if err != nil {
-		t.Fatalf("GetFeatureValue(a) = %v, want 5", err)
+		t.Fatalf("GetFeatureValue(bnd) = %v, want 5", err)
 	}
 	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
-		t.Errorf("a = %#v, want integer 5", got)
+		t.Errorf("bnd = %#v, want integer 5", got)
 	}
 }
 

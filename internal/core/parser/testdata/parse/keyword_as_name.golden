@@ -40,18 +40,19 @@
             (Usage kind="part" name="boundaryEdges" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
-                (FeatureChainExpr member="edges"
-                  (FeatureReference name="base"))
-                (Multiplicity range=true
-                  (LiteralInteger value="0")
-                  (LiteralInteger value="1")))
               (Multiplicity range=false
                 (LiteralInteger value="1"))
-              (FeatureReference name="boundaryEdges")
-              (Multiplicity range=true
-                (LiteralInteger value="0")
-                (LiteralInteger value="1"))))))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (ConnectorEnd target="boundaryEdges"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Definition kind="item" abstract=false variation=false name="Alice" individual=true))
       (Membership visibility="default"

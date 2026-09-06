@@ -15,7 +15,7 @@ package ConnectorEnds {
         connector eng to tanks.main;
         connector a ::> a.x to b;
         connector [1] bead ::> tanks.x to [0..1] b;
-        connector r ::> eng to tanks.main;
+        connector r references eng to tanks.main;
         private connector [0..1] transitionLink to [1..*] trigger;
         connector link from eng to tanks.main;
         connector all from eng to tanks.main;

@@ -86,6 +86,7 @@ func (c *featureReferenceChecker) checkSymbol(sym *symbols.Symbol) {
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		c.checkDeclaredChains(sym, d)
+		c.checkBindingEnds(sym, d)
 		c.walkExpr(refSite{sym: sym}, scope, d.Value)
 		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
 	case *ast.Definition:
@@ -366,11 +367,29 @@ func w8cOwnedByImplicitNode(target *symbols.Symbol) bool {
 	return owner != nil && owner.Name == "" && isUsageKind(owner.Kind)
 }
 
+// checkBindingEnds checks that each end of a binding names a feature, resolved
+// where the binding is declared.
+func (c *featureReferenceChecker) checkBindingEnds(sym *symbols.Symbol, d *ast.Usage) {
+	if d.Kind != ast.UsageBinding {
+		return
+	}
+	for _, end := range d.ConnectorEnds {
+		target := end.AttachedTarget()
+		if target == nil {
+			continue
+		}
+		if _, failed := target.(*ast.ErrorNode); failed {
+			continue
+		}
+		c.checkReferent(refSite{sym: sym}, sym.OwnerScope, target, target.Span())
+	}
+}
+
 // checkDeclaredChains checks the feature chains a usage's header writes; a flow
 // end's last segment names the end's nested feature, so only its prefix is a chain.
 func (c *featureReferenceChecker) checkDeclaredChains(sym *symbols.Symbol, d *ast.Usage) {
 	for _, rel := range d.Relationships {
-		if rel != nil && !(d.Kind == ast.UsageBinding && rel.Kind == ast.RelReferences) {
+		if rel != nil {
 			c.checkChainTarget(sym.OwnerScope, rel.Target)
 		}
 	}

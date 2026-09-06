@@ -410,6 +410,8 @@ func TraceLabel(node ast.Node) string {
 		return "null"
 	case *ast.FeatureReference:
 		return "feature " + qualifiedNameToString(n.Name)
+	case *ast.QualifiedName:
+		return "feature " + qualifiedNameToString(n)
 	case *ast.FeatureChainExpr:
 		return "chain " + qualifiedNameToString(n.Member)
 	case *ast.OperatorExpr:
