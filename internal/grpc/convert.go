@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -300,8 +301,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		}
 		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: pvq}}
 	case runtime.ValMeasurementRef:
-		// No wire arm names a unit by itself; a quantity carries one, a bare reference cannot.
-		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: MeasurementRefToProto(val.MeasurementRef())}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -365,6 +365,16 @@ func vectorQuantityToProto(vq *runtime.VectorQuantity) *pb.VectorQuantity {
 		pvq.Components = append(pvq.Components, pq)
 	}
 	return pvq
+}
+
+// MeasurementRefToProto marshals a bare reference: the unit as written, what it
+// reduces to, and the one declaration it names when it names one.
+func MeasurementRefToProto(ref *runtime.MeasurementRef) *pb.MeasurementRef {
+	pm := &pb.MeasurementRef{Unit: ref.Unit.Text, UnitTerm: unitTermToProto(ref.Unit.Term)}
+	if decl := ref.Declaration(); decl != nil {
+		pm.UnitId = symbols.FQNOf(decl)
+	}
+	return pm
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -441,7 +451,32 @@ var (
 	// ErrVectorQuantityEmpty reports a vector quantity of no components, whose
 	// num is Number[1..*].
 	ErrVectorQuantityEmpty = errors.New("vector quantity has no components")
+
+	// ErrMeasurementRefNeedsIndex reports a measurement reference converted from
+	// the wire without the model's symbols, which its units resolve against.
+	ErrMeasurementRefNeedsIndex = errors.New("a measurement reference needs the model's symbols to be converted from the wire")
+
+	// ErrMeasurementRefEmpty reports a measurement reference sent with no unit
+	// text, no reduction and no declaration: nothing it could refer to.
+	ErrMeasurementRefEmpty = errors.New("measurement reference names no unit")
+
+	// ErrUnknownMeasurementUnit reports a unit_id the model does not declare
+	// uniquely, so no reference can name the declaration.
+	ErrUnknownMeasurementUnit = errors.New("unknown measurement unit")
+
+	// ErrUnitIDMismatch reports a unit_id whose declaration the unit text sent
+	// with it does not spell, so the two name different units.
+	ErrUnitIDMismatch = errors.New("unit as written does not spell unit_id")
 )
+
+// ValueCarriesMeasurementRef reports whether a value, or any value nested in
+// it, is a MeasurementRef: the kind measurement_refs governs.
+func ValueCarriesMeasurementRef(pv *pb.Value) bool {
+	return valueCarries(pv, func(v *pb.Value) bool {
+		_, ok := v.GetKind().(*pb.Value_MeasurementRef)
+		return ok
+	})
+}
 
 // ValueCarriesComplex reports whether a value, or any value nested in it, is a
 // Complex: the kind the complex_values capability governs.
@@ -523,6 +558,8 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 		return protoToVector(k.Vector)
 	case *pb.Value_VectorQuantity:
 		return protoToVectorQuantity(k.VectorQuantity, idx, sem)
+	case *pb.Value_MeasurementRef:
+		return ProtoToMeasurementRef(k.MeasurementRef, idx, sem)
 	default:
 		return protoToScalar(pv), nil
 	}
@@ -653,6 +690,90 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	}
 	unit := runtime.Unit{Text: text, Product: product, Term: term}
 	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
+}
+
+// ProtoToMeasurementRef rebuilds a bare reference from the wire: by the
+// declaration unit_id names, checked against the unit text and reduction sent
+// with it, or else by the unit text read exactly as a Quantity's is.
+func ProtoToMeasurementRef(pm *pb.MeasurementRef, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if pm.GetUnit() == "" && pm.GetUnitTerm() == nil && pm.GetUnitId() == "" {
+		return runtime.Value{}, ErrMeasurementRefEmpty
+	}
+	if (idx == nil || sem == nil) && (len(pm.GetUnitTerm().GetFactors()) > 0 || pm.GetUnitId() != "") {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrMeasurementRefNeedsIndex, pm.GetUnit())
+	}
+	if pm.GetUnitTerm() == nil {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnitNotReduced, cmp.Or(pm.GetUnit(), pm.GetUnitId()))
+	}
+	term, err := protoToUnitTerm(pm.GetUnitTerm(), idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	if pm.GetUnitId() != "" {
+		return declaredMeasurementRef(pm.GetUnitId(), pm.GetUnit(), term, idx, sem)
+	}
+	product, term, err := unitProductOfText(pm.GetUnit(), term, idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	text := pm.GetUnit()
+	if text == "" && !product.IsEmpty() {
+		text = product.String()
+	}
+	return runtime.NewMeasurementRefValue(runtime.Unit{Text: text, Product: product, Term: term}), nil
+}
+
+// declaredMeasurementRef is the reference to the unit declaration id names, refused
+// unless it is a measurement unit reducing to term that text, if any, spells.
+func declaredMeasurementRef(id, text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	matches := idx.LookupQualified(id)
+	if len(matches) != 1 {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnknownMeasurementUnit, id)
+	}
+	unit, ok := sem.MeasurementUnitOf(matches[0])
+	if !ok {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, id)
+	}
+	declared, err := sem.UnitTermOf(unit)
+	if err != nil {
+		return runtime.Value{}, fmt.Errorf("%w: %s: %w", ErrUnitNotReduced, id, err)
+	}
+	if !reducesTo(declared, term) {
+		return runtime.Value{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s", ErrUnitTextMismatch, id, declared, term)
+	}
+	if text != "" && !textSpellsUnit(text, unit, idx, sem) {
+		return runtime.Value{}, fmt.Errorf("%w: %s is not %s", ErrUnitIDMismatch, text, id)
+	}
+	return runtime.DeclaredMeasurementRef(unit, text, declared), nil
+}
+
+// textSpellsUnit reports whether unit text is one name for the declaration unit:
+// its symbol or name (`km`, `kilometre`), or a qualified name resolving to it.
+func textSpellsUnit(text string, unit *symbols.Symbol, idx *symbols.Index, sem *semantics.Model) bool {
+	p := parser.New(source.New("<unit>", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return false
+	}
+	spellings := []string{lexer.NameText(unit.Name)}
+	if unit.ShortName != "" {
+		spellings = append(spellings, lexer.NameText(unit.ShortName))
+	}
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if len(qn.Parts) == 1 {
+			return unit, slices.Contains(spellings, lexer.NameText(qn.Parts[0].Text))
+		}
+		matches := idx.LookupQualified(semantics.QualifiedNameText(qn))
+		if len(matches) != 1 {
+			return nil, false
+		}
+		sym, ok := sem.MeasurementUnitOf(matches[0])
+		return unit, ok && sym == unit
+	})
+	if err != nil || len(product.Powers) != 1 {
+		return false
+	}
+	return product.Powers[0].Unit == unit && product.Powers[0].Exponent == 1
 }
 
 // unitProductOfText reads unit text as a product of the model's units that reduces

@@ -88,6 +88,11 @@ func (s *Service) filterValueCapabilities(value *pb.Value) {
 		for _, nested := range nestedValues(value) {
 			s.filterValueCapabilities(nested)
 		}
+	case *pb.Value_MeasurementRef:
+		if !s.capabilities.has(CapabilityMeasurementRefs) {
+			shown := displayValue(value)
+			value.Kind = &pb.Value_Null{Null: "unsupported: " + shown.Kind.String() + " " + runtime.FormatValue(shown)}
+		}
 	}
 }
 
@@ -126,6 +131,12 @@ func displayValue(pv *pb.Value) runtime.Value {
 			units = append(units, q.Unit)
 		}
 		return runtime.NewVectorQuantityValue(num, units)
+	case *pb.Value_MeasurementRef:
+		text := k.MeasurementRef.GetUnit()
+		if text == "" {
+			text = describeUnitTerm(k.MeasurementRef.GetUnitTerm())
+		}
+		return runtime.NewMeasurementRefValue(runtime.Unit{Text: text, Product: semantics.NamedUnitProduct(nil, text, false)})
 	default:
 		return protoToScalar(pv)
 	}

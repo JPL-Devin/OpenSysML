@@ -156,6 +156,15 @@ func valueFromProto(value *pb.Value) Value {
 			out = append(out, quantity)
 		}
 		return out
+	case *pb.Value_MeasurementRef:
+		ref := kind.MeasurementRef
+		if ref.GetUnit() == "" && ref.GetUnitTerm() == nil && ref.GetUnitId() == "" {
+			return Null("unsupported: measurement reference naming no unit")
+		}
+		if ref.GetUnitTerm() == nil {
+			return Null("unsupported: measurement reference without its reduction")
+		}
+		return MeasurementRef{Unit: ref.GetUnit(), Term: unitTermFromProto(ref.GetUnitTerm()), UnitID: ref.GetUnitId()}
 	default:
 		// A newer service's arm parses as an unknown field: no kind at all.
 		return Null("unsupported: a value arm this client does not know")
@@ -230,6 +239,12 @@ func valueToProto(value Value) (*pb.Value, error) {
 			vq.Components = append(vq.Components, quantityToProto(component))
 		}
 		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: vq}}, nil
+	case MeasurementRef:
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: &pb.MeasurementRef{
+			Unit:     v.Unit,
+			UnitTerm: unitTermToProto(v.Term),
+			UnitId:   v.UnitID,
+		}}}, nil
 	case Unset:
 		return nil, &StatusError{
 			Code:    CodeInvalidArgument,
@@ -248,12 +263,28 @@ func quantityToProto(quantity Quantity) *pb.Quantity {
 	case Real:
 		out.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: float64(magnitude)}
 	}
-	if quantity.Term != nil {
-		term := &pb.UnitTerm{ScaleNum: quantity.Term.ScaleNum, ScaleDen: quantity.Term.ScaleDen}
-		for _, factor := range quantity.Term.Factors {
-			term.Factors = append(term.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
-		}
-		out.UnitTerm = term
+	out.UnitTerm = unitTermToProto(quantity.Term)
+	return out
+}
+
+func unitTermToProto(term *UnitTerm) *pb.UnitTerm {
+	if term == nil {
+		return nil
+	}
+	out := &pb.UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
+	for _, factor := range term.Factors {
+		out.Factors = append(out.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
+	}
+	return out
+}
+
+func unitTermFromProto(term *pb.UnitTerm) *UnitTerm {
+	if term == nil {
+		return nil
+	}
+	out := &UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
+	for _, factor := range term.Factors {
+		out.Factors = append(out.Factors, UnitFactor{UnitID: factor.UnitId, Exponent: factor.Exponent})
 	}
 	return out
 }
@@ -294,13 +325,7 @@ func quantityFromProto(quantity *pb.Quantity) (Quantity, bool) {
 	default:
 		return Quantity{}, false
 	}
-	if term := quantity.GetUnitTerm(); term != nil {
-		converted := &UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
-		for _, factor := range term.Factors {
-			converted.Factors = append(converted.Factors, UnitFactor{UnitID: factor.UnitId, Exponent: factor.Exponent})
-		}
-		out.Term = converted
-	}
+	out.Term = unitTermFromProto(quantity.GetUnitTerm())
 	return out, true
 }
 
