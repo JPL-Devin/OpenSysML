@@ -284,3 +284,30 @@ func TestSelfNamedRedefinitionTargetSurvivesTheGraphAlone(t *testing.T) {
 	back := notationFromTheGraphAlone(t, "p.sysml", src)
 	wantFragments(t, back, "occurrence causes[1..*] subsets participant redefines causes;")
 }
+
+// An unnamed usage takes its name from the first feature it redefines, so a
+// chain through it reads that name back however many features it redefines.
+func TestNameFromTheFirstOfSeveralRedefinitionsFromTheGraphAlone(t *testing.T) {
+	src := `package NP {
+    item def Disc {
+        attribute innerSpaceDimension;
+    }
+    item def Shell {
+        item faces {
+            attribute innerSpaceDimension;
+        }
+    }
+    item def ConeOrCylinder :> Shell {
+        item :>> faces;
+        item base : Disc :> faces {
+            attribute :>> Disc::innerSpaceDimension, faces::innerSpaceDimension;
+        }
+        attribute dim = base.innerSpaceDimension;
+    }
+}
+`
+	back := notationFromTheGraphAlone(t, "np.sysml", src)
+	wantFragments(t, back,
+		"attribute redefines innerSpaceDimension, faces::innerSpaceDimension;",
+		"attribute dim = base.innerSpaceDimension;")
+}

@@ -29,57 +29,57 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
                 (FeatureChainExpr member="a"
-                  (FeatureReference name="x"))
+                  (FeatureReference name="x")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (Multiplicity range=false
-                  (LiteralInteger value="1")))
-              (Relationship kind="references" target=(expr)
+                  (LiteralInteger value="1"))
                 (FeatureChainExpr member="b"
-                  (FeatureReference name="x"))
-                (Multiplicity range=false
-                  (LiteralInteger value="1")))))
+                  (FeatureReference name="x")))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
-                (FeatureChainExpr member="a"
-                  (FeatureReference name="x"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (Multiplicity range=true
                   (LiteralInteger value="0")
-                  (LiteralInteger value="1")))
-              (Relationship kind="references" target=(expr)
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="x")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="b"
                   (FeatureReference name="y")))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="a"
                   (FeatureReference name="x")))
-              (Relationship kind="references" target=(expr)
-                (FeatureChainExpr member="b"
-                  (FeatureReference name="y"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (Multiplicity range=false
-                  (LiteralInfinity)))))
+                  (LiteralInfinity))
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="y")))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="a"
                   (FeatureReference name="x")))
-              (Relationship kind="references" target=(expr)
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="b"
-                  (FeatureReference name="x")))
-              (Multiplicity range=false
-                (LiteralInteger value="1"))))
+                  (FeatureReference name="x")))))
           (Membership visibility="default"
             (Usage kind="binding" name="bb" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="a"
                   (FeatureReference name="x")))
-              (Relationship kind="references" target=(expr)
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="b"
-                  (FeatureReference name="x")))
-              (Multiplicity range=false
-                (LiteralInteger value="1"))))
+                  (FeatureReference name="x")))))
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="*ast.FeatureChainExpr"

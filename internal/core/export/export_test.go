@@ -2104,7 +2104,10 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 		"bind [0..1] a = [0..1] b;",
 		"bind a = [1] b;",
 		"binding ab bind [2] a = b;",
-		"binding ab of [0..1] a = [1..*] b;",
+		"binding ab bind [0..1] a = [1..*] b;",
+		"bind e1 ::> a = e2 references b;",
+		"bind [1] e1 ::> a = b;",
+		"binding ab bind e1 ::> a = e2 ::> b;",
 		"connect [1] left to [0..1] right;",
 		"connect ([1] left, [2] right);",
 		"allocate a to b;",
@@ -2149,19 +2152,21 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 	graph := string(turtle)
 	for _, triple := range []string{
-		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pvalue ;",
+		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pend1 ;",
 		"expr:P__Car___402_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"a\" ;",
 		"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend0_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend0_pupperBound .",
-		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pvalue_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pvalue_pupperBound .",
+		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend1_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend1_pupperBound .",
 		"expr:P__Car___402_pend0_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
-		"expr:P__Car___402_pvalue_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+		"expr:P__Car___402_pend1_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
 	} {
 		if !strings.Contains(graph, triple) {
 			t.Errorf("the graph should state %q:\n%s", triple, graph)
 		}
 	}
-	if strings.Contains(graph, "expr:P__Car___402_pend1") {
-		t.Errorf("the value end is the value node itself, not a second copy of it:\n%s", graph)
+	for _, legacy := range []string{"sysml:value expr:", "sysml:references", "_pvalue"} {
+		if strings.Contains(graph, legacy) {
+			t.Errorf("a binding's ends are connector ends, not a reference and a value (%s):\n%s", legacy, graph)
+		}
 	}
 	// Without the bounds the ends come back bare: the notation reads the graph.
 	stripped := withoutTriples(t, turtle, "sysx:sourceText")

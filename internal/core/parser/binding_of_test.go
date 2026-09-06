@@ -8,9 +8,9 @@ import (
 )
 
 // `binding b of f = v` names the feature the binding binds, so the `of` target
-// is a reference and not a typing: typing it would type-check the bound feature
-// as the binding's type.
-func TestBindingOfTargetIsAReference(t *testing.T) {
+// is a connector end and not a typing: typing it would type-check the bound
+// feature as the binding's type.
+func TestBindingOfTargetIsAConnectorEnd(t *testing.T) {
 	const code = `package P { binding linkAToB of [1] featureA = [1] featureB; }`
 
 	p := New(source.New("test.sysml", []byte(code)))
@@ -20,21 +20,33 @@ func TestBindingOfTargetIsAReference(t *testing.T) {
 	}
 
 	binding := findBindingUsage(t, file)
-	var kinds []ast.RelationshipKind
+	if binding.Ident.Name != "linkAToB" {
+		t.Errorf("binding name = %q, want linkAToB", binding.Ident.Name)
+	}
 	for _, rel := range binding.Relationships {
-		kinds = append(kinds, rel.Kind)
+		t.Errorf("binding carries a %v relationship; ends are connector ends", rel.Kind)
 	}
-	for _, kind := range kinds {
-		if kind == ast.RelTyping {
-			t.Errorf("`of` target became a typing relationship: %v", kinds)
+	if binding.Value != nil {
+		t.Errorf("binding carries a value; ends are connector ends")
+	}
+	ends := binding.ConnectorEnds
+	if len(ends) != 2 {
+		t.Fatalf("binding has %d ends, want 2", len(ends))
+	}
+	for i, want := range []string{"featureA", "featureB"} {
+		if got := ast.QualifiedText(ends[i].AttachedTarget()); got != want {
+			t.Errorf("end %d target = %q, want %q", i, got, want)
 		}
-	}
-	if !hasKind(kinds, ast.RelReferences) {
-		t.Errorf("`of` target is not a reference relationship: %v", kinds)
+		if ends[i].Multiplicity == nil {
+			t.Errorf("end %d has no multiplicity, want [1]", i)
+		}
+		if _, named := ends[i].DeclaredName(); named {
+			t.Errorf("end %d is named, want anonymous", i)
+		}
 	}
 }
 
-func TestAnonymousBindingSimpleEndsAreReferences(t *testing.T) {
+func TestAnonymousBindingSimpleEnds(t *testing.T) {
 	const code = `package P {
 		binding bind b = a;
 		bind b = a;
@@ -67,21 +79,76 @@ func TestAnonymousBindingSimpleEndsAreReferences(t *testing.T) {
 		if binding.Ident.Name != "" {
 			t.Errorf("binding ident = %q, want empty", binding.Ident.Name)
 		}
-		if len(binding.Relationships) != 1 {
-			t.Fatalf("binding has %d relationships, want 1", len(binding.Relationships))
+		if len(binding.Relationships) != 0 || binding.Value != nil {
+			t.Fatalf("binding stores ends outside ConnectorEnds")
 		}
-		rel := binding.Relationships[0]
-		if rel.Kind != ast.RelReferences {
-			t.Errorf("binding relationship kind = %v, want references", rel.Kind)
+		if len(binding.ConnectorEnds) != 2 {
+			t.Fatalf("binding has %d ends, want 2", len(binding.ConnectorEnds))
 		}
-		target, ok := rel.Target.(*ast.QualifiedName)
-		if !ok || len(target.Parts) != 1 || target.Parts[0].Text != "b" {
-			t.Errorf("binding target = %#v, want qualified name b", rel.Target)
-			continue
+		for i, want := range []string{"b", "a"} {
+			target, ok := binding.ConnectorEnds[i].Target.(*ast.QualifiedName)
+			if !ok || len(target.Parts) != 1 || target.Parts[0].Text != want {
+				t.Errorf("end %d target = %#v, want qualified name %s", i, binding.ConnectorEnds[i].Target, want)
+				continue
+			}
+			if sf.Text(target.Parts[0].Span) != want {
+				t.Errorf("end %d target span = %#v, want source span for %s", i, target, want)
+			}
 		}
-		if sf.Text(target.Parts[0].Span) != "b" {
-			t.Errorf("binding target span = %#v, want source span for b", target)
-		}
+	}
+}
+
+// A binding end reads like a succession's: `[mult] name ::> feature` names the
+// end, and the name never becomes the binding's own name.
+func TestBindingNamedEnds(t *testing.T) {
+	cases := []struct {
+		file, code   string
+		bindingName  string
+		endNames     [2]string
+		endTargets   [2]string
+		endMultCount int
+	}{
+		{"t.sysml", `part def D { bind e1 ::> a = e2 references b; }`, "", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.sysml", `part def D { bind [1] e1 ::> a = [1] e2 ::> b; }`, "", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 2},
+		{"t.sysml", `part def D { bind e3 ::> a = b; }`, "", [2]string{"e3", ""}, [2]string{"a", "b"}, 0},
+		{"t.sysml", `part def D { bind a = e2 ::> b; }`, "", [2]string{"", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.sysml", `part def D { binding x bind e1 ::> a = e2 ::> b; }`, "x", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.kerml", `class D { binding e1 ::> a = e2 ::> b; }`, "", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.kerml", `class D { binding of e1 ::> a = e2 ::> b; }`, "", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.kerml", `class D { binding x of e1 references a = e2 references b; }`, "x", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 0},
+		{"t.kerml", `class D { binding [1] e1 ::> a = [1] e2 ::> b; }`, "", [2]string{"e1", "e2"}, [2]string{"a", "b"}, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			p := New(source.New(tc.file, []byte(tc.code)))
+			file := p.ParseFile()
+			for _, d := range p.Diagnostics {
+				t.Errorf("offset %d: %s", d.Span.Offset, d.Message)
+			}
+			binding := findBindingUsage(t, file)
+			if binding.Ident.Name != tc.bindingName {
+				t.Errorf("binding name = %q, want %q", binding.Ident.Name, tc.bindingName)
+			}
+			if len(binding.ConnectorEnds) != 2 {
+				t.Fatalf("binding has %d ends, want 2", len(binding.ConnectorEnds))
+			}
+			mults := 0
+			for i, end := range binding.ConnectorEnds {
+				name, named := end.DeclaredName()
+				if named != (tc.endNames[i] != "") || name.Name != tc.endNames[i] {
+					t.Errorf("end %d name = %q (named=%v), want %q", i, name.Name, named, tc.endNames[i])
+				}
+				if got := ast.QualifiedText(end.AttachedTarget()); got != tc.endTargets[i] {
+					t.Errorf("end %d attached target = %q, want %q", i, got, tc.endTargets[i])
+				}
+				if end.Multiplicity != nil {
+					mults++
+				}
+			}
+			if mults != tc.endMultCount {
+				t.Errorf("%d ends carry a multiplicity, want %d", mults, tc.endMultCount)
+			}
+		})
 	}
 }
 
@@ -97,6 +164,10 @@ func findBindingUsage(t *testing.T, root *ast.RootNamespace) *ast.Usage {
 					return found
 				}
 			case *ast.Package:
+				if found := find(v.Members); found != nil {
+					return found
+				}
+			case *ast.Definition:
 				if found := find(v.Members); found != nil {
 					return found
 				}
@@ -117,13 +188,4 @@ func findBindingUsage(t *testing.T, root *ast.RootNamespace) *ast.Usage {
 		t.Fatalf("no binding usage parsed")
 	}
 	return found
-}
-
-func hasKind(kinds []ast.RelationshipKind, want ast.RelationshipKind) bool {
-	for _, kind := range kinds {
-		if kind == want {
-			return true
-		}
-	}
-	return false
 }
