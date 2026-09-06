@@ -11,24 +11,49 @@ public interface VectorOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   java.util.List<org.openmbee.opensysml.proto.Value> 
       getComponentsList();
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   org.openmbee.opensysml.proto.Value getComponents(int index);
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   int getComponentsCount();
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   java.util.List<? extends org.openmbee.opensysml.proto.ValueOrBuilder> 
       getComponentsOrBuilderList();
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   org.openmbee.opensysml.proto.ValueOrBuilder getComponentsOrBuilder(

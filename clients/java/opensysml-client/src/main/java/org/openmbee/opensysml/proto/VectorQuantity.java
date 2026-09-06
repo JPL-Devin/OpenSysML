@@ -8,11 +8,7 @@ package org.openmbee.opensysml.proto;
 /**
  * <pre>
  * VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
- * each carrying its magnitude, the unit as written and that unit's reduction
- * exactly as a scalar Quantity does. The axes are usually in one unit but need
- * not be (`⟨1.0 [m], 2.0 [rad]⟩`), so the unit travels per component; a
- * component whose named unit lacks its unit_term is rejected as a Quantity's
- * is. A vector quantity has at least one component (its num is Number[1..*]).
+ * unit and reduction included, since the axes need not share a unit.
  * </pre>
  *
  * Protobuf type {@code sysml.VectorQuantity}
@@ -57,6 +53,11 @@ private static final long serialVersionUID = 0L;
   @SuppressWarnings("serial")
   private java.util.List<org.openmbee.opensysml.proto.Quantity> components_;
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -64,6 +65,11 @@ private static final long serialVersionUID = 0L;
     return components_;
   }
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -72,6 +78,11 @@ private static final long serialVersionUID = 0L;
     return components_;
   }
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -79,6 +90,11 @@ private static final long serialVersionUID = 0L;
     return components_.size();
   }
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -86,6 +102,11 @@ private static final long serialVersionUID = 0L;
     return components_.get(index);
   }
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -256,11 +277,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
-   * each carrying its magnitude, the unit as written and that unit's reduction
-   * exactly as a scalar Quantity does. The axes are usually in one unit but need
-   * not be (`⟨1.0 [m], 2.0 [rad]⟩`), so the unit travels per component; a
-   * component whose named unit lacks its unit_term is rejected as a Quantity's
-   * is. A vector quantity has at least one component (its num is Number[1..*]).
+   * unit and reduction included, since the axes need not share a unit.
    * </pre>
    *
    * Protobuf type {@code sysml.VectorQuantity}
@@ -458,6 +475,11 @@ private static final long serialVersionUID = 0L;
         org.openmbee.opensysml.proto.Quantity, org.openmbee.opensysml.proto.Quantity.Builder, org.openmbee.opensysml.proto.QuantityOrBuilder> componentsBuilder_;
 
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Quantity> getComponentsList() {
@@ -468,6 +490,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public int getComponentsCount() {
@@ -478,6 +505,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Quantity getComponents(int index) {
@@ -488,6 +520,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder setComponents(
@@ -505,6 +542,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder setComponents(
@@ -519,6 +561,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(org.openmbee.opensysml.proto.Quantity value) {
@@ -535,6 +582,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -552,6 +604,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -566,6 +623,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -580,6 +642,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder addAllComponents(
@@ -595,6 +662,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder clearComponents() {
@@ -608,6 +680,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public Builder removeComponents(int index) {
@@ -621,6 +698,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Quantity.Builder getComponentsBuilder(
@@ -628,6 +710,11 @@ private static final long serialVersionUID = 0L;
       return internalGetComponentsFieldBuilder().getBuilder(index);
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.QuantityOrBuilder getComponentsOrBuilder(
@@ -638,6 +725,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public java.util.List<? extends org.openmbee.opensysml.proto.QuantityOrBuilder> 
@@ -649,6 +741,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Quantity.Builder addComponentsBuilder() {
@@ -656,6 +753,11 @@ private static final long serialVersionUID = 0L;
           org.openmbee.opensysml.proto.Quantity.getDefaultInstance());
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Quantity.Builder addComponentsBuilder(
@@ -664,6 +766,11 @@ private static final long serialVersionUID = 0L;
           index, org.openmbee.opensysml.proto.Quantity.getDefaultInstance());
     }
     /**
+     * <pre>
+     * At least one (num is Number[1..*]); a named unit sent without its
+     * unit_term is rejected as a Quantity's is.
+     * </pre>
+     *
      * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Quantity.Builder> 

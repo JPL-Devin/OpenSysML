@@ -11,16 +11,31 @@ public interface ArrayOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @return A list containing the dimensions.
    */
   java.util.List<java.lang.Long> getDimensionsList();
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @return The count of dimensions.
    */
   int getDimensionsCount();
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @param index The index of the element to return.
    * @return The dimensions at the given index.
@@ -28,24 +43,44 @@ public interface ArrayOrBuilder extends
   long getDimensions(int index);
 
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   java.util.List<org.openmbee.opensysml.proto.Value> 
       getElementsList();
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   org.openmbee.opensysml.proto.Value getElements(int index);
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   int getElementsCount();
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   java.util.List<? extends org.openmbee.opensysml.proto.ValueOrBuilder> 
       getElementsOrBuilderList();
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   org.openmbee.opensysml.proto.ValueOrBuilder getElementsOrBuilder(

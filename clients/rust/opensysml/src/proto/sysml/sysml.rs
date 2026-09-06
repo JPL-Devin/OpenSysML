@@ -774,37 +774,33 @@ pub mod value {
         VectorQuantity(super::VectorQuantity),
     }
 }
-/// Array is a Collections::Array: its dimensions and its elements flattened in
-/// row-major order (the last index varies fastest). Its rank is the number of
-/// dimensions and its flattened size their product, one for an array of rank 0;
-/// the elements number exactly that. Every dimension is positive. An element is
-/// any Value, so an array of quantities or of arrays crosses as such. An array
-/// is compared by content, so the object it may have been read from is not part
-/// of the value and does not cross.
+/// Array is a Collections::Array: its elements flattened in row-major order
+/// under its dimensions, compared by content rather than by the object read.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Array {
+    /// Positive extents, one per rank; their product (one for rank 0) is how many
+    /// elements there are, and an array not filling them is rejected.
     #[prost(int64, repeated, tag="1")]
     pub dimensions: ::prost::alloc::vec::Vec<i64>,
+    /// Any Value each, so an array of quantities or of arrays crosses as such.
     #[prost(message, repeated, tag="2")]
     pub elements: ::prost::alloc::vec::Vec<Value>,
 }
-/// Vector is a VectorValues::NumericalVectorValue: its components in order, its
-/// dimension their number. Each component is a Value holding an int_value or a
-/// real_value, keeping Integer and Real apart as the rest of Value does; a
-/// component of any other arm is rejected rather than read as a number.
+/// Vector is a VectorValues::NumericalVectorValue: its components in order,
+/// its dimension their number.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Vector {
+    /// Each an int_value or a real_value, kept apart as the rest of Value does;
+    /// a component of any other arm is rejected rather than read as a number.
     #[prost(message, repeated, tag="1")]
     pub components: ::prost::alloc::vec::Vec<Value>,
 }
 /// VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
-/// each carrying its magnitude, the unit as written and that unit's reduction
-/// exactly as a scalar Quantity does. The axes are usually in one unit but need
-/// not be (`⟨1.0 \[m\], 2.0 \[rad\]⟩`), so the unit travels per component; a
-/// component whose named unit lacks its unit_term is rejected as a Quantity's
-/// is. A vector quantity has at least one component (its num is Number\[1..*\]).
+/// unit and reduction included, since the axes need not share a unit.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct VectorQuantity {
+    /// At least one (num is Number\[1..*\]); a named unit sent without its
+    /// unit_term is rejected as a Quantity's is.
     #[prost(message, repeated, tag="1")]
     pub components: ::prost::alloc::vec::Vec<Quantity>,
 }

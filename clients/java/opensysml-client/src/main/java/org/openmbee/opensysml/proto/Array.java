@@ -7,13 +7,8 @@ package org.openmbee.opensysml.proto;
 
 /**
  * <pre>
- * Array is a Collections::Array: its dimensions and its elements flattened in
- * row-major order (the last index varies fastest). Its rank is the number of
- * dimensions and its flattened size their product, one for an array of rank 0;
- * the elements number exactly that. Every dimension is positive. An element is
- * any Value, so an array of quantities or of arrays crosses as such. An array
- * is compared by content, so the object it may have been read from is not part
- * of the value and does not cross.
+ * Array is a Collections::Array: its elements flattened in row-major order
+ * under its dimensions, compared by content rather than by the object read.
  * </pre>
  *
  * Protobuf type {@code sysml.Array}
@@ -60,6 +55,11 @@ private static final long serialVersionUID = 0L;
   private com.google.protobuf.Internal.LongList dimensions_ =
       emptyLongList();
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @return A list containing the dimensions.
    */
@@ -69,6 +69,11 @@ private static final long serialVersionUID = 0L;
     return dimensions_;
   }
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @return The count of dimensions.
    */
@@ -76,6 +81,11 @@ private static final long serialVersionUID = 0L;
     return dimensions_.size();
   }
   /**
+   * <pre>
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   * </pre>
+   *
    * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
    * @param index The index of the element to return.
    * @return The dimensions at the given index.
@@ -89,6 +99,10 @@ private static final long serialVersionUID = 0L;
   @SuppressWarnings("serial")
   private java.util.List<org.openmbee.opensysml.proto.Value> elements_;
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   @java.lang.Override
@@ -96,6 +110,10 @@ private static final long serialVersionUID = 0L;
     return elements_;
   }
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   @java.lang.Override
@@ -104,6 +122,10 @@ private static final long serialVersionUID = 0L;
     return elements_;
   }
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   @java.lang.Override
@@ -111,6 +133,10 @@ private static final long serialVersionUID = 0L;
     return elements_.size();
   }
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   @java.lang.Override
@@ -118,6 +144,10 @@ private static final long serialVersionUID = 0L;
     return elements_.get(index);
   }
   /**
+   * <pre>
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   * </pre>
+   *
    * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
    */
   @java.lang.Override
@@ -315,13 +345,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Array is a Collections::Array: its dimensions and its elements flattened in
-   * row-major order (the last index varies fastest). Its rank is the number of
-   * dimensions and its flattened size their product, one for an array of rank 0;
-   * the elements number exactly that. Every dimension is positive. An element is
-   * any Value, so an array of quantities or of arrays crosses as such. An array
-   * is compared by content, so the object it may have been read from is not part
-   * of the value and does not cross.
+   * Array is a Collections::Array: its elements flattened in row-major order
+   * under its dimensions, compared by content rather than by the object read.
    * </pre>
    *
    * Protobuf type {@code sysml.Array}
@@ -546,6 +571,11 @@ private static final long serialVersionUID = 0L;
       bitField0_ |= 0x00000001;
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @return A list containing the dimensions.
      */
@@ -555,6 +585,11 @@ private static final long serialVersionUID = 0L;
       return dimensions_;
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @return The count of dimensions.
      */
@@ -562,6 +597,11 @@ private static final long serialVersionUID = 0L;
       return dimensions_.size();
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @param index The index of the element to return.
      * @return The dimensions at the given index.
@@ -570,6 +610,11 @@ private static final long serialVersionUID = 0L;
       return dimensions_.getLong(index);
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @param index The index to set the value at.
      * @param value The dimensions to set.
@@ -585,6 +630,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @param value The dimensions to add.
      * @return This builder for chaining.
@@ -598,6 +648,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @param values The dimensions to add.
      * @return This builder for chaining.
@@ -612,6 +667,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Positive extents, one per rank; their product (one for rank 0) is how many
+     * elements there are, and an array not filling them is rejected.
+     * </pre>
+     *
      * <code>repeated int64 dimensions = 1 [json_name = "dimensions"];</code>
      * @return This builder for chaining.
      */
@@ -635,6 +695,10 @@ private static final long serialVersionUID = 0L;
         org.openmbee.opensysml.proto.Value, org.openmbee.opensysml.proto.Value.Builder, org.openmbee.opensysml.proto.ValueOrBuilder> elementsBuilder_;
 
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Value> getElementsList() {
@@ -645,6 +709,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public int getElementsCount() {
@@ -655,6 +723,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public org.openmbee.opensysml.proto.Value getElements(int index) {
@@ -665,6 +737,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder setElements(
@@ -682,6 +758,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder setElements(
@@ -696,6 +776,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder addElements(org.openmbee.opensysml.proto.Value value) {
@@ -712,6 +796,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder addElements(
@@ -729,6 +817,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder addElements(
@@ -743,6 +835,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder addElements(
@@ -757,6 +853,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder addAllElements(
@@ -772,6 +872,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder clearElements() {
@@ -785,6 +889,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public Builder removeElements(int index) {
@@ -798,6 +906,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder getElementsBuilder(
@@ -805,6 +917,10 @@ private static final long serialVersionUID = 0L;
       return internalGetElementsFieldBuilder().getBuilder(index);
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public org.openmbee.opensysml.proto.ValueOrBuilder getElementsOrBuilder(
@@ -815,6 +931,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public java.util.List<? extends org.openmbee.opensysml.proto.ValueOrBuilder> 
@@ -826,6 +946,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder addElementsBuilder() {
@@ -833,6 +957,10 @@ private static final long serialVersionUID = 0L;
           org.openmbee.opensysml.proto.Value.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder addElementsBuilder(
@@ -841,6 +969,10 @@ private static final long serialVersionUID = 0L;
           index, org.openmbee.opensysml.proto.Value.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Any Value each, so an array of quantities or of arrays crosses as such.
+     * </pre>
+     *
      * <code>repeated .sysml.Value elements = 2 [json_name = "elements"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Value.Builder> 

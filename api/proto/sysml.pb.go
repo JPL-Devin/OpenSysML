@@ -3829,17 +3829,15 @@ func (*Value_Vector) isValue_Kind() {}
 
 func (*Value_VectorQuantity) isValue_Kind() {}
 
-// Array is a Collections::Array: its dimensions and its elements flattened in
-// row-major order (the last index varies fastest). Its rank is the number of
-// dimensions and its flattened size their product, one for an array of rank 0;
-// the elements number exactly that. Every dimension is positive. An element is
-// any Value, so an array of quantities or of arrays crosses as such. An array
-// is compared by content, so the object it may have been read from is not part
-// of the value and does not cross.
+// Array is a Collections::Array: its elements flattened in row-major order
+// under its dimensions, compared by content rather than by the object read.
 type Array struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Dimensions    []int64                `protobuf:"varint,1,rep,packed,name=dimensions,proto3" json:"dimensions,omitempty"`
-	Elements      []*Value               `protobuf:"bytes,2,rep,name=elements,proto3" json:"elements,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Positive extents, one per rank; their product (one for rank 0) is how many
+	// elements there are, and an array not filling them is rejected.
+	Dimensions []int64 `protobuf:"varint,1,rep,packed,name=dimensions,proto3" json:"dimensions,omitempty"`
+	// Any Value each, so an array of quantities or of arrays crosses as such.
+	Elements      []*Value `protobuf:"bytes,2,rep,name=elements,proto3" json:"elements,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3888,13 +3886,13 @@ func (x *Array) GetElements() []*Value {
 	return nil
 }
 
-// Vector is a VectorValues::NumericalVectorValue: its components in order, its
-// dimension their number. Each component is a Value holding an int_value or a
-// real_value, keeping Integer and Real apart as the rest of Value does; a
-// component of any other arm is rejected rather than read as a number.
+// Vector is a VectorValues::NumericalVectorValue: its components in order,
+// its dimension their number.
 type Vector struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Components    []*Value               `protobuf:"bytes,1,rep,name=components,proto3" json:"components,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Each an int_value or a real_value, kept apart as the rest of Value does;
+	// a component of any other arm is rejected rather than read as a number.
+	Components    []*Value `protobuf:"bytes,1,rep,name=components,proto3" json:"components,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3937,14 +3935,12 @@ func (x *Vector) GetComponents() []*Value {
 }
 
 // VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
-// each carrying its magnitude, the unit as written and that unit's reduction
-// exactly as a scalar Quantity does. The axes are usually in one unit but need
-// not be (`⟨1.0 [m], 2.0 [rad]⟩`), so the unit travels per component; a
-// component whose named unit lacks its unit_term is rejected as a Quantity's
-// is. A vector quantity has at least one component (its num is Number[1..*]).
+// unit and reduction included, since the axes need not share a unit.
 type VectorQuantity struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Components    []*Quantity            `protobuf:"bytes,1,rep,name=components,proto3" json:"components,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// At least one (num is Number[1..*]); a named unit sent without its
+	// unit_term is rejected as a Quantity's is.
+	Components    []*Quantity `protobuf:"bytes,1,rep,name=components,proto3" json:"components,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

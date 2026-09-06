@@ -7,10 +7,8 @@ package org.openmbee.opensysml.proto;
 
 /**
  * <pre>
- * Vector is a VectorValues::NumericalVectorValue: its components in order, its
- * dimension their number. Each component is a Value holding an int_value or a
- * real_value, keeping Integer and Real apart as the rest of Value does; a
- * component of any other arm is rejected rather than read as a number.
+ * Vector is a VectorValues::NumericalVectorValue: its components in order,
+ * its dimension their number.
  * </pre>
  *
  * Protobuf type {@code sysml.Vector}
@@ -55,6 +53,11 @@ private static final long serialVersionUID = 0L;
   @SuppressWarnings("serial")
   private java.util.List<org.openmbee.opensysml.proto.Value> components_;
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -62,6 +65,11 @@ private static final long serialVersionUID = 0L;
     return components_;
   }
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -70,6 +78,11 @@ private static final long serialVersionUID = 0L;
     return components_;
   }
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -77,6 +90,11 @@ private static final long serialVersionUID = 0L;
     return components_.size();
   }
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -84,6 +102,11 @@ private static final long serialVersionUID = 0L;
     return components_.get(index);
   }
   /**
+   * <pre>
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   * </pre>
+   *
    * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
    */
   @java.lang.Override
@@ -253,10 +276,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Vector is a VectorValues::NumericalVectorValue: its components in order, its
-   * dimension their number. Each component is a Value holding an int_value or a
-   * real_value, keeping Integer and Real apart as the rest of Value does; a
-   * component of any other arm is rejected rather than read as a number.
+   * Vector is a VectorValues::NumericalVectorValue: its components in order,
+   * its dimension their number.
    * </pre>
    *
    * Protobuf type {@code sysml.Vector}
@@ -454,6 +475,11 @@ private static final long serialVersionUID = 0L;
         org.openmbee.opensysml.proto.Value, org.openmbee.opensysml.proto.Value.Builder, org.openmbee.opensysml.proto.ValueOrBuilder> componentsBuilder_;
 
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Value> getComponentsList() {
@@ -464,6 +490,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public int getComponentsCount() {
@@ -474,6 +505,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Value getComponents(int index) {
@@ -484,6 +520,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder setComponents(
@@ -501,6 +542,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder setComponents(
@@ -515,6 +561,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(org.openmbee.opensysml.proto.Value value) {
@@ -531,6 +582,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -548,6 +604,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -562,6 +623,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder addComponents(
@@ -576,6 +642,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder addAllComponents(
@@ -591,6 +662,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder clearComponents() {
@@ -604,6 +680,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public Builder removeComponents(int index) {
@@ -617,6 +698,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder getComponentsBuilder(
@@ -624,6 +710,11 @@ private static final long serialVersionUID = 0L;
       return internalGetComponentsFieldBuilder().getBuilder(index);
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.ValueOrBuilder getComponentsOrBuilder(
@@ -634,6 +725,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public java.util.List<? extends org.openmbee.opensysml.proto.ValueOrBuilder> 
@@ -645,6 +741,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder addComponentsBuilder() {
@@ -652,6 +753,11 @@ private static final long serialVersionUID = 0L;
           org.openmbee.opensysml.proto.Value.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public org.openmbee.opensysml.proto.Value.Builder addComponentsBuilder(
@@ -660,6 +766,11 @@ private static final long serialVersionUID = 0L;
           index, org.openmbee.opensysml.proto.Value.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Each an int_value or a real_value, kept apart as the rest of Value does;
+     * a component of any other arm is rejected rather than read as a number.
+     * </pre>
+     *
      * <code>repeated .sysml.Value components = 1 [json_name = "components"];</code>
      */
     public java.util.List<org.openmbee.opensysml.proto.Value.Builder> 

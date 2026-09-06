@@ -1917,23 +1917,23 @@ export const ValueSchema: GenMessage<Value> = /*@__PURE__*/
   messageDesc(file_sysml, 44);
 
 /**
- * Array is a Collections::Array: its dimensions and its elements flattened in
- * row-major order (the last index varies fastest). Its rank is the number of
- * dimensions and its flattened size their product, one for an array of rank 0;
- * the elements number exactly that. Every dimension is positive. An element is
- * any Value, so an array of quantities or of arrays crosses as such. An array
- * is compared by content, so the object it may have been read from is not part
- * of the value and does not cross.
+ * Array is a Collections::Array: its elements flattened in row-major order
+ * under its dimensions, compared by content rather than by the object read.
  *
  * @generated from message sysml.Array
  */
 export type Array = Message<"sysml.Array"> & {
   /**
+   * Positive extents, one per rank; their product (one for rank 0) is how many
+   * elements there are, and an array not filling them is rejected.
+   *
    * @generated from field: repeated int64 dimensions = 1;
    */
   dimensions: bigint[];
 
   /**
+   * Any Value each, so an array of quantities or of arrays crosses as such.
+   *
    * @generated from field: repeated sysml.Value elements = 2;
    */
   elements: Value[];
@@ -1947,15 +1947,16 @@ export const ArraySchema: GenMessage<Array> = /*@__PURE__*/
   messageDesc(file_sysml, 45);
 
 /**
- * Vector is a VectorValues::NumericalVectorValue: its components in order, its
- * dimension their number. Each component is a Value holding an int_value or a
- * real_value, keeping Integer and Real apart as the rest of Value does; a
- * component of any other arm is rejected rather than read as a number.
+ * Vector is a VectorValues::NumericalVectorValue: its components in order,
+ * its dimension their number.
  *
  * @generated from message sysml.Vector
  */
 export type Vector = Message<"sysml.Vector"> & {
   /**
+   * Each an int_value or a real_value, kept apart as the rest of Value does;
+   * a component of any other arm is rejected rather than read as a number.
+   *
    * @generated from field: repeated sysml.Value components = 1;
    */
   components: Value[];
@@ -1970,16 +1971,15 @@ export const VectorSchema: GenMessage<Vector> = /*@__PURE__*/
 
 /**
  * VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
- * each carrying its magnitude, the unit as written and that unit's reduction
- * exactly as a scalar Quantity does. The axes are usually in one unit but need
- * not be (`⟨1.0 [m], 2.0 [rad]⟩`), so the unit travels per component; a
- * component whose named unit lacks its unit_term is rejected as a Quantity's
- * is. A vector quantity has at least one component (its num is Number[1..*]).
+ * unit and reduction included, since the axes need not share a unit.
  *
  * @generated from message sysml.VectorQuantity
  */
 export type VectorQuantity = Message<"sysml.VectorQuantity"> & {
   /**
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   *
    * @generated from field: repeated sysml.Quantity components = 1;
    */
   components: Quantity[];

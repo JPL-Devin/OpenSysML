@@ -11,24 +11,49 @@ public interface VectorQuantityOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   java.util.List<org.openmbee.opensysml.proto.Quantity> 
       getComponentsList();
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   org.openmbee.opensysml.proto.Quantity getComponents(int index);
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   int getComponentsCount();
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   java.util.List<? extends org.openmbee.opensysml.proto.QuantityOrBuilder> 
       getComponentsOrBuilderList();
   /**
+   * <pre>
+   * At least one (num is Number[1..*]); a named unit sent without its
+   * unit_term is rejected as a Quantity's is.
+   * </pre>
+   *
    * <code>repeated .sysml.Quantity components = 1 [json_name = "components"];</code>
    */
   org.openmbee.opensysml.proto.QuantityOrBuilder getComponentsOrBuilder(
