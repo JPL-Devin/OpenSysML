@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -162,6 +163,17 @@ func TestExposedElementsInheritedExposeSatisfiesDerivedConditions(t *testing.T) 
 	wantNames(t, "exposed set of Safe", exposedNames(t, m, sym(t, root, "Safe")), []string{"A", "C"})
 	wantNames(t, "exposed set of sr", exposedNames(t, m, sym(t, root, "sr")), []string{"C"})
 	wantNames(t, "exposed set of srr", exposedNames(t, m, sym(t, root, "srr")), []string{"C"})
+
+	// Name lookup in the narrower view agrees with its exposed set.
+	sr := sym(t, root, "sr")
+	for _, name := range []string{"A", "B"} {
+		if _, ok := m.resolver.ResolveName(sr.Scope, name, &ast.QualifiedName{Parts: []ast.NameSegment{{Text: name}}}); ok {
+			t.Errorf("%s resolves in sr, which its filter rejects", name)
+		}
+	}
+	if _, ok := m.resolver.ResolveName(sr.Scope, "C", &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "C"}}}); !ok {
+		t.Error("C does not resolve in sr, which its inherited expose admits")
+	}
 }
 
 // A view exposing nothing has an empty exposed set, which is no error.
