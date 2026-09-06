@@ -372,7 +372,7 @@ func (ctx *Context) CaseConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) 
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	var out []Condition
+	out := ctx.appendResultConflict(nil, sym, true)
 	for _, member := range ctx.chainMembers(sym, scope) {
 		// A case's own steps are its procedure, not a statement its conditions miss.
 		if _, step := statementKeyword(member.node); step {

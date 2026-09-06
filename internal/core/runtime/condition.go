@@ -115,13 +115,7 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 // an anonymous one, which no name can redefine, is always inherited.
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
-	if conflict := ctx.model.ResultExpressionConflict(sym); conflict != nil {
-		scope := sym.Scope
-		if scope == nil {
-			scope = sym.OwnerScope
-		}
-		out = append(out, Condition{Conflict: conflict, Scope: scope, Required: required})
-	}
+	out = ctx.appendResultConflict(out, sym, required)
 	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
 		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
@@ -135,6 +129,20 @@ func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol,
 		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
+}
+
+// appendResultConflict appends the marker for a second owned or inherited result
+// expression of sym, which no body of the runtime's choosing may stand in for.
+func (ctx *Context) appendResultConflict(out []Condition, sym *symbols.Symbol, required bool) []Condition {
+	conflict := ctx.model.ResultExpressionConflict(sym)
+	if conflict == nil {
+		return out
+	}
+	scope := sym.Scope
+	if scope == nil {
+		scope = sym.OwnerScope
+	}
+	return append(out, Condition{Conflict: conflict, Scope: scope, Required: required})
 }
 
 // namedConstraintOf returns the constraint usage a require/assume constraint

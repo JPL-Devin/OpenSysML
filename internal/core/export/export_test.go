@@ -122,20 +122,26 @@ func TestRoundTripIsLossless(t *testing.T) {
 				}
 				return
 			}
-			structuralRoundTrip(t, name, first)
+			structuralRoundTrip(t, name+ext, first)
 		})
 	}
 }
 
 // structuralRoundTrip strips the source text from a graph and requires the
 // structure alone to carry it to notation and back; it returns that notation.
+// name may carry the notation's extension; a bare name reads as SysML.
 func structuralRoundTrip(t *testing.T, name string, first []byte) []byte {
 	t.Helper()
+	ext := filepath.Ext(name)
+	if ext == "" {
+		ext = ".sysml"
+	}
+	name = strings.TrimSuffix(name, ext)
 	fromGraph, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the mapping alone: %v", err)
 	}
-	again, err := export.Convert(name+".sysml", fromGraph, export.FormatSysML, export.FormatTurtle)
+	again, err := export.Convert(name+ext, fromGraph, export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle again from the mapping alone: %v", err)
 	}
@@ -3118,6 +3124,100 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 		"part unresolved : Elsewhere::Missing;",
 		"public import Meta::* [(@ Safety)];",
 		"attribute other : Tagged;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// The pilot corpora's three `connector <end> to <end>;` shapes (KerML.xtext:836)
+// declare no name: the graph relates the ends' features and writes them back alone.
+func TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText(t *testing.T) {
+	src := `package Corpus {
+	class V6Engine;
+	class FuelTank;
+	class A { feature x; }
+	class B;
+	class Vehicle {
+		feature eng : V6Engine;
+		feature tanks : FuelTank { feature main1 : FuelTank; }
+		feature a : A;
+		feature b : B;
+		feature transitionLink[0..1];
+		feature trigger[1..*];
+		connector eng to tanks.main1;
+		connector a ::> a.x to b;
+		private connector [0..1] transitionLink to [1..*] trigger;
+	}
+}
+`
+	turtle, err := export.Convert("corpus.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, want := range []string{
+		"sysx:relatedFeature expr:Corpus__Vehicle___406_pend0, expr:Corpus__Vehicle___406_pend1 ;",
+		"expr:Corpus__Vehicle___406_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"eng\" ;\n    sysml:elementId \"Corpus__Vehicle___406_pend0\" ;\n    sysml:referent elmt:Corpus__Vehicle__eng ;",
+		"expr:Corpus__Vehicle___407_pend0\n    a sysml:FeatureChainExpression ;\n    sysx:sourceText \"a.x\" ;",
+		"sysml:targetFeature elmt:Corpus__A__x ;\n    sysx:endIndex \"0\"^^xsd:integer ;\n    sysx:endName \"a\" .",
+		"sysml:referent elmt:Corpus__Vehicle__transitionLink ;\n    sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:Corpus__Vehicle___408_pend0_plowerBound ;",
+	} {
+		if !strings.Contains(graph, want) {
+			t.Errorf("the graph should carry %q\n%s", want, graph)
+		}
+	}
+	for _, name := range []string{"eng", "a", "transitionLink"} {
+		if strings.Contains(graph, "elmt:Corpus__Vehicle__"+name+"\n    a sysml:ConnectorAsUsage ;") {
+			t.Errorf("the connector took the end %s as its name\n%s", name, graph)
+		}
+	}
+	back := string(structuralRoundTrip(t, "corpus.kerml", turtle))
+	for _, want := range []string{
+		"connector eng to tanks.main1;",
+		"connector a ::> a.x to b;",
+		"private connector [0..1] transitionLink to [1..*] trigger;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// A comment in a head spelling a verb (`connect /* from */ a to b`) is not the
+// verb: the head's form is read from its tokens, so the graph still states it.
+func TestEndVerbsInCommentsAreNotVerbs(t *testing.T) {
+	src := `package Comments {
+	class T { feature eng; feature t; feature u; }
+	class V :> T {
+		connector /* from */ eng to t;
+		connector /* ( */ [1] eng to /* allocate */ [0..1] u;
+		connector link /* to */ from eng to u;
+	}
+	part def P { part a; part b; part c; }
+	part p : P {
+		connect /* from */ a to b;
+		connect /* ( */ (a, b, c);
+		binding /* of */ bind a = b;
+	}
+}
+`
+	turtle, err := export.Convert("comments.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if n := strings.Count(string(turtle), "sysx:endForm "); n != 6 {
+		t.Errorf("the graph should state all 6 heads' forms, got %d\n%s", n, turtle)
+	}
+	back := backFromTheGraphAlone(t, string(turtle))
+	for _, want := range []string{
+		"connector eng to t;",
+		"connector [1] eng to [0..1] u;",
+		"connector link from eng to u;",
+		"connect a to b;",
+		"connect (a, b, c);",
+		"binding bind a = b;",
 	} {
 		if !strings.Contains(back, want) {
 			t.Errorf("the notation should read %q\n%s", want, back)

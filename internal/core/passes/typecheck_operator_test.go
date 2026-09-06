@@ -306,3 +306,246 @@ func TestQuantityUnitInEveryExpressionPosition(t *testing.T) {
 		"21:48 found Natural",
 	)
 }
+
+// A filter condition and a multiplicity bound are judged by rules of their own,
+// yet the operators they write get the operator rules too, once each. The pinned
+// pilot warns at the same positions in the filter conditions.
+func TestOperatorRulesInFilterConditions(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C;
+	package Q1 { filter (1 as C) == 1; }
+	package Q2 { filter (1 as Integer) == 1; }
+	package Q3 { filter (1, 2)[1] == 1; }
+	package Q4 { private import Q1::*[(1 as C) == 1]; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:23 cast argument is typed by Integer, unrelated to the target C",
+		"7:37 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.kerml", codeBracketOperator, kerml, "6:22 `x[i]` is not an index in KerML")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C;
+	package Q1 { filter (1 as C) == 1; }
+	package Q2 { filter (1 as Integer) == 1; }
+}`, "4:23 cast argument is typed by Integer, unrelated to the target C")
+}
+
+func TestOperatorRulesInMultiplicityBounds(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	feature n : Integer;
+	feature a : K[((1 as C) as Integer)..(2 as Integer)];
+	feature b : K[n..((n as C) as Natural)];
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"5:17 cast argument is typed by C, unrelated to the target Integer",
+		"5:18 cast argument is typed by Integer, unrelated to the target C",
+		"6:20 cast argument is typed by C, unrelated to the target Natural",
+		"6:21 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	part a : K[((1 as C) as Integer)..(2 as Integer)];
+}`,
+		"4:14 cast argument is typed by C, unrelated to the target Integer",
+		"4:15 cast argument is typed by Integer, unrelated to the target C")
+}
+
+// A calculation or constraint usage named as a value is typed by its definition,
+// not by its result, so casting it to the result's type warns, as the pilot
+// warns; its invocation and its result parameter are typed by the result.
+func TestCastConformanceOfCalculationUsages(t *testing.T) {
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	calc def Name { return : String; }
+	calc def Count { return : Integer; }
+	calc def NameSub :> Name;
+	constraint def K;
+	part def PD {
+		calc n : Name; calc c : Count; calc ns : NameSub; constraint k : K;
+		attribute a1 = n as String;
+		attribute a2 = c as String;
+		attribute a3 = ns as String;
+		attribute a4 = n() as String;
+		attribute a5 = c() as String;
+		attribute a6 = Name() as Integer;
+		attribute a7 = k as Boolean;
+		attribute a8 = k() as Boolean;
+		attribute b1 = n.result as String;
+		attribute b2 = ns.result as String;
+		attribute b3 = ns() as String;
+		attribute b4 = NameSub() as String;
+	}
+	calc def Wrap1 { return : String; calc n : Name; n as String }
+	calc def Wrap2 { return : String; calc n : Name; n.result as String }
+	calc def Wrap3 { return : String; result as String }
+}`,
+		"9:18 cast argument is typed by Name, unrelated to the target String",
+		"10:18 cast argument is typed by Count, unrelated to the target String",
+		"11:18 cast argument is typed by NameSub, unrelated to the target String",
+		"13:18 cast argument is typed by Integer, unrelated to the target String",
+		"14:18 cast argument is typed by String, unrelated to the target Integer",
+		"15:18 cast argument is typed by K, unrelated to the target Boolean",
+		"22:51 cast argument is typed by Name, unrelated to the target String",
+	)
+}
+
+// A bound's operators are judged by the type tier, so an unrelated type error
+// elsewhere in the document does not silence them.
+func TestOperatorRulesInMultiplicityBoundsSurviveUnrelatedErrors(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	feature bad : Integer = "s";
+	feature a : K[0..(2 as C)];
+}`
+	root := parser.New(source.New("a.kerml", []byte(kerml))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument("a.kerml", root)
+	idx.ExpandWildcardImports()
+	var errs, casts int
+	for _, d := range Analyze("a.kerml", root, nil, idx) {
+		switch {
+		case d.Code == codeCastConformance:
+			casts++
+		case d.Severity == SeverityError:
+			errs++
+		}
+	}
+	if errs != 1 || casts != 1 {
+		t.Fatalf("want the binding error and the bound's cast warning, got %d errors and %d cast warnings", errs, casts)
+	}
+}
+
+// The members an expression body declares are reached wherever the body is
+// written: in a filter condition, a bound or an ordinary value, once each.
+func TestOperatorRulesInBodyMembers(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	package Q1 { filter { feature m = 1 as C; m == 1 }; }
+	feature a : K[0..{ feature m = 2 as C; m }];
+	feature v = { feature m = 3 as C; feature n { feature o = 4 as C; } m };
+	package Q2 { filter { in x; feature m = { 5 as C }; m == x }; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:36 cast argument is typed by Integer, unrelated to the target C",
+		"5:33 cast argument is typed by Integer, unrelated to the target C",
+		"6:28 cast argument is typed by Integer, unrelated to the target C",
+		"6:60 cast argument is typed by Integer, unrelated to the target C",
+		"7:44 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	package Q1 { filter { attribute m = 1 as C; m == 1 }; }
+	part a : K[0..{ attribute m = 2 as C; m }];
+}`,
+		"4:38 cast argument is typed by Integer, unrelated to the target C",
+		"5:32 cast argument is typed by Integer, unrelated to the target C")
+}
+
+// Every multiplicity the notation writes is reached once by the operator rules:
+// a multiplicity declaration's range, a body parameter's bound (in a value, a
+// select, a collect or a filter body), a cast's, a definition's, a connector
+// end's, a subject's, an assume/require's and a cross feature's.
+func TestOperatorRulesInEveryMultiplicityForm(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K;
+	multiplicity m [0..(2 as C)];
+	feature f = { in x : Integer[0..(3 as C)]; x };
+	feature g = (as K[0..(4 as C)]);
+	class D [0..(5 as C)];
+	connector c from [0..(6 as C)] f to [0..(7 as C)] g;
+	feature n : Natural;
+	feature i : K { multiplicity mm [0..(8 as C)]; }
+	feature j = f.?{ in y : Integer[0..(10 as C)]; y == 1 };
+	feature k = f.{ in w : Integer[0..(11 as C)]; w };
+	multiplicity m2 [0..n[1]];
+	feature f2 = { in x : Integer[0..n[2]]; x };
+	feature g2 = (as K[0..n[3]]);
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:22 cast argument is typed by Integer, unrelated to the target C",
+		"5:35 cast argument is typed by Integer, unrelated to the target C",
+		"6:24 cast argument is typed by Integer, unrelated to the target C",
+		"7:15 cast argument is typed by Integer, unrelated to the target C",
+		"8:24 cast argument is typed by Integer, unrelated to the target C",
+		"8:43 cast argument is typed by Integer, unrelated to the target C",
+		"10:39 cast argument is typed by Integer, unrelated to the target C",
+		"11:38 cast argument is typed by Integer, unrelated to the target C",
+		"12:37 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.kerml", codeBracketOperator, kerml,
+		"13:22 `x[i]` is not an index in KerML",
+		"14:35 `x[i]` is not an index in KerML",
+		"15:24 `x[i]` is not an index in KerML")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	part a : K; part b : K;
+	connection cn connect [0..(2 as C)] a to [0..(3 as C)] b;
+	bind [0..(4 as C)] a = b;
+	requirement def D { subject s : K[0..(5 as C)]; }
+	requirement def R { assume constraint ac [0..(6 as C)] { true } require constraint rc [0..(7 as C)] { true } }
+	part e : K[0..(8 as C)] { attribute q = { in v : Integer[0..(9 as C)]; v }; }
+	connection def CD { end e1 [0..(10 as C)] feature x : K; end e2 : K; }
+	package Q { filter { in z : Integer[0..(11 as C)]; z == 1 }; }
+}`,
+		"5:29 cast argument is typed by Integer, unrelated to the target C",
+		"5:48 cast argument is typed by Integer, unrelated to the target C",
+		"6:12 cast argument is typed by Integer, unrelated to the target C",
+		"7:40 cast argument is typed by Integer, unrelated to the target C",
+		"8:48 cast argument is typed by Integer, unrelated to the target C",
+		"8:93 cast argument is typed by Integer, unrelated to the target C",
+		"9:17 cast argument is typed by Integer, unrelated to the target C",
+		"9:63 cast argument is typed by Integer, unrelated to the target C",
+		"10:34 cast argument is typed by Integer, unrelated to the target C",
+		"11:42 cast argument is typed by Integer, unrelated to the target C")
+}
+
+// Multiplicity and relationship bodies are reached wherever they sit — top level, feature,
+// value or filter body, under a definition or package — once each, in their own scope.
+func TestOperatorRulesInMultiplicityAndRelationshipBodies(t *testing.T) {
+	kerml := `package P {
+	private import ScalarValues::*;
+	datatype C; classifier K; classifier K2 :> K;
+	multiplicity m [0..3] { feature f : K[0..(1 as C)]; feature g : Integer = 2 as C; }
+	specialization s subtype K2 :> K { feature h : K[0..(3 as C)]; feature i : Integer = 4 as C; }
+	feature outer : K { specialization subtype K2 :> K { feature j : K[0..(5 as C)]; } }
+	feature v = { feature x { multiplicity mm [0..(6 as C)] { feature q : K[0..(7 as C)]; } specialization subtype K2 :> K { feature r : K[0..(8 as C)]; } } 1 };
+	package Q { filter { feature y { multiplicity mn [0..3] { feature t : K[0..(9 as C)]; } specialization subtype K2 :> K { feature w : K[0..(10 as C)]; } } 1 == 1 }; }
+	multiplicity ok [0..3] { feature f : K[0..(1 as Integer)]; feature g : Integer = 2 as Integer; }
+	package R1 { filter { classifier D [0..(1 as C)] { feature f : K[0..(2 as C)]; multiplicity m [0..3] { feature g : Integer = 3 as C; } } 1 == 1 }; }
+	package R2 { filter { struct S { package N { feature f : K[0..(4 as C)]; } specialization subtype K2 :> K { struct T { feature h : K[0..(5 as C)]; } } } 1 == 1 }; }
+}`
+	wantOperatorDiags(t, "a.kerml", codeCastConformance, kerml,
+		"4:44 cast argument is typed by Integer, unrelated to the target C",
+		"4:76 cast argument is typed by Integer, unrelated to the target C",
+		"5:55 cast argument is typed by Integer, unrelated to the target C",
+		"5:87 cast argument is typed by Integer, unrelated to the target C",
+		"6:73 cast argument is typed by Integer, unrelated to the target C",
+		"7:49 cast argument is typed by Integer, unrelated to the target C",
+		"7:78 cast argument is typed by Integer, unrelated to the target C",
+		"7:141 cast argument is typed by Integer, unrelated to the target C",
+		"8:78 cast argument is typed by Integer, unrelated to the target C",
+		"8:141 cast argument is typed by Integer, unrelated to the target C",
+		"10:42 cast argument is typed by Integer, unrelated to the target C",
+		"10:71 cast argument is typed by Integer, unrelated to the target C",
+		"10:127 cast argument is typed by Integer, unrelated to the target C",
+		"11:65 cast argument is typed by Integer, unrelated to the target C",
+		"11:139 cast argument is typed by Integer, unrelated to the target C")
+	wantOperatorDiags(t, "a.sysml", codeCastConformance, `package P {
+	private import ScalarValues::*;
+	attribute def C; part def K;
+	multiplicity m [0..3] { attribute f : K[0..(1 as C)]; attribute g : Integer = 2 as C; }
+	part v : K { multiplicity mm [0..3] { attribute q : K[0..(3 as C)]; } }
+	package R { filter { part x { part def D { part f : K[0..(4 as C)]; multiplicity m [0..3] { part g : K[0..(5 as C)]; } } } 1 == 1 }; }
+}`,
+		"4:46 cast argument is typed by Integer, unrelated to the target C",
+		"4:80 cast argument is typed by Integer, unrelated to the target C",
+		"5:60 cast argument is typed by Integer, unrelated to the target C",
+		"6:60 cast argument is typed by Integer, unrelated to the target C",
+		"6:109 cast argument is typed by Integer, unrelated to the target C")
+}

@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 258,
-        "digest": "sha256:99e4ad1a9612deaa8beed90d0aefa443c4c007ac92e3c3734f5888e67ecb5f8c"
+        "files": 257,
+        "digest": "sha256:24d4bf1d98fdd0c94c23ba724f7a041fcd7b346d6990ce28346a2173f687902c"
       }
     ],
-    "recorded": "2026-09-06"
+    "recorded": "2026-09-05"
   },
   "totals": {
-    "cases": 258,
-    "bothReject": 249,
+    "cases": 257,
+    "bothReject": 248,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 126,
-      "bothReject": 117,
+      "cases": 125,
+      "bothReject": 116,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -1540,6 +1540,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k53-boolean-expression-subsets-datatype.kerml",
+      "source": "semantic",
+      "rule": "a boolean expression is a feature, so what it subsets must be a feature, not a data type (KerML 8.3.3.3 Subsetting::subsettedFeature is typed Feature and 8.3.4.8 BooleanExpression is an Expression, hence a Step and a Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'D'` — because that position admits only Features, exactly as for `feature f :\u003e D`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2083,24 +2092,6 @@
       "pilotErrors": 3
     },
     {
-      "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
-      "source": "semantic",
-      "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
-    },
-    {
-      "path": "semantic/s90-requirement-def-inherits-two-subjects.sysml",
-      "source": "semantic",
-      "rule": "A requirement definition inheriting a subject from each of two generals has two subjects (SysML 7.20 Requirements; pilot validateRequirementDefinitionOnlyOneSubject).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
-    },
-    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2475,8 +2466,8 @@
       }
     ],
     "totals": {
-      "cases": 258,
-      "bothReject": 249,
+      "cases": 257,
+      "bothReject": 248,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

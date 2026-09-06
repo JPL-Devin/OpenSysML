@@ -132,9 +132,12 @@ func doc() usage.Doc {
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html", ""),
 				usage.Ex("sysml model.sysml -render-documents rendered", "every document, linked"),
 				usage.Ex("sysml model.sysml -render-documents site -doc-form html -html-css theme.css", ""),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -html-theme report -o report.html", "a bundled theme"),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -html-mermaid cdn -o report.html", "diagrams drawn in the browser"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf "+
 					"-pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf", ""),
 				usage.Ex("sysml -html-default-css -o sysml-document.css", "the default stylesheet"),
+				usage.Ex("sysml -html-default-css -html-theme modern -o modern.css", "a theme's full sheet"),
 			},
 			Paragraphs: []string{
 				"A document is a part def specializing DocumentQueries::Document. Its " +
@@ -149,11 +152,14 @@ func doc() usage.Doc {
 					"with mermaid-cli (mmdc). None of these tools is needed until PDF " +
 					"output is asked for; scripts/download-doc-pdf-toolchain.sh " +
 					"provisions pinned copies.",
-				"HTML output needs nothing external and loads nothing: -html-css adds " +
+				"HTML output needs nothing external and loads nothing by default: -html-theme " +
+					"picks one of the bundled looks (default, modern, print, report), -html-css adds " +
 					"your own stylesheets, -html-no-default-css drops the default one, " +
 					"-html-fragment writes the document element alone to embed in a " +
 					"page of yours, and -html-default-css writes the default sheet out " +
-					"to start from.",
+					"— or, with -html-theme, a theme's whole sheet — to start from. Diagrams are written as Mermaid source; -html-mermaid " +
+					"cdn has the page load a pinned Mermaid release from jsDelivr so a " +
+					"browser draws them, or names a URL of your own to load it from.",
 			},
 		}, {
 			Title: "Flag order",
@@ -263,9 +269,11 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&pdfTOC, "doc-toc", false, "Write a table of contents ahead of the content (-doc-form html or pdf)")
 	fs.BoolVar(&pdfNumbering, "doc-number-sections", false, "Number the section headings hierarchically (-doc-form html or pdf)")
 	fs.Var(&htmlCSS, "html-css", "Style the HTML with this stylesheet: a file is inlined, a URL is linked (repeatable, applied in order after the default sheet)")
+	fs.StringVar(&htmlTheme, "html-theme", "", "Style the HTML page with a bundled theme layered over the default stylesheet: default, modern, print or report (default: the default stylesheet alone)")
 	fs.BoolVar(&htmlNoCSS, "html-no-default-css", false, "Leave the default stylesheet out, so only -html-css sheets style the document")
 	fs.BoolVar(&htmlShowCSS, "html-default-css", false, "Write the default document stylesheet and exit, as a starting point for your own")
 	fs.BoolVar(&htmlFragment, "html-fragment", false, "Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own")
+	fs.StringVar(&htmlMermaid, "html-mermaid", "", "Have the HTML page load Mermaid to draw its diagrams: cdn loads a pinned release from jsDelivr, a URL loads the script it names (default: diagrams stay Mermaid source)")
 	fs.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
 	fs.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
 	fs.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")

@@ -172,10 +172,12 @@ reported, so a script that reads it takes the output from the first `{`.
 | `--doc-title-page` | | Put the document title on a page of its own (`--doc-form html` or `pdf`) |
 | `--doc-toc` | | Write a table of contents ahead of the content (`--doc-form html` or `pdf`) |
 | `--doc-number-sections` | | Number the section headings hierarchically (`--doc-form html` or `pdf`) |
+| `--html-theme <name>` | | Style the HTML page with a bundled theme layered over the default stylesheet: `default`, `modern`, `print` or `report` (default: the default stylesheet alone) |
 | `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined in a single page and written beside a set's pages, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
 | `--html-no-default-css` | | Leave the default stylesheet out, so only `--html-css` sheets style the document |
-| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own |
+| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own; with `--html-theme`, the theme's whole sheet |
 | `--html-fragment` | | Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own |
+| `--html-mermaid <cdn\|url>` | | Have the HTML page load Mermaid to draw its diagrams: `cdn` loads a pinned release from jsDelivr, a URL loads the script it names (default: diagrams stay Mermaid source) |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
 | `--pdf-title-page` | | Alias of `--doc-title-page` |
 | `--pdf-toc` | | Alias of `--doc-toc` |
@@ -357,8 +359,14 @@ view, kind and flow direction. Identifiers are anchors only, matching the Markdo
 `Ref` resolves within a page and across a rendered set.
 
 Diagram blocks embed their Mermaid source in `<pre class="mermaid">`, which a page that loads
-Mermaid renders as a diagram and any other page shows as source. The output loads nothing over the
-network, runs no JavaScript of its own, and is byte-identical between runs.
+Mermaid renders as a diagram and any other page shows as source. By default the output loads
+nothing over the network, runs no JavaScript of its own, and is byte-identical between runs.
+`-html-mermaid cdn` adds one `<script>` before `</body>` that loads a pinned Mermaid release from
+jsDelivr so a browser with network access draws the diagrams; `-html-mermaid <url>` loads the
+script from a URL of your own instead, such as a copy served beside the pages. The page still
+carries only the source, so it degrades to source wherever the script cannot load. The option
+does not combine with `-html-fragment`: a fragment has no page shell to hold the script, so the
+embedding page loads Mermaid itself.
 
 ### Styling the HTML
 
@@ -372,8 +380,10 @@ The default stylesheet is inlined in a standalone page and declared in a cascade
 Your own CSS is unlayered, so it wins on cascade origin rather than specificity — overriding a
 default needs neither `!important` nor a matching selector. Every default value comes from a
 `--sysml-*` custom property on `.sysml-document`, so retheming can be a handful of properties, and
-the renderer emits no `style` attributes to compete with. `-html-default-css` writes that sheet to
-copy from, `-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
+the renderer emits no `style` attributes to compete with. `-html-theme modern|print|report` layers
+a bundled theme over the default sheet, in the same layer, so your CSS still wins over both.
+`-html-default-css` writes that sheet to copy from (the theme's whole sheet with `-html-theme`),
+`-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
 `-html-no-default-css` drops it entirely. A `-render-documents` set writes one shared
 `sysml-document.css` that every page links, so the styling is edited in one place, and
 `-html-fragment` writes the `<article>` alone, with no page shell and no stylesheet, for embedding

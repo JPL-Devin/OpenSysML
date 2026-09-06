@@ -1,8 +1,9 @@
 package docrender
 
 import (
-	_ "embed" // for the //go:embed directive
+	"embed"
 	"html"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,45 @@ var defaultCSS string
 // DefaultStylesheet is the default document stylesheet: one cascade layer of
 // declarations, every value taken from a --sysml-* token on .sysml-document.
 func DefaultStylesheet() string { return defaultCSS }
+
+// themeFS holds the bundled themes, one <name>.css each, written against the
+// default sheet's tokens in its cascade layer.
+//
+//go:embed themes/*.css
+var themeFS embed.FS
+
+// DefaultTheme names the default stylesheet on its own.
+const DefaultTheme = "default"
+
+// Themes lists the bundled theme names, the default first and the rest sorted.
+func Themes() []string {
+	entries, err := themeFS.ReadDir("themes")
+	if err != nil {
+		panic("docrender: bundled themes unreadable: " + err.Error())
+	}
+	names := []string{DefaultTheme}
+	for _, entry := range entries {
+		names = append(names, strings.TrimSuffix(entry.Name(), ".css"))
+	}
+	sort.Strings(names[1:])
+	return names
+}
+
+// ThemeStylesheet is the default stylesheet followed by the named theme's
+// overrides in the same layer; empty or DefaultTheme is the default alone.
+func ThemeStylesheet(name string) (string, error) {
+	if name == "" || name == DefaultTheme {
+		return defaultCSS, nil
+	}
+	if strings.ContainsAny(name, "/\\.") {
+		return "", &Error{Kind: ErrorUnknownTheme, Actual: name}
+	}
+	overrides, err := themeFS.ReadFile("themes/" + name + ".css")
+	if err != nil {
+		return "", &Error{Kind: ErrorUnknownTheme, Actual: name}
+	}
+	return defaultCSS + "\n" + string(overrides), nil
+}
 
 // StylesheetFileName is the file a rendered document set links its shared
 // stylesheet from.
@@ -64,6 +104,10 @@ type HTMLOptions struct {
 	// NoDefaultStylesheet leaves the default stylesheet out.
 	NoDefaultStylesheet bool
 
+	// Theme names the bundled theme layered over the default stylesheet;
+	// empty is the default alone. Ignored with NoDefaultStylesheet.
+	Theme string
+
 	// Stylesheets are attached after the default one, unlayered, so their
 	// declarations win on cascade origin rather than on specificity.
 	Stylesheets []Stylesheet
@@ -79,7 +123,15 @@ type HTMLOptions struct {
 
 	// Lang is the page language, "en" when empty.
 	Lang string
+
+	// MermaidScript is the URL of a Mermaid script a standalone page loads to
+	// draw its diagrams; empty loads none, leaving each as source.
+	MermaidScript string
 }
+
+// MermaidScriptURL is the pinned Mermaid release a page loads from a public
+// CDN when a script is asked for by name rather than URL.
+const MermaidScriptURL = "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
 
 // HTML renders an evaluated document as deterministic, semantic HTML: an
 // <article> holding nested <section> elements, real tables with <caption> and
@@ -98,7 +150,14 @@ func HTML(document *docir.Document, opts HTMLOptions) (string, error) {
 			return "", err
 		}
 	}
-	w := &htmlWriter{opts: opts, ids: contentIDs(document)}
+	var base string
+	if !opts.NoDefaultStylesheet {
+		var err error
+		if base, err = ThemeStylesheet(opts.Theme); err != nil {
+			return "", err
+		}
+	}
+	w := &htmlWriter{opts: opts, base: base, ids: contentIDs(document)}
 	w.numbers = sectionNumbers(document.Content(), nil, "", map[string]string{})
 	if err := w.writeDocument(document); err != nil {
 		return "", err
@@ -125,6 +184,7 @@ func (s Stylesheet) check() error {
 type htmlWriter struct {
 	b       strings.Builder
 	opts    HTMLOptions
+	base    string
 	ids     map[string]string
 	numbers map[string]string
 }
@@ -145,6 +205,9 @@ func (w *htmlWriter) writeDocument(document *docir.Document) error {
 	}
 	w.b.WriteString("</article>\n")
 	if !w.opts.Fragment {
+		if w.opts.MermaidScript != "" {
+			w.b.WriteString("<script" + attr("src", w.opts.MermaidScript) + "></script>\n")
+		}
 		w.b.WriteString("</body>\n</html>\n")
 	}
 	return nil
@@ -162,7 +225,7 @@ func (w *htmlWriter) writeShellStart(title string) {
 	w.b.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	w.b.WriteString("<title>" + htmlText(title) + "</title>\n")
 	if !w.opts.NoDefaultStylesheet {
-		w.b.WriteString("<style>\n" + defaultCSS + "</style>\n")
+		w.b.WriteString("<style>\n" + w.base + "</style>\n")
 	}
 	for _, sheet := range w.opts.Stylesheets {
 		if sheet.Href != "" {
@@ -441,8 +504,8 @@ func (w *htmlWriter) writeDefinitions(node docir.Content, id string) {
 }
 
 // writeDiagram writes one diagram as a figure: a table-kind view as a table,
-// every other supported kind as Mermaid source, which renders as readable text
-// where no Mermaid renderer is loaded.
+// every other supported kind as Mermaid source, which a loaded Mermaid script
+// draws and any other page shows as readable text.
 func (w *htmlWriter) writeDiagram(node docir.Content, id string) error {
 	return w.writeFigure(id, node.Name(), node.Caption(), node.Rendering(), node.Direction())
 }

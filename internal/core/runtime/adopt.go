@@ -603,7 +603,8 @@ func (a *adoption) planHeld(owner string, id int64) error {
 }
 
 // rebind maps a symbol of the previous context to the one declaration of the
-// same qualified name and kind here, and records it for the values that name it.
+// same qualified name and kind here — as the scope tree the caller resolves in
+// declares it — and records it for the values that name it.
 func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, error) {
 	if sym == nil {
 		return nil, &AdoptError{Reason: what + " was never resolved"}
@@ -632,6 +633,7 @@ func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, er
 	if found == nil {
 		return nil, &AdoptError{Type: fqn, Reason: what + " is no longer declared"}
 	}
+	found = a.ctx.declaredSymbol(found)
 	a.rebound[sym] = found
 	return found, nil
 }

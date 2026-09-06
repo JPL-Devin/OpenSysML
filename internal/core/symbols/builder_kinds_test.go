@@ -88,6 +88,37 @@ func TestBuildConnectorEndsDefineNoSymbols(t *testing.T) {
 	}
 }
 
+// A KerML binary connector is named only ahead of `from` (KerML.xtext:836):
+// `connector eng to t;` adds no second `eng`, and `a ::> eng` is the connector's member.
+func TestBuildKerMLBinaryConnectorEndsStayOutOfTheFeaturingType(t *testing.T) {
+	root := parser.New(source.New("t.kerml", []byte(`package P {
+		class T {
+			feature eng; feature t; feature u;
+			connector eng to t;
+			connector a ::> eng to t;
+			connector [0..1] eng to [1..*] u;
+			connector c from eng to t;
+		}
+	}`))).ParseFile()
+	pkg := Build(root).LookupLocalAll("P")[0].Scope
+	typ := pkg.LookupLocalAll("T")[0].Scope
+	for _, name := range []string{"eng", "t", "u", "c"} {
+		if got := len(typ.LookupLocalAll(name)); got != 1 {
+			t.Errorf("T declares %d symbols named %q, want 1", got, name)
+		}
+	}
+	if got := typ.LookupLocalAll("a"); len(got) != 0 {
+		t.Errorf("the end name a leaked into T as %v", got)
+	}
+	var ends []*Symbol
+	for _, child := range typ.Children() {
+		ends = append(ends, child.LookupLocalAll("a")...)
+	}
+	if len(ends) != 1 || ends[0].Kind != SymbolConnectorEnd {
+		t.Fatalf("connector scopes declare %v for the end a, want one connectorEnd", ends)
+	}
+}
+
 // An entry/do/exit action a state declares by name is a feature of that state,
 // as the standard library's StateAction relies on, so it must be a member of
 // the state's scope and not disappear into the parser's entry/do/exit wrapper.

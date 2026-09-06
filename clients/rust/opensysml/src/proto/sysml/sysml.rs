@@ -728,7 +728,7 @@ pub struct AttributeInfo {
 /// Value represents a runtime-evaluable value
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Value {
-    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
+    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
     pub kind: ::core::option::Option<value::Kind>,
 }
 /// Nested message and enum types in `Value`.
@@ -763,7 +763,46 @@ pub mod value {
         /// one complex number, never two Reals
         #[prost(message, tag="11")]
         Complex(super::Complex),
+        /// shape and elements, never a flat sequence
+        #[prost(message, tag="12")]
+        Array(super::Array),
+        /// numeric components, never a sequence
+        #[prost(message, tag="13")]
+        Vector(super::Vector),
+        /// components each with their unit
+        #[prost(message, tag="14")]
+        VectorQuantity(super::VectorQuantity),
     }
+}
+/// Array is a Collections::Array: its elements flattened in row-major order
+/// under its dimensions, compared by content rather than by the object read.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Array {
+    /// Positive extents, one per rank; their product (one for rank 0) is how many
+    /// elements there are, and an array not filling them is rejected.
+    #[prost(int64, repeated, tag="1")]
+    pub dimensions: ::prost::alloc::vec::Vec<i64>,
+    /// Any Value each, so an array of quantities or of arrays crosses as such.
+    #[prost(message, repeated, tag="2")]
+    pub elements: ::prost::alloc::vec::Vec<Value>,
+}
+/// Vector is a VectorValues::NumericalVectorValue: its components in order,
+/// its dimension their number.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Vector {
+    /// Each an int_value or a real_value, kept apart as the rest of Value does;
+    /// a component of any other arm is rejected rather than read as a number.
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Value>,
+}
+/// VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
+/// unit and reduction included, since the axes need not share a unit.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VectorQuantity {
+    /// At least one (num is Number\[1..*\]); a named unit sent without its
+    /// unit_term is rejected as a Quantity's is.
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Quantity>,
 }
 /// Complex is one complex number in rectangular form. It crosses as one value
 /// so `1.0 + 2.0i` cannot be mistaken for a sequence of two Reals.
@@ -906,6 +945,13 @@ pub struct ServerInfoResponse {
     ///                   action input or calc argument is accepted; without it,
     ///                   one is refused with UNIMPLEMENTED rather than read as
     ///                   another value.
+    ///    "structured_values" - a Value carries a Collections::Array, a numerical
+    ///                   vector and a vector quantity as array, vector and
+    ///                   vector_quantity, shape and units intact, rather than
+    ///                   reporting them as unsupported nulls, and one is accepted
+    ///                   as an action input or calc argument; without it, one is
+    ///                   refused with UNIMPLEMENTED rather than read as another
+    ///                   value.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
     ///    "document_query" - the RunDocumentQuery RPC runs a named document query

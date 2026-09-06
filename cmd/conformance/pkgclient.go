@@ -263,7 +263,11 @@ func (c *pkgClient) executeAction(ctx context.Context, request protoreflect.Mess
 	}
 	inputs := make(map[string]opensysml.Value, len(req.Inputs))
 	for name, value := range req.Inputs {
-		inputs[name] = valueFromProto(value)
+		input, converted := valueFromProto(value)
+		if !converted {
+			return nil, &uncoveredError{reason: "the public Go API cannot send a vector with a non-numeric component"}
+		}
+		inputs[name] = input
 	}
 	run, err := c.api.ExecuteAction(ctx, c.model(req.ModelHash), req.ActionSymbolId, inputs)
 	var failure *opensysml.FailureError
@@ -387,7 +391,11 @@ func (c *pkgClient) evaluateCalc(ctx context.Context, request protoreflect.Messa
 	}
 	arguments := make([]opensysml.Value, 0, len(req.Arguments))
 	for _, argument := range req.Arguments {
-		arguments = append(arguments, valueFromProto(argument))
+		converted, ok := valueFromProto(argument)
+		if !ok {
+			return nil, &uncoveredError{reason: "the public Go API cannot send a vector with a non-numeric component"}
+		}
+		arguments = append(arguments, converted)
 	}
 	calculation, err := c.api.EvaluateCalc(ctx, c.model(req.ModelHash), req.SymbolId, arguments...)
 	var verifyErr *opensysml.VerifyError
@@ -718,6 +726,24 @@ func valueToProto(value opensysml.Value) *pb.Value {
 			EnumerationId: v.EnumerationID,
 			Name:          v.Name,
 		}}}
+	case opensysml.Array:
+		array := &pb.Array{Dimensions: append([]int64(nil), v.Dimensions...)}
+		for _, element := range v.Elements {
+			array.Elements = append(array.Elements, valueToProto(element))
+		}
+		return &pb.Value{Kind: &pb.Value_Array{Array: array}}
+	case opensysml.Vector:
+		vector := &pb.Vector{}
+		for _, component := range v {
+			vector.Components = append(vector.Components, valueToProto(component))
+		}
+		return &pb.Value{Kind: &pb.Value_Vector{Vector: vector}}
+	case opensysml.VectorQuantity:
+		vq := &pb.VectorQuantity{}
+		for _, component := range v {
+			vq.Components = append(vq.Components, quantityToProto(component))
+		}
+		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: vq}}
 	default:
 		return nil
 	}
@@ -736,40 +762,73 @@ func valuesToProto(values map[string]opensysml.Value) map[string]*pb.Value {
 
 // valueFromProto reads a scenario's request value into the public type a call
 // takes, so a request the suite states reaches the API as the API states it.
-func valueFromProto(value *pb.Value) opensysml.Value {
+// It reports false for a value the public types cannot state, such as a vector
+// with a non-numeric component.
+func valueFromProto(value *pb.Value) (opensysml.Value, bool) {
 	switch kind := value.GetKind().(type) {
 	case *pb.Value_IntValue:
-		return opensysml.Int(kind.IntValue)
+		return opensysml.Int(kind.IntValue), true
 	case *pb.Value_RealValue:
-		return opensysml.Real(kind.RealValue)
+		return opensysml.Real(kind.RealValue), true
 	case *pb.Value_Complex:
-		return opensysml.Complex(complex(kind.Complex.GetReal(), kind.Complex.GetImaginary()))
+		return opensysml.Complex(complex(kind.Complex.GetReal(), kind.Complex.GetImaginary())), true
 	case *pb.Value_BoolValue:
-		return opensysml.Bool(kind.BoolValue)
+		return opensysml.Bool(kind.BoolValue), true
 	case *pb.Value_StringValue:
-		return opensysml.String(kind.StringValue)
+		return opensysml.String(kind.StringValue), true
 	case *pb.Value_InstanceId:
-		return opensysml.InstanceID(kind.InstanceId)
+		return opensysml.InstanceID(kind.InstanceId), true
 	case *pb.Value_Null:
-		return opensysml.Null(kind.Null)
+		return opensysml.Null(kind.Null), true
 	case *pb.Value_Unset:
-		return opensysml.Unset{}
+		return opensysml.Unset{}, true
 	case *pb.Value_Sequence:
 		sequence := make(opensysml.Sequence, 0, len(kind.Sequence.GetElements()))
 		for _, element := range kind.Sequence.GetElements() {
-			sequence = append(sequence, valueFromProto(element))
+			converted, ok := valueFromProto(element)
+			if !ok {
+				return nil, false
+			}
+			sequence = append(sequence, converted)
 		}
-		return sequence
+		return sequence, true
 	case *pb.Value_Quantity:
-		return quantityFromProto(kind.Quantity)
+		return quantityFromProto(kind.Quantity), true
 	case *pb.Value_EnumLiteral:
 		return opensysml.EnumLiteral{
 			LiteralID:     kind.EnumLiteral.GetLiteralId(),
 			EnumerationID: kind.EnumLiteral.GetEnumerationId(),
 			Name:          kind.EnumLiteral.GetName(),
+		}, true
+	case *pb.Value_Array:
+		array := opensysml.Array{Dimensions: append([]int64(nil), kind.Array.GetDimensions()...)}
+		for _, element := range kind.Array.GetElements() {
+			converted, ok := valueFromProto(element)
+			if !ok {
+				return nil, false
+			}
+			array.Elements = append(array.Elements, converted)
 		}
+		return array, true
+	case *pb.Value_Vector:
+		vector := make(opensysml.Vector, 0, len(kind.Vector.GetComponents()))
+		for _, component := range kind.Vector.GetComponents() {
+			converted, ok := valueFromProto(component)
+			number, numeric := converted.(opensysml.Number)
+			if !ok || !numeric {
+				return nil, false
+			}
+			vector = append(vector, number)
+		}
+		return vector, true
+	case *pb.Value_VectorQuantity:
+		vq := make(opensysml.VectorQuantity, 0, len(kind.VectorQuantity.GetComponents()))
+		for _, component := range kind.VectorQuantity.GetComponents() {
+			vq = append(vq, quantityFromProto(component))
+		}
+		return vq, true
 	default:
-		return nil
+		return nil, true
 	}
 }
 

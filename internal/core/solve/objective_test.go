@@ -489,6 +489,69 @@ func TestAnalysisWithPins(t *testing.T) {
 	}
 }
 
+// TestAnalysisRefusesConflictingResultExpressions: an analysis stating a result
+// expression over an inherited one, or inheriting two, is refused where validation
+// rejects it, whether or not it states an objective; a goalless case whose
+// condition is merely untranslatable still lacks an objective first.
+func TestAnalysisRefusesConflictingResultExpressions(t *testing.T) {
+	ctx, idx := fixtureDocuments(t,
+		document{"base.sysml", `
+			package base {
+				private import ScalarValues::*;
+				private import TradeStudies::*;
+				analysis def Base {
+					attribute size : Integer;
+					objective roomiest : MaximizeObjective {
+						subject :>> selectedAlternative;
+						in calc :>> eval { size }
+					}
+					size >= 1
+				}
+				analysis def Other { attribute size : Integer; size <= 9 }
+				analysis def Goalless { attribute size : Integer; size >= 1 }
+			}
+		`},
+		document{"sub.sysml", `
+			package sub {
+				private import base::*;
+				analysis def Stated :> Base { size <= 4 }
+				analysis def Inherited :> Base, Other;
+				analysis def Kept :> Base;
+				analysis def GoallessStated :> Goalless { size <= 4 }
+				analysis def GoallessFlowed {
+					attribute size : Integer;
+					require constraint { action a; size <= 3 }
+				}
+			}
+		`})
+	sym := symbolNamed(t, idx, "sub::Kept")
+	if _, err := Analysis(ctx, sym, sym.OwnerScope); err != nil {
+		t.Fatalf("translating sub::Kept: %v", err)
+	}
+	sym = symbolNamed(t, idx, "sub::GoallessFlowed")
+	if _, err := Analysis(ctx, sym, sym.OwnerScope); !errors.Is(err, ErrNoObjective) {
+		t.Errorf("translating sub::GoallessFlowed: %v, want no objective", err)
+	}
+	for _, tc := range []struct{ name, location string }{
+		{"sub::Stated", "sub.sysml:4:35"},
+		{"sub::Inherited", "sub.sysml:5:5"},
+		{"sub::GoallessStated", "sub.sysml:7:47"},
+	} {
+		sym := symbolNamed(t, idx, tc.name)
+		q, err := Analysis(ctx, sym, sym.OwnerScope)
+		var refused *NotTranslatableError
+		if q != nil || !errors.As(err, &refused) {
+			t.Fatalf("translating %s: query %v, err %v; want a refusal", tc.name, q, err)
+		}
+		if refused.Construct != "conflicting result expression" {
+			t.Errorf("%s: refusal names %q", tc.name, refused.Construct)
+		}
+		if refused.File != "sub.sysml" || refused.Location != tc.location {
+			t.Errorf("%s: refusal records file %q at %q, want sub.sysml at %s", tc.name, refused.File, refused.Location, tc.location)
+		}
+	}
+}
+
 // TestCaseStepsAreNotBodyStatements: a case's own action steps are its procedure,
 // so an analysis stating them still translates; a step inside a required
 // constraint's body is refused as any body statement is.
