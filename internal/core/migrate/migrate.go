@@ -763,7 +763,11 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("abstract ")
 	}
 	if p.Attrs["isReadOnly"] == "true" && kw == "attribute" {
-		b.WriteString("constant ")
+		if ownerCat.occurrence() {
+			b.WriteString("constant ")
+		} else {
+			note = joinNotes(note, "isReadOnly is dropped: only a feature of an occurrence type can be constant")
+		}
 	}
 	b.WriteString(prefix)
 	b.WriteString(kw)

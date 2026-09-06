@@ -254,6 +254,34 @@ func TestModifiersFollowTheGrammarOrder(t *testing.T) {
 	wantLine(t, r.Notation, "out derived constant attribute b : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "inout derived abstract constant attribute c : ScalarValues::Boolean;")
 	wantLine(t, r.Notation, "derived abstract attribute d : ScalarValues::Boolean;")
+	for _, d := range errors(t, "t.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
+}
+
+func TestReadOnlyIsDroppedWhereConstantIsIllegal(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:DataType" xmi:id="_dt" name="Pose">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_x" name="x" isReadOnly="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Signal" xmi:id="_sig" name="Ping">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_w" name="weight" isReadOnly="true">
+        <type href="http://www.omg.org/spec/UML/20161101/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+    </packagedElement>`, `<sysml:ValueType xmi:id="_s1" base_DataType="_dt"/>`)
+	wantLine(t, r.Notation, "attribute x : ScalarValues::Real;")
+	wantLine(t, r.Notation, "attribute weight : ScalarValues::Real;")
+	wantNoLine(t, r.Notation, "constant")
+	for _, id := range []string{"_x", "_w"} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != migrate.Approximated || !strings.Contains(es[0].Note, "isReadOnly") {
+			t.Errorf("%s: entries = %+v", id, es)
+		}
+	}
+	for _, d := range errors(t, "t.sysml", r.Notation) {
+		t.Errorf("%v", d)
+	}
 }
 
 func TestInstanceWithSeveralClassifiers(t *testing.T) {
