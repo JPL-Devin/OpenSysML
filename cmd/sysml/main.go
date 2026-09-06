@@ -14,6 +14,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
@@ -102,38 +103,39 @@ func writableFile(dir, name string) (string, bool) {
 
 // CLI flags
 var (
-	evalExprs     stringSlice
-	showHelp      bool
-	showMan       bool
-	showVersion   bool
-	debugMode     bool
-	quietMode     bool
-	traceMode     bool
-	convertFormat string
-	queryText     string
-	outputPath    string
-	fromFormat    string
-	renderView    string
-	renderAllDir  string
-	renderForm    string
-	renderDoc     string
-	renderDocsDir string
-	docForm       string
-	pdfEngine     string
-	pdfTitlePage  bool
-	pdfTOC        bool
-	pdfNumbering  bool
-	htmlCSS       stringSlice
-	htmlNoCSS     bool
-	htmlShowCSS   bool
-	htmlFragment  bool
-	htmlMermaid   string
-	htmlTheme     string
-	strictMode    bool
-	modelChecks   checks
-	compileCalc   string
-	compileTarget string
-	compileSource bool
+	evalExprs       stringSlice
+	showHelp        bool
+	showMan         bool
+	showVersion     bool
+	debugMode       bool
+	quietMode       bool
+	traceMode       bool
+	convertFormat   string
+	queryText       string
+	outputPath      string
+	fromFormat      string
+	migrationReport string
+	renderView      string
+	renderAllDir    string
+	renderForm      string
+	renderDoc       string
+	renderDocsDir   string
+	docForm         string
+	pdfEngine       string
+	pdfTitlePage    bool
+	pdfTOC          bool
+	pdfNumbering    bool
+	htmlCSS         stringSlice
+	htmlNoCSS       bool
+	htmlShowCSS     bool
+	htmlFragment    bool
+	htmlMermaid     string
+	htmlTheme       string
+	strictMode      bool
+	modelChecks     checks
+	compileCalc     string
+	compileTarget   string
+	compileSource   bool
 
 	syncDiffWith       string
 	syncApplyTo        string
@@ -304,6 +306,11 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
 		return 2
 	}
+	if migrationReport != "" && convertFormat == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -migration-report accompanies -convert of a SysML v1 model; write `sysml model.xmi -convert sysml -migration-report report.txt`")
+		return 2
+	}
+
 	if compileCalc != "" {
 		switch {
 		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
@@ -423,6 +430,13 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	for _, path := range args {
+		if f, err := export.FormatOfPath(path); err == nil && f == export.FormatXMI {
+			fmt.Fprintf(os.Stderr, "sysml: %s is a SysML v1 model; migrate it first with `sysml %s -convert sysml -output model.sysml`, then load model.sysml\n", path, path)
+			return 2
+		}
 	}
 
 	if queryText != "" {

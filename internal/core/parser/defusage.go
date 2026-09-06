@@ -621,7 +621,7 @@ func (p *Parser) featureSpecializationAt(i int) bool {
 		return true
 	case lexer.Keyword:
 		switch t.KeywordID {
-		case "subsets", "references", "crosses", "redefines":
+		case "subsets", "references", "crosses", "redefines", "default":
 			return true
 		case "defined", "typed":
 			n := p.peekN(i + 1)
@@ -643,7 +643,7 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 		return t2.Kind == lexer.Identifier || t2.Kind == lexer.UnrestrictedName
 	case lexer.Keyword:
 		switch t.KeywordID {
-		case "subsets", "references", "crosses", "redefines":
+		case "subsets", "references", "crosses", "redefines", "default":
 			return true
 		case "defined", "typed":
 			return t2.Kind == lexer.Keyword && t2.KeywordID == "by"
@@ -805,7 +805,7 @@ func (p *Parser) atFeatureSpecializationPartAt(off int) bool {
 		return p.atNameAt(off)
 	case lexer.Keyword:
 		switch t.KeywordID {
-		case "subsets", "references", "crosses", "redefines":
+		case "subsets", "references", "crosses", "redefines", "default":
 			return true
 		case "defined", "typed":
 			n := p.peekN(off + 1)
@@ -3077,7 +3077,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
 		// Either spelling of a specialization, or a value, continues the
-		// declaration: `ref x :> y`, `ref x subsets y`, `ref x = 5`.
+		// declaration: `ref x :> y`, `ref x subsets y`, `ref x = 5`, `ref x default = 5`.
 		hasNameAndRelationship := p.atName() && beginsDeclarationTail(p.peekN(1), p.peekN(2))
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndBody := p.atName() && p.peekN(1).Kind == lexer.LBrace
