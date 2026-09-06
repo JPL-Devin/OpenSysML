@@ -591,6 +591,9 @@ func TestNegativeKerML(t *testing.T) {
 
 		// A binary connector states both ends around `to` (KerML.xtext:836).
 		{"binary_connector_no_second_end", "package P { feature a; connector a to ; }"},
+		{"binary_connector_no_first_end", "package P { feature t; connector to t; }"},
+		{"binary_connector_no_to", "package P { feature eng; feature t; connector eng t; }"},
+		{"binary_connector_end_multiplicity_no_target", "package P { feature a; feature b; connector [1] to b; }"},
 		{"binary_connector_named_end_no_target", "package P { feature a; feature b; connector e ::> to b; }"},
 		{"binary_connector_name_without_from", "package P { feature a; feature b; connector c : L a to b; }"},
 

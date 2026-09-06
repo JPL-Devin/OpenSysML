@@ -59,15 +59,15 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 305 |
+| `stable` | 306 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
 | `unwritable` | 0 |
 | `unparseable` | 0 |
 | `refused` | 40 |
-| **total** | **345** |
+| **total** | **346** |
 
-So 305 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
+So 306 of 346 files convert to Turtle, and every one of them comes back as the same Turtle byte for
 byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
 it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
 back up to whitespace, as a different graph, or that could not be written back or re-read from
@@ -78,7 +78,10 @@ canonical notation all moved to `stable` when it landed. The refusals by class: 
 as a connector *named* `a`; two of them (`parser_features_demo_advanced_connectors.kerml`,
 `Named Collection Members Example/VehicleTanks.kerml`) convert now that the ends are read as
 ends, and the third (`Simple Tests/ArgumentResolution.kerml`) meets the standing refusal of an
-anonymous `feature` declaration. No file
+anonymous `feature` declaration. The ends themselves — bare, behind a multiplicity, or named
+ahead of the feature they reference (`connector a ::> a.x to b;`, carried as `sysx:endName`) — are
+structure the decoder writes back without the source text
+([rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)). No file
 is refused for an expression any longer: a body's result expression is mapped
 ([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
 took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an

@@ -12,8 +12,8 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 303 of the 345 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 42 are refused. Of the 303, a second
+  the construct. 306 of the 346 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 40 are refused. Of the 306, a second
   conversion of the written-back notation reproduces the Turtle byte for byte for
   every one — the notation is written from the [source text](#source-text) the
   graph carries. These figures are the
@@ -270,7 +270,8 @@ The `sysx:` properties:
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
-| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`, `connector c from a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
@@ -902,12 +903,20 @@ and `sysml:upperBound` expression nodes, the way a feature carries its own; the
 decoder writes them back ahead of the end. A `bind` head's second end is the
 value node the head already states as `sysml:value`, so a `bind a = b` relates
 `sysml:references` and `sysml:value` as its two ends without a copy of either
-(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). The forms
-and what each writes:
+(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). An end that
+declares a name of its own and reference-subsets the feature it attaches to
+(`connect bead ::> t.bead to …`, KerML `connector a ::> a.x to b;`) relates that
+feature — `sysml:referent` or `sysml:targetFeature` is `t.bead`, not `bead` —
+and carries the name as `sysx:endName` on the same node; the decoder writes it
+back as `<name> ::> <feature>`, whichever of `::>` and `references` the source
+spelled (`export_test.go:TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText`).
+A KerML binary connector without `from` starts with its first end, so
+`connector eng to t;` is an anonymous connector whose `end0` is `eng`, and a
+named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
 
 | `sysx:endForm` | Notation | Head |
 |----------------|----------|------|
-| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b` |
+| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b`, `connector c from a to b` |
 | `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
 | `equals` | `<end0> = <end1>` | `bind a = b` |
 | `firstThen` | `<end0> then <end1>` | `succession first a then b` |
@@ -927,9 +936,9 @@ source, whitespace and comments aside, before recording it — a head written ov
 several lines, or with a note inside it, records its form like any other
 (`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
 cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
-more than their ends: an end with a `references` clause, an inline payload
-declaration (`flow of x : P from a to b`), or a satisfy that declares a name of
-its own (`satisfy s : R by v`).
+more than their ends: an end that redefines, an inline payload declaration
+(`flow of x : P from a to b`), or a satisfy that declares a name of its own
+(`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
