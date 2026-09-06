@@ -758,9 +758,8 @@ func TestCollectionModifiersAreWritten(t *testing.T) {
 	}
 }
 
-// The prefix keywords come out in the v2 grammar's order — direction, derived,
-// abstract, constant, ref — and a read-only property is `constant` on every
-// usage kind whose features can vary; a value type's cannot, so there it is a note.
+// Prefix keywords come out in grammar order (direction, derived, abstract, constant,
+// ref); read-only is `constant` except in a value type, where it is only noted.
 func TestPrefixModifiersFollowTheGrammarOrder(t *testing.T) {
 	r := migrateDocument(t, `
     <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
