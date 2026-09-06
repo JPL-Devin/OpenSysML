@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -197,6 +198,13 @@ func TestMalformedMeasurementRefsAreRejected(t *testing.T) {
 		{"declaration without its reduction", measurementRefValue("", "SI::kilometre", nil), ErrUnitNotReduced},
 		{"unusable scale", measurementRefValue("m", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 0, Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
 		{"zero scale", measurementRefValue("m", "", &pb.UnitTerm{ScaleNum: 0, ScaleDen: 1, Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"NaN scale", measurementRefValue("m", "", &pb.UnitTerm{ScaleNum: math.NaN(), ScaleDen: 1, Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"infinite scale", measurementRefValue("m", "", &pb.UnitTerm{ScaleNum: math.Inf(1), ScaleDen: 1, Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"infinite denominator", measurementRefValue("m", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: math.Inf(-1), Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"term-only NaN scale", measurementRefValue("", "", &pb.UnitTerm{ScaleNum: math.NaN(), ScaleDen: 1, Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"term-only infinite scale", measurementRefValue("", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: math.Inf(1), Factors: metreTerm().Factors}), ErrUnitScaleUnusable},
+		{"NaN exponent", measurementRefValue("", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "SI::metre", Exponent: math.NaN()}}}), ErrUnitExponentUnusable},
+		{"infinite exponent", measurementRefValue("", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "SI::metre", Exponent: math.Inf(-1)}}}), ErrUnitExponentUnusable},
 		{"unknown base unit", measurementRefValue("furlong", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "SI::furlong", Exponent: 1}}}), ErrUnknownBaseUnit},
 		{"factor over a part", measurementRefValue("M", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "M::convert", Exponent: 1}}}), ErrNotAMeasurementUnit},
 		{"unnamed factor", measurementRefValue("x", "", &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{Exponent: 1}}}), ErrUnknownBaseUnit},

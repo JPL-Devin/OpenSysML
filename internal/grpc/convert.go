@@ -424,9 +424,13 @@ var (
 	// measurement unit, which nothing is measured in.
 	ErrNotAMeasurementUnit = errors.New("not a measurement unit")
 
-	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
-	// undefined, which no magnitude can be converted through.
+	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero, undefined
+	// or not finite, which no magnitude can be converted through.
 	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
+
+	// ErrUnitExponentUnusable reports a unit factor raised to a power that is not
+	// a finite number, which measures no dimension.
+	ErrUnitExponentUnusable = errors.New("unit exponent is not a finite number")
 
 	// ErrUnitNotReduced reports a named unit sent without its reduction, over
 	// which alone commensurability is decided.
@@ -1062,7 +1066,7 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
 	}
 	scale := semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}
-	if scale.IsZero() {
+	if scale.IsZero() || !finite(scale.Num) || !finite(scale.Den) {
 		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, scale.Num, scale.Den)
 	}
 	term := semantics.UnitTerm{Scale: scale}
@@ -1080,6 +1084,9 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		if !ok {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
 		}
+		if !finite(f.GetExponent()) {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s**%g", ErrUnitExponentUnusable, f.GetUnitId(), f.GetExponent())
+		}
 		term.Factors = append(term.Factors, semantics.UnitFactor{
 			Unit:     unit,
 			Exponent: f.GetExponent(),
@@ -1087,6 +1094,9 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 	}
 	return term.Normalized(), nil
 }
+
+// finite reports whether a wire double is a number a unit term can carry.
+func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
 
 // enumLiteralFromProto resolves a literal against the model, since a literal is
 // the declaration it names: one the model does not declare has no identity here.
