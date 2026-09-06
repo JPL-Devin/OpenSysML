@@ -397,3 +397,29 @@ func TestUnmappedElementsKeepStereotypeMetadata(t *testing.T) {
 		t.Errorf("_d entries = %+v", es)
 	}
 }
+
+func TestMultilineTagsKeepTheReportOneLinePerEntry(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Activity" xmi:id="_act" name="Run"/>`,
+		`<custom:Tracked xmlns:custom="http://example.com/custom" xmi:id="_c1" base_Activity="_act">
+    <notes>first line
+second	line</notes>
+  </custom:Tracked>`)
+	wantLine(t, r.Notation, " * second	line)")
+	var b strings.Builder
+	if err := r.Report.WriteText(&b); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, line := range strings.Split(b.String(), "\n") {
+		if strings.HasPrefix(line, "«Tracked» Activity\t") {
+			found = true
+			if !strings.Contains(line, `notes = first line\nsecond\tline`) {
+				t.Errorf("report line = %q", line)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no report line for the activity:\n%s", b.String())
+	}
+}

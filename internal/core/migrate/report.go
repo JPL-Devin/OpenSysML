@@ -117,12 +117,12 @@ func (r *Report) WriteText(w io.Writer) error {
 		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 		fmt.Fprintf(&b, "\n## %s (%d)\n", v, len(entries))
 		for _, e := range entries {
-			fmt.Fprintf(&b, "%s\t%s\t%s", e.Kind, e.Name, e.ID)
+			fmt.Fprintf(&b, "%s\t%s\t%s", field(e.Kind), field(e.Name), field(e.ID))
 			if e.Target != "" {
-				fmt.Fprintf(&b, "\t-> %s", e.Target)
+				fmt.Fprintf(&b, "\t-> %s", field(e.Target))
 			}
 			if e.Note != "" {
-				fmt.Fprintf(&b, "\t(%s)", e.Note)
+				fmt.Fprintf(&b, "\t(%s)", field(e.Note))
 			}
 			b.WriteByte('\n')
 		}
@@ -130,6 +130,11 @@ func (r *Report) WriteText(w io.Writer) error {
 	_, err := io.WriteString(w, b.String())
 	return err
 }
+
+// fieldEscaper escapes the whitespace that would break the one-line-per-entry table.
+var fieldEscaper = strings.NewReplacer("\r\n", `\n`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
+
+func field(s string) string { return fieldEscaper.Replace(s) }
 
 // WriteJSON writes the report as one JSON document.
 func (r *Report) WriteJSON(w io.Writer) error {
