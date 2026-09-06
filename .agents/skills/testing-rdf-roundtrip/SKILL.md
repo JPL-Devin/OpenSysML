@@ -67,7 +67,7 @@ which `TestSourceTextComesBackByteForByte` and `TestTrailingTriviaComesBack` loc
 For corpus files compare `hop1.ttl` and `hop2.ttl` as **triple sets**, not bytes (`pip install rdflib`,
 parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and report
 `sysx:sourceText` differences separately from structural ones: an element rebuilt from the graph
-(a stale head, a dropped optional keyword such as `connector x from a to b` → `connector x a to b`)
+(a stale head, or a canonicalized keyword synonym such as `r references eng` → `r ::> eng`)
 changes its sourceText legally while every structural triple must still match.
 
 ### Heads that are *not* expected to survive without sourceText (as of this writing)
@@ -75,9 +75,11 @@ changes its sourceText legally while every structural triple must still match.
 - **Any end-binding head that says more than its ends.** `endForm` in
   `internal/core/export/end_forms.go` is only emitted when rebuilding the head reproduces its
   *tokens* (layout and comments aside, so a line break inside `connect a\n to b;` is fine), so an
-  end with a multiplicity, an inline payload declaration or a head with a body carries no
+  unsupported inline payload declaration or a head with a body may carry no
   `sysx:endForm`, and the sourceText-free hop is refused with `it has no sysx:endForm, and the ends
   it relates are written in the form the head states`.
+  Connector-end multiplicities themselves are supported: `[0..1] eng to [1..*] trigger`
+  reconstructs from end-node bounds.
 - **Named satisfy heads** `satisfy requirement req1 : Req1 by system;` come back as
   `satisfy req1 : Req1 by system;` (the `requirement` keyword is dropped, and the parser then reads
   `req1` as the *satisfied* requirement instead of a new one — `unresolved reference: req1`). Minimal
@@ -105,6 +107,41 @@ grep -o "sysx:[a-zA-Z]*" hop1.ttl | sort | uniq -c | sort -rn
 
 The `endVerb` degradation is the cheapest single proof that a predicate is not decorative. Note the
 degraded output still validates clean, so judge it by the *text*, not by the exit code.
+
+### KerML connector ends and reliable graph mutations
+
+Use `make build-sysml` and `bin/sysml FILE -convert kerml -o BACK` for KerML.
+`connector eng to tanks.main;` is anonymous; only `connector link from eng to tanks.main;`
+declares the connector name. `internal/core/export/testdata/convert/connector_ends.kerml`
+covers named ends, per-end multiplicities, `from`, `all`, and n-ary connectors.
+
+For `connector a ::> a.x to b;`, the connector's `sysx:relatedFeature` selects an
+end expression node of type `FeatureChainExpression`, with `sysx:endName "a"`.
+That expression has `sysml:targetFeature` for `x` and an argument whose referent is `a`.
+Do not expect the connector's relatedFeature edge to target `a` or `x` directly.
+Existing features called `eng`, `a`, or `transitionLink` are legitimate; verify the
+connector adds no additional enclosing declarations with those names.
+Private visibility is on the connector's `sysml:owningMembership`, not the connector node.
+
+Controls with all sourceText/sourceTail removed:
+- Delete only the named `a` end's endName: it reconstructs as `connector a.x to b;`.
+- Delete its connector→end relatedFeature edge: reconstruction refuses fewer than two ends.
+- Delete the named `link` connector's endVerb `"from"`: reconstruction may refuse because
+  the resulting notation cannot parse. Refusal is a valid control, not necessarily text degradation.
+- `r references eng` canonically becomes `r ::> eng` without source text.
+
+Keep parser failures distinct from mapping refusal. RDFLib's default Turtle serializer can
+write compact bare numeric/boolean terms that this CLI's Turtle reader might reject. Prefer
+editing the CLI-emitted Turtle as above, or serialize mutated RDFLib graphs using `format="nt"`
+(N-Triples is a Turtle subset with explicit typed literals). First round-trip the *unmutated*
+graph through the same serializer and require identical reconstructed notation; otherwise a
+mutation refusal is vacuous. Check the graph delta is exactly the intended triple.
+
+A corpus file that `-convert ttl` refuses is not automatically an "unrelated" refusal: check
+its verdict in `internal/core/export/testdata/corpus_roundtrip_expected.txt` first. A file
+pinned `stable` there that now refuses is a regression to fix, not a failure to preserve.
+Only when the baseline itself records the refusal may you isolate your feature in a modified
+copy — and label that as modified-copy evidence, never as a pass for the original file.
 
 ## A fixture that exercises the end-binding heads
 

@@ -156,6 +156,25 @@ func TestContradictoryKeywordGraphsAreRefused(t *testing.T) {
 		old: asserted, new: strings.Replace(asserted, "AssertConstraintUsage", "ConstraintUsage", 1),
 		want: []string{"the `assert` declaration <urn:sysmlv2:element:AnonymousAssertions__Vehicle___402>", "the metaclass ConstraintUsage, not the AssertConstraintUsage its keyword states"},
 	}, {
+		name: "event_named", fixture: "anonymous_events.sysml",
+		old: event, new: event + "\n    sysml:declaredName \"e\" ;",
+		want: []string{"the `event` declaration <urn:sysmlv2:element:AnonymousEvents__Sender___401>", "it declares a name (sysml:declaredName), which `event` written as the kind keyword cannot", "a declaration is written `event occurrence <name>`"},
+	}, {
+		name: "event_named_unreferenced", fixture: "anonymous_events.sysml",
+		old:  "    sysx:declaredKeyword \"event\" ;\n    sysml:references \"exchange.request\"^^sysx:Expression ;",
+		new:  "    sysx:declaredKeyword \"event\" ;\n    sysml:declaredName \"e\" ;",
+		want: []string{"the `event` declaration <urn:sysmlv2:element:AnonymousEvents__Sender___401>", "would come back as a reference to a different element"},
+	}, {
+		name: "assert_named_body", fixture: "anonymous_assertions.sysml",
+		old:  "    sysx:declaredKeyword \"assert\" ;\n    sysml:references elmt:AnonymousAssertions__massConstraint ;",
+		new:  "    sysx:declaredKeyword \"assert\" ;\n    sysml:declaredName \"c2\" ;",
+		want: []string{"the `assert` declaration <urn:sysmlv2:element:AnonymousAssertions__Vehicle___402>", "nothing but a body or a multiplicity follows", "a declaration is written `assert constraint <name>`"},
+	}, {
+		name: "assert_named_multiplicity", fixture: "anonymous_assertions.sysml",
+		old:  "    sysx:declaredKeyword \"assert\" ;\n    sysml:references elmt:AnonymousAssertions__massConstraint ;",
+		new:  "    sysx:declaredKeyword \"assert\" ;\n    sysml:declaredName \"c2\" ;\n    sysml:upperBound \"1\"^^xsd:integer ;\n    sysml:references elmt:AnonymousAssertions__massConstraint ;",
+		want: []string{"the `assert` declaration <urn:sysmlv2:element:AnonymousAssertions__Vehicle___402>", "nothing but a body or a multiplicity follows"},
+	}, {
 		name: "assert_other_prefix", fixture: "anonymous_assertions.sysml",
 		old: asserted, new: asserted + "\n    sysx:declaredPrefix \"assume\" ;",
 		want: []string{"the asserted constraint <urn:sysmlv2:element:AnonymousAssertions__Vehicle___402>", `sysx:declaredPrefix "assume" is not the ` + "`assert` its metaclass states"},
