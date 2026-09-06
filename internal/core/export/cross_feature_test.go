@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
@@ -182,5 +183,36 @@ func TestCrossFeaturePrefixComesBackFromTheGraphAlone(t *testing.T) {
 	}
 	if string(out) != kerml {
 		t.Errorf("KerML cross feature prefixes were not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", kerml, out)
+	}
+}
+
+// A graph stating isPortion without isComposite still writes `portion`, the
+// notation's only spelling of a portion.
+func TestPortionAloneComesBackAsPortion(t *testing.T) {
+	kerml := `package Portions {
+    class A;
+    class B {
+        portion feature q : A;
+    }
+    assoc C {
+        end portion x1[1] feature x : B;
+        end feature y : A;
+    }
+}
+`
+	turtle, err := export.Convert("m.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	stripped := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysml:isComposite")
+	if strings.Contains(string(stripped), "isComposite") {
+		t.Fatalf("isComposite survived stripping:\n%s", stripped)
+	}
+	out, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(out) != kerml {
+		t.Errorf("isPortion alone did not write portion:\n--- want ---\n%s--- got ---\n%s", kerml, out)
 	}
 }

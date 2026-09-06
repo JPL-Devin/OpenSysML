@@ -1308,6 +1308,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		{"isVariation", "variation"},
 		{"isVariant", "variant"},
 		{"isComposite", "composite"},
+		{"isPortion", "portion"},
 		{"isDerived", "derived"},
 		{"isConstant", "constant"},
 		{"isIndividual", "individual"},
@@ -1327,8 +1328,8 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		if flag.property == "isVariant" && d.enumeratedValue(el) {
 			continue
 		}
-		if d.boolOf(el, rdf.SysML+flag.property) {
-			words = append(words, d.compositeKeyword(el, flag))
+		if d.boolOf(el, rdf.SysML+flag.property) && !d.portionSubsumes(el, flag.property) {
+			words = append(words, flag.keyword)
 		}
 		// The cross feature an end owns is written right after `end`
 		// (SysML.xtext EndUsagePrefix `'end' OwnedCrossFeatureMember?`).
@@ -2171,9 +2172,10 @@ func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
 		{"isAbstract", "abstract"},
 		{"isVariation", "variation"},
 		{"isComposite", "composite"},
+		{"isPortion", "portion"},
 	} {
-		if d.boolOf(cross, rdf.SysML+flag.property) {
-			words = append(words, d.compositeKeyword(cross, flag))
+		if d.boolOf(cross, rdf.SysML+flag.property) && !d.portionSubsumes(cross, flag.property) {
+			words = append(words, flag.keyword)
 		}
 	}
 	if prefix, ok := d.stringOf(cross, rdf.OpenSysML+xDeclaredPrefix); ok {
@@ -2193,13 +2195,10 @@ func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
 	return words
 }
 
-// compositeKeyword writes `portion` for a composite feature that is a portion
-// (KerML `portion feature p`: isPortion implies isComposite).
-func (d *decoder) compositeKeyword(el *element, flag struct{ property, keyword string }) string {
-	if flag.property == "isComposite" && d.boolOf(el, rdf.SysML+"isPortion") {
-		return "portion"
-	}
-	return flag.keyword
+// portionSubsumes reports whether `portion` stands in for the flag: a portion is
+// composite, and the notation spells that `portion` alone (KerML.xtext BasicFeaturePrefix).
+func (d *decoder) portionSubsumes(el *element, property string) bool {
+	return property == "isComposite" && d.boolOf(el, rdf.SysML+"isPortion")
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the
