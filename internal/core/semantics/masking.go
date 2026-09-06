@@ -205,7 +205,7 @@ func (m *Model) redefinitionTarget(sym *symbols.Symbol, target ast.Node) *symbol
 				return inherited
 			}
 		}
-		found, ok := m.resolver.ResolveQualified(sym.OwnerScope, node)
+		found, ok := m.resolver.ResolveRedefinitionTarget(sym.OwnerScope, sym.Decl, node)
 		if !ok || found == nil {
 			return nil
 		}
