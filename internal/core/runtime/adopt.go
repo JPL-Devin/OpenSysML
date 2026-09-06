@@ -632,30 +632,68 @@ func (a *adoption) planUnit(unit Unit) error {
 				return &AdoptError{Type: a.ctx.fqnOf(found), Reason: what + " no longer reduces: " + err.Error()}
 			}
 		case power.Reduces != nil:
-			reduces = *power.Reduces
+			if err := a.planTerm(*power.Reduces); err != nil {
+				return err
+			}
+			reduces = a.rewriteTerm(*power.Reduces)
 		default:
 			return nil
 		}
 		term = term.Times(reduces.Pow(power.Exponent))
 	}
-	if !term.Same(unit.Term) {
+	if err := a.planTerm(unit.Term); err != nil {
+		return err
+	}
+	if was := a.rewriteTerm(unit.Term); !term.Same(was) {
 		return &AdoptError{Reason: "the unit " + unit.Product.String() + " it is measured in now reduces to " +
-			term.String() + ", not " + unit.Term.String()}
+			term.String() + ", not " + was.String()}
 	}
 	return nil
 }
 
-// rewriteUnit is the unit with every declaration it names rebound.
+// planTerm rebinds every base unit a reduction is expressed over.
+func (a *adoption) planTerm(term semantics.UnitTerm) error {
+	for _, factor := range term.Factors {
+		if factor.Unit == nil {
+			continue
+		}
+		if _, err := a.rebind(factor.Unit, "the base unit "+factor.Unit.Name+" it reduces to"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rewriteUnit is the unit with every declaration it names rebound, in its
+// product and in its reduction alike.
 func (a *adoption) rewriteUnit(unit Unit) Unit {
 	powers := make([]semantics.UnitPower, len(unit.Product.Powers))
 	for i, power := range unit.Product.Powers {
 		if found, ok := a.rebound[power.Unit]; ok {
 			power.Unit = found
 		}
+		if power.Reduces != nil {
+			reduces := a.rewriteTerm(*power.Reduces)
+			power.Reduces = &reduces
+		}
 		powers[i] = power
 	}
 	unit.Product = semantics.UnitProduct{Powers: powers}
+	unit.Term = a.rewriteTerm(unit.Term)
 	return unit
+}
+
+// rewriteTerm is the reduction with every base unit it names rebound.
+func (a *adoption) rewriteTerm(term semantics.UnitTerm) semantics.UnitTerm {
+	factors := make([]semantics.UnitFactor, len(term.Factors))
+	for i, factor := range term.Factors {
+		if found, ok := a.rebound[factor.Unit]; ok {
+			factor.Unit = found
+		}
+		factors[i] = factor
+	}
+	term.Factors = factors
+	return term
 }
 
 func (a *adoption) planHeld(owner string, id int64) error {

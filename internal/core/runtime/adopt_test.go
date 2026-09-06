@@ -1224,6 +1224,75 @@ func TestAdoptRefusesAUnitWhoseReductionChanged(t *testing.T) {
 	}
 }
 
+// A model's own base unit (no conversion to a library unit) reduces to itself,
+// so an unchanged one is carried over with its reduction rebound, not refused.
+func TestAdoptRebindsAModelsOwnBaseUnit(t *testing.T) {
+	src := `package Demo {
+	private import ISQ::*;
+	private import SI::*;
+	private import MeasurementReferences::*;
+	attribute chain : LengthUnit;
+	attribute furlong : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = chain; :>> conversionFactor = 10; } }
+	part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute len : LengthValue; }
+	part field : Field;
+}`
+	prev := libraryContextOver(t, src)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for feature, value := range map[string]string{"width": "3 [chain]", "unit": "chain", "len": "2 [furlong]"} {
+		val, err := evalIn(t, prev, scope, value)
+		if err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		if err := field.SetFeatureValue(prev, feature, val); err != nil {
+			t.Fatalf("write %s: %v", feature, err)
+		}
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt into a re-analysis with the same units: %v", err)
+	}
+	chain := lookupOne(t, ctx.resolver.Index(), "Demo::chain")
+	for _, feature := range []string{"width", "unit", "len"} {
+		fv, err := field.GetFeatureValue(ctx, feature)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", feature, err)
+		}
+		for _, unit := range unitsOf(fv.Value) {
+			if got := unit.Term.Factors[0].Unit; got != chain {
+				t.Errorf("%s reduces over %p, want the chain declared by the re-analysis %p", feature, got, chain)
+			}
+		}
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"field.unit == chain":                                         "true",
+		"field.width == 3 [chain]":                                    "true",
+		"field.width.mRef == field.unit":                              "true",
+		"field.len == 20 [chain]":                                     "true",
+		"QuantityCalculations::ConvertQuantity(field.len, chain)":     "20.0 [chain]",
+		"QuantityCalculations::ConvertQuantity(field.width, furlong)": "0.3 [furlong]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+
+	gone := libraryContextOver(t, strings.Replace(src, "attribute chain : LengthUnit;", "attribute chain : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 20.1168; } }", 1))
+	var adoptErr *AdoptError
+	if _, err := gone.Adopt(prev, shapes, field); !errors.As(err, &adoptErr) {
+		t.Fatalf("Adopt into a re-analysis converting chain to metres: %v, want an AdoptError", err)
+	} else if !strings.Contains(err.Error(), "·metre, not ") || !strings.HasSuffix(err.Error(), "chain") {
+		t.Errorf("Adopt refused for %q, want the changed reduction named", err)
+	}
+}
+
 const adoptWrittenSrc = `package Demo {
 	private import ScalarValues::*;
 	part def Holder { attribute n : Integer; }

@@ -30,6 +30,7 @@ func measurementRefContext(t *testing.T) (*Context, *symbols.Scope) {
 			attribute wrongUnit : LengthUnit = s;
 			attribute wrongDimension : AreaUnit = m * s;
 			attribute notAUnit : LengthValue = m;
+			attribute notAnArea : AreaValue = m * m;
 			attribute vq : Quantities::VectorQuantityValue = VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m];
 			attribute scaled = VectorFunctions::VectorOf((1.0, 2.0)) [m] * (2 [s]);
 		}
@@ -230,6 +231,7 @@ func TestMeasurementRefReport(t *testing.T) {
 		{"wrongUnit", ErrTypeMismatch, "cannot write the measurement reference s, a measurement reference of dimension T, to a feature typed by LengthUnit"},
 		{"wrongDimension", ErrTypeMismatch, "cannot write the measurement reference m*s, a measurement reference of dimension L·T, to a feature typed by AreaUnit"},
 		{"notAUnit", ErrTypeMismatch, "cannot write the measurement reference m, a measurement reference typed LengthUnit, to a feature typed by LengthValue"},
+		{"notAnArea", ErrTypeMismatch, "cannot write the measurement reference m**2, a measurement reference typed DerivedUnit, to a feature typed by AreaValue"},
 		{"m + m", ErrTypeMismatch, "operator '+' is not defined for a measurement reference and a measurement reference"},
 		{"m - s", ErrTypeMismatch, "operator '-' is not defined for a measurement reference and a measurement reference"},
 		{"m * 3", ErrTypeMismatch, "operator '*' is not defined for a measurement reference and an Integer"},

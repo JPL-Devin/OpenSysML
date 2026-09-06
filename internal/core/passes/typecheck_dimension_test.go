@@ -159,6 +159,14 @@ func TestBoundComposedMeasurementUnit(t *testing.T) {
 		"cannot bind a measurement reference of dimension L·T to a feature typed by AreaUnit")
 	wantOneDimensionError(t, `attribute u : LengthUnit = m / s;`,
 		"cannot bind a measurement reference of dimension L·T^-1 to a feature typed by LengthUnit")
+	// A quantity value type of the same dimension is no type of a unit: the
+	// runtime refuses the write, so the checker refuses the binding.
+	wantOneDimensionError(t, `attribute a : AreaValue = m * m;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by AreaValue")
+	wantOneDimensionError(t, `attribute v : SpeedValue = km / h;`,
+		"cannot bind a measurement reference typed DerivedUnit to a feature typed by SpeedValue")
+	wantNoDimensionDiags(t, `attribute a : AreaValue = 2 [m] * 3 [m];`)
+	wantNoDimensionDiags(t, `attribute n : ScalarValues::Natural = 1 * 1;`)
 }
 
 // TestComposedMeasurementUnitAsAnArgument: an operator expression over units is

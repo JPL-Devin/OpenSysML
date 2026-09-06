@@ -806,11 +806,13 @@ the flat sequence of its elements:
   measurement units" — so it binds to `DerivedUnit` (`kpl : DerivedUnit = km / L`
   in the OMG vehicle example) and to a unit definition of its dimension (`m * m`
   to `AreaUnit`, `km / h` to `SpeedUnit`; `Model.MeasurementRefConforms`, judged
-  the same by the checker — `checkValueMeasurementRef`,
+  the same by the checker — `judgedAsMeasurementRef`,
   `MeasurementRefExprConformance` — and the runtime's write conformance). A
   reference of another dimension (`m / s` to `LengthUnit`) or a number written to
   a unit-typed feature, and a reference written to a quantity-typed one (`m` to
-  `LengthValue`), are refused by both. A quantity written to a unit-typed feature
+  `LengthValue`, `m * m` to `AreaValue` — the checker judges a composed unit as
+  the `DerivedUnit` it is before it compares dimensions, which alone would pass
+  it), are refused by both. A quantity written to a unit-typed feature
   (`hp : PowerUnit = 745.7 [W]` in the OMG individuals example) is not judged,
   as the pilot implementation accepts it; the feature then holds the quantity,
   and `200 [hp]` is `ErrNotAQuantity`, `hp` naming no unit. A quantity's `num` and `mRef`
@@ -829,8 +831,11 @@ the flat sequence of its elements:
   value carries the unit and its reduction, not the library object's features. A
   reference embedded in a written value is rebound across re-analysis like the
   objects behind an array are (`adopt.go` `unitsOf`, `planUnit`, `rewriteUnit`: a
-  model's own `furlong` follows the re-read declaration; a unit the new model no
-  longer declares, or reduces differently — `furlong` re-declared as `220 m` — refuses
+  model's own `furlong` follows the re-read declaration, in the product and in
+  the reduction alike, so a base unit the model declares without a conversion —
+  which reduces to itself — is carried over and still equals a fresh `chain`
+  (`TestAdoptRebindsAModelsOwnBaseUnit`); a unit the new model no longer
+  declares, or reduces differently — `furlong` re-declared as `220 m` — refuses
   adoption naming the unit and both reductions, since a magnitude written under
   the old factor would read as another quantity under the new;
   `TestAdoptRefusesAUnitWhoseReductionChanged`); the solver refuses to pin one
