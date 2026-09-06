@@ -248,6 +248,36 @@ calc def Q :> Query {
 	}
 }
 
+func TestExecuteShortNameIsNotDerivedForANamedFeature(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+action def Provide;
+action <pp> providePower : Provide;
+action <ss> steer : Provide;
+part spec {
+	perform providePower;
+	perform action turn references steer;
+}
+calc def Q :> Query {
+	in root : Element;
+	Project(
+		source = WhereType(source = Descendants(source = root, maxDepth = 1), type = "ActionUsage"),
+		properties = ("name", "shortName")
+	)
+}`)
+	result, err := fixture.execute(t, "Q", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "spec"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := cellStrings(t, result, "name"); !slices.EqualFunc(got, [][]string{{"providePower"}, {"turn"}}, slices.Equal) {
+		t.Fatalf("name cells = %q", got)
+	}
+	if got := cellStrings(t, result, "shortName"); !slices.EqualFunc(got, [][]string{{"pp"}, nil}, slices.Equal) {
+		t.Fatalf("shortName cells = %q, want pp for the unnamed perform and none for turn", got)
+	}
+}
+
 // A computed column is one value per row, so an element with two doc bodies
 // fails the column the way every multi-valued feature does.
 func TestExecuteComputedDocumentationReportsSeveralBodies(t *testing.T) {
