@@ -758,6 +758,37 @@ func TestCollectionModifiersAreWritten(t *testing.T) {
 	}
 }
 
+// The prefix keywords come out in the v2 grammar's order — direction, derived,
+// abstract, constant — and a read-only property is `constant` on every usage kind.
+func TestPrefixModifiersFollowTheGrammarOrder(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_ro" name="ro" isReadOnly="true">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Boolean"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_da" name="da" isDerived="true" isReadOnly="true" type="_a" aggregation="composite"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_if" name="I">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_fp" name="fp" isDerived="true" isReadOnly="true">
+        <type xmi:type="uml:PrimitiveType" href="http://www.omg.org/spec/UML/20131001/PrimitiveTypes.xmi#Real"/>
+      </ownedAttribute>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s1" base_Class="_a"/>
+  <sysml:InterfaceBlock xmi:id="_s2" base_Class="_if"/>
+  <sysml:FlowProperty xmi:id="_s3" base_Property="_fp" direction="out"/>`)
+	wantLine(t, r.Notation, "constant attribute ro : ScalarValues::Boolean;")
+	wantLine(t, r.Notation, "derived constant part da : A;")
+	wantLine(t, r.Notation, "out derived constant attribute fp : ScalarValues::Real;")
+	for _, id := range []string{"_ro", "_da", "_fp"} {
+		if es := entriesFor(r, id); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+			t.Errorf("%s entries = %+v", id, es)
+		}
+	}
+	if diags := errors(t, "t.sysml", r.Notation); len(diags) > 0 {
+		t.Errorf("%v", diags)
+	}
+}
+
 // namedRelationModel is a block, a requirement and a test case joined by one
 // named dependency of each SysML relationship stereotype.
 const namedRelationModel = `
