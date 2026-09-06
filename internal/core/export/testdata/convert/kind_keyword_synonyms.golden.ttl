@@ -130,6 +130,7 @@ elmt:Synonyms__atStart
     sysml:owningMembership elmt:Synonyms__atStart_om ;
     sysml:declaredName "atStart" ;
     sysx:declaredKeyword "snapshot" ;
+    sysml:isPortion "true"^^xsd:boolean ;
     sysml:portionKind "snapshot" ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    snapshot atStart;\n" .
@@ -155,6 +156,7 @@ elmt:Synonyms__during
     sysml:owningMembership elmt:Synonyms__during_om ;
     sysml:declaredName "during" ;
     sysx:declaredKeyword "timeslice" ;
+    sysml:isPortion "true"^^xsd:boolean ;
     sysml:portionKind "timeslice" ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    timeslice during;\n" .

@@ -21,6 +21,7 @@ domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound:
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch ReferenceUsage lowerBound        # MultiplicityRange_lowerBound: same collapse on a kindless usage
 domain-mismatch ReferenceUsage upperBound        # MultiplicityRange_upperBound: same collapse on a kindless usage
+domain-mismatch AttributeUsage lowerBound        # MultiplicityRange_lowerBound: same collapse on an attribute (a KerML `feature`)
 domain-mismatch AttributeUsage upperBound        # MultiplicityRange_upperBound: same collapse on an attribute (a KerML `feature`)
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
 domain-mismatch OperatorExpression lowerBound    # MultiplicityRange_lowerBound: a cast's `(as T[m])` multiplicity is written on the operator expression
@@ -108,4 +109,6 @@ unknown-property PartUsage isChain                           # notation flag for
 unknown-property PartUsage isVariant                         # Usage::isVariant, which the 202407 rendering omits; the metamodel derives it from the VariantMembership
 unknown-property EnumerationUsage isVariant                  # Usage::isVariant on an enumerated value, a variant of its enumeration definition; omitted the same way
 unknown-property ConnectorAsUsage isAll                      # Type::isSufficient (`connector all from a to b`), written under the notation's own name
+unknown-property AttributeUsage isAll                        # Type::isSufficient (`portion feature all slices`), written under the notation's own name
+unknown-property AttributeUsage isConstant                   # Feature::isReadOnly in the 202407 rendering, whose `readonly` the notation has since respelled `const`; written under the notation's own name
 literal-for-object-property FeatureChainExpression targetFeature                   # FeatureChainExpression_targetFeature: a library feature such as an action's done resolves outside the graph and is written as a name (D7)

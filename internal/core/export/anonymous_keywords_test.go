@@ -45,8 +45,8 @@ func TestAnonymousKeywordsAreTypedWhereTheVocabularyStatesThem(t *testing.T) {
 	}, {
 		fixture: "anonymous_portions.sysml",
 		want: []string{
-			"sysx:declaredKeyword \"snapshot\" ;\n    sysml:portionKind \"snapshot\" ;\n    sysml:redefines \"start\" ;",
-			"sysx:declaredKeyword \"timeslice\" ;\n    sysml:portionKind \"timeslice\" ;\n    sysml:redefines \"portionOfLife\" ;",
+			"sysx:declaredKeyword \"snapshot\" ;\n    sysml:isPortion \"true\"^^xsd:boolean ;\n    sysml:portionKind \"snapshot\" ;\n    sysml:redefines \"start\" ;",
+			"sysx:declaredKeyword \"timeslice\" ;\n    sysml:isPortion \"true\"^^xsd:boolean ;\n    sysml:portionKind \"timeslice\" ;\n    sysml:redefines \"portionOfLife\" ;",
 		},
 		forbade: []string{"sysml:isSnapshot", "sysml:isTimeslice"},
 	}, {
@@ -129,7 +129,7 @@ func TestAnonymousKeywordsComeBackFromTheTypedFactsAlone(t *testing.T) {
 // TestContradictoryKeywordGraphsAreRefused corrupts the typed fact under an anonymous
 // keyword: the decoder refuses rather than spelling the canonical keyword.
 func TestContradictoryKeywordGraphsAreRefused(t *testing.T) {
-	snapshot := "    sysx:declaredKeyword \"snapshot\" ;\n    sysml:portionKind \"snapshot\" ;\n    sysml:redefines \"start\" ;"
+	snapshot := "    sysx:declaredKeyword \"snapshot\" ;\n    sysml:isPortion \"true\"^^xsd:boolean ;\n    sysml:portionKind \"snapshot\" ;\n    sysml:redefines \"start\" ;"
 	event := "    a sysml:EventOccurrenceUsage ;\n    sysml:qualifiedName \"AnonymousEvents::Sender::@1\" ;"
 	asserted := "    a sysml:AssertConstraintUsage ;\n    sysml:qualifiedName \"AnonymousAssertions::Vehicle::@2\" ;"
 	cases := []struct {
@@ -137,7 +137,7 @@ func TestContradictoryKeywordGraphsAreRefused(t *testing.T) {
 		want                    []string
 	}{{
 		name: "portion_missing", fixture: "anonymous_portions.sysml",
-		old: snapshot, new: "    sysx:declaredKeyword \"snapshot\" ;\n    sysml:redefines \"start\" ;",
+		old: snapshot, new: "    sysx:declaredKeyword \"snapshot\" ;\n    sysml:isPortion \"true\"^^xsd:boolean ;\n    sysml:redefines \"start\" ;",
 		want: []string{"the `snapshot` declaration <urn:sysmlv2:element:AnonymousPortions__car___400>", "no sysml:portionKind"},
 	}, {
 		name: "portion_wrong", fixture: "anonymous_portions.sysml",
