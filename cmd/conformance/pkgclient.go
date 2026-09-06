@@ -744,6 +744,12 @@ func valueToProto(value opensysml.Value) *pb.Value {
 			vq.Components = append(vq.Components, quantityToProto(component))
 		}
 		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: vq}}
+	case opensysml.MeasurementRef:
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: &pb.MeasurementRef{
+			Unit:     v.Unit,
+			UnitTerm: unitTermToProto(v.Term),
+			UnitId:   v.UnitID,
+		}}}
 	default:
 		return nil
 	}
@@ -827,30 +833,40 @@ func valueFromProto(value *pb.Value) (opensysml.Value, bool) {
 			vq = append(vq, quantityFromProto(component))
 		}
 		return vq, true
+	case *pb.Value_MeasurementRef:
+		return opensysml.MeasurementRef{
+			Unit:   kind.MeasurementRef.GetUnit(),
+			Term:   unitTermFromProto(kind.MeasurementRef.GetUnitTerm()),
+			UnitID: kind.MeasurementRef.GetUnitId(),
+		}, true
 	default:
 		return nil, true
 	}
 }
 
 func quantityFromProto(quantity *pb.Quantity) opensysml.Quantity {
-	out := opensysml.Quantity{Unit: quantity.GetUnit()}
+	out := opensysml.Quantity{Unit: quantity.GetUnit(), Term: unitTermFromProto(quantity.GetUnitTerm())}
 	switch magnitude := quantity.GetMagnitude().(type) {
 	case *pb.Quantity_IntMagnitude:
 		out.Magnitude = opensysml.Int(magnitude.IntMagnitude)
 	case *pb.Quantity_RealMagnitude:
 		out.Magnitude = opensysml.Real(magnitude.RealMagnitude)
 	}
-	if term := quantity.GetUnitTerm(); term != nil {
-		converted := &opensysml.UnitTerm{ScaleNum: term.GetScaleNum(), ScaleDen: term.GetScaleDen()}
-		for _, factor := range term.GetFactors() {
-			converted.Factors = append(converted.Factors, opensysml.UnitFactor{
-				UnitID:   factor.GetUnitId(),
-				Exponent: factor.GetExponent(),
-			})
-		}
-		out.Term = converted
-	}
 	return out
+}
+
+func unitTermFromProto(term *pb.UnitTerm) *opensysml.UnitTerm {
+	if term == nil {
+		return nil
+	}
+	converted := &opensysml.UnitTerm{ScaleNum: term.GetScaleNum(), ScaleDen: term.GetScaleDen()}
+	for _, factor := range term.GetFactors() {
+		converted.Factors = append(converted.Factors, opensysml.UnitFactor{
+			UnitID:   factor.GetUnitId(),
+			Exponent: factor.GetExponent(),
+		})
+	}
+	return converted
 }
 
 func instancesToProto(instances []*opensysml.Instance) []*pb.Instance {
@@ -1013,12 +1029,17 @@ func quantityToProto(quantity opensysml.Quantity) *pb.Quantity {
 	case opensysml.Real:
 		out.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: float64(magnitude)}
 	}
-	if quantity.Term != nil {
-		term := &pb.UnitTerm{ScaleNum: quantity.Term.ScaleNum, ScaleDen: quantity.Term.ScaleDen}
-		for _, factor := range quantity.Term.Factors {
-			term.Factors = append(term.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
-		}
-		out.UnitTerm = term
+	out.UnitTerm = unitTermToProto(quantity.Term)
+	return out
+}
+
+func unitTermToProto(term *opensysml.UnitTerm) *pb.UnitTerm {
+	if term == nil {
+		return nil
+	}
+	out := &pb.UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
+	for _, factor := range term.Factors {
+		out.Factors = append(out.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
 	}
 	return out
 }
