@@ -239,6 +239,27 @@ func TestPinRefusesAValueWithNoLiteral(t *testing.T) {
 	}
 }
 
+// TestPinRefusesATensorQuantity: the term language has scalar variables only, so
+// a tensor is refused by name rather than flattened or silently dropped.
+func TestPinRefusesATensorQuantity(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	metre := quantityValue(t, ctx, idx, "test::Panel::clearance").Quantity().Unit
+	num := []semantics.Value{{Kind: semantics.ValReal, Real: 1}, {Kind: semantics.ValReal, Real: 0}, {Kind: semantics.ValReal, Real: 0}, {Kind: semantics.ValReal, Real: 1}}
+	tensor := runtime.NewTensorQuantityValue([]int64{2, 2}, num, []runtime.Unit{metre, metre, metre, metre})
+	sym := symbolNamed(t, idx, "test::Panel::speedIsBounded")
+	speed := symbolNamed(t, idx, "test::Panel::maxSpeed")
+	_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{
+		Feature: speed, Name: "maxSpeed", Value: tensor, Source: PinChosen,
+	}})
+	var refusal *PinError
+	if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+		t.Fatalf("error %v, want a typed refusal to fix a tensor", err)
+	}
+	if !strings.Contains(refusal.Reason, "is not a scalar") || !strings.Contains(refusal.Value, "Tensor(2, 2)") {
+		t.Errorf("refusal %+v does not name the tensor and why", refusal)
+	}
+}
+
 // TestPinRefusesAValueOfTheWrongType: a string does not fix a number, whatever
 // the model states.
 func TestPinRefusesAValueOfTheWrongType(t *testing.T) {

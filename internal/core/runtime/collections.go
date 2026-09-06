@@ -58,6 +58,8 @@ func collectionElements(val Value) []Value {
 		return constValues(val.Vector().Elements)
 	case ValVectorQuantity:
 		return constValues(val.VectorQuantity().Num)
+	case ValTensorQuantity:
+		return constValues(val.TensorQuantity().Num)
 	}
 	return elementsOf(val)
 }
@@ -69,7 +71,7 @@ func overCollectionElements(apply builtinFunc) builtinFunc {
 	return func(ec *EvalContext, args []Value) (Value, error) {
 		if len(args) > 0 {
 			switch args[0].Kind {
-			case ValArray, ValVector, ValVectorQuantity:
+			case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
 				elements, err := ec.newSequence(collectionElements(args[0]))
 				if err != nil {
 					return Value{}, err
@@ -467,6 +469,8 @@ func arrayIndex(op string, arr Value, indexesVal Value) (Value, error) {
 			elements[i] = NewQuantityValue(vq.component(i))
 		}
 		return (&Array{Dimensions: []int64{int64(vq.Dimension())}, Elements: elements}).at(op, indexes)
+	case ValTensorQuantity:
+		return arr.TensorQuantity().componentArray().at(op, indexes)
 	}
 	return Value{}, fmt.Errorf("%w: %s requires an Array (arr: Array[1]), got %s", ErrTypeMismatch, op, describeValue(arr))
 }

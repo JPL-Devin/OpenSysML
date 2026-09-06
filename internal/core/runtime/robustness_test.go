@@ -335,6 +335,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
 	t.Run("measurement_reference_failure_modes", testMeasurementReferenceFailureModes)
+	t.Run("tensor_quantity_failure_modes", testTensorQuantityFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -1318,7 +1319,8 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrUnevaluableLibraryFunction},
 		{"coordinate transformation", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrUnevaluableLibraryFunction},
 		{"outer product", "Quantities::TensorQuantityValue", "VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
-		{"tensor sum", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+		{"tensor sum of number sequences", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrTypeMismatch},
+		{"tensor product", "Quantities::TensorQuantityValue", "TensorCalculations::tensorTensorMult(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((3.0, 4.0)) [SI::m])", ErrUnevaluableLibraryFunction},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := fmt.Sprintf(`
@@ -1346,6 +1348,70 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("value err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// testTensorQuantityFailureModes: a tensor the library does not determine is a typed
+// error at the call, never a value: components that do not fill the reference,
+// operands of two shapes, incommensurable components, a unit predicate over a
+// shape with no identity, and the five calculations the library leaves bodiless
+// and underspecified, each naming itself.
+func testTensorQuantityFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  error
+		names string
+	}{
+		{"element count", "TensorCalculations::'['((1.0, 2.0, 3.0), stressRef)", ErrMultiplicityViolation, "n = mRef.flattenedSize"},
+		{"one reference for four components", "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), oneRef)", ErrMultiplicityViolation, "oneRef"},
+		{"a unit as the reference", "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), (Pa, Pa, Pa, Pa))", ErrTypeMismatch, "TensorMeasurementReference"},
+		{"shape mismatch", "stress + TensorCalculations::'['((1.0, 2.0, 3.0), rowRef)", ErrMultiplicityViolation, "dimensions [2, 2] and [3] differ"},
+		{"tensor minus scalar", "stress - 2 [Pa]", ErrMultiplicityViolation, "dimensions [2, 2] and [] differ"},
+		{"incommensurable components", "stress + TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), lengthRef)", ErrIncommensurableUnits, ""},
+		{"non-square unit predicate", "TensorCalculations::isUnitTensorQuantity(TensorCalculations::'['((1.0, 2.0, 3.0), rowRef))", ErrUnevaluableLibraryFunction, "only a square tensor of order two has an identity"},
+		{"unset covariance", "stress.contravariantOrder", ErrUnevaluableLibraryFunction, "orderSum"},
+		{"tensor times vector", "TensorCalculations::tensorVectorMult(stress, VectorFunctions::VectorOf((1.0, 2.0)) [Pa])", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorVectorMult"},
+		{"vector times tensor", "TensorCalculations::vectorTensorMult(VectorFunctions::VectorOf((1.0, 2.0)) [Pa], stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::vectorTensorMult"},
+		{"tensor times tensor", "TensorCalculations::tensorTensorMult(stress, stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
+		{"tensor times tensor by operator", "stress * stress", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
+		{"outer product", "VectorCalculations::outer(VectorFunctions::VectorOf((1.0, 2.0)) [Pa], VectorFunctions::VectorOf((1.0, 2.0)) [Pa])", ErrUnevaluableLibraryFunction, "VectorCalculations::outer"},
+		{"transform", "TensorCalculations::transform(stressRef, stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::transform"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					private import ISQ::*;
+					private import SI::*;
+					private import MeasurementReferences::*;
+					private import Quantities::*;
+					attribute stressRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); }
+					attribute lengthRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (Pa, m, Pa, Pa); }
+					attribute rowRef : TensorMeasurementReference { :>> dimensions = (3); :>> mRefs = (Pa, Pa, Pa); }
+					attribute oneRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = Pa; }
+					attribute stress = TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), stressRef);
+					part def Holder {
+						attribute value : TensorQuantityValue = %s;
+					}
+				}
+			`, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+			if sym == nil {
+				t.Fatal("part def Holder not found")
+			}
+			inst, err := ctx.Instantiate(sym)
+			if err != nil {
+				t.Fatalf("Instantiate err = %v", err)
+			}
+			_, err = inst.GetFeatureValue(ctx, "value")
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("value err = %v, want %v", err, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.names) {
+				t.Errorf("value err = %v, want it to state %q", err, tc.names)
 			}
 		})
 	}

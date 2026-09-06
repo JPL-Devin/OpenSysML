@@ -196,6 +196,8 @@ func heldSame(prior, now Value) bool {
 		return prior.Quantity().Unit.Product.Equal(now.Quantity().Unit.Product) && valueIdentical(prior, now)
 	case ValVectorQuantity:
 		return vectorQuantityHeldSame(prior.VectorQuantity(), now.VectorQuantity())
+	case ValTensorQuantity:
+		return tensorQuantityHeldSame(prior.TensorQuantity(), now.TensorQuantity())
 	case ValSequence:
 		return elementsHeldSame(prior.Sequence().Elements(), now.Sequence().Elements())
 	case ValArray:

@@ -358,6 +358,11 @@ func FormatTraceValue(v Value) string {
 			return v.Kind.String()
 		}
 		return v.VectorQuantity().format(formatConst)
+	case ValTensorQuantity:
+		if v.TensorQuantity() == nil {
+			return v.Kind.String()
+		}
+		return v.TensorQuantity().format(formatConst)
 	case ValMeasurementRef:
 		if v.MeasurementRef() == nil {
 			return v.Kind.String()

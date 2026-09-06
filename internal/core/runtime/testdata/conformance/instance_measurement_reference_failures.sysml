@@ -2,9 +2,9 @@
 // A conversion between dimensions is incommensurable; a reference is neither a
 // number nor an addend; a declaration's own members (unitConversion,
 // quantityDimension) are not what the value holds; a vector quantity whose axes
-// differ has no single reference; and the coordinate frames and tensors the
-// library declares have no runtime value, so `transform` and `outer` are not
-// evaluable.
+// differ has no single reference; the coordinate frames the library declares
+// have no runtime value, so `transform` is not evaluable; and `outer` declares
+// a VectorQuantityValue result no outer product is.
 package test {
 	public import ISQ::*;
 	public import SI::*;

@@ -168,7 +168,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return true, "", nil
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
-	case ValArray, ValVector, ValVectorQuantity:
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
 		return ctx.structuredConforms(scope, *value, declared, how)
 	case ValMeasurementRef:
 		return ctx.measurementRefConforms(value.MeasurementRef(), declared)
@@ -209,12 +209,16 @@ func isScalarConstant(value *Value) bool {
 	return value.Kind == ValConst || value.Kind == ValComplex || value.Kind == ValString
 }
 
-// isStructuredValue reports an array, vector or vector quantity value.
+// isStructuredValue reports an array, vector, vector quantity or tensor quantity value.
 func isStructuredValue(value *Value) bool {
-	return value.Kind == ValArray || value.Kind == ValVector || value.Kind == ValVectorQuantity
+	switch value.Kind {
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
+		return true
+	}
+	return false
 }
 
-// structuredConforms judges a written array, vector or vector quantity: its type's
+// structuredConforms judges a written array, vector or vector/tensor quantity: its type's
 // supertypes, or a non-scalar specialization of its base type whose shape it fits.
 func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol, how admission) (bool, string, error) {
 	direct, err := ctx.structuredValueType(value)
@@ -240,14 +244,16 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 			return ok, refusal, err
 		}
 	}
-	if value.Kind != ValVectorQuantity {
-		return true, "", nil
-	}
-	vq := value.VectorQuantity()
-	for i := 0; i < vq.Dimension(); i++ {
-		if ok, refusal, err := ctx.quantityConforms(NewQuantityValue(vq.component(i)), declared); !ok || err != nil {
-			return ok, refusal, err
+	switch value.Kind {
+	case ValVectorQuantity:
+		vq := value.VectorQuantity()
+		for i := 0; i < vq.Dimension(); i++ {
+			if ok, refusal, err := ctx.quantityConforms(NewQuantityValue(vq.component(i)), declared); !ok || err != nil {
+				return ok, refusal, err
+			}
 		}
+	case ValTensorQuantity:
+		return ctx.tensorQuantityConforms(value.TensorQuantity(), declared)
 	}
 	return true, "", nil
 }
@@ -370,7 +376,7 @@ func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared 
 	return true, "", nil
 }
 
-// structuredDimensions is the dimensions of an array, or the one of a vector.
+// structuredDimensions is the dimensions of an array or tensor, or the one of a vector.
 func structuredDimensions(value Value) []int64 {
 	switch value.Kind {
 	case ValArray:
@@ -379,12 +385,14 @@ func structuredDimensions(value Value) []int64 {
 		return []int64{int64(value.Vector().Dimension())}
 	case ValVectorQuantity:
 		return []int64{int64(value.VectorQuantity().Dimension())}
+	case ValTensorQuantity:
+		return value.TensorQuantity().Dimensions
 	}
 	return nil
 }
 
 // structuredElements is the row-major elements of an array or vector, or the
-// magnitudes of a vector quantity's axes.
+// magnitudes of a vector or tensor quantity's components.
 func structuredElements(value Value) []Value {
 	switch value.Kind {
 	case ValArray:
@@ -393,6 +401,8 @@ func structuredElements(value Value) []Value {
 		return constValues(value.Vector().Elements)
 	case ValVectorQuantity:
 		return constValues(value.VectorQuantity().Num)
+	case ValTensorQuantity:
+		return constValues(value.TensorQuantity().Num)
 	}
 	return nil
 }

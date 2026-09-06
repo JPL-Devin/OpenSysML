@@ -9,6 +9,6 @@
     "turn": {"type": "Quantity", "value": 9, "unit": "rad"},
     "halfTurn": {"error": "unit has no root: rad raises the dimension-one unit rad to the odd power 1"},
     "ratio": {"type": "Real", "value": 3.0},
-    "spread": {"error": "not evaluable: VectorCalculations::outer: a tensor quantity has no representation: the runtime has no tensor value kind"}
+    "spread": {"error": "not evaluable: VectorCalculations::outer: the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two"}
   }
 }
