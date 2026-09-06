@@ -739,15 +739,7 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("private ")
 		note = joinNotes(note, "package visibility is written as private")
 	}
-	if p.Attrs["isAbstract"] == "true" {
-		b.WriteString("abstract ")
-	}
-	if p.Attrs["isDerived"] == "true" {
-		b.WriteString("derived ")
-	}
-	if p.Attrs["isReadOnly"] == "true" && kw == "attribute" {
-		b.WriteString("readonly ")
-	}
+	// Modifiers follow SysML.xtext RefPrefix: direction, derived, abstract, constant.
 	if p.Type == "Port" {
 		dir, dnote := portDirection(p)
 		b.WriteString(dir)
@@ -762,6 +754,19 @@ func (m *migration) feature(p *xmi.Element) {
 			case "inout":
 				b.WriteString("inout ")
 			}
+		}
+	}
+	if p.Attrs["isDerived"] == "true" {
+		b.WriteString("derived ")
+	}
+	if p.Attrs["isAbstract"] == "true" {
+		b.WriteString("abstract ")
+	}
+	if p.Attrs["isReadOnly"] == "true" && kw == "attribute" {
+		if ownerCat.occurrence() {
+			b.WriteString("constant ")
+		} else {
+			note = joinNotes(note, "isReadOnly is dropped: only a feature of an occurrence type can be constant")
 		}
 	}
 	b.WriteString(prefix)

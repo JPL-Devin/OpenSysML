@@ -57,6 +57,17 @@ func (c category) keyword() string {
 	return ""
 }
 
+// occurrence reports whether the category's v2 definition is an occurrence
+// type, whose features may be variable and so constant (KerML 8.3.3.1.5).
+func (c category) occurrence() bool {
+	switch c {
+	case catPartDef, catPortDef, catConstraintDef, catRequirementDef, catConnectionDef,
+		catIndividualDef, catVerificationDef, catItemDef:
+		return true
+	}
+	return false
+}
+
 // requirementStereotypes are the SysML requirement stereotype and the
 // specialized requirement kinds MagicDraw's SysML customization adds.
 var requirementStereotypes = []string{
