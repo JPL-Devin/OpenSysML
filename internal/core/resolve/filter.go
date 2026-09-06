@@ -13,17 +13,12 @@ import (
 // where a lookup enumerates the candidates an import surfaced, since only the
 // semantic model can judge a condition (docs/project/spec-compliance.md).
 
-// importAdmits returns the test an element an import surfaces has to pass: the
-// import's own filter clause (`import P::*[@Safety]`) and the `filter` members
-// of the namespace declaring the import, which restrict every membership it
-// imports — including a `filter` beside the `expose` lines of a view.
-func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
-	return r.importAdmitsInto(scope, scope, imp)
-}
-
-// importAdmitsInto is importAdmits for an import inherited into the view owning
-// into: what a view exposes through an inherited `expose` has to satisfy the
-// conditions of the inheriting view and its own supertypes as well.
+// importAdmitsInto returns the test an element an import surfaces has to pass:
+// the import's own filter clause (`import P::*[@Safety]`) and the `filter`
+// members of the namespace declaring the import, which restrict every
+// membership it imports — including a `filter` beside the `expose` lines of a
+// view. When the import is inherited into the view owning into, what it exposes
+// has to satisfy the conditions of that view and its supertypes as well.
 func (r *Resolver) importAdmitsInto(into, scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
 	filters := r.namespaceFilters(scope)
 	if imp.IsExpose {
@@ -265,7 +260,7 @@ func (r *Resolver) AdmittedTopLevel(doc string, bindings []symbols.RootBinding) 
 
 // ImportedElements enumerates the elements imp surfaces into scope, with the
 // same admission a lookup through imp makes: the import's filter clause and the
-// `filter` members of the declaring namespace (see importAdmits).
+// `filter` members of the declaring namespace (see importAdmitsInto).
 func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
 	return r.ImportedElementsInto(scope, scope, imp)
 }
