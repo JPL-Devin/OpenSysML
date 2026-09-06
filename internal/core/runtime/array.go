@@ -227,8 +227,8 @@ const (
 	scalarValueTypeFQN          = "ScalarValues::ScalarValue"
 )
 
-// structuredFeature reads a library feature of an array, vector, vector
-// quantity, scalar quantity or measurement reference; the second result is
+// structuredFeature reads a library feature of an array, vector, vector, tensor
+// or scalar quantity, or measurement reference; the second result is
 // false for another name. A sequence it answers is charged to the element budget.
 func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, error) {
 	switch val.Kind {
@@ -257,6 +257,8 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 		return ctx.quantityFeature(val, name)
 	case ValMeasurementRef:
 		return ctx.measurementRefFeature(val, name)
+	case ValTensorQuantity:
+		return ctx.tensorQuantityFeature(val, name)
 	}
 	return Value{}, false, nil
 }
@@ -377,7 +379,7 @@ func (ctx *Context) structuredObject(value Value) (*Instance, bool) {
 
 // structuredValueType is the most specific library type a structured value is
 // of: the object it was read from or an Array, a Cartesian (three-)vector, a
-// vector quantity.
+// vector or tensor quantity.
 func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	if inst, ok := ctx.structuredObject(value); ok {
 		return ctx.objectType(inst), nil
@@ -394,6 +396,8 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 		}
 	case ValVectorQuantity:
 		fqn = vectorQuantityTypeFQN
+	case ValTensorQuantity:
+		fqn = tensorQuantityTypeFQN
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -401,7 +405,8 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 }
 
 // structuredBaseType is the type a structured value is of whatever its shape (Array,
-// NumericalVectorValue, VectorQuantityValue, or the type of the object it was read from).
+// NumericalVectorValue, VectorQuantityValue, TensorQuantityValue, or the type of the
+// object it was read from).
 func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
 	if inst, ok := ctx.structuredObject(value); ok {
 		return ctx.objectType(inst), nil
@@ -414,6 +419,8 @@ func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
 		fqn = numericalVectorTypeFQN
 	case ValVectorQuantity:
 		fqn = vectorQuantityTypeFQN
+	case ValTensorQuantity:
+		fqn = tensorQuantityTypeFQN
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -630,6 +637,14 @@ func structuredKey(v Value) uint64 {
 		vq := v.VectorQuantity()
 		for i := range vq.Num {
 			write(valueKeyFunc(NewQuantityValue(vq.component(i))))
+		}
+	case ValTensorQuantity:
+		tq := v.TensorQuantity()
+		for _, d := range tq.Dimensions {
+			write(valueKeyFunc(integerValue(d)))
+		}
+		for _, component := range tq.components() {
+			write(valueKeyFunc(component))
 		}
 	}
 	return h.Sum64()

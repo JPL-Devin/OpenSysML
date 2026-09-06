@@ -211,16 +211,27 @@ Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evalu
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
 `cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured
 when this record was last updated and are not the current baseline — `go run ./cmd/pilot-exec-diff`
-prints the current ones. State of the 126 committed cases, the original 32, the 62 the
+prints the current ones. State of the 138 committed cases, the original 32, the 62 the
 expression round added, the 10 of `value_classification.cases`, the 3 of `contextual_names.cases`,
-the 14 of `rational_terms.cases` and the 5 the empty-aggregate and subsetting round added to
-`w6d_expr_depth.cases`:
+the 14 of `rational_terms.cases`, the 5 the empty-aggregate and subsetting round added to
+`w6d_expr_depth.cases` and the 12 of `tensor_quantities.cases`:
 
 ```
 agree: 69 · kind-only: 1 · order-only: 0 · disagree: 4
-pilot-unevaluated: 36 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
+pilot-unevaluated: 48 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
 nondeterministic: 0
 ```
+
+The twelve `tensor_quantities.cases` probe `TensorCalculations` over a 2×2 stress tensor built
+by `TensorCalculations::'['` on a model-declared `TensorMeasurementReference`, added with the
+tensor quantity value they were meant to referee and could not: the pilot answers every one —
+the construction (`InvocationExpression [`), `dimensions` and `flattenedSize` (the `Feature
+dimensions` itself), `#` (`IndexExpression #`), `+` (`OperatorExpression +`), the scalar
+multiplications, the zero and unit predicates, `tensorTensorMult` and `VectorCalculations::outer`,
+qualified at the prompt or as an attribute's value — with the unevaluated node, so all twelve
+land in `pilot-unevaluated`. The semantics are therefore self-assessed against the vendored
+declarations, in [spec-compliance.md](spec-compliance.md) (*Structured values*) and
+[omg-issues.md](omg-issues.md#vectorcalculationsouter--a-vectorquantityvalue-return-for-an-order-two-product).
 
 The fourteen `rational_terms.cases` probe `RationalFunctions::rat`, `numer` and `denom`, added
 with the implementation they were meant to referee and could not: the pilot answers every call

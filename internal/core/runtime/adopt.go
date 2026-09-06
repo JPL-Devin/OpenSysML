@@ -609,6 +609,8 @@ func unitsOf(v Value) []Unit {
 		return []Unit{v.MeasurementRef().Unit}
 	case ValVectorQuantity:
 		return v.VectorQuantity().Units
+	case ValTensorQuantity:
+		return v.TensorQuantity().Units
 	case ValSequence:
 		if unit, ok := v.Sequence().ElementUnit(); ok {
 			return []Unit{unit}
@@ -989,6 +991,13 @@ func (a *adoption) rewrite(val Value) Value {
 			units[i] = a.rewriteUnit(unit)
 		}
 		return NewVectorQuantityValue(vq.Num, units)
+	case ValTensorQuantity:
+		tq := *val.TensorQuantity()
+		tq.Units = make([]Unit, len(tq.Units))
+		for i, unit := range val.TensorQuantity().Units {
+			tq.Units[i] = a.rewriteUnit(unit)
+		}
+		return Value{Kind: ValTensorQuantity, ref: &tq}
 	default:
 		return val
 	}

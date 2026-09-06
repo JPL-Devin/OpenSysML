@@ -57,6 +57,8 @@ func describeOperand(val Value) string {
 		return "a vector"
 	case ValVectorQuantity:
 		return "a vector quantity"
+	case ValTensorQuantity:
+		return "a tensor quantity"
 	case ValMeasurementRef:
 		return "a measurement reference"
 	}

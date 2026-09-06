@@ -1182,17 +1182,71 @@ func TestAdoptRebindsTheUnitsAWrittenValueNames(t *testing.T) {
 	}
 }
 
+// A tensor a run wrote is carried over as a tensor: its shape and magnitudes
+// intact, every component's unit rebound to the re-analysis's declaration.
+func TestAdoptRebindsATensorsComponentUnits(t *testing.T) {
+	src := strings.Replace(adoptUnitSrc,
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute strain : Quantities::TensorQuantityValue; }\n"+
+			"attribute strainRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (furlong, m, furlong, m); }", 1)
+	prev := libraryContextOver(t, src)
+	scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope
+	field, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::field"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	val, err := evalIn(t, prev, scope, "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), strainRef)")
+	if err != nil {
+		t.Fatalf("tensor: %v", err)
+	}
+	if err := field.SetFeatureValue(prev, "strain", val); err != nil {
+		t.Fatalf("write strain: %v", err)
+	}
+	shapes := prev.ShapesOf(field)
+
+	ctx := libraryContextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, field); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	strain, err := field.GetFeatureValue(ctx, "strain")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(strain): %v", err)
+	}
+	if strain.Value.Kind != ValTensorQuantity {
+		t.Fatalf("strain carried over as %s, want a tensor quantity", FormatValue(strain.Value))
+	}
+	furlong := lookupOne(t, ctx.resolver.Index(), "Demo::furlong")
+	if decl := strain.Value.TensorQuantity().Units[0].Product.Powers[0].Unit; decl != furlong {
+		t.Errorf("component 1 is measured in %p, want the furlong declared by the re-analysis %p", decl, furlong)
+	}
+	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
+	for expr, want := range map[string]string{
+		"field.strain":                       "Tensor(2, 2)[1.0 [furlong], 2.0 [m], 3.0 [furlong], 4.0 [m]]",
+		"field.strain.dimensions":            "[2, 2]",
+		"field.strain#(1, 1) == 201.168 [m]": "true",
+		"field.strain.mRef":                  "Array(2, 2)[furlong, m, furlong, m]",
+		"TensorCalculations::scalarTensorMult(2, field.strain)#(2, 1)": "6.0 [furlong]",
+	} {
+		got, err := evalIn(t, ctx, newScope, expr)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s after the carry-over = %s, %v; want %s", expr, FormatValue(got), err, want)
+		}
+	}
+}
+
 // A value measured in a unit the re-analysis redefined (same name, other
 // reduction) is refused rather than carried over with a stale conversion.
 func TestAdoptRefusesAUnitWhoseReductionChanged(t *testing.T) {
 	src := strings.Replace(adoptUnitSrc,
 		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; }",
-		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute pos : Quantities::VectorQuantityValue; }", 1)
+		"part def Field { attribute width : LengthValue; attribute unit : LengthUnit; attribute pos : Quantities::VectorQuantityValue; attribute strain : Quantities::TensorQuantityValue; }\n"+
+			"attribute strainRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (furlong, furlong, furlong, furlong); }", 1)
 	changed := libraryContextOver(t, strings.Replace(src, "conversionFactor = 201.168", "conversionFactor = 220", 1))
 	for feature, value := range map[string]string{
-		"width": "3 [furlong]",
-		"unit":  "furlong",
-		"pos":   "VectorFunctions::VectorOf((1.0, 2.0)) [furlong]",
+		"width":  "3 [furlong]",
+		"unit":   "furlong",
+		"pos":    "VectorFunctions::VectorOf((1.0, 2.0)) [furlong]",
+		"strain": "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), strainRef)",
 	} {
 		prev := libraryContextOver(t, src)
 		scope := lookupOne(t, prev.resolver.Index(), "Demo").Scope

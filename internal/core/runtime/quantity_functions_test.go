@@ -304,7 +304,7 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"MeasurementRefCalculations::ToString(1)", ErrTypeMismatch, `function MeasurementRefCalculations::ToString parameter "x" requires a measurement reference such as SI::m, got an Integer`},
 		{"MeasurementRefCalculations::'CoordinateFrame*'(m, s)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::'CoordinateFrame*': a CoordinateFrame is a library declaration whose origin and basisDirections the runtime holds no value of"},
 		{"VectorCalculations::'['((1.0, 2.0), m)", ErrUnevaluableLibraryFunction, "VectorCalculations::'[': a VectorMeasurementReference is a CoordinateFrame"},
-		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::outer: a tensor quantity has no representation"},
+		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::outer: the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two"},
 		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf((1.0, 2.0)) [m], 0 [s])", ErrDivisionByZero, "function VectorCalculations::vectorScalarQuantityDiv"},
 		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((1.0, 2.0)) [s])", ErrIncommensurableUnits, "function VectorCalculations::'+'"},
 		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m])", ErrTypeMismatch, "requires vectors of equal dimension, got 2 and 3"},
@@ -312,8 +312,11 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"VectorCalculations::'+'((1 [m], 2 [m]), (3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::'+' parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
 		{"VectorCalculations::norm((3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::norm parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
 		{"VectorCalculations::vectorScalarMult((1.0, 2.0), 2 [m])", ErrTypeMismatch, `function VectorCalculations::vectorScalarMult parameter "x" requires a numeric value`},
-		{"TensorCalculations::'+'(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::'+': a tensor quantity has no representation"},
-		{"TensorCalculations::tensorTensorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
+		{"TensorCalculations::'+'(1, 2)", ErrTypeMismatch, `function TensorCalculations::'+' parameter "x" requires a TensorQuantityValue (a tensor, vector or scalar quantity), got an Integer`},
+		{"TensorCalculations::tensorTensorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult: the declaration states only the parameter and result types; neither TensorCalculations nor the Kernel says which indices contract"},
+		{"TensorCalculations::tensorVectorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorVectorMult: the declaration states only the parameter and result types"},
+		{"TensorCalculations::vectorTensorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::vectorTensorMult: the declaration states only the parameter and result types"},
+		{"TensorCalculations::transform(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::transform: a CoordinateTransformation has no representation: the runtime holds a scalar measurement reference but no coordinate frame with an origin and basisDirections, a tensor quantity carries a unit per component and no source frame"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
@@ -412,7 +415,7 @@ func testQuantityCalculationThatHasNoValue(t *testing.T) {
 		{"ConvertQuantity(side, side)", ErrTypeMismatch},
 		{"ConvertQuantity(side, s)", ErrIncommensurableUnits},
 		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
-		{"TensorCalculations::isZeroTensorQuantity(side)", ErrUnevaluableLibraryFunction},
+		{"TensorCalculations::tensorTensorMult(side, side)", ErrUnevaluableLibraryFunction},
 	} {
 		got, err := evalIn(t, ctx, scope, tt.expr)
 		if !errors.Is(err, tt.want) {
