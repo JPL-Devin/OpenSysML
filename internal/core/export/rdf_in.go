@@ -1308,6 +1308,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		{"isVariation", "variation"},
 		{"isVariant", "variant"},
 		{"isComposite", "composite"},
+		{"isPortion", "portion"},
 		{"isDerived", "derived"},
 		{"isConstant", "constant"},
 		{"isIndividual", "individual"},
@@ -1327,7 +1328,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		if flag.property == "isVariant" && d.enumeratedValue(el) {
 			continue
 		}
-		if d.boolOf(el, rdf.SysML+flag.property) {
+		if d.boolOf(el, rdf.SysML+flag.property) && !d.portionSubsumes(el, flag.property) {
 			words = append(words, flag.keyword)
 		}
 		// The cross feature an end owns is written right after `end`
@@ -2141,6 +2142,7 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 			Note: "it declares neither a name nor a multiplicity, and one or the other introduces a cross feature ahead of its end",
 		}
 	}
+	words = append(d.crossFeaturePrefixWords(cross), words...)
 	typed, err := d.referenceList(cross, rdf.SysML+relationshipProperty[ast.RelTyping])
 	if err != nil {
 		return nil, err
@@ -2153,6 +2155,50 @@ func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
 		return nil, err
 	}
 	return append(words, relationships...), nil
+}
+
+// crossFeaturePrefixWords writes the prefix a cross feature owns ahead of its name
+// (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix, SysML.xtext BasicUsagePrefix).
+func (d *decoder) crossFeaturePrefixWords(cross *element) []string {
+	var words []string
+	if direction, ok := d.stringOf(cross, rdf.SysML+pDirection); ok {
+		words = append(words, direction)
+	}
+	for _, flag := range []struct {
+		property string
+		keyword  string
+	}{
+		{"isDerived", "derived"},
+		{"isAbstract", "abstract"},
+		{"isVariation", "variation"},
+		{"isComposite", "composite"},
+		{"isPortion", "portion"},
+	} {
+		if d.boolOf(cross, rdf.SysML+flag.property) && !d.portionSubsumes(cross, flag.property) {
+			words = append(words, flag.keyword)
+		}
+	}
+	if prefix, ok := d.stringOf(cross, rdf.OpenSysML+xDeclaredPrefix); ok {
+		words = append(words, prefix)
+	}
+	for _, flag := range []struct {
+		property string
+		keyword  string
+	}{
+		{"isConstant", "constant"},
+		{"isReference", "ref"},
+	} {
+		if d.boolOf(cross, rdf.SysML+flag.property) {
+			words = append(words, flag.keyword)
+		}
+	}
+	return words
+}
+
+// portionSubsumes reports whether `portion` stands in for the flag: a portion is
+// composite, and the notation spells that `portion` alone (KerML.xtext BasicFeaturePrefix).
+func (d *decoder) portionSubsumes(el *element, property string) bool {
+	return property == "isComposite" && d.boolOf(el, rdf.SysML+"isPortion")
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the

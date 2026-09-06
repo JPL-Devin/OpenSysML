@@ -1,8 +1,6 @@
 package ast
 
 import (
-	"slices"
-
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -547,24 +545,19 @@ type FlowEnds struct {
 // the `x1 [0..1]` of `end x1 [0..1] feature x : C1` (KerML 8.3.4.5).
 type CrossFeatureMember struct {
 	NodeBase
+	// The prefix after `end` is the cross feature's (KerML.xtext BasicFeaturePrefix).
+	Direction     FeatureDirection
+	IsDerived     bool
+	IsAbstract    bool
+	IsVariation   bool
+	IsComposite   bool
+	IsPortion     bool
+	IsVariable    bool
+	IsConstant    bool
+	IsReference   bool
 	Ident         Identification
 	Multiplicity  *Multiplicity
 	Relationships []*Relationship
-}
-
-// OwnRelationships is the relationships a usage states of itself: the parser
-// also lists its cross feature's on it, and those belong to the cross feature.
-func OwnRelationships(u *Usage) []*Relationship {
-	if u.CrossFeature == nil || len(u.CrossFeature.Relationships) == 0 {
-		return u.Relationships
-	}
-	own := make([]*Relationship, 0, len(u.Relationships))
-	for _, rel := range u.Relationships {
-		if !slices.Contains(u.CrossFeature.Relationships, rel) {
-			own = append(own, rel)
-		}
-	}
-	return own
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.

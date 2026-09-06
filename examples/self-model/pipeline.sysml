@@ -245,7 +245,10 @@ package OpenSysMLPipeline {
             attribute :>> elementScoped = true;
         }
         part metadataAnnotations : TypeCheck { attribute :>> goType = "MetadataAnnotationPass"; }
-        part annotationOwnership : ConstraintCheck { attribute :>> goType = "AnnotationOwnershipPass"; }
+        part annotationOwnership : ConstraintCheck {
+            attribute :>> goType = "AnnotationOwnershipPass";
+            attribute :>> elementScoped = true;
+        }
         part occurrenceTyping : TypeCheck { attribute :>> goType = "W8DOccurrenceTypingPass"; }
         part connectorFeaturing : ConstraintCheck { attribute :>> goType = "W8DConnectorFeaturingPass"; }
         part flowEnds : ConstraintCheck { attribute :>> goType = "W8DFlowEndPass"; }

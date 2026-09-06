@@ -28,10 +28,10 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 258,
-        "digest": "sha256:99e4ad1a9612deaa8beed90d0aefa443c4c007ac92e3c3734f5888e67ecb5f8c"
+        "digest": "sha256:5783898a4c0ddb3565c4e049e023866b8fc3b59edb47e0b0299f18d2b1274b2d"
       }
     ],
-    "recorded": "2026-09-06"
+    "recorded": "2026-09-05"
   },
   "totals": {
     "cases": 258,
@@ -1540,6 +1540,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k53-cross-feature-typed-narrower-than-end.kerml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -2083,18 +2092,9 @@
       "pilotErrors": 3
     },
     {
-      "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
+      "path": "semantic/s88-cross-feature-typed-narrower-than-end.sysml",
       "source": "semantic",
-      "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
-      "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
-    },
-    {
-      "path": "semantic/s90-requirement-def-inherits-two-subjects.sysml",
-      "source": "semantic",
-      "rule": "A requirement definition inheriting a subject from each of two generals has two subjects (SysML 7.20 Requirements; pilot validateRequirementDefinitionOnlyOneSubject).",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,

@@ -3,6 +3,7 @@ package semantics
 import (
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -96,4 +97,82 @@ func TestOwnedCrossFeatureTypesSysML(t *testing.T) {
 	owns := nested(t, p.Scope, "Owns")
 	wantTypes(t, m, nested(t, owns.Scope, "owner", "owners"), "Person")
 	wantTypes(t, m, nested(t, owns.Scope, "car", "cars"), "Car")
+}
+
+// The typing, subsetting and multiplicity written ahead of an end's kind keyword
+// belong to its named cross feature (KerML.xtext OwnedCrossingFeature); the end
+// keeps only the relationships it states itself.
+func TestNamedCrossFeatureRelationshipsStayOnCrossFeature(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"t.kerml", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end x1 : Sub1 [0..1] :> g feature x : C1;
+				end y1 [0..1] feature y : C2;
+			}
+		}`},
+		{"keywords.kerml", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end x1 [0..1] typed by Sub1 subsets g feature x : C1;
+				end y1 [0..1] feature y : C2;
+			}
+		}`},
+		{"t.sysml", `package P {
+			part def C1; part def C2;
+			part def Sub1 :> C1;
+			item g : C1;
+			connection def A {
+				end x1 : Sub1 [0..1] :> g item x : C1;
+				end y1 [0..1] item y : C2;
+			}
+		}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamed(t, tc.name, tc.src)
+			p := sym(t, root, "P")
+			g := nested(t, p.Scope, "g")
+			a := nested(t, p.Scope, "A")
+			x := nested(t, a.Scope, "x")
+			x1 := nested(t, a.Scope, "x", "x1")
+
+			wantRelationshipKinds(t, x, ast.RelTyping)
+			wantRelationshipKinds(t, x1, ast.RelTyping, ast.RelSubsets)
+			wantTypes(t, m, x, "C1")
+			wantTypes(t, m, x1, "Sub1", "C1")
+			if got := m.DeclaredFeatureTypes(x); len(got) != 1 || got[0].Name != "C1" {
+				t.Fatalf("end x declares types %v, want only C1", got)
+			}
+			if m.Conforms(x, g) {
+				t.Fatalf("end x subsets g, want that subsetting left to x1: %v", m.DirectSupertypes(x))
+			}
+			if !m.Conforms(x1, g) {
+				t.Fatalf("cross feature x1 does not subset g: %v", m.DirectSupertypes(x1))
+			}
+			if _, ok := m.MultiplicityOf(x); ok {
+				t.Fatal("MultiplicityOf(x) ok, want the [0..1] left to x1")
+			}
+			known := func(v int64) Bound { return Bound{Value: v, Known: true} }
+			if r, ok := m.MultiplicityOf(x1); !ok || r != (Range{known(0), known(1)}) {
+				t.Fatalf("MultiplicityOf(x1) = %+v, %v, want [0..1]", r, ok)
+			}
+		})
+	}
+}
+
+func wantRelationshipKinds(t *testing.T, sym *symbols.Symbol, want ...ast.RelationshipKind) {
+	t.Helper()
+	rels := RelationshipsOf(sym)
+	if len(rels) != len(want) {
+		t.Fatalf("RelationshipsOf(%s) has %d relationships, want %v", sym.Name, len(rels), want)
+	}
+	for i, r := range rels {
+		if r.Kind != want[i] {
+			t.Fatalf("RelationshipsOf(%s)[%d] = %v, want %v", sym.Name, i, r.Kind, want[i])
+		}
+	}
 }
