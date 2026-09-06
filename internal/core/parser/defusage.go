@@ -211,28 +211,28 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 }
 
 type featureMods struct {
-	isAbstract        bool
-	isVariation       bool
-	isVariant         bool
-	isReference       bool
-	isVariable        bool
-	isEnd             bool
-	isChain           bool
-	isConstant        bool
-	isEvent           bool            // event modifier for occurrences
-	isIndividual      bool            // individual modifier for individuals/snapshots
-	portion           ast.PortionKind // 'snapshot' / 'timeslice' portion prefix
-	isNegated         bool            // `not` of `assert not <kind>`: the conditions are asserted to be false
-	prefixKeyword     string          // keyword qualifying the kind that follows it: the `assert` of `assert constraint c`
-	visibility        ast.Visibility
-	direction         ast.FeatureDirection
-	isComposite       bool
-	isPortion         bool
-	isDerived         bool
-	isReadonly        bool
-	isOrdered         bool
-	isNonunique       bool
-	crossMultiplicity *ast.Multiplicity // the `[mult]` right after `end`: the end's crossing multiplicity
+	isAbstract    bool
+	isVariation   bool
+	isVariant     bool
+	isReference   bool
+	isVariable    bool
+	isEnd         bool
+	isChain       bool
+	isConstant    bool
+	isEvent       bool            // event modifier for occurrences
+	isIndividual  bool            // individual modifier for individuals/snapshots
+	portion       ast.PortionKind // 'snapshot' / 'timeslice' portion prefix
+	isNegated     bool            // `not` of `assert not <kind>`: the conditions are asserted to be false
+	prefixKeyword string          // keyword qualifying the kind that follows it: the `assert` of `assert constraint c`
+	visibility    ast.Visibility
+	direction     ast.FeatureDirection
+	isComposite   bool
+	isPortion     bool
+	isDerived     bool
+	isReadonly    bool
+	isOrdered     bool
+	isNonunique   bool
+	cross         *ast.CrossFeatureMember // the cross feature declared right after `end`
 }
 
 // anonymousCrossFeature wraps the `[mult]` written right after `end` as the
@@ -246,14 +246,15 @@ func anonymousCrossFeature(mult *ast.Multiplicity) *ast.CrossFeatureMember {
 	return cross
 }
 
-// tryParseCrossFeature parses the cross feature an end declares ahead of its
-// kind keyword, `end x1 : Sub1 [0..1] :> g feature x` (KerML.xtext
-// OwnedCrossingFeature, a FeatureDeclaration), consuming nothing otherwise.
+// tryParseCrossFeature parses the cross feature an end declares ahead of its kind
+// keyword, `end var x1 : Sub1 [0..1] :> g feature x` (KerML.xtext OwnedCrossingFeature),
+// consuming nothing otherwise; a bare prefix (`end ref attribute e`) is the end's.
 func (p *Parser) tryParseCrossFeature() *ast.CrossFeatureMember {
 	cp := p.checkpoint()
 	defer p.release()
 	start := p.peek().Span.Offset
 	cross := &ast.CrossFeatureMember{}
+	p.parseCrossFeaturePrefix(cross)
 	if p.atName() || p.at(lexer.Lt) {
 		cross.Ident = p.parseIdentification()
 	}
@@ -262,12 +263,64 @@ func (p *Parser) tryParseCrossFeature() *ast.CrossFeatureMember {
 		cross.Multiplicity = p.parseMultiplicity()
 		cross.Relationships = append(cross.Relationships, p.parseRelationships(true)...)
 	}
-	if !p.isKindKeyword(p.peek()) {
+	declared := cross.Ident.Name != "" || cross.Ident.ShortName != "" ||
+		len(cross.Relationships) > 0 || cross.Multiplicity != nil
+	if !declared || !p.isKindKeyword(p.peek()) {
 		p.restore(cp)
 		return nil
 	}
 	cross.NodeSpan = p.spanFrom(start)
 	return cross
+}
+
+// parseCrossFeaturePrefix reads the modifiers a cross feature is declared with
+// (KerML.xtext BasicFeaturePrefix, SysML.xtext BasicUsagePrefix) onto cross.
+func (p *Parser) parseCrossFeaturePrefix(cross *ast.CrossFeatureMember) {
+	for {
+		t := p.peek()
+		if p.atVarWord() {
+			// KerML reserves `var`; in SysML it is the cross feature's name
+			// unless a name or another modifier follows (`end var [1] item x`).
+			next := p.peekN(1)
+			if p.src.Kind() != source.KindKerML &&
+				next.Kind != lexer.Identifier && next.Kind != lexer.UnrestrictedName && next.Kind != lexer.Lt &&
+				!(next.Kind == lexer.Keyword && (featureModifierKeywords[next.KeywordID] || !p.reservedWord(next.KeywordID))) {
+				return
+			}
+			cross.IsVariable = true
+			p.advance()
+			continue
+		}
+		if t.Kind != lexer.Keyword {
+			return
+		}
+		switch t.KeywordID {
+		case "in":
+			cross.Direction = ast.DirIn
+		case "out":
+			cross.Direction = ast.DirOut
+		case "inout":
+			cross.Direction = ast.DirInOut
+		case "derived":
+			cross.IsDerived = true
+		case "abstract":
+			cross.IsAbstract = true
+		case "variation":
+			cross.IsVariation = true
+		case "composite":
+			cross.IsComposite = true
+		case "portion":
+			cross.IsComposite = true
+			cross.IsPortion = true
+		case "constant", "const":
+			cross.IsConstant = true
+		case "ref":
+			cross.IsReference = true
+		default:
+			return
+		}
+		p.advance()
+	}
 }
 
 // applyFeatureMods transfers modifiers that were consumed before a declaration's
@@ -334,8 +387,8 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.visibility != ast.VisibilityDefault {
 			d.Visibility = mods.visibility
 		}
-		if mods.crossMultiplicity != nil && d.CrossFeature == nil {
-			d.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
+		if mods.cross != nil && d.CrossFeature == nil {
+			d.CrossFeature = mods.cross
 		}
 		if mods.prefixKeyword != "" && d.PrefixKeyword == "" {
 			d.PrefixKeyword = mods.prefixKeyword
@@ -920,10 +973,12 @@ func (p *Parser) parseMoreFeatureModifiers(m *featureMods) {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
-			// `end [mult] ref ...`: the multiplicity is the end's crossing one.
 			p.advance() // consume "end"
+			// `end [mult] ref ...`: the multiplicity is the end's crossing one.
 			if p.at(lexer.LBracket) {
-				m.crossMultiplicity = p.parseMultiplicity()
+				m.cross = anonymousCrossFeature(p.parseMultiplicity())
+			} else {
+				m.cross = p.tryParseCrossFeature()
 			}
 			continue
 		case "constant", "const":
@@ -2005,7 +2060,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		IsNonunique:   mods.isNonunique,
 	}
 
-	u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
+	u.CrossFeature = mods.cross
 
 	// Handle UsageSatisfy special syntax:
 	// Full form: satisfy [requirement] <name> by <name> { body }
@@ -2962,43 +3017,19 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 		}
 
-		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
-			var cross *ast.CrossFeatureMember
-			// `end [1] part bead : TireBead` — the kind keyword follows the
-			// modifiers directly, so the crossing multiplicity was already
-			// taken with them.
-			hasDefKeyword := p.isKindKeyword(p.peek())
-			if !hasDefKeyword {
-				cross = p.tryParseCrossFeature()
-				hasDefKeyword = cross != nil
+		// The cross feature was read with the modifiers, so only the end's own
+		// declaration remains; `end ref name;` is the anonymous form handled below.
+		if mods.isEnd && p.isKindKeyword(p.peek()) {
+			decl := p.parseDeclaration(start)
+			if u, ok := decl.(*ast.Usage); ok {
+				applyFeatureMods(u, mods)
+				u.IsEnd = true
+				u.Visibility = mods.visibility
 			}
-
-			// If we found a definition keyword, parse the full declaration
-			if hasDefKeyword {
-				// Now parse the actual feature/usage declaration
-				// The definition keyword (feature/occurrence/etc) will be consumed by parseDeclaration
-				decl := p.parseDeclaration(start)
-
-				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
-				if u, ok := decl.(*ast.Usage); ok {
-					if cross != nil {
-						u.CrossFeature = cross
-					}
-					// Every modifier ahead of the kind keyword belongs to the
-					// end, not `end` alone: `end ref attribute e : S;`.
-					applyFeatureMods(u, mods)
-					u.IsEnd = true
-					u.Visibility = mods.visibility
-				}
-
-				// Wrap in membership
-				mem := &ast.Membership{Visibility: vis, Member: decl}
-				mem.NodeSpan = p.spanFrom(start)
-				mem.SetLeadingTrivia(trivia)
-				return mem
-			}
-			// If no definition keyword found, fall through to handle as anonymous feature with modifiers
-			// Pattern: end ref name; - will be handled by anonymous feature parsing below
+			mem := &ast.Membership{Visibility: vis, Member: decl}
+			mem.NodeSpan = p.spanFrom(start)
+			mem.SetLeadingTrivia(trivia)
+			return mem
 		}
 
 		// A feature modifier can precede the kind keyword: `ref part a : V`,
@@ -3101,7 +3132,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
-			u.CrossFeature = anonymousCrossFeature(mods.crossMultiplicity)
+			u.CrossFeature = mods.cross
 
 			// Parse post-multiplicity modifiers (ordered/nonunique)
 			postMods := p.parsePostModifiers()
@@ -3650,7 +3681,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		IsComposite:  mods.isComposite,
 		IsPortion:    mods.isPortion,
 		Direction:    mods.direction,
-		CrossFeature: anonymousCrossFeature(mods.crossMultiplicity),
+		CrossFeature: mods.cross,
 	}
 	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)

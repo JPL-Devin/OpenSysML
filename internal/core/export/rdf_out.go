@@ -1305,6 +1305,22 @@ func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error
 	e.head(crossSubject, memberHead{node: cross, visibility: ast.VisibilityDefault, fqn: crossFQN,
 		owner: subject, index: e.crossFeatureIndex(n), metaclass: rdf.SysMLTerm(metaclass), inline: true})
 	e.ident(crossSubject, cross.Ident)
+	// The prefix between `end` and the cross feature is the cross feature's own,
+	// stated as an end's would be (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix).
+	if cross.IsVariable {
+		e.graph.Add(crossSubject, e.sysx(xDeclaredPrefix), rdf.String("var"))
+	}
+	e.flags(crossSubject, []boolProperty{
+		{"isAbstract", cross.IsAbstract},
+		{"isVariation", cross.IsVariation},
+		{"isReference", cross.IsReference},
+		{"isConstant", cross.IsConstant},
+		{"isComposite", cross.IsComposite},
+		{"isDerived", cross.IsDerived},
+	})
+	if keyword := directionKeyword(cross.Direction); keyword != "" {
+		e.graph.Add(crossSubject, e.sysml(pDirection), rdf.String(keyword))
+	}
 	e.relationships(crossSubject, fqn, cross.Relationships)
 	e.multiplicity(crossSubject, fqn, cross.Multiplicity)
 	return nil

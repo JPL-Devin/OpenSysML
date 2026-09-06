@@ -112,3 +112,61 @@ func TestCrossFeaturesComeBackFromTheGraphAlone(t *testing.T) {
 		t.Errorf("KerML cross features were not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", kerml, out)
 	}
 }
+
+// A cross feature's prefix is stated on the cross feature, never on the end,
+// and comes back from the structural triples alone.
+func TestCrossFeaturePrefixComesBackFromTheGraphAlone(t *testing.T) {
+	sysml := `package Crossing {
+    part def A;
+    part def B;
+    connection def C {
+        end in x1[1] typed by A item x : A;
+        end derived abstract ref x2[1] item y : B;
+        end constant x3[1] typed by B item z : B;
+        end ref plain : A[3];
+    }
+}
+`
+	g := turtleOf(t, "crossing", sysml)
+	elmt := func(name string) string { return rdf.ElementIRI(name).Value }
+	wantLexical(t, g, elmt("Crossing::C::x::x1"), rdf.SysML+"direction", "in")
+	if g.HasProperty(iri(elmt("Crossing::C::x")), rdf.SysML+"direction") {
+		t.Errorf("the end x took its cross feature's direction")
+	}
+	for _, flag := range []struct{ end, cross, property string }{
+		{"Crossing::C::y", "Crossing::C::y::x2", "isDerived"},
+		{"Crossing::C::y", "Crossing::C::y::x2", "isAbstract"},
+		{"Crossing::C::y", "Crossing::C::y::x2", "isReference"},
+		{"Crossing::C::z", "Crossing::C::z::x3", "isConstant"},
+	} {
+		wantLexical(t, g, elmt(flag.cross), rdf.SysML+flag.property, "true")
+		if g.HasProperty(iri(elmt(flag.end)), rdf.SysML+flag.property) {
+			t.Errorf("the end <%s> took its cross feature's %s", flag.end, flag.property)
+		}
+	}
+	if back := toNotation(t, withoutTriples(t, idTurtle(t, sysml), "sysx:sourceText")); back != sysml {
+		t.Errorf("cross feature prefixes were not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", sysml, back)
+	}
+
+	kerml := `package Crossing {
+    class A;
+    class B;
+    assoc C {
+        end var x1[1] typed by A feature x : A;
+        end out derived composite x2[1] feature y : B;
+        end var [1] feature z : B;
+    }
+}
+`
+	turtle, err := export.Convert("m.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	out, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(out) != kerml {
+		t.Errorf("KerML cross feature prefixes were not rebuilt from the graph:\n--- want ---\n%s--- got ---\n%s", kerml, out)
+	}
+}

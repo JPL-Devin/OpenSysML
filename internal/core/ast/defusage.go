@@ -545,6 +545,16 @@ type FlowEnds struct {
 // the `x1 [0..1]` of `end x1 [0..1] feature x : C1` (KerML 8.3.4.5).
 type CrossFeatureMember struct {
 	NodeBase
+	// The prefix after `end` is the cross feature's (KerML.xtext BasicFeaturePrefix).
+	Direction     FeatureDirection
+	IsDerived     bool
+	IsAbstract    bool
+	IsVariation   bool
+	IsComposite   bool
+	IsPortion     bool
+	IsVariable    bool
+	IsConstant    bool
+	IsReference   bool
 	Ident         Identification
 	Multiplicity  *Multiplicity
 	Relationships []*Relationship

@@ -8,6 +8,11 @@ connection def Anonymous {
 	end [1] part named : TireMountingRim;
 }
 
+connection def Crossing {
+	end in x1 : TireBead [1] item x : TireBead;
+	end derived ref x2 [1] item y : TireMountingRim;
+}
+
 interface def FuelInterface {
 	end supplierPort : FuelOutPort;
 	end part consumerPort;
