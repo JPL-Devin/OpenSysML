@@ -1034,7 +1034,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	switch value.Kind {
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
-	case ValArray, ValVector, ValVectorQuantity, ValQuantity, ValMeasurementRef:
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity, ValQuantity, ValMeasurementRef:
 		// An array or vector read from an object keeps that object's members; any
 		// other's own features are answered from the value.
 		if inst, ok := ec.ctx.structuredObject(value); ok {
@@ -1431,7 +1431,7 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		if re, ok := value.realPart(); ok {
 			return ctx.directValueType(scope, realConst(re))
 		}
-	case ValArray, ValVector, ValVectorQuantity:
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
 		return ctx.structuredValueType(value)
 	case ValMeasurementRef:
 		return ctx.measurementRefValueType(value.MeasurementRef())
@@ -1645,8 +1645,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, err
 	}
 	// Operator notation over a vector is the VectorFunctions operator of the same
-	// symbol, which specializes DataFunctions'.
+	// symbol, which specializes DataFunctions'; over a tensor, TensorCalculations'.
 	if val, ok, err := ec.ctx.vectorArithmetic(n.Operator, left, right); ok {
+		return val, err
+	}
+	if val, ok, err := ec.ctx.tensorArithmetic(n.Operator, left, right); ok {
 		return val, err
 	}
 	return arithmeticValues(n.Operator, left, right, n.Span())
@@ -2428,6 +2431,8 @@ func valueEqual(a, b Value) bool {
 		return vectorEqual(a.Vector(), b.Vector())
 	case ValVectorQuantity:
 		return vectorQuantityEqual(a.VectorQuantity(), b.VectorQuantity())
+	case ValTensorQuantity:
+		return tensorQuantityEqual(a.TensorQuantity(), b.TensorQuantity())
 	case ValMeasurementRef:
 		return a.MeasurementRef().equal(b.MeasurementRef())
 	default:

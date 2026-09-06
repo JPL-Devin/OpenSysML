@@ -298,8 +298,8 @@ func TestResolveQualifiedBindingChain(t *testing.T) {
 	}
 
 	binding := findBindingUsage(t, root.Members)
-	if len(binding.Relationships) != 1 || binding.Relationships[0].Kind != ast.RelReferences {
-		t.Fatalf("expected one reference-subsetting end, got %v", binding.Relationships)
+	if len(binding.ConnectorEnds) != 2 {
+		t.Fatalf("expected two binding ends, got %v", binding.ConnectorEnds)
 	}
 
 	// Source end: the whole chain, outermost segment last.
@@ -308,14 +308,23 @@ func TestResolveQualifiedBindingChain(t *testing.T) {
 		"Kite System", "Desert Kite",
 		"Kite Wall", "Wall Height",
 	}
-	if got := resolvedSegments(t, r, binding.Relationships[0].Target); !equalStrings(got, wantSource) {
+	if got := resolvedSegments(t, r, binding.ConnectorEnds[0].AttachedTarget()); !equalStrings(got, wantSource) {
 		t.Errorf("source end resolved to %v, want %v", got, wantSource)
 	}
 
 	wantTarget := []string{"Kite Requirements", "Minimum Wall Height"}
-	if got := resolvedSegments(t, r, binding.Value); !equalStrings(got, wantTarget) {
+	if got := resolvedSegments(t, r, binding.ConnectorEnds[1].AttachedTarget()); !equalStrings(got, wantTarget) {
 		t.Errorf("target end resolved to %v, want %v", got, wantTarget)
 	}
+}
+
+// bindingEnd returns the feature attached at binding end i.
+func bindingEnd(t *testing.T, binding *ast.Usage, i int) ast.Node {
+	t.Helper()
+	if i >= len(binding.ConnectorEnds) || binding.ConnectorEnds[i] == nil {
+		t.Fatalf("binding has %d ends, want end %d", len(binding.ConnectorEnds), i)
+	}
+	return binding.ConnectorEnds[i].AttachedTarget()
 }
 
 func TestResolveLongFeatureChain(t *testing.T) {
@@ -333,7 +342,7 @@ func TestResolveLongFeatureChain(t *testing.T) {
 	}
 
 	binding := findBindingUsage(t, root.Members)
-	got := resolvedSegments(t, r, binding.Relationships[0].Target)
+	got := resolvedSegments(t, r, bindingEnd(t, binding, 0))
 	want := []string{"A"}
 	for i := 0; i < segments-2; i++ {
 		want = append(want, "p"+strconv.Itoa(i))
@@ -514,9 +523,9 @@ func TestResolveChainUnresolvedSegmentRecordsNoSymbol(t *testing.T) {
 	}
 
 	binding := findBindingUsage(t, root.Members)
-	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	chain, ok := bindingEnd(t, binding, 0).(*ast.FeatureChainExpr)
 	if !ok {
-		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+		t.Fatalf("expected a feature chain end, got %T", bindingEnd(t, binding, 0))
 	}
 	if sym, ok := r.PartSymbol(chain.Member, 0); ok {
 		t.Errorf("discarded reading left segment B pointing at %s", sym.Name)
@@ -544,9 +553,9 @@ func TestResolveChainPrefersMemberOverOuterDeclaration(t *testing.T) {
 	}
 
 	binding := findBindingUsage(t, root.Members)
-	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	chain, ok := bindingEnd(t, binding, 0).(*ast.FeatureChainExpr)
 	if !ok {
-		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+		t.Fatalf("expected a feature chain end, got %T", bindingEnd(t, binding, 0))
 	}
 	inner := innerSymbol(t, r, chain.Operand, "B")
 	got, ok := r.PartSymbol(chain.Member, 0)

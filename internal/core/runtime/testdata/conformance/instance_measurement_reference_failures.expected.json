@@ -13,6 +13,6 @@
     "notAUnit": {"error": "parameter \"targetMRef\" requires a measurement reference such as SI::m, got an Integer"},
     "mixed": {"error": "not evaluable: VectorCalculations::'[': a VectorMeasurementReference is a CoordinateFrame, whose mRefs and basisDirections the runtime holds no value of"},
     "turned": {"error": "not evaluable: VectorCalculations::transform: a CoordinateTransformation has no representation"},
-    "spread": {"error": "not evaluable: VectorCalculations::outer: a tensor quantity has no representation: the runtime has no tensor value kind"}
+    "spread": {"error": "not evaluable: VectorCalculations::outer: the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two"}
   }
 }

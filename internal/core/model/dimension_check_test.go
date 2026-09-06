@@ -223,3 +223,45 @@ func TestDimensionUnknownSilent(t *testing.T) {
 		})
 	}
 }
+
+// TestDimensionBareNumberComparisonSilent covers a quantity compared with a plain
+// number, the stdlib's own idiom (`xoffset > 0` in ShapeItems): the number states
+// no measurement and is read in the quantity's unit, as a bound value is. A sum
+// still warns, since its result must carry one dimension.
+func TestDimensionBareNumberComparisonSilent(t *testing.T) {
+	const decls = `
+		private import ISQ::*;
+		private import SI::*;
+		attribute len : ISQ::LengthValue = 3.0 [m];
+		attribute mass : ISQ::MassValue = 1200.0 [kg];`
+	for name, src := range map[string]string{
+		"greater than zero": `package Test { ` + decls + `
+			constraint ok { len > 0 or mass > 0 }
+		}`,
+		"equal and unequal": `package Test { ` + decls + `
+			constraint ok { len == 0 and mass != 0 }
+		}`,
+		"number on the left": `package Test { ` + decls + `
+			constraint ok { 0 < len and 2 * 5 <= mass }
+		}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			warnings, errs := dimensionDiagnostics(t, src)
+			if len(errs) != 0 {
+				t.Fatalf("unexpected errors: %v", errs)
+			}
+			if len(warnings) != 0 {
+				t.Fatalf("a comparison with a plain number must not warn, got: %v", warnings)
+			}
+		})
+	}
+	warnings, errs := dimensionDiagnostics(t, `package Test { `+decls+`
+		constraint bad { len + 5 > 0 }
+	}`)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "operator '+'") {
+		t.Fatalf("want 1 warning on the sum, got: %v", warnings)
+	}
+}

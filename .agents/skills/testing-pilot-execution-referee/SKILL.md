@@ -63,9 +63,9 @@ Use `-cases DIR` for another directory of `.cases` files, `-out DIR`,
 lines followed by `id :: target :: expression` lines. Reports go to
 `build/pilot-exec-diff/pilot-exec-diff.{txt,json}`.
 
-Reference values at the current implementation (126 cases, all six default
+Reference values at the current implementation (138 cases, all seven default
 fixtures):
-`agree 69 · kind-only 1 · order-only 0 · disagree 4 · pilot-unevaluated 36 ·
+`agree 69 · kind-only 1 · order-only 0 · disagree 4 · pilot-unevaluated 48 ·
 pilot-silent 4 · pilot-error 2 · ours-error 2 · both-error 8 ·
 nondeterministic 0`.
 All four `disagree` are unrefereeable rather than verdicts against us:
