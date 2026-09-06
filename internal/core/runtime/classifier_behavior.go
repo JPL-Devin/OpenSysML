@@ -285,9 +285,11 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 // keeping those registered since, along with occurrences naming the removed.
 func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	abandoned := make(map[int64]bool)
+	var gone []*Instance
 	for _, id := range ctx.created[mark:end] {
-		if _, live := ctx.instances[id]; live {
+		if inst, live := ctx.instances[id]; live {
 			abandoned[id] = true
+			gone = append(gone, inst)
 			delete(ctx.instances, id)
 		}
 	}
@@ -302,6 +304,7 @@ func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	}
 	ctx.forgetLives(abandoned)
 	ctx.forgetVariantsNaming(abandoned)
+	ctx.forgetEdgesOf(gone)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
 }

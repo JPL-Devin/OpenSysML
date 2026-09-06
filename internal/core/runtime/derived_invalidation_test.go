@@ -64,6 +64,12 @@ const derivedInvalidationModel = `
 			attribute pick : Integer = if which == 1 ? a else b;
 			attribute twice : Integer = pick * 2;
 		}
+		part def Origin { attribute x : Integer default 3; }
+		part def Fresh {
+			attribute twice : Integer = origin.x * 2;
+			attribute own : Integer default 5;
+		}
+		part def Reader { attribute viaFresh : Integer = fresh.own + 1; }
 		part def Bin {
 			attribute weights [*] default null;
 			attribute grams :> ISQ::mass [*] = (1 [g])->select {in x; false};
@@ -75,6 +81,9 @@ const derivedInvalidationModel = `
 		part rod : Rod;
 		part bin : Bin;
 		part sw : Switch;
+		part origin : Origin;
+		part fresh : Fresh;
+		part reader : Reader;
 		part host : Host;
 		part writer : Writer;
 		part stack : Stack;
@@ -278,6 +287,56 @@ func TestDerivedValueForgetsTheBranchItNoLongerReads(t *testing.T) {
 	setInt(t, ctx, sw, "b", 7)
 	if got := readInt(t, ctx, sw, "twice"); got != 14 {
 		t.Fatalf("twice = %d after b := 7, want 14", got)
+	}
+}
+
+// TestAbandonedObjectsLeaveNoDependencyEdges: the feature values of an object a
+// failed creation abandons are delisted from what they read and from what read them.
+func TestAbandonedObjectsLeaveNoDependencyEdges(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, derivedInvalidationModel))
+	origin := instantiateNamed(t, ctx, idx, "test::origin")
+	reader := instantiateNamed(t, ctx, idx, "test::reader")
+	if got := readInt(t, ctx, origin, "x"); got != 3 {
+		t.Fatalf("origin.x = %d, want 3", got)
+	}
+	x := origin.FeatureValues["x"]
+
+	mark := len(ctx.created)
+	fresh := instantiateNamed(t, ctx, idx, "test::fresh")
+	if got := readInt(t, ctx, fresh, "twice"); got != 6 {
+		t.Fatalf("fresh.twice = %d, want 6", got)
+	}
+	if len(x.dependents) != 1 {
+		t.Fatalf("origin.x lists %d dependents, want fresh.twice", len(x.dependents))
+	}
+	ctx.abandonInstancesSince(mark)
+	if len(x.dependents) != 0 {
+		t.Errorf("origin.x still lists %d dependents of the abandoned object", len(x.dependents))
+	}
+
+	mark = len(ctx.created)
+	if got := readInt(t, ctx, reader, "viaFresh"); got != 6 {
+		t.Fatalf("viaFresh = %d, want 6", got)
+	}
+	viaFresh := reader.FeatureValues["viaFresh"]
+	own, listed := viaFresh.reads, false
+	for _, src := range own {
+		listed = listed || src.Feature.Name == "own"
+	}
+	if !listed {
+		t.Fatalf("viaFresh reads %d values, none of them fresh.own", len(own))
+	}
+	ctx.abandonInstancesSince(mark)
+	for _, src := range viaFresh.reads {
+		if src.Feature.Name == "own" {
+			t.Error("viaFresh still lists the abandoned fresh.own among what it reads")
+		}
+	}
+	if viaFresh.Materialized {
+		t.Error("viaFresh still holds a value derived from the abandoned object")
+	}
+	if got := readInt(t, ctx, reader, "viaFresh"); got != 6 {
+		t.Errorf("viaFresh = %d after the rollback, want 6 from a re-created object", got)
 	}
 }
 

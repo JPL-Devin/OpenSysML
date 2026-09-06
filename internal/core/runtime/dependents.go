@@ -45,21 +45,50 @@ func (ctx *Context) forgetReads(fv *FeatureValue) {
 	}
 }
 
-// delist drops dep from src's dependents, copying rather than writing in place: a
-// journal snapshot shares the array.
+// delist drops dep from src's dependents.
 func (ctx *Context) delist(src, dep *FeatureValue) {
-	for i, listed := range src.dependents {
-		if listed != dep {
+	if kept := without(src.dependents, dep); len(kept) != len(src.dependents) {
+		ctx.noteProbeWrite(src)
+		src.dependents = kept
+	}
+}
+
+// delistRead drops src from what dep reads.
+func (ctx *Context) delistRead(dep, src *FeatureValue) {
+	if kept := without(dep.reads, src); len(kept) != len(dep.reads) {
+		ctx.noteProbeWrite(dep)
+		dep.reads = kept
+	}
+}
+
+// without is list less fv, copied rather than written in place, since a journal
+// snapshot shares the array; list itself when fv is not in it.
+func without(list []*FeatureValue, fv *FeatureValue) []*FeatureValue {
+	for i, listed := range list {
+		if listed != fv {
 			continue
 		}
-		ctx.noteProbeWrite(src)
-		if len(src.dependents) == 1 {
-			src.dependents = nil
-			return
+		if len(list) == 1 {
+			return nil
 		}
-		kept := make([]*FeatureValue, 0, len(src.dependents)-1)
-		src.dependents = append(append(kept, src.dependents[:i]...), src.dependents[i+1:]...)
-		return
+		kept := make([]*FeatureValue, 0, len(list)-1)
+		return append(append(kept, list[:i]...), list[i+1:]...)
+	}
+	return list
+}
+
+// forgetEdgesOf drops every edge into or out of the feature values of objects a
+// failed creation abandons; what read one derives again from the object built instead.
+func (ctx *Context) forgetEdgesOf(objects []*Instance) {
+	for _, inst := range objects {
+		for _, fv := range inst.FeatureValues {
+			ctx.forgetReads(fv)
+			for _, dep := range fv.dependents {
+				ctx.delistRead(dep, fv)
+			}
+			ctx.invalidate(fv.dependents)
+			fv.dependents = nil
+		}
 	}
 }
 
