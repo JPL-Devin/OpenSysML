@@ -676,14 +676,14 @@ func (m *migration) association(e *xmi.Element) {
 }
 
 // featureKeyword decides the v2 usage keyword of a v1 property from its type
-// and aggregation, given the category of its owner.
+// and aggregation, given the category of its owner; prefix is `ref ` or empty.
 func (m *migration) featureKeyword(p *xmi.Element, owner category) (keyword, prefix, note string) {
 	t := m.model.Ref(p, "type")
 	if p.Type == "Port" {
 		return "port", "", ""
 	}
 	if owner == catConstraintDef {
-		return "attribute", "in ", ""
+		return "attribute", "", ""
 	}
 	if t == nil {
 		return "ref", "", "the untyped property is written as a reference usage"
@@ -739,12 +739,15 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("private ")
 		note = joinNotes(note, "package visibility is written as private")
 	}
-	// The v2 usage prefix orders direction, derived, abstract, constant.
-	if p.Type == "Port" {
+	// The v2 usage prefix orders direction, derived, abstract, constant, ref.
+	switch {
+	case p.Type == "Port":
 		dir, dnote := portDirection(p)
 		b.WriteString(dir)
 		note = joinNotes(note, dnote)
-	} else if ownerCat == catPortDef {
+	case ownerCat == catConstraintDef:
+		b.WriteString("in ")
+	case ownerCat == catPortDef:
 		if fp := stereo(p, "FlowProperty"); fp != nil {
 			switch fp.Tag("direction") {
 			case "in":
@@ -763,7 +766,12 @@ func (m *migration) feature(p *xmi.Element) {
 		b.WriteString("abstract ")
 	}
 	if p.Attrs["isReadOnly"] == "true" {
-		b.WriteString("constant ")
+		// A value type's features cannot vary, so `constant` is not allowed there.
+		if ownerCat == catAttributeDef {
+			note = joinNotes(note, "read-only is not written: the features of an attribute definition cannot vary")
+		} else {
+			b.WriteString("constant ")
+		}
 	}
 	b.WriteString(prefix)
 	b.WriteString(kw)
