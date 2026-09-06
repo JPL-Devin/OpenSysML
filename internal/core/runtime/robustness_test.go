@@ -275,6 +275,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_feature_value", testCyclicDerivedFeatureValue)
+	t.Run("write_into_cyclic_derived_feature_values", testWriteIntoCyclicDerivedFeatureValues)
 	t.Run("cyclic_subsetting_of_default_collections", testCyclicSubsettingOfDefaultCollections)
 	t.Run("derived_feature_value_over_missing_feature", testDerivedFeatureValueOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
@@ -2315,6 +2316,58 @@ func testCyclicDerivedFeatureValue(t *testing.T) {
 
 	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
 		t.Fatalf("GetFeatureValue error = %v, want ErrCyclicFeatureValue", fvErr)
+	}
+}
+
+// testWriteIntoCyclicDerivedFeatureValues: a write into a pair of values derived
+// from each other neither hangs unmaterializing what read them nor unmaterializes
+// the written value; it breaks the cycle, and a later write to the other end
+// keeps the first write.
+func testWriteIntoCyclicDerivedFeatureValues(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Loop {
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Loop", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Loop part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "a"); !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("GetFeatureValue(a) error = %v, want ErrCyclicFeatureValue", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- inst.SetFeatureValue(ctx, "b", constReal(1)) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("SetFeatureValue(b): %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("SetFeatureValue(b) hung unmaterializing a cycle of derived values")
+	}
+	if b := inst.FeatureValues["b"]; !b.Materialized || !b.Written {
+		t.Fatalf("the write to b left it materialized %t, written %t", b.Materialized, b.Written)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "a")
+	if err != nil || !valueIdentical(fv.HeldValue(), constReal(2)) {
+		t.Fatalf("a after b := 1.0 = %v, %v; want 2.0", fv, err)
+	}
+
+	if err := inst.SetFeatureValue(ctx, "a", constReal(5)); err != nil {
+		t.Fatalf("SetFeatureValue(a): %v", err)
+	}
+	fv, err = inst.GetFeatureValue(ctx, "b")
+	if err != nil || !valueIdentical(fv.HeldValue(), constReal(1)) {
+		t.Fatalf("b after a := 5.0 = %v, %v; want the written 1.0", fv, err)
 	}
 }
 

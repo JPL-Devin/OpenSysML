@@ -670,6 +670,10 @@ func (a *adoption) commit() {
 			}
 			done[fv] = true
 			fv.Feature = plan.featureFor(name, fv)
+			// What fv read, and what read it, did so in the previous analysis: no edge
+			// is kept between the two, and a value derived again here lists itself anew.
+			fv.dependents = nil
+			a.ctx.forgetReads(fv)
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
 			if a.ctx.derivedFeatureValue(fv) {
@@ -759,7 +763,7 @@ func (a *adoption) restartBehaviors() ([]string, error) {
 	// A behavior writes the feature values of its own object and of the objects that
 	// one holds, so the whole carried closure forgets what the discarded run wrote.
 	for _, obj := range carried {
-		obj.forgetBehaviorWrites()
+		obj.forgetBehaviorWrites(a.ctx)
 	}
 	if err := a.ctx.restartClassifierBehaviors(objects); err != nil {
 		a.abandon()

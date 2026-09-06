@@ -1168,3 +1168,79 @@ func TestAdoptRebindsIntoTheScopeTreeTheCallerResolvesIn(t *testing.T) {
 		t.Errorf("the context holds %d objects, want the carried one alone", n)
 	}
 }
+
+const adoptDependentSrc = `package Demo {
+	part def Source { attribute x default 3; }
+	part def Reader { attribute twice = src.x * 2; }
+	part src : Source;
+	part reader : Reader;
+}`
+
+// A value derived from another object's feature is listed as that feature's
+// dependent, an edge of the analysis both were read in: carrying either object over
+// drops it, and the value derived again there follows a write here.
+func TestAdoptDropsDependencyEdgesAndDerivesAgain(t *testing.T) {
+	prev := contextOver(t, adoptDependentSrc)
+	src := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::src")
+	reader := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::reader")
+	if got := readInt(t, prev, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d before the carry-over, want 6", got)
+	}
+	x := src.FeatureValues["x"]
+	if len(x.dependents) != 1 {
+		t.Fatalf("src.x lists %d dependents before the carry-over, want reader.twice", len(x.dependents))
+	}
+	srcShapes, readerShapes := prev.ShapesOf(src), prev.ShapesOf(reader)
+
+	ctx := contextOver(t, adoptDependentSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, readerShapes, reader); err != nil {
+		t.Fatalf("Adopt(reader): %v", err)
+	}
+	if len(x.dependents) != 0 {
+		t.Errorf("src.x, left behind, still lists %d dependents carried over", len(x.dependents))
+	}
+	if _, err := ctx.Adopt(prev, srcShapes, src); err != nil {
+		t.Fatalf("Adopt(src): %v", err)
+	}
+	if len(x.dependents) != 0 {
+		t.Errorf("src.x still lists %d dependents of the previous analysis", len(x.dependents))
+	}
+	if twice := reader.FeatureValues["twice"]; twice.Materialized {
+		t.Errorf("reader.twice still holds %s from the previous analysis", FormatValue(twice.HeldValue()))
+	}
+	if got := readInt(t, ctx, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d after the carry-over, want 6", got)
+	}
+	if err := src.SetFeatureValue(ctx, "x", constInt(9)); err != nil {
+		t.Fatalf("SetFeatureValue(x): %v", err)
+	}
+	if got := readInt(t, ctx, reader, "twice"); got != 18 {
+		t.Errorf("reader.twice = %d after x := 9, want 18 from the edge recorded here", got)
+	}
+}
+
+// Carrying one object over leaves what depended on it where it was: a write to
+// the carried object reaches nothing in the analysis it left.
+func TestAdoptOfASourceLeavesItsDependentsBehind(t *testing.T) {
+	prev := contextOver(t, adoptDependentSrc)
+	src := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::src")
+	reader := instantiateNamed(t, prev, prev.resolver.Index(), "Demo::reader")
+	if got := readInt(t, prev, reader, "twice"); got != 6 {
+		t.Fatalf("reader.twice = %d before the carry-over, want 6", got)
+	}
+	shapes := prev.ShapesOf(src)
+
+	ctx := contextOver(t, adoptDependentSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, src); err != nil {
+		t.Fatalf("Adopt(src): %v", err)
+	}
+	if err := src.SetFeatureValue(ctx, "x", constInt(9)); err != nil {
+		t.Fatalf("SetFeatureValue(x): %v", err)
+	}
+	if twice := reader.FeatureValues["twice"]; !twice.Materialized || FormatValue(twice.HeldValue()) != "6" {
+		t.Errorf("a write in the new context reached reader.twice left behind (materialized %t, %s)", twice.Materialized, FormatValue(twice.HeldValue()))
+	}
+	if _, found := ctx.Instance(reader.ID); found {
+		t.Error("the reader was carried over with the source it read")
+	}
+}

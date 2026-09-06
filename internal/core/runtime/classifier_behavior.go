@@ -55,13 +55,14 @@ func (b *ObjectBehavior) Describe() string {
 
 // forgetBehaviorWrites drops what a run wrote, so a restarted behavior reads the
 // object's declared initial values instead of what the discarded run left.
-func (inst *Instance) forgetBehaviorWrites() {
+func (inst *Instance) forgetBehaviorWrites(ctx *Context) {
 	for _, fv := range inst.FeatureValues {
 		if !fv.Written {
 			continue
 		}
 		fv.Value, fv.Values = Value{}, Value{}
 		fv.Materialized, fv.Written = false, false
+		ctx.invalidateDependents(fv)
 	}
 }
 
@@ -284,9 +285,11 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 // keeping those registered since, along with occurrences naming the removed.
 func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	abandoned := make(map[int64]bool)
+	var gone []*Instance
 	for _, id := range ctx.created[mark:end] {
-		if _, live := ctx.instances[id]; live {
+		if inst, live := ctx.instances[id]; live {
 			abandoned[id] = true
+			gone = append(gone, inst)
 			delete(ctx.instances, id)
 		}
 	}
@@ -301,6 +304,7 @@ func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	}
 	ctx.forgetLives(abandoned)
 	ctx.forgetVariantsNaming(abandoned)
+	ctx.forgetEdgesOf(gone)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
 }
@@ -334,6 +338,7 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 			}
 			fv.Value, fv.Values = Value{}, Value{}
 			fv.Materialized, fv.Written = false, false
+			ctx.invalidateDependents(fv)
 		}
 	}
 }
@@ -777,8 +782,10 @@ func (ctx *Context) performanceOccurrence(
 				sentinel, name, inst.ID, err)
 		}
 		ctx.noteProbeWrite(fv)
+		before := ctx.beforeWrite(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
+		ctx.afterWrite(fv, before)
 		return occurrence, nil
 	}
 	id, ok := fv.HeldValue().Object()
