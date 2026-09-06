@@ -2009,9 +2009,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// Check for multiplicity before name: binding [mult] name ...
 		if p.at(lexer.LBracket) {
 			// `binding [mult] bind …` keeps `bind` as the SysML keyword in either file kind.
-			after := p.peekN(p.pastBracketed(0))
+			next := p.pastBracketed(0)
+			after := p.peekN(next)
 			bindFollows := after.Kind == lexer.Keyword && after.KeywordID == "bind"
-			if keyword == "bind" || (p.src.Kind() == source.KindKerML && !bindFollows && p.atLeadingEndMultiplicity()) {
+			// A binding end has no slot for an end name, so `[mult] e ::> a` keeps
+			// the declaration reading until it does.
+			namedEnd := p.peekN(next+1).Kind == lexer.ColonColonGt || p.peekIsKeyword(next+1, "references")
+			if keyword == "bind" || (p.src.Kind() == source.KindKerML && !bindFollows && !namedEnd && p.atLeadingEndMultiplicity()) {
 				// `bind [mult] a = b` and KerML `binding [mult] a = b` declare no connector,
 				// so the multiplicity is the first end's (SysML.xtext:1020; KerML.xtext:875).
 				p.parseBindingEnd(u)
