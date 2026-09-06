@@ -139,8 +139,9 @@ type oosemAudit struct {
 	diags              []Diagnostic
 }
 
-// newOOSEMAudit returns nil when the OOSEM library is not loaded, since no
-// element can then be an OOSEM artefact.
+// newOOSEMAudit returns nil when the bundled OOSEM library is not loaded, since
+// no element can then be an OOSEM artefact; a workspace package of the same
+// name is not the method vocabulary.
 func newOOSEMAudit(ctx *Context) *oosemAudit {
 	a := &oosemAudit{
 		ctx:         ctx,
@@ -156,7 +157,7 @@ func newOOSEMAudit(ctx *Context) *oosemAudit {
 	for _, entry := range oosemKindDefinitions {
 		for _, fqn := range entry.fqns {
 			for _, def := range ctx.Index.LookupQualified(fqn) {
-				if def != nil {
+				if def != nil && ctx.Index.Library(def) {
 					a.definitions[entry.kind] = append(a.definitions[entry.kind], def)
 					found = true
 				}

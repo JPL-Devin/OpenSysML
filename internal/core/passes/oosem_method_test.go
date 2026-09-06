@@ -1,6 +1,12 @@
 package passes
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // oosemModel wraps body in a package importing the OOSEM library.
 func oosemModel(body string) string {
@@ -263,5 +269,31 @@ func TestOOSEMSilentWithoutTheLibrary(t *testing.T) {
 	}`
 	for _, code := range []string{CodeOOSEMRequirementNotDerived, CodeOOSEMRequirementNotSatisfied, CodeOOSEMLogicalNotAllocated, CodeOOSEMUseCaseSubject} {
 		w8dWantLines(t, src, code)
+	}
+}
+
+// A workspace package named OOSEM is not the method vocabulary: without the
+// bundled library nothing is an OOSEM artefact, however it is named.
+func TestOOSEMSilentForAUserPackageNamedOOSEM(t *testing.T) {
+	const src = `package OOSEM {
+		requirement def MissionRequirement;
+		requirement def SystemRequirement;
+		part def LogicalComponent;
+		part def Node;
+	}
+	package M {
+		private import OOSEM::*;
+		requirement mission : MissionRequirement;
+		requirement sys : SystemRequirement;
+		part logical : LogicalComponent;
+		part node : Node;
+	}`
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>", root)
+	for _, d := range Analyze("<t>", root, nil, idx) {
+		if d.Source == oosemSource {
+			t.Errorf("unexpected OOSEM finding: %s: %s", d.Code, d.Message)
+		}
 	}
 }
