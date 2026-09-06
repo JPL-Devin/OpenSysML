@@ -1313,9 +1313,8 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", err
 	}
 	event := d.boolOf(el, rdf.SysML+"isEvent") || el.metaclass == mEventOccurrenceUsage
-	// A `snapshot`, `timeslice`, `event` or `assert` written in the keyword's
-	// place states a fact the graph types; a spelling the typing contradicts
-	// would come back as another declaration, so it is refused.
+	// A `snapshot`, `timeslice`, `event` or `assert` keyword states a typed
+	// fact; a spelling the typing contradicts is refused, not respelled.
 	if err := d.keywordTyped(el, keyword, portion, event); err != nil {
 		return "", err
 	}

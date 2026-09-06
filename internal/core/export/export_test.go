@@ -2831,8 +2831,7 @@ func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 }
 
 // The fixture is 0.5.1's own output: `sysml:isSnapshot` and `sysml:isTimeslice`
-// for a portion, which `sysml:portionKind` now states. Read without them, the
-// portions would come back as plain occurrences.
+// for a portion, which `sysml:portionKind` now states.
 func TestSupersededPortionFlagsAreRefused(t *testing.T) {
 	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "portions_0_5_1.ttl"))
 	if err != nil {
@@ -2855,8 +2854,7 @@ func TestSupersededPortionFlagsAreRefused(t *testing.T) {
 	withoutSnapshot := withoutTriples(t, turtle, "sysml:isSnapshot")
 	refused(withoutSnapshot, rdf.SysML+"isTimeslice", `sysml:portionKind "timeslice"`)
 
-	// With both flags gone the keyword alone states the portion, which the
-	// typing then contradicts: still a refusal, never a plain `occurrence`.
+	// With both flags gone the keyword contradicts the typing: still refused.
 	_, err = export.Convert("old.ttl", withoutTriples(t, withoutSnapshot, "sysml:isTimeslice"), export.FormatTurtle, export.FormatSysML)
 	var unsupported *export.UnsupportedError
 	if !errors.As(err, &unsupported) {

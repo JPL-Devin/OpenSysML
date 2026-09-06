@@ -693,9 +693,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 				return err
 			}
 		}
-		// The prefix a kind keyword was qualified with (`assume constraint c`)
-		// states what the usage is for, so it is part of the declaration; an
-		// `assert` prefix is the AssertConstraintUsage metaclass instead.
+		// The prefix a kind keyword was qualified with (`assume constraint c`) is
+		// part of the declaration; `assert` is the AssertConstraintUsage metaclass.
 		if n.PrefixKeyword != "" && !assertedConstraint(n) {
 			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
 		}
