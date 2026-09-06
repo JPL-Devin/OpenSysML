@@ -233,6 +233,138 @@ pub struct EnumLiteral {
     pub name: String,
 }
 
+/// A multidimensional array: its shape, and its elements flattened in
+/// row-major order (last dimension varying fastest).
+///
+/// A rank-0 array holds exactly one element. An element is any [`Value`], a
+/// nested array or a quantity included. A service advertising
+/// `structured_values` sends one as itself; an older one sends an unsupported
+/// [`Value::Null`] in its place.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Array {
+    dimensions: Vec<i64>,
+    elements: Vec<Value>,
+}
+
+impl Array {
+    /// Builds an array, checking that every dimension is positive and that
+    /// the elements fill the dimensions exactly.
+    pub fn new(dimensions: Vec<i64>, elements: Vec<Value>) -> Result<Self, Error> {
+        let mut size: i64 = 1;
+        for &extent in &dimensions {
+            if extent <= 0 {
+                return Err(Error::Decode(format!(
+                    "array dimension is not positive: {extent}"
+                )));
+            }
+            size = size.checked_mul(extent).ok_or_else(|| {
+                Error::Decode(format!("array dimensions {dimensions:?} overflow"))
+            })?;
+        }
+        if u64::try_from(size).ok() != u64::try_from(elements.len()).ok() {
+            return Err(Error::Decode(format!(
+                "array of dimensions {dimensions:?} holds {} element(s), want {size}",
+                elements.len()
+            )));
+        }
+        Ok(Self {
+            dimensions,
+            elements,
+        })
+    }
+
+    /// Extent of each dimension, all positive.
+    pub fn dimensions(&self) -> &[i64] {
+        &self.dimensions
+    }
+
+    /// Number of dimensions.
+    pub fn rank(&self) -> usize {
+        self.dimensions.len()
+    }
+
+    /// The elements in row-major order.
+    pub fn elements(&self) -> &[Value] {
+        &self.elements
+    }
+
+    /// The element at a multi-index, one coordinate per dimension; `None` when
+    /// the index has the wrong rank or a coordinate is outside its dimension.
+    pub fn get(&self, index: &[i64]) -> Option<&Value> {
+        if index.len() != self.dimensions.len() {
+            return None;
+        }
+        let mut flat: i64 = 0;
+        for (&coordinate, &extent) in index.iter().zip(&self.dimensions) {
+            if coordinate < 0 || coordinate >= extent {
+                return None;
+            }
+            flat = flat * extent + coordinate;
+        }
+        self.elements.get(usize::try_from(flat).ok()?)
+    }
+}
+
+/// A vector of numbers, each kept as the [`Magnitude`] the model computed:
+/// one value, never a sequence of numbers.
+///
+/// A service advertising `structured_values` sends one as itself; an older
+/// one sends an unsupported [`Value::Null`] in its place.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Vector {
+    /// The components, in order.
+    pub components: Vec<Magnitude>,
+}
+
+impl Vector {
+    /// Number of components.
+    pub fn dimension(&self) -> usize {
+        self.components.len()
+    }
+}
+
+/// A vector whose components are quantities, each with its own unit:
+/// `VectorOf((3.0, 4.0)) [m]` holds two metres. The units usually agree but
+/// need not.
+///
+/// A service advertising `structured_values` sends one as itself; an older
+/// one sends an unsupported [`Value::Null`] in its place.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VectorQuantity {
+    components: Vec<Quantity>,
+}
+
+impl VectorQuantity {
+    /// Builds a vector quantity, refusing one with no components.
+    pub fn new(components: Vec<Quantity>) -> Result<Self, Error> {
+        if components.is_empty() {
+            return Err(Error::Decode(
+                "vector quantity has no components".to_owned(),
+            ));
+        }
+        Ok(Self { components })
+    }
+
+    /// The components, at least one, in order.
+    pub fn components(&self) -> &[Quantity] {
+        &self.components
+    }
+
+    /// Number of components.
+    pub fn dimension(&self) -> usize {
+        self.components.len()
+    }
+
+    /// The one unit every component is written in, or `None` when they differ.
+    pub fn unit(&self) -> Option<&str> {
+        let first = &self.components[0].unit;
+        self.components
+            .iter()
+            .all(|component| component.unit == *first)
+            .then_some(first.as_str())
+    }
+}
+
 /// A runtime value returned by the service.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -254,6 +386,12 @@ pub enum Value {
     Quantity(Quantity),
     /// Enumeration literal value.
     EnumLiteral(EnumLiteral),
+    /// Multidimensional array value.
+    Array(Array),
+    /// Numeric vector value.
+    Vector(Vector),
+    /// Vector of quantities.
+    VectorQuantity(VectorQuantity),
     /// Explicit null value.
     Null,
     /// A materialized feature with no value.
@@ -281,30 +419,34 @@ pub(crate) fn value_from_wire(value: wire::Value) -> Result<Value, Error> {
                 .collect::<Result<_, _>>()?,
         )),
         wire::value::Kind::Null(_) => Ok(Value::Null),
-        wire::value::Kind::Quantity(v) => {
-            let magnitude = match v.magnitude {
-                Some(wire::quantity::Magnitude::IntMagnitude(value)) => Magnitude::Integer(value),
-                Some(wire::quantity::Magnitude::RealMagnitude(value)) => Magnitude::Real(value),
-                None => return Err(Error::Decode("Quantity has no magnitude".to_owned())),
-            };
-            let unit_term = v.unit_term.map(|term| UnitTerm {
-                scale_num: term.scale_num,
-                scale_den: term.scale_den,
-                factors: term
-                    .factors
-                    .into_iter()
-                    .map(|factor| UnitFactor {
-                        unit_id: factor.unit_id,
-                        exponent: factor.exponent,
-                    })
-                    .collect(),
-            });
-            Ok(Value::Quantity(Quantity {
-                magnitude,
-                unit: v.unit,
-                unit_term,
-            }))
-        }
+        wire::value::Kind::Quantity(v) => Ok(Value::Quantity(quantity_from_wire(v)?)),
+        wire::value::Kind::Array(v) => Ok(Value::Array(Array::new(
+            v.dimensions,
+            v.elements
+                .into_iter()
+                .map(value_from_wire)
+                .collect::<Result<_, _>>()?,
+        )?)),
+        wire::value::Kind::Vector(v) => Ok(Value::Vector(Vector {
+            components: v
+                .components
+                .into_iter()
+                .map(|component| match component.kind {
+                    Some(wire::value::Kind::IntValue(value)) => Ok(Magnitude::Integer(value)),
+                    Some(wire::value::Kind::RealValue(value)) => Ok(Magnitude::Real(value)),
+                    other => Err(Error::Decode(format!(
+                        "vector component is not a number: {}",
+                        other.as_ref().map_or("no kind", kind_name)
+                    ))),
+                })
+                .collect::<Result<_, _>>()?,
+        })),
+        wire::value::Kind::VectorQuantity(v) => Ok(Value::VectorQuantity(VectorQuantity::new(
+            v.components
+                .into_iter()
+                .map(quantity_from_wire)
+                .collect::<Result<_, _>>()?,
+        )?)),
         wire::value::Kind::EnumLiteral(v) => Ok(Value::EnumLiteral(EnumLiteral {
             literal_id: v.literal_id,
             enumeration_id: v.enumeration_id,
@@ -312,6 +454,51 @@ pub(crate) fn value_from_wire(value: wire::Value) -> Result<Value, Error> {
         })),
         wire::value::Kind::Unset(_) => Ok(Value::Unset),
     }
+}
+
+/// The wire field name of a `Value` arm, for messages about a misplaced one.
+fn kind_name(kind: &wire::value::Kind) -> &'static str {
+    match kind {
+        wire::value::Kind::IntValue(_) => "int_value",
+        wire::value::Kind::RealValue(_) => "real_value",
+        wire::value::Kind::BoolValue(_) => "bool_value",
+        wire::value::Kind::StringValue(_) => "string_value",
+        wire::value::Kind::InstanceId(_) => "instance_id",
+        wire::value::Kind::Sequence(_) => "sequence",
+        wire::value::Kind::Null(_) => "null",
+        wire::value::Kind::Quantity(_) => "quantity",
+        wire::value::Kind::EnumLiteral(_) => "enum_literal",
+        wire::value::Kind::Unset(_) => "unset",
+        wire::value::Kind::Complex(_) => "complex",
+        wire::value::Kind::Array(_) => "array",
+        wire::value::Kind::Vector(_) => "vector",
+        wire::value::Kind::VectorQuantity(_) => "vector_quantity",
+    }
+}
+
+fn quantity_from_wire(v: wire::Quantity) -> Result<Quantity, Error> {
+    let magnitude = match v.magnitude {
+        Some(wire::quantity::Magnitude::IntMagnitude(value)) => Magnitude::Integer(value),
+        Some(wire::quantity::Magnitude::RealMagnitude(value)) => Magnitude::Real(value),
+        None => return Err(Error::Decode("Quantity has no magnitude".to_owned())),
+    };
+    let unit_term = v.unit_term.map(|term| UnitTerm {
+        scale_num: term.scale_num,
+        scale_den: term.scale_den,
+        factors: term
+            .factors
+            .into_iter()
+            .map(|factor| UnitFactor {
+                unit_id: factor.unit_id,
+                exponent: factor.exponent,
+            })
+            .collect(),
+    });
+    Ok(Quantity {
+        magnitude,
+        unit: v.unit,
+        unit_term,
+    })
 }
 
 /// A symbol in a parsed model.
@@ -686,6 +873,284 @@ mod tests {
         assert_eq!(print(1.0, 2.0), "1.0 + 2.0i");
         assert_eq!(print(0.0, 0.0), "0.0 + 0.0i");
         assert_eq!(print(-3.25, -0.0), "-3.25 - 0.0i");
+    }
+
+    fn int(value: i64) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::IntValue(value)),
+        }
+    }
+
+    fn real(value: f64) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::RealValue(value)),
+        }
+    }
+
+    fn metres(magnitude: f64) -> wire::Quantity {
+        wire::Quantity {
+            magnitude: Some(wire::quantity::Magnitude::RealMagnitude(magnitude)),
+            unit: "m".to_owned(),
+            unit_term: Some(wire::UnitTerm {
+                scale_num: 1.0,
+                scale_den: 1.0,
+                factors: vec![wire::UnitFactor {
+                    unit_id: "SI::metre".to_owned(),
+                    exponent: 1.0,
+                }],
+            }),
+        }
+    }
+
+    fn metre_term() -> UnitTerm {
+        UnitTerm {
+            scale_num: 1.0,
+            scale_den: 1.0,
+            factors: vec![UnitFactor {
+                unit_id: "SI::metre".to_owned(),
+                exponent: 1.0,
+            }],
+        }
+    }
+
+    fn array(dimensions: Vec<i64>, elements: Vec<wire::Value>) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::Array(wire::Array {
+                dimensions,
+                elements,
+            })),
+        }
+    }
+
+    fn vector(components: Vec<wire::Value>) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::Vector(wire::Vector { components })),
+        }
+    }
+
+    fn vector_quantity(components: Vec<wire::Quantity>) -> wire::Value {
+        wire::Value {
+            kind: Some(wire::value::Kind::VectorQuantity(wire::VectorQuantity {
+                components,
+            })),
+        }
+    }
+
+    #[test]
+    fn an_array_keeps_its_shape_and_row_major_elements() {
+        let Ok(Value::Array(grid)) = value_from_wire(array(
+            vec![2, 3],
+            vec![int(1), int(2), int(3), int(4), int(5), int(6)],
+        )) else {
+            panic!("a (2, 3) array should decode");
+        };
+        assert_eq!(grid.dimensions(), [2, 3]);
+        assert_eq!(grid.rank(), 2);
+        assert_eq!(grid.get(&[1, 2]), Some(&Value::Integer(6)));
+        assert_eq!(grid.get(&[0, 1]), Some(&Value::Integer(2)));
+        assert_eq!(grid.get(&[2, 0]), None);
+        assert_eq!(grid.get(&[0]), None);
+        assert_eq!(grid.elements().len(), 6);
+
+        // Rank 0 holds exactly one element; rank 1 and 3 keep every extent.
+        let Ok(Value::Array(scalar)) = value_from_wire(array(vec![], vec![real(7.0)])) else {
+            panic!("a rank-0 array should decode");
+        };
+        assert_eq!(scalar.rank(), 0);
+        assert_eq!(scalar.get(&[]), Some(&Value::Real(7.0)));
+        let Ok(Value::Array(cube)) =
+            value_from_wire(array(vec![2, 2, 2], (0..8).map(int).collect()))
+        else {
+            panic!("a (2, 2, 2) array should decode");
+        };
+        assert_eq!(cube.get(&[1, 0, 1]), Some(&Value::Integer(5)));
+
+        // An element is any value: a nested array of a quantity, or a vector.
+        let nested = value_from_wire(array(
+            vec![2],
+            vec![
+                array(
+                    vec![1],
+                    vec![wire::Value {
+                        kind: Some(wire::value::Kind::Quantity(metres(3.0))),
+                    }],
+                ),
+                vector(vec![real(1.0), real(2.0)]),
+            ],
+        ));
+        let inner = Array::new(
+            vec![1],
+            vec![Value::Quantity(Quantity {
+                magnitude: Magnitude::Real(3.0),
+                unit: "m".to_owned(),
+                unit_term: Some(metre_term()),
+            })],
+        )
+        .ok();
+        assert_eq!(
+            nested.ok(),
+            Some(Value::Array(
+                Array::new(
+                    vec![2],
+                    vec![
+                        Value::Array(inner.expect("inner array is well formed")),
+                        Value::Vector(Vector {
+                            components: vec![Magnitude::Real(1.0), Magnitude::Real(2.0)],
+                        }),
+                    ],
+                )
+                .expect("outer array is well formed")
+            ))
+        );
+    }
+
+    #[test]
+    fn a_malformed_array_is_refused() {
+        let short = value_from_wire(array(vec![2, 3], vec![int(1), int(2)]));
+        assert!(
+            matches!(&short, Err(Error::Decode(message)) if message.contains("want 6")),
+            "{short:?}"
+        );
+        assert!(matches!(
+            value_from_wire(array(vec![0], vec![])),
+            Err(Error::Decode(message)) if message.contains("not positive")
+        ));
+        assert!(matches!(
+            value_from_wire(array(vec![-1], vec![int(1)])),
+            Err(Error::Decode(_))
+        ));
+        assert!(matches!(
+            value_from_wire(array(vec![i64::MAX, 2], vec![])),
+            Err(Error::Decode(message)) if message.contains("overflow")
+        ));
+    }
+
+    #[test]
+    fn a_vector_keeps_integer_and_real_components_apart() {
+        assert_eq!(
+            value_from_wire(vector(vec![real(3.0), real(4.0)])).ok(),
+            Some(Value::Vector(Vector {
+                components: vec![Magnitude::Real(3.0), Magnitude::Real(4.0)],
+            }))
+        );
+        assert_eq!(
+            value_from_wire(vector(vec![int(1), real(2.5)])).ok(),
+            Some(Value::Vector(Vector {
+                components: vec![Magnitude::Integer(1), Magnitude::Real(2.5)],
+            }))
+        );
+        assert_eq!(
+            value_from_wire(vector(vec![])).ok(),
+            Some(Value::Vector(Vector { components: vec![] }))
+        );
+        assert_ne!(
+            value_from_wire(vector(vec![real(3.0)])).ok(),
+            Some(Value::Sequence(vec![Value::Real(3.0)]))
+        );
+
+        let text = value_from_wire(vector(vec![
+            real(1.0),
+            wire::Value {
+                kind: Some(wire::value::Kind::StringValue("two".to_owned())),
+            },
+        ]));
+        assert!(
+            matches!(&text, Err(Error::Decode(message)) if message.contains("string_value")),
+            "{text:?}"
+        );
+        assert!(matches!(
+            value_from_wire(vector(vec![wire::Value { kind: None }])),
+            Err(Error::Decode(message)) if message.contains("no kind")
+        ));
+    }
+
+    #[test]
+    fn a_vector_quantity_keeps_one_quantity_per_component() {
+        let Ok(Value::VectorQuantity(position)) =
+            value_from_wire(vector_quantity(vec![metres(3.0), metres(4.0)]))
+        else {
+            panic!("a vector quantity should decode");
+        };
+        assert_eq!(position.dimension(), 2);
+        assert_eq!(position.unit(), Some("m"));
+        assert_eq!(
+            position.components(),
+            [
+                Quantity {
+                    magnitude: Magnitude::Real(3.0),
+                    unit: "m".to_owned(),
+                    unit_term: Some(metre_term()),
+                },
+                Quantity {
+                    magnitude: Magnitude::Real(4.0),
+                    unit: "m".to_owned(),
+                    unit_term: Some(metre_term()),
+                },
+            ]
+        );
+
+        // Units may differ per component; a composed unit keeps its reduction.
+        let speed = wire::Quantity {
+            magnitude: Some(wire::quantity::Magnitude::RealMagnitude(5.0)),
+            unit: "m/s".to_owned(),
+            unit_term: Some(wire::UnitTerm {
+                scale_num: 1.0,
+                scale_den: 1.0,
+                factors: vec![
+                    wire::UnitFactor {
+                        unit_id: "SI::metre".to_owned(),
+                        exponent: 1.0,
+                    },
+                    wire::UnitFactor {
+                        unit_id: "SI::second".to_owned(),
+                        exponent: -1.0,
+                    },
+                ],
+            }),
+        };
+        let Ok(Value::VectorQuantity(mixed)) =
+            value_from_wire(vector_quantity(vec![metres(1.0), speed]))
+        else {
+            panic!("a mixed vector quantity should decode");
+        };
+        assert_eq!(mixed.unit(), None);
+        assert_eq!(mixed.components()[1].unit, "m/s");
+        assert_eq!(
+            mixed.components()[1]
+                .unit_term
+                .as_ref()
+                .map(|term| term.factors.len()),
+            Some(2)
+        );
+
+        assert!(matches!(
+            value_from_wire(vector_quantity(vec![])),
+            Err(Error::Decode(message)) if message.contains("no components")
+        ));
+        assert!(matches!(
+            value_from_wire(vector_quantity(vec![wire::Quantity::default()])),
+            Err(Error::Decode(message)) if message.contains("no magnitude")
+        ));
+    }
+
+    #[test]
+    fn a_structured_value_survives_the_wire_bytes() {
+        use prost::Message;
+        for value in [
+            array(
+                vec![2, 3],
+                vec![int(1), int(2), int(3), int(4), int(5), int(6)],
+            ),
+            vector(vec![real(3.0), int(4)]),
+            vector_quantity(vec![metres(3.0), metres(4.0)]),
+        ] {
+            let again = wire::Value::decode(value.encode_to_vec().as_slice())
+                .expect("a value encodes to decodable bytes");
+            assert_eq!(
+                value_from_wire(value.clone()).ok(),
+                value_from_wire(again).ok()
+            );
+        }
     }
 
     #[test]

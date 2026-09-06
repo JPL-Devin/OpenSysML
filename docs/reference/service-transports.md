@@ -52,12 +52,21 @@ capability's definition rather than something a client has to guess:
 | The capability describes | A request that needs it | What a client should do |
 |---|---|---|
 | what the service can be *asked*: `strict_conformance`, `inline_language`, `parse_sources`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query`, `document_query`, `render_document` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
-| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value`, `complex_values` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
+| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value`, `complex_values`, `structured_values` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
 
-`complex_values` sits in both rows: a complex in a response is reported as an `unsupported`
-null without it, and a complex in an action input or calc argument is refused with
-`UNIMPLEMENTED` rather than read as another value — a service that predates the arm would read
-it as an unknown field, so the Go and Python clients check the list before sending one.
+`complex_values` and `structured_values` sit in both rows: a complex — or an array, vector or
+vector quantity — in a response is reported as an `unsupported` null without it, and one in an
+action input or calc argument is refused with `UNIMPLEMENTED` rather than read as another value
+— a service that predates the arm would read it as an unknown field, so every client checks
+the list before sending one (`structured_values` covers a structured value nested inside a
+sequence or array as well as one at the top level). In the other direction, a client built
+before an arm existed parses a newer service's answer as an unknown field — a `Value` with no
+kind set — and no client this repository ships reads that as a plain null or crashes: Python
+raises `UnsupportedValueError`, Rust returns `Error::Decode`, Go reads an `unsupported` null
+naming the case, Java reports a top-level result as `Optional.empty()` and refuses one nested
+in a sequence, feature or array with `TransportException`, and Node reports the `absent`
+kind, which `encodeValue` refuses to send back (`MalformedValueError`) and whose vector
+components are refused when read.
 
 So a client cannot treat "the call succeeded" as "the field was computed", and cannot treat
 "no refusal" as "the capability is there". Every client this repository ships checks the list

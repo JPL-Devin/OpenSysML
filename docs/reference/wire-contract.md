@@ -192,10 +192,10 @@ Note that `not_found` is also the status for an unknown *symbol* on some methods
 which (`model not found:`, `symbol not found:`, `file not found:`), and a client that recovers
 by re-parsing must read it.
 
-## `Value`: eleven arms, exactly one present
+## `Value`: fourteen arms, exactly one present
 
 Every value the engine returns — an expression result, a feature of an instance, an action
-output, a state-machine context variable — is a `Value`, which is a proto `oneof` of eleven
+output, a state-machine context variable — is a `Value`, which is a proto `oneof` of fourteen
 arms. In JSON that is **an object with exactly one key**, and the key is the discriminator.
 A decoder therefore does not look for a `kind` field: it looks at which key is present. The
 arms, each captured from `Evaluate` against the model at the end of this section:
@@ -213,8 +213,12 @@ arms, each captured from `Evaluate` against the model at the end of this section
 | `enumLiteral` | object | `{"result":{"enumLiteral":{"literalId":"Rover::Mode::idle","enumerationId":"Rover::Mode","name":"Mode::idle"}}}` | Enumeration literal |
 | `unset` | boolean | `{"result":{"unset":true}}` | A feature that exists and has no value |
 | `complex` | object | `{"result":{"complex":{"real":1.5,"imaginary":-2}}}` | Complex number |
+| `array` | object | `{"result":{"array":{"dimensions":["2","3"],"elements":[{"intValue":"1"},…,{"intValue":"6"}]}}}` | Multi-dimensional array; `elements` are `Value`s in row-major order |
+| `vector` | object | `{"result":{"vector":{"components":[{"realValue":3},{"realValue":4}]}}}` | Numeric vector; each component an `intValue` or `realValue` |
+| `vectorQuantity` | object | `{"result":{"vectorQuantity":{"components":[{"realMagnitude":3,"unit":"m","unitTerm":{…}},…]}}}` | Vector of quantities; one `quantity` body per component |
 
-Requests for the table's rows were of the form
+The last three rows were captured against `conformance/fixtures/structured.sysml` (`S::grid`,
+`S::v`, `S::d`); the rest against the model below, with requests of the form
 `{"modelHash":"59c4…a654","expression":"<expr>","contextSymbolId":"Rover"}` with `rover.count`,
 `1.0 / 3.0`, `rover.armed`, `"abc"`, `rover.wheel`, `rover.tags`, `null`, `rover.speed`,
 `Mode::idle`, `rover.serial` and `rover.z`, and the model was:
@@ -267,6 +271,11 @@ decode(v):
   quantity     → see below
   enumLiteral  → identity is literalId; enumerationId is its type; name is for display
   complex      → complex(v.complex.real or 0, v.complex.imaginary or 0)
+  array        → shape v.array.dimensions (parse each as int64); elements := map decode over
+                 v.array.elements; require len(elements) == product(dimensions), else an error
+  vector       → map over v.vector.components: intValue → integer, realValue → double,
+                 anything else → an error
+  vectorQuantity → map the quantity rule over v.vectorQuantity.components; empty → an error
   anything else → an error: a newer service than this decoder
 ```
 
@@ -376,6 +385,42 @@ literals of different enumerations can carry the same one.
 **`complex`.** `real` and `imaginary`, both doubles, **either omitted when zero**:
 `rect(0.0, 2.0)` is `{"result":{"complex":{"imaginary":2}}}`. Read each with a default of 0.
 
+**`array`.** The shape and the elements, flattened:
+
+```console
+$ … /Evaluate -d '{"modelHash":"42cc…54b0","expression":"S::grid"}'
+{"result":{"array":{"dimensions":["2", "3"], "elements":[{"intValue":"1"}, {"intValue":"2"}, {"intValue":"3"}, {"intValue":"4"}, {"intValue":"5"}, {"intValue":"6"}]}}}
+```
+
+- `dimensions` is the rank and extents, `int64` strings like `intValue`; a rank-0 array has no
+  `dimensions` key (default omission) and exactly one element.
+- `elements` is the array flattened in **row-major** order — the last dimension varies fastest,
+  so the element at `(i, j)` of a `(2, 3)` array is `elements[i*3 + j]` — and every element is a
+  `Value` of any arm, so an array of quantities, or of arrays, nests without a second encoding.
+- The element count is the product of the dimensions; a client must check it (and that every
+  extent is positive) before indexing, and reject a message that disagrees. The service applies
+  the same rule to an array sent to it.
+
+**`vector`.** `components` is a list of `Value`s each of which is an `intValue` or a
+`realValue` — nothing else — so an Integer and a Real component stay distinct, as they do in
+a `sequence`. A `vector` is not a `sequence`: `VectorOf((3.0, 4.0))` is one value with a
+dimension, and the engine's vector functions accept it where a sequence of numbers would be
+read element by element. A component of any other arm is an error, on both sides.
+
+**`vectorQuantity`.** `components` is a list of `quantity` bodies — each with its own
+magnitude, `unit` and `unitTerm`, exactly as the `quantity` arm carries them:
+
+```console
+$ … /Evaluate -d '{"modelHash":"42cc…54b0","expression":"S::d"}'
+{"result":{"vectorQuantity":{"components":[{"realMagnitude":3, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}, {"realMagnitude":4, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}]}}}
+```
+
+The unit is carried per component rather than once, so a vector whose components were
+composed in different units arrives as it was computed; a client wanting one unit checks that
+every component names the same one. An empty `components` list is an error: a vector quantity
+has at least one component. A component sent without its `unitTerm` is refused by the rule
+under `quantity`.
+
 ### What a client must not do
 
 - **Do not compare enum literals by `name`.** Compare `literalId`.
@@ -389,6 +434,9 @@ literals of different enumerations can carry the same one.
 - **Do not default a missing `realValue` to 0 or a missing `boolValue` to false to "make it
   work".** If the key you expected is not the one present, the value is of another kind, and
   the decoder must say so.
+- **Do not read an `array` or a `vector` as a `sequence`.** The first has a shape and the
+  second a dimension; flattening either into a list loses what the arm exists to carry.
+- **Do not index an `array` before checking `len(elements) == product(dimensions)`.**
 
 ## Three places a failure can be
 
@@ -671,6 +719,21 @@ time it is entered, so a state entered twice appears twice.
 $ … /EvaluateCalc -d '{"modelHash":"b4e0…ded9","symbolId":"Demo::add","arguments":[{"intValue":"2"},{"realValue":3.5}]}'
 {"result":{"realValue":5.5}}
 ```
+
+A structured argument goes back the way it came — the same `array`, `vector` or
+`vectorQuantity` body the service writes — and a malformed one is an in-body failure naming
+the fault, not a value read some other way:
+
+```console
+$ … /EvaluateCalc -d '{"modelHash":"42cc…54b0","symbolId":"S::length","arguments":[{"vector":{"components":[{"realValue":3.0},{"realValue":4.0}]}}]}'
+{"result":{"realValue":5}}
+
+$ … /EvaluateCalc -d '{"modelHash":"42cc…54b0","symbolId":"S::length","arguments":[{"vector":{"components":[{"realValue":3.0},{"stringValue":"4"}]}}]}'
+{"error":"calc argument could not be read: vector component is not a number: component 2", "failureReason":"FAILURE_REASON_EVALUATION"}
+```
+
+A service without the `structured_values` capability refuses the same argument with the
+`unimplemented` Connect error instead, naming the capability; check `GetServerInfo` first.
 
 A calc *usage* whose output features are evaluated from its own members (no `arguments`)
 answers them as `outputs`, a list of `{"name":…,"value":<Value>}` in declaration order, in
