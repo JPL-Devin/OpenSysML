@@ -137,11 +137,11 @@ editing the CLI-emitted Turtle as above, or serialize mutated RDFLib graphs usin
 graph through the same serializer and require identical reconstructed notation; otherwise a
 mutation refusal is vacuous. Check the graph delta is exactly the intended triple.
 
-Corpus files may contain unrelated export refusals despite clean validation. For example,
-the pilot ArgumentResolution file has an anonymous `out feature : A = new A(x);` that may
-be refused as a nameless feature. Preserve that failure, and, if isolating connector coverage,
-name the output only in a temporary copy and label it as modified-copy evidence, never a
-pass for the original corpus file.
+A corpus file that `-convert ttl` refuses is not automatically an "unrelated" refusal: check
+its verdict in `internal/core/export/testdata/corpus_roundtrip_expected.txt` first. A file
+pinned `stable` there that now refuses is a regression to fix, not a failure to preserve.
+Only when the baseline itself records the refusal may you isolate your feature in a modified
+copy — and label that as modified-copy evidence, never as a pass for the original file.
 
 ## A fixture that exercises the end-binding heads
 
