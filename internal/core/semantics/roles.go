@@ -230,17 +230,17 @@ func (m *Model) collectRoles(sym *symbols.Symbol, role caseRole, seen map[*symbo
 	return out
 }
 
-// SubjectParameterOf returns the subject parameter of a requirement or case,
-// owned or inherited along its generals, or nil when it has none.
+// SubjectParameterOf returns the subject parameter of a requirement or case: its own,
+// else the inherited one no other visible subject redefines, or nil when it has none.
 func (m *Model) SubjectParameterOf(sym *symbols.Symbol) *symbols.Symbol {
-	if m == nil || sym == nil {
-		return nil
+	owned, inherited := m.SubjectsOf(sym)
+	if len(owned) > 0 {
+		return owned[0]
 	}
-	subjects := m.effectiveRoles(sym, subjectRole, map[*symbols.Symbol]bool{})
-	if len(subjects) == 0 {
-		return nil
+	if len(inherited) > 0 {
+		return inherited[0]
 	}
-	return subjects[0]
+	return nil
 }
 
 func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*symbols.Symbol]bool) []*symbols.Symbol {

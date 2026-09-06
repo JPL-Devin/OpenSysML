@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
@@ -364,5 +365,34 @@ func TestRolesInheritThroughReferenceSubsetting(t *testing.T) {
 	}
 	if owned, inherited := m.SubjectsOf(nested(t, p.Scope, "rBoth")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != s || inherited[1] != s0 {
 		t.Errorf("SubjectsOf(rBoth) = %v, %v; want [], [s s0]", owned, inherited)
+	}
+}
+
+// The subject parameter is the one that survives redefinition: when one branch of a
+// diamond restates the common ancestor's subject, the restatement wins whichever branch
+// is written first, and whether the branch is a general or a referenced usage.
+func TestSubjectParameterSurvivesDiamondRedefinition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A;
+		part def B :> A;
+		requirement def Base { subject s : A; }
+		requirement def L :> Base;
+		requirement r : Base { subject s2 : B :>> s; }
+		requirement d : L ::> r;
+		requirement def D :> L, Base { subject s3 : B :>> s; }
+		requirement def E :> L, D;
+		requirement def F :> D, L;
+		requirement e : E;
+	}`)
+	p := sym(t, root, "P")
+	s2 := nested(t, nested(t, p.Scope, "r").Scope, "s2")
+	s3 := nested(t, nested(t, p.Scope, "D").Scope, "s3")
+	for _, tc := range []struct {
+		name string
+		want *symbols.Symbol
+	}{{"d", s2}, {"E", s3}, {"F", s3}, {"e", s3}} {
+		if got := m.SubjectParameterOf(nested(t, p.Scope, tc.name)); got != tc.want {
+			t.Errorf("SubjectParameterOf(%s) = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
