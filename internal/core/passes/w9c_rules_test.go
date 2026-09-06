@@ -540,6 +540,99 @@ func TestW9CImplicitBindingsSysML(t *testing.T) {
 	w9cWantLines(t, src, "bound-feature-types", 3, 7, 17, 19, 21, 24, 27, 28, 30, 31, 34)
 }
 
+// A bound value typed by several types conforms when any one of them conforms
+// to any type of the feature it fills, or the reverse; a feature typed only by
+// its value takes every type of that value; arithmetic and conditionals, whose
+// result types are not statically known, stay silent. The pinned pilot agrees
+// line for line.
+func TestW9CMultiTypedValuesSysML(t *testing.T) {
+	src := `package Test {
+	private import ScalarValues::*;
+	part def A; part def B; part def C;
+	attribute def Meters :> Real; attribute def Seconds :> Real;
+	part ab : A, B; part a : A; part c : C;
+	attribute m : Meters; attribute sec : Seconds;
+	calc def GivesAB { return : A, B; }
+	calc def GivesA { return : A; }
+	calc c1 { return : B; ab }
+	calc c2 { return : C; ab }
+	calc c3 { return : B; GivesAB() }
+	calc c4 { return : C; GivesAB() }
+	calc c5 { return : B; GivesA() }
+	calc c6 { return : B, C; GivesA() }
+	calc c7 { return : B, C; GivesAB() }
+	calc c8 { return : Seconds; m + 1 }
+	calc c9 { return : String; m + 1 }
+	calc c10 { return : Integer; if true ? m else sec }
+	calc c11 { return : B; if true ? ab else ab }
+	requirement def RB { subject s : B; }
+	requirement def RC { subject s : C; }
+	requirement r1 : RB { subject s : B = ab; }
+	requirement r2 : RC { subject s : C = ab; }
+	requirement r3 : RB { subject s : B = a; }
+	part def Sys {
+		part ab2 : A, B;
+		part a2 : A;
+		satisfy requirement rb1 : RB by ab2;
+		satisfy requirement rc1 : RC by ab2;
+		satisfy requirement rb2 : RB by a2;
+	}
+	part abs : A, B [*];
+	calc c12 { return : B; abs#(1) }
+	calc c13 { return : B; abs.?{in x; true} }
+	calc c14 { return : C; abs#(1) }
+	calc c15 { return : C; abs.?{in x; true} }
+	part x = ab;
+	requirement r4 : RB { subject s : B = x; }
+	requirement r5 : RC { subject s : C = x; }
+	calc c16 { return : B; x }
+	calc c17 { return : C; x }
+}`
+	w9cWantLines(t, src, "bound-feature-types", 10, 12, 13, 14, 23, 24, 29, 30, 35, 36, 39, 41)
+}
+
+// Operator results are judged by the library function's declared result: a
+// data value never fills a part, a Boolean never a Meters, while a conditional
+// or `??` (typed Anything) and arithmetic bound to a data type stay silent. The
+// pinned pilot agrees line for line.
+func TestW9COperatorResultsSysML(t *testing.T) {
+	src := `package Test {
+	private import ScalarValues::*;
+	attribute def Meters :> Real; attribute def Seconds :> Real;
+	part def PD; part def QD;
+	attribute m : Meters; attribute sec : Seconds;
+	part pd : PD; part qd : QD;
+	calc c1 { return : PD; m + m }
+	calc c2 { return : PD; m > sec }
+	calc c3 { return : PD; -m }
+	calc c4 { return : PD; pd as QD }
+	calc c5 { return : PD; if true ? qd else qd }
+	calc c6 { return : PD; qd ?? qd }
+	calc c7 { return : PD; (qd, qd) }
+	calc c8 { return : Seconds; m + m }
+	calc c9 { return : String; m + m }
+	calc c10 { return : Boolean; m + m }
+	calc c11 { return : PD; 1 }
+	calc c12 { return : PD; "s" }
+	calc c13 { return : PD; null }
+	calc c14 { return : PD; true }
+	calc c15 { return : Boolean; m }
+	calc c16 { return : Meters; sec }
+	calc c17 { return : Meters; m > sec }
+	calc c18 { return : Meters; not true }
+	calc c19 { return : Boolean; not true }
+	calc c20 { return : Meters; m ?? sec }
+	calc c21 { return : PD; qd }
+	calc c22 { return : PD; (qd, qd)#(1) }
+	calc c23 { return : PD; (pd, pd)#(1) }
+	requirement def R { subject s : PD; }
+	requirement r1 : R { subject s : PD = m + m; }
+	requirement r2 : R { subject s : PD = qd as PD; }
+	requirement r3 : R { subject s : PD = pd as QD; }
+}`
+	w9cWantLines(t, src, "bound-feature-types", 7, 8, 9, 10, 17, 18, 20, 21, 22, 23, 27, 31, 33)
+}
+
 // Redefining an untyped library feature replaces its implicit value typing, so
 // no diamond is drawn through it (examples/pilot-corpora TradeStudyTest.sysml:18).
 func TestW9CRedefinedUntypedFeatureStaysSilent(t *testing.T) {

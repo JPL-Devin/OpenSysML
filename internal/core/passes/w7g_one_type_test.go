@@ -92,6 +92,8 @@ func TestW7GAnAttributeTypedByAnEnumerationTakesNoOtherType(t *testing.T) {
 		attribute def A;
 		attribute withEnum : E, A;
 		attribute plain : A, A;
+		ref refEnum : E, A;
+		bareEnum : E, A;
 	}`
 	diags := only(typeDiags(t, src), "one-type")
 	if len(diags) != 1 || diags[0].Message != msgEnumerationAttributeTypes {
@@ -112,7 +114,10 @@ func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
 			e = true;
 			f = Level::low;
 			g : Level = Level::high;
+			h = wrongOrLevel;
 		}
+		ref wrongOrLevel : Wrong, Level;
+		ref rightOrReal : Right, ScalarValues::Real;
 		enum def Right :> ScalarValues::Real {
 			ok1 = 4.0;
 			ok2 : ScalarValues::Real;
@@ -122,6 +127,7 @@ func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
 			ok6 := 2.0;
 			ok7;
 			= 5.0;
+			ok8 = rightOrReal;
 		}
 		enum def Nested {
 			enum n1 : Nested;
@@ -135,7 +141,7 @@ func TestW7GAnEnumeratedValueIsTypedByItsEnumerationAlone(t *testing.T) {
 		}
 		got = append(got, strings.Fields(src[d.Span.Offset:d.Span.End()])[0])
 	}
-	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	want := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("enumerated values typed outside their enumeration: got %v, want %v", got, want)
 	}
