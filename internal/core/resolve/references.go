@@ -473,7 +473,7 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if rel == nil {
 			continue
 		}
-		if rel.Kind.ReferenceSubsets() {
+		if ast.IsReferenceSubsetting(decl, rel) {
 			c.referenceTarget(scope, decl, rel.Target)
 			continue
 		}

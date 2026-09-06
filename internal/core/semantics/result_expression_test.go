@@ -115,7 +115,16 @@ func TestResultExpressionNestedAssertionIsNotAResult(t *testing.T) {
 	m, root := buildModel(t,
 		"requirement def Margin { attribute x; require constraint enough { x > 0 } }"+
 			" requirement def Tight :> Margin { require constraint :>> enough { assert constraint { x > 1 } } }")
-	redefining := sym(t, sym(t, root, "Tight").Scope, "enough")
+	// A redefining requirement constraint references nothing, so it has no name.
+	var redefining *symbols.Symbol
+	for _, member := range sym(t, root, "Tight").Scope.AnonymousMembers() {
+		if member.Kind == symbols.SymbolConstraintUsage {
+			redefining = member
+		}
+	}
+	if redefining == nil {
+		t.Fatal("Tight owns no anonymous constraint usage")
+	}
 	if got := ownerNames(m, redefining); len(got) != 1 || got[0] != "enough" {
 		t.Fatalf("a nested assertion adds no result; the redefined one is inherited, got %v", got)
 	}

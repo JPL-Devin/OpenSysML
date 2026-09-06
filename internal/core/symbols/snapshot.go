@@ -730,7 +730,12 @@ func (d *sectionReader) readSymbols() {
 			s.Facts = &d.facts[id-1]
 		}
 		s.ShortName = d.r.String()
-		s.Naming = Naming(d.r.Uint())
+		naming := d.r.Uint()
+		if naming > uint64(NamedByRedefinition) {
+			d.r.Fail("naming kind")
+			return
+		}
+		s.Naming = Naming(naming)
 		s.NamingTarget = d.node()
 		if d.r.Err() != nil {
 			return

@@ -15,8 +15,8 @@ const replacedResultFixture = `package Power {
         require constraint typed : Shortfall;
     }
     requirement def Fixed :> Margin {
-        require constraint :>> tooLittle { 600.0 >= 450.0 }
-        require constraint :>> typed { 600.0 >= 450.0 }
+        require constraint tooLittle :>> tooLittle { 600.0 >= 450.0 }
+        require constraint typed :>> typed { 600.0 >= 450.0 }
     }
     calc def Plus { in x : Real; x + 1.0 }
     calc def Twice :> Plus { x + 2.0 }

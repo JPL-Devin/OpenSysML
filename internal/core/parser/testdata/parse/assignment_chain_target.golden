@@ -36,5 +36,5 @@
                 (Usage kind="state" name="setting" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (EntryMember
                     (Membership visibility="default"
-                      (Usage kind="action" name="set" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (Usage kind="action" name="set" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="entry"
                         (*ast.AssignmentActionNode)))))))))))))

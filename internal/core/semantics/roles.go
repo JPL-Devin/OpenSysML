@@ -131,7 +131,7 @@ func (m *Model) explicitRedefinitions(sym *symbols.Symbol) map[*symbols.Symbol]b
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
-		if target := m.resolveRelTarget(sym, rel); target != nil {
+		if target := m.relationshipTarget(sym, rel); target != nil {
 			out[target] = true
 		}
 	}

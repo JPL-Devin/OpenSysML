@@ -73,7 +73,7 @@ func (r *Resolver) explicitRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 	for _, rel := range redefinesRelationships(sym.Decl) {
 		// Redefinitions search features of the owner's generals; hide only the
 		// declaration's own binding so a same-named target reaches that feature.
-		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true}
+		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true, redefining: true}
 		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, hide); ok && found != sym {
 			out = append(out, found)
 		}

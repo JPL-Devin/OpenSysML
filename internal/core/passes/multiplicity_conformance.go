@@ -33,7 +33,7 @@ func (cc *constraintChecker) checkMultiplicityConformance(sym *symbols.Symbol) {
 		if !redefines && rel.Kind != ast.RelSubsets {
 			continue
 		}
-		target := cc.resolveRelationshipTarget(sym, rel.Target)
+		target := cc.resolveRelationshipTarget(sym, rel)
 		if target == nil || target == sym {
 			continue
 		}
@@ -107,7 +107,7 @@ func (cc *constraintChecker) conformanceMultiplicity(sym *symbols.Symbol) (seman
 		if rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines {
 			continue
 		}
-		if subsetted := cc.resolveRelationshipTarget(sym, rel.Target); subsetted != nil && ownedByType(subsetted) {
+		if subsetted := cc.resolveRelationshipTarget(sym, rel); subsetted != nil && ownedByType(subsetted) {
 			return semantics.Range{}, false
 		}
 	}
@@ -166,26 +166,11 @@ func declaresEndFeature(sym *symbols.Symbol) bool {
 	return false
 }
 
-// resolveRelationshipTarget resolves the feature a relationship names from the
-// scope its source is declared in, following an alias to its target.
-func (cc *constraintChecker) resolveRelationshipTarget(sym *symbols.Symbol, target ast.Node) *symbols.Symbol {
-	if sym == nil || target == nil {
+// resolveRelationshipTarget resolves the feature a relationship of sym names,
+// following an alias to its target.
+func (cc *constraintChecker) resolveRelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	if sym == nil || rel == nil || ast.AsQualifiedName(rel.Target) == nil {
 		return nil
 	}
-	if ref, ok := target.(*ast.FeatureReference); ok {
-		target = ref.Name
-	}
-	qn, ok := target.(*ast.QualifiedName)
-	if !ok || qn == nil {
-		return nil
-	}
-	resolved, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-	if !ok || resolved == nil {
-		return nil
-	}
-	canonical, ok := cc.resolver.ResolveAliasTarget(resolved)
-	if !ok {
-		return nil
-	}
-	return canonical
+	return cc.model.RelationshipTarget(sym, rel)
 }

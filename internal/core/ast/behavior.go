@@ -585,12 +585,12 @@ func ConditionReference(n Node) *QualifiedName {
 
 // NamingFeature returns the relationship naming a constraint declared without a
 // name: a requirement constraint is named by the constraint it references
-// (SysML ConstraintUsage::namingFeature), else by its lone redefinition.
+// (SysML ConstraintUsage::namingFeature); a redefinition leaves it anonymous.
 func (c OwnedConstraint) NamingFeature() *Relationship {
 	if c.Ident.Declared() {
 		return nil
 	}
-	return namingRelationship(c.Relationships, true)
+	return namingReference(c.Relationships)
 }
 
 // EffectiveName returns the name the constraint answers to: its declared name,
@@ -606,13 +606,13 @@ func (c OwnedConstraint) EffectiveName() (string, source.Span) {
 }
 
 // NamingFeature returns the relationship naming a subject declared without a
-// name: its lone redefinition, as for a usage (`subject :>> vehicle;` answers to
-// `vehicle`); a subject that merely references a feature stays anonymous.
+// name: its first redefinition, as for a usage (`subject :>> vehicle;` answers
+// to `vehicle`); a subject that merely references a feature stays anonymous.
 func (m *SubjectMember) NamingFeature() *Relationship {
 	if m == nil || m.Ident.Declared() {
 		return nil
 	}
-	return namingRelationship(m.Relationships, false)
+	return firstRedefinition(m.Relationships)
 }
 
 // EffectiveName returns the name the subject answers to: its declared name,
@@ -628,6 +628,20 @@ func (m *SubjectMember) EffectiveName() (string, source.Span) {
 		return TargetName(rel.Target)
 	}
 	return "", source.Span{}
+}
+
+// DeclNamedByReference reports whether an unnamed declaration is named by the
+// feature it references, and whether that reference is its only naming feature
+// (a requirement's assume/require/verify member, which no redefinition names).
+func DeclNamedByReference(decl Node) (byReference, referenceOnly bool) {
+	switch decl.(type) {
+	case *AssumeMember, *RequireMember:
+		return true, true
+	}
+	if u, ok := decl.(*Usage); ok && u.NamedByReference() {
+		return true, u.IsRequirementConstraint() || u.IsVerifiedRequirement()
+	}
+	return false, false
 }
 
 // DeclNamingFeature is NamingFeature over every declaration that may borrow its

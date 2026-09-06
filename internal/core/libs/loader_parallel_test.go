@@ -114,7 +114,7 @@ func indexRecords(idx *symbols.Index) []*IndexRecord {
 	sort.Strings(docs)
 	recs := make([]*IndexRecord, 0, len(docs))
 	for _, doc := range docs {
-		rec, _ := recordFromIndex(doc, idx, r, model)
+		rec, _ := recordFromIndex(doc, idx, model)
 		recs = append(recs, rec)
 	}
 	return recs

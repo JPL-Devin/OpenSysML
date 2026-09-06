@@ -161,9 +161,9 @@ func (m *Model) eachMember(sym *symbols.Symbol, view memberView, declaring *symb
 	}
 }
 
-// LookupMember returns the first visible member of sym — declared by it, or
-// contributed by what it specializes or reference-subsets — registered under
-// name, honoring masking.
+// LookupMember returns the member sym has under name, as MembersOf reports them:
+// its own declaration, else an inherited member it does not redefine, else the
+// feature of sym redefining that member and so answering to its name.
 func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	if sym == nil || name == "" {
 		return nil, false
@@ -172,10 +172,8 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 		sym = target
 	}
 	// Local first.
-	if sym.Scope != nil {
-		if s, ok := sym.Scope.LookupLocal(name); ok {
-			return s, true
-		}
+	if s, ok := m.resolver.LocalBinding(sym.Scope, name); ok {
+		return s, true
 	}
 	// If no scope (cached stdlib symbol), query index for direct children
 	if sym.Scope == nil {
@@ -185,7 +183,16 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 			}
 		}
 	}
-	return m.LookupContributedMember(sym, name)
+	var found *symbols.Symbol
+	m.eachContributedMember(sym, name, func(s *symbols.Symbol) bool {
+		if !m.InheritanceMasked(sym, s) {
+			found = s
+		} else {
+			found = m.NamingRedefiner(sym, s)
+		}
+		return found == nil
+	})
+	return found, found != nil
 }
 
 // LookupContributedMember is LookupMember without sym's own declarations: only
@@ -240,14 +247,4 @@ func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield fu
 			}
 		}
 	}
-}
-
-// lastDoubleColon returns the index of the last "::" in s, or -1 if not found.
-func lastDoubleColon(s string) int {
-	for i := len(s) - 1; i > 0; i-- {
-		if s[i-1:i+1] == "::" {
-			return i - 1
-		}
-	}
-	return -1
 }

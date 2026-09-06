@@ -56,21 +56,22 @@ func TestBuildNamedOwnedConstraintsAreRequirementMembers(t *testing.T) {
 	}
 }
 
-// A constraint that redefines one of the requirement's generals without a
-// name of its own answers to the redefined name, as a usage does.
-func TestBuildOwnedConstraintBorrowsRedefinedName(t *testing.T) {
+// A requirement constraint is named only by the constraint it references
+// (SysML 7.20, ConstraintUsage::namingFeature): one that merely redefines an
+// inherited constraint stays anonymous, unlike a usage under a plain membership.
+func TestBuildOwnedConstraintRedefinitionDeclaresNoName(t *testing.T) {
 	scope := buildScope(t, `package P {
 		constraint def C;
 		requirement def R { require constraint c : C; }
 		requirement def S :> R { require constraint :>> c; }
 	}`)
 	s := scope.LookupLocalAll("P")[0].Scope.LookupLocalAll("S")[0]
-	syms := s.Scope.LookupLocalAll("c")
-	if len(syms) != 1 {
-		t.Fatalf("S declares %d symbols named c, want 1", len(syms))
+	if syms := s.Scope.LookupLocalAll("c"); len(syms) != 0 {
+		t.Fatalf("S declares %d symbols named c, want none", len(syms))
 	}
-	if !syms[0].EffectiveName() || syms[0].NamingTarget == nil {
-		t.Error("c's name is not recorded as borrowed from its redefinition")
+	anon := s.Scope.AnonymousMembers()
+	if len(anon) != 1 || anon[0].Kind != SymbolConstraintUsage {
+		t.Fatalf("S anonymous members = %v, want the one constraint", anon)
 	}
 }
 

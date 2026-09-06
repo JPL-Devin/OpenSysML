@@ -686,7 +686,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		// The prefix a kind keyword was qualified with (`assert constraint c`)
 		// states what the usage is for, so it is part of the declaration.
-		if n.PrefixKeyword != "" {
+		if n.PrefixKeyword != "" && !prefixCarriedByGraph(n) {
 			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
 		}
 		e.flags(subject, []boolProperty{
@@ -1657,6 +1657,23 @@ func referencesFeature(n *ast.Usage) bool {
 	for _, rel := range n.Relationships {
 		if rel.Kind == ast.RelReferences && rel.Target != nil {
 			return true
+		}
+	}
+	return false
+}
+
+// prefixCarriedByGraph reports a prefix the graph already states structurally:
+// a state's `entry`/`do`/`exit` by the subaction membership that owns the
+// action, an `include` by the inclusion relationship.
+func prefixCarriedByGraph(n *ast.Usage) bool {
+	switch n.PrefixKeyword {
+	case "entry", "do", "exit":
+		return n.Kind == ast.UsageAction
+	case "include":
+		for _, rel := range n.Relationships {
+			if rel.Kind == ast.RelIncludes {
+				return true
+			}
 		}
 	}
 	return false

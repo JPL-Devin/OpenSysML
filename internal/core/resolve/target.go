@@ -60,6 +60,11 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 // namingTarget hides the one feature a reference named, whoever is resolving
 // it: the semantic model reads a redefinition without knowing it is a naming
 // feature, and must still reach the redefined feature.
+//
+// hideBorrowedName applies only while resolving a reference subsetting's own
+// target: a sibling that borrowed the same name is not the referenced feature
+// (`perform a; perform a;` both perform a). Any other reference sees borrowed
+// names as the owner's members they are.
 type refFilter struct {
 	decl         ast.Node
 	namingTarget ast.Node
@@ -70,6 +75,9 @@ type refFilter struct {
 	hideBorrowedName bool
 	skipNamingTarget bool
 	skipBorrowedName bool
+	// redefining marks a redefinition's own target, which the owner's other
+	// redefinitions do not mask (KerML 8.3.3.3.6); a subsetting's target they do.
+	redefining bool
 }
 
 // hides reports whether sym is a binding a reference target must not see.
@@ -103,18 +111,16 @@ func namedByReference(sym *symbols.Symbol) bool {
 	return sym.Naming == symbols.NamedByReference
 }
 
-// declNode returns the declaration f hides the bindings of, if any.
-func (f *refFilter) declNode() ast.Node {
-	if f == nil {
-		return nil
-	}
-	return f.decl
-}
-
 // contributedOnly reports whether a scope owner's own declarations are hidden,
 // leaving only what it inherits or reference-subsets.
 func (f *refFilter) contributedOnly() bool {
 	return f != nil && f.decl != nil
+}
+
+// resolvesRedefinition reports whether f serves a redefinition's own target,
+// which the owner's other redefinitions do not mask (KerML 8.3.3.3.6).
+func (f *refFilter) resolvesRedefinition() bool {
+	return f != nil && f.redefining
 }
 
 // hiding returns f extended to hide whatever target named a feature. A nil f
@@ -129,17 +135,30 @@ func (f *refFilter) hiding(target ast.Node) *refFilter {
 		out.featuredBy = f.featuredBy
 		out.skipNamingTarget = f.skipNamingTarget
 		out.skipBorrowedName = f.skipBorrowedName
+		out.redefining = f.redefining
 	}
 	if out.skipNamingTarget {
 		out.namingTarget = nil
 		out.targetName = ""
 		out.hideBorrowedName = false
-	} else if !out.skipBorrowedName {
+	} else if out.decl != nil && !out.skipBorrowedName {
 		if qn := ast.AsQualifiedName(target); qn != nil && len(qn.Parts) > 0 {
 			out.targetName = qn.Parts[len(qn.Parts)-1].Text
 			out.hideBorrowedName = true
 		}
 	}
+	return &out
+}
+
+// forLeadingSegment returns f for the first segment of a qualified name: a
+// subsetting's owner is a namespace that segment may name, while a redefinition
+// still skips the redefining feature itself.
+func (f *refFilter) forLeadingSegment() *refFilter {
+	if f == nil || f.decl == nil || f.redefining {
+		return f
+	}
+	out := *f
+	out.decl = nil
 	return &out
 }
 
@@ -189,6 +208,19 @@ func referenceFilter(decl ast.Node, target ast.Node) *refFilter {
 // ResolveReferenceTarget resolves the target of a reference subsetting owned by
 // decl, which is declared in scope.
 func (r *Resolver) ResolveReferenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) (*symbols.Symbol, bool) {
+	return r.resolveTarget(scope, target, referenceFilter(decl, target))
+}
+
+// ResolveRedefinitionTarget resolves the target of a redefinition owned by decl:
+// the feature decl's owner inherits, which decl's own redefinition does not
+// mask (KerML 8.3.3.3.6), whatever name decl borrowed from it.
+func (r *Resolver) ResolveRedefinitionTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) (*symbols.Symbol, bool) {
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	if qn, ok := target.(*ast.QualifiedName); ok {
+		return r.ResolveReference(Reference{Scope: scope, QN: qn, Referrer: decl, Redefines: true})
+	}
 	return r.resolveTarget(scope, target, referenceFilter(decl, target))
 }
 
@@ -312,7 +344,7 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	if ref.Redefines {
 		// A subsetting reaches a sibling redefinition first, as resolveRelationships does.
 		if ref.Subsetting == nil || !r.resolveOwnSibling(ref.Scope, ref.QN, ref.Subsetting) {
-			r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
+			r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer, ref.Subsetting == nil)
 		}
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
 	}
@@ -353,8 +385,8 @@ func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName, cha
 		if ok && namedByChain(next, chain) {
 			next, ok = r.lookupContributedMember(cur, part.Text)
 		}
-		if !ok && cur.Scope != nil {
-			next, ok = cur.Scope.LookupLocal(part.Text)
+		if !ok {
+			next, ok = r.LocalBinding(cur.Scope, part.Text)
 			ok = ok && !namedByChain(next, chain)
 		}
 		if !ok {

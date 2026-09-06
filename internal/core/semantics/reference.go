@@ -58,8 +58,14 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 // that clause outside its relationship list when it is written with the
 // `references` keyword, so it is asked for its own.
 func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
-	if end, ok := sym.Decl.(*ast.ConnectorEnd); ok {
-		return end.ReferencedTarget()
+	switch decl := sym.Decl.(type) {
+	case *ast.ConnectorEnd:
+		return decl.ReferencedTarget()
+	case *ast.Usage:
+		if rel := decl.ReferenceSubsetting(); rel != nil {
+			return rel.Target
+		}
+		return nil
 	}
 	for _, rel := range RelationshipsOf(sym) {
 		if rel != nil && rel.Kind.ReferenceSubsets() && rel.Target != nil {

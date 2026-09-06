@@ -92,11 +92,36 @@ func (r *Resolver) localBinding(scope *symbols.Scope, name string, hide *refFilt
 	return sym, true
 }
 
+// LocalBindings returns the members scope declares under name that bind it,
+// declared names first.
+func (r *Resolver) LocalBindings(scope *symbols.Scope, name string) []*symbols.Symbol {
+	if scope == nil {
+		return nil
+	}
+	all := symbols.PreferDeclared(scope.LookupLocalAll(name))
+	out := make([]*symbols.Symbol, 0, len(all))
+	for _, sym := range all {
+		if r.bindsEffectiveName(sym) {
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+// LocalBinding returns the first of LocalBindings.
+func (r *Resolver) LocalBinding(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	if all := r.LocalBindings(scope, name); len(all) > 0 {
+		return all[0], true
+	}
+	return nil, false
+}
+
 // bindsEffectiveName reports whether sym binds the name it was found under. A
-// feature with no declared name takes the name of the feature it redefines, so
-// it binds none when that redefinition resolves to nothing (KerML 7.3.4.5).
+// feature with no declared name takes the name of the feature it redefines or
+// references, so it binds none when that target resolves to nothing, or to no
+// feature (KerML 7.3.4.5).
 func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Naming != symbols.NamedByRedefinition {
+	if sym == nil || sym.Naming == symbols.NamedByDeclaration {
 		return true
 	}
 	if named, done := r.effNames[sym]; done {
@@ -108,15 +133,37 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	r.naming[sym] = true
 	defer delete(r.naming, sym)
 	named := true
-	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, sym.NamingTarget) })
+	r.aside(func() {
+		if sym.Naming == symbols.NamedByReference {
+			named = r.referencesFeature(sym.OwnerScope, sym.Decl, sym.NamingTarget)
+		} else {
+			named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, sym.NamingTarget)
+		}
+	})
 	r.effNames[sym] = named
 	return named
+}
+
+// referencesFeature reports whether the reference subsetting target owned by
+// decl names a feature: a definition or nothing at all names no feature.
+func (r *Resolver) referencesFeature(scope *symbols.Scope, decl ast.Node, target ast.Node) bool {
+	if target == nil {
+		return true
+	}
+	found, ok := r.resolveTarget(scope, target, referenceFilter(decl, target))
+	if !ok {
+		return false
+	}
+	if alias, isAlias := r.ResolveAliasTarget(found); isAlias {
+		found = alias
+	}
+	return found.IsFeature()
 }
 
 // namesVisibleFeature reports whether a redefinition target owned by decl names
 // a feature the redefinition can see, chain segments included (KerML 8.2.3.5).
 func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, target ast.Node) bool {
-	hide := &refFilter{decl: decl, skipBorrowedName: true}
+	hide := &refFilter{decl: decl, skipBorrowedName: true, redefining: true}
 	chain, ok := target.(*ast.FeatureChainExpr)
 	if !ok {
 		if qn := ast.AsQualifiedName(target); qn != nil {
@@ -140,29 +187,38 @@ func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, targ
 // visibleMember resolves name as a member of sym, skipping what hide covers, so
 // that a feature which borrowed a name does not mask the one it took it from.
 func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	// What a feature of sym redefines, sym does not inherit, so no name of it
+	// resolves here (KerML 8.3.3.3.6); only a redefinition of it is exempt.
+	admits := func(found *symbols.Symbol) (*symbols.Symbol, bool) {
+		if !visibleAsInheritedMember(sym, found) {
+			return nil, false
+		}
+		return r.inheritedAsFrom(sym, found, hide.resolvesRedefinition())
+	}
 	if hide.contributedOnly() {
 		// The owner's own declarations are the local bindings already filtered
 		// by the caller, so only contributed ones remain.
 		found, ok := r.lookupContributedMember(sym, name)
-		if !ok || !visibleAsInheritedMember(sym, found) ||
-			r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.decl)) {
+		if !ok {
 			return nil, false
 		}
-		return found, true
+		return admits(found)
 	}
 	found, ok := r.lookupMember(sym, name)
-	if !ok || !visibleAsInheritedMember(sym, found) {
+	if !ok {
 		return nil, false
 	}
-	// What a feature of sym redefines, sym does not inherit, so no name of it
-	// resolves here (KerML 8.3.3.3); a redefinition being written is exempt.
-	if r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.declNode())) {
+	if found, ok = admits(found); !ok {
 		return nil, false
 	}
 	if !hide.hides(found) {
 		return found, true
 	}
-	return r.lookupContributedMember(sym, name)
+	found, ok = r.lookupContributedMember(sym, name)
+	if !ok {
+		return nil, false
+	}
+	return admits(found)
 }
 
 // implicitlyNamedMember returns the anonymous member of scope that binds name by

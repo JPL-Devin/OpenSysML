@@ -76,12 +76,24 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 		t.Errorf("references seen = %v, want s:4 a:2 r:2", seen)
 	}
 
-	// A redefining constraint is registered under the short name it redefines,
-	// as a `part :>> wheel` is; a redefining subject with a short name of its
-	// own is one symbol under both its names.
+	// A redefining subject takes both names of the subject it redefines (KerML
+	// 7.3.4.5), so `R2::s` and `R2::x` reach it; a requirement constraint is
+	// named only by a constraint it references, so a redefining one has no name.
 	r2 := local(t, pkg.Scope, "R2")
-	for _, name := range []string{"a", "r"} {
-		local(t, r2.Scope, name)
+	subject := local(t, r2.Scope, "s")
+	if got, ok := r.ResolveQualified(rootScope, qualified("P", "R2", "x")); !ok || got != subject {
+		t.Errorf("P::R2::x = %v, %v; want R2's subject", got, ok)
+	}
+	for _, name := range []string{"a", "r", "ac", "rc"} {
+		if _, ok := r2.Scope.LookupLocal(name); ok {
+			t.Errorf("R2 answers to %q; a redefining requirement constraint derives no name", name)
+		}
+		if _, ok := r.ResolveQualified(rootScope, qualified("P", "R2", name)); ok {
+			t.Errorf("P::R2::%s resolves; want unresolved", name)
+		}
+	}
+	if anon := r2.Scope.AnonymousMembers(); len(anon) != 2 {
+		t.Errorf("R2 anonymous members = %d, want the two constraints", len(anon))
 	}
 	r3 := local(t, pkg.Scope, "R3")
 	if local(t, r3.Scope, "s2") != local(t, r3.Scope, "y") {

@@ -255,9 +255,9 @@ func TestShortNameSuppressesTheDerivedName(t *testing.T) {
 	}
 }
 
-// Two redefinitions have no single naming feature, so the declaration stays
-// anonymous rather than picking one of the redefined names.
-func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {
+// The first redefinition names a feature that redefines several (KerML
+// 7.3.4.5, Feature::namingFeature): `v.engine` reaches it, `v.motor` nothing.
+func TestTwoRedefinitionsNameTheFeatureByTheFirst(t *testing.T) {
 	root := build(t, `package P {
 		part def Vehicle { part engine; part motor; }
 		part v : Vehicle { part :>> engine :>> motor; }
@@ -265,8 +265,35 @@ func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {
 
 	pkg, _ := root.LookupLocal("P")
 	v, _ := pkg.Scope.LookupLocal("v")
-	if names := v.Scope.MemberNames(); len(names) != 0 {
-		t.Fatalf("v members = %v, want none", names)
+	if names := v.Scope.MemberNames(); len(names) != 1 || names[0] != "engine" {
+		t.Fatalf("v members = %v, want [engine]", names)
+	}
+	e, _ := v.Scope.LookupLocal("engine")
+	if e.Naming != NamedByRedefinition || e.NamingTarget == nil {
+		t.Errorf("engine naming=%v target=%v; want the first redefinition", e.Naming, e.NamingTarget)
+	}
+}
+
+// A feature chain is a nameless feature of its own, so a member whose first
+// redefinition is a chain takes no name from it — nor from a later plain one —
+// while a performed chain is named by its target (pinned pilot on both shapes).
+func TestChainRedefinitionNamesNothing(t *testing.T) {
+	root := build(t, `package P {
+		part def H { part p { part q; action a; } part q2; }
+		part h : H { part :>> p.q :>> q2; perform p.a; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	h, _ := pkg.Scope.LookupLocal("h")
+	if names := h.Scope.MemberNames(); len(names) != 1 || names[0] != "a" {
+		t.Fatalf("h members = %v, want [a]", names)
+	}
+	if anon := h.Scope.AnonymousMembers(); len(anon) != 1 || anon[0].Naming != NamedByDeclaration {
+		t.Fatalf("anonymous members of h = %v, want the one chain redefinition with no derived name", anon)
+	}
+	a, _ := h.Scope.LookupLocal("a")
+	if a.Naming != NamedByReference {
+		t.Errorf("a naming=%v, want the performed chain's target", a.Naming)
 	}
 }
 

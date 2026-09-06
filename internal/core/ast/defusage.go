@@ -504,12 +504,17 @@ func (u *Usage) IsVariantReference() bool {
 }
 
 // IsStateAction reports whether the usage is a state's `entry a;`, `do a;` or
-// `exit a;`, each a performed action (SysML v2 StateSubactionMembership).
+// `exit a;`, or the `entry action ...` form of one, each a performed action
+// (SysML v2 StateSubactionMembership).
 func (u *Usage) IsStateAction() bool {
 	if u.Kind != UsageAction {
 		return false
 	}
 	switch u.Keyword {
+	case "entry", "do", "exit":
+		return true
+	}
+	switch u.PrefixKeyword {
 	case "entry", "do", "exit":
 		return true
 	}
@@ -527,6 +532,9 @@ func (u *Usage) IsExhibitedState() bool {
 func (u *Usage) IsIncludedUseCase() bool {
 	if u.Kind != UsageUseCase {
 		return false
+	}
+	if u.PrefixKeyword == "include" {
+		return true
 	}
 	for _, rel := range u.Relationships {
 		if rel != nil && rel.Kind == RelIncludes {
@@ -553,6 +561,37 @@ func (u *Usage) IsRequirementConstraint() bool {
 		return true
 	}
 	return u.PrefixKeyword == "require" || u.PrefixKeyword == "assume"
+}
+
+// ReferenceSubsetting returns the usage's OwnedReferenceSubsetting clause, or
+// nil. The reference form of satisfy/verify (`satisfy r;`) is parsed as a plain
+// subsetting of the requirement it names (SysML.xtext:2119, 2272).
+func (u *Usage) ReferenceSubsetting() *Relationship {
+	if u == nil {
+		return nil
+	}
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		if rel.Kind.ReferenceSubsets() || (rel.Kind == RelSubsets && u.Kind == UsageSatisfy && !u.DeclaresRequirement) {
+			return rel
+		}
+	}
+	return nil
+}
+
+// IsReferenceSubsetting reports whether rel is decl's OwnedReferenceSubsetting,
+// whatever kind the parser recorded it under.
+func IsReferenceSubsetting(decl Node, rel *Relationship) bool {
+	if rel == nil || rel.Target == nil {
+		return false
+	}
+	if rel.Kind.ReferenceSubsets() {
+		return true
+	}
+	u, ok := decl.(*Usage)
+	return ok && u.ReferenceSubsetting() == rel
 }
 
 // NamedByReference reports whether an unnamed usage takes its name from the

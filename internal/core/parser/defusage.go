@@ -1228,6 +1228,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if kw == "include" && p.atUseCase() {
 			p.advance() // consume 'use'
 			p.advance() // consume 'case'
+			// The prefix says the use case is included, which the kind keyword alone
+			// would lose (IncludeUseCaseUsage, SysML v2 §7.23.4).
+			mods.prefixKeyword = "include"
 			u := p.parseUsage(start, ast.UsageUseCase, useCaseKind, mods, isAll)
 			if u != nil {
 				// Add includes relationship to first typing target

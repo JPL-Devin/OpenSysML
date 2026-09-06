@@ -110,9 +110,7 @@ func (ec *exprChecker) effectiveRange(scope *symbols.Scope, d featureDecl, depth
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
-		// The redefining declaration may carry the redefined feature's name, so
-		// the target is resolved with the declaration's own bindings hidden.
-		target, ok := ec.resolver.ResolveReferenceTarget(scope, d.node, rel.Target)
+		target, ok := ec.resolver.ResolveRedefinitionTarget(scope, d.node, rel.Target)
 		if !ok || target == nil {
 			continue
 		}

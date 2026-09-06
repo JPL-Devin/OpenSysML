@@ -274,10 +274,8 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 			kept = append(kept, sym)
 			continue
 		}
+		// What a dropped member redefines still stops being inherited.
 		redefines := r.redefinedClosure(sym)
-		if redefinedByOther(redefines, byOwner, sym) {
-			continue
-		}
 		for target := range redefines {
 			if target != sym {
 				if byInherited == nil {
@@ -286,7 +284,9 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 				byInherited[target] = true
 			}
 		}
-		kept = append(kept, sym)
+		if !redefinedByOther(redefines, byOwner, sym) {
+			kept = append(kept, sym)
+		}
 	}
 	out := make([]*symbols.Symbol, 0, len(kept))
 	for _, sym := range kept {
@@ -392,12 +392,13 @@ func (r *Resolver) aliasTarget(sym *symbols.Symbol) *symbols.Symbol {
 	return sym
 }
 
-// duplicateName reports one indistinguishable name at the member declaring it.
-// from names the namespaces a duplicate comes from, which the reference's
-// wording carries for a name it did not find in the namespace itself.
+// duplicateName reports one indistinguishable name at the member declaring it,
+// or at the whole member when the name is derived rather than declared. from
+// names the namespaces a duplicate comes from, which the reference's wording
+// carries for a name it did not find in the namespace itself.
 func (r *Resolver) duplicateName(sym *symbols.Symbol, message string, from []*symbols.Symbol) {
 	span := sym.NameSpan
-	if span == (source.Span{}) {
+	if span == (source.Span{}) || sym.Naming != symbols.NamedByDeclaration {
 		span = sym.DeclSpan
 	}
 	if names := ownerNames(sym, from); len(names) > 0 {

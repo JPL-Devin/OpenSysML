@@ -3933,7 +3933,7 @@ expr:ThenAfterMembers__AfterPerform___401_pflowSource_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "stride" ;
     sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowSource_pa0" ;
-    sysml:referent elmt:ThenAfterMembers__stride ;
+    sysml:referent elmt:ThenAfterMembers__AfterPerform___400 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
 expr:ThenAfterMembers__AfterPerform___401_pflowTarget

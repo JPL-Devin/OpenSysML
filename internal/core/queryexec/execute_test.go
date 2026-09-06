@@ -1049,7 +1049,7 @@ calc def Composed :> Query {
 }
 `)
 	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
-	want := []string{"namedOne", "", "namedTwo"}
+	want := []string{"namedOne", "engine", "namedTwo"}
 	direct, err := fixture.execute(t, "Children", bindings, Options{})
 	if err != nil {
 		t.Fatalf("execute direct query: %v", err)
@@ -1764,7 +1764,7 @@ calc def Recursive :> Query {
 	Descendants(source = source, maxDepth = 1)
 }
 `)
-	want := []string{"namedOne", "", "namedTwo"}
+	want := []string{"namedOne", "engine", "namedTwo"}
 	for _, query := range []string{"Direct", "Recursive"} {
 		rows, err := fixture.execute(t, query, Bindings{
 			"source": {ElementValue(fixture.symbol(t, "root"))},

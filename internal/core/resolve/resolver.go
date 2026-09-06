@@ -32,7 +32,9 @@ type supertypeProvider interface {
 // one of its features redefines them. *semantics.Model implements it.
 type maskChecker interface {
 	InheritanceMasked(sym, candidate *symbols.Symbol) bool
-	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
+	InheritanceMaskedRedefining(sym, candidate *symbols.Symbol) bool
+	NamingRedefiner(sym, masked *symbols.Symbol) *symbols.Symbol
+	NamingRedefinerRedefining(sym, masked *symbols.Symbol) *symbols.Symbol
 }
 
 // elementFilterChecker is the part of the semantic model that decides an element
@@ -422,9 +424,6 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 // a trigger payload; what its imports surface is not considered.
 func (r *Resolver) lookupMemberOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	if found, ok := r.model.LookupMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.model.LookupContributedMember(sym, name); ok {
 		return found, true
 	}
 	return r.triggerPayload(sym, name)
