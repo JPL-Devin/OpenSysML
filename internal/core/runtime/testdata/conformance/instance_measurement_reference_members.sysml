@@ -13,7 +13,8 @@
 // prefix { :>> conversionFactor = 1000.0; } }`) is one object, not none; one whose only
 // binding sits under an abstract member stays none, as the abstract member holds nothing,
 // and so does one whose body only values a calc's parameters, which bind no field. A field
-// the model adds to a TensorMeasurementReference (`label`) is state of its own and reads.
+// the model adds to a TensorMeasurementReference (`label`) is state of its own and reads;
+// a constraint the model adds holds no value, so a usage stating none stays unset.
 package test {
 	public import ISQ::*;
 	public import SI::*;
@@ -32,6 +33,7 @@ package test {
 	attribute computing : Box { :>> conv { calc scaled { in x : Real = 1000.0; return : Real = x; } } }
 	attribute def LabeledRef :> TensorMeasurementReference { attribute label : String = "stress"; }
 	attribute labeled : LabeledRef;
+	attribute def CheckedRef :> TensorMeasurementReference { constraint bounded { isBound == false } }
 
 	part def Survey {
 		attribute side : LengthValue = 3 [km];
@@ -57,5 +59,6 @@ package test {
 		attribute computingConv : ConversionByPrefix[0..1] = computing.conv;
 		attribute label : String = labeled.label;
 		attribute labeledBound : Boolean = labeled.isBound;
+		attribute checked : CheckedRef;
 	}
 }

@@ -133,7 +133,7 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 }
 
 // shapeHoldsValue reports whether an object of typ carries a value of its own: a record's
-// features, or a feature the model adds to a value-held type (`:>> mRefs = (m, m)`, `label`).
+// features, or a field the model adds to a value-held type (`:>> mRefs = (m, m)`, `label`).
 func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
 	features := ctx.FeaturesOf(typ)
 	if len(features) == 0 {
@@ -143,7 +143,7 @@ func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
 		return true
 	}
 	for _, feat := range features {
-		if !ctx.libraryDeclared(feat.Symbol) {
+		if !ctx.libraryDeclared(feat.Symbol) && holdsRecordField(feat.Symbol) {
 			return true
 		}
 	}

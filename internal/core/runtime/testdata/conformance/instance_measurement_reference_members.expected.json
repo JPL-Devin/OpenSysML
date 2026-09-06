@@ -27,6 +27,7 @@
     "hollowConv": {"type": "Sequence", "elements": []},
     "computingConv": {"type": "Sequence", "elements": []},
     "label": {"type": "String", "value": "stress"},
-    "labeledBound": {"type": "Boolean", "value": false}
+    "labeledBound": {"type": "Boolean", "value": false},
+    "checked": {"type": "Unset"}
   }
 }
