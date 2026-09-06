@@ -942,7 +942,10 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		return
 	}
 
-	hide := &refFilter{decl: decl}
+	hide := &refFilter{
+		decl:             decl,
+		skipBorrowedName: true,
+	}
 	r.Enter()
 
 	if len(qn.Parts) == 1 {

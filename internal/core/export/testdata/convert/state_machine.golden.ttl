@@ -246,7 +246,7 @@ elmt:StateMachine__VehicleStates__starting___400__ready
     sysml:owningRelationship elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:declaredName "ready" ;
-    sysml:type elmt:StateMachine__VehicleStates__starting___402___400 ;
+    sysml:type elmt:StateMachine__Warm ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__starting___401
@@ -274,7 +274,7 @@ elmt:StateMachine__VehicleStates__starting___401__running
     sysml:owningRelationship elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:declaredName "running" ;
-    sysml:type elmt:StateMachine__VehicleStates__starting___402___400 ;
+    sysml:type elmt:StateMachine__Warm ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__starting___402
