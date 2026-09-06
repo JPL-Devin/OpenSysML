@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 259,
-        "digest": "sha256:422640c9d2ea84902190e874fee73c971e69d5d4923b5be51e2a408cfb906c95"
+        "files": 261,
+        "digest": "sha256:5ae650745057ef82a2e7467f23ba62eca30f2ff0044191683a94f8c8235cedcf"
       }
     ],
     "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 259,
-    "bothReject": 250,
+    "cases": 261,
+    "bothReject": 252,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 9,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 127,
-      "bothReject": 118,
+      "cases": 129,
+      "bothReject": 120,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0
@@ -2110,6 +2110,24 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s91-case-references-second-objective.sysml",
+      "source": "semantic",
+      "rule": "A case usage inherits an objective from its definition and another from the case it reference-subsets, so it has two (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s92-requirement-references-second-subject.sysml",
+      "source": "semantic",
+      "rule": "A requirement usage inherits a subject from its definition and another from the requirement it reference-subsets, so it has two (SysML 7.20 Requirements; pilot validateRequirementUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/send-constructor-non-type.sysml",
       "source": "semantic",
       "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
@@ -2484,8 +2502,8 @@
       }
     ],
     "totals": {
-      "cases": 259,
-      "bothReject": 250,
+      "cases": 261,
+      "bothReject": 252,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 9,
       "bothAccept": 0

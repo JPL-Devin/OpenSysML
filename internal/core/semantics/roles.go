@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -35,7 +37,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
 	seenRoles := m.explicitRedefinitions(sym)
-	for _, sup := range m.DirectSupertypes(owner) {
+	for _, sup := range m.roleSources(owner) {
 		if !behaviorLike(sup) {
 			continue
 		}
@@ -56,6 +58,17 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 				out = append(out, f)
 			}
 		}
+	}
+	return out
+}
+
+// roleSources are the cases whose subjects and objectives sym inherits: its generals and
+// the usage it reference-subsets, a subsetting too (KerML 8.3.3.3.9) but kept out of
+// DirectSupertypes.
+func (m *Model) roleSources(sym *symbols.Symbol) []*symbols.Symbol {
+	out := m.DirectSupertypes(sym)
+	if ref := m.ReferencedFeature(sym); ref != nil && !slices.Contains(out, ref) {
+		out = append(out[:len(out):len(out)], ref)
 	}
 	return out
 }
@@ -117,7 +130,7 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, visiting map[*symbols.S
 	}
 	var out []*symbols.Symbol
 	placed := map[*symbols.Symbol]bool{}
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		if !behaviorLike(sup) {
 			continue
 		}
@@ -184,7 +197,7 @@ func (m *Model) visibleRoles(sym *symbols.Symbol, role caseRole) (owned, inherit
 	owned = ownedRoles(sym, role)
 	var reachable []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		reachable = m.collectRoles(sup, role, seen, reachable)
 	}
 	masked := map[*symbols.Symbol]bool{}
@@ -211,7 +224,7 @@ func (m *Model) collectRoles(sym *symbols.Symbol, role caseRole, seen map[*symbo
 	}
 	seen[sym] = true
 	out = append(out, ownedRoles(sym, role)...)
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		out = m.collectRoles(sup, role, seen, out)
 	}
 	return out
@@ -239,7 +252,7 @@ func (m *Model) effectiveRoles(sym *symbols.Symbol, role caseRole, seen map[*sym
 		return owned
 	}
 	var out []*symbols.Symbol
-	for _, sup := range m.DirectSupertypes(sym) {
+	for _, sup := range m.roleSources(sym) {
 		if behaviorLike(sup) {
 			out = append(out, m.effectiveRoles(sup, role, seen)...)
 		}

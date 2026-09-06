@@ -314,3 +314,55 @@ func TestAnalysisObjectivesAlignAcrossUnevenDiamond(t *testing.T) {
 		}
 	}
 }
+
+// Reference subsetting is a subsetting, so a usage inherits the roles of the usage it
+// references: alone, beside an owned one (which redefines it by role), beside one
+// inherited from its definition, and through a chain of references.
+func TestRolesInheritThroughReferenceSubsetting(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		case def CD { objective o; }
+		case c0 { objective o0; }
+		case alone ::> c0;
+		case owned ::> c0 { objective o1; }
+		case both : CD ::> c0;
+		case mid ::> c0;
+		case deep : CD ::> mid;
+		requirement def RD { subject s; }
+		requirement r0 { subject s0; }
+		requirement rAlone ::> r0;
+		requirement rOwned ::> r0 { subject s1; }
+		requirement rBoth : RD ::> r0;
+	}`)
+	p := sym(t, root, "P")
+	o := nested(t, nested(t, p.Scope, "CD").Scope, "o")
+	o0 := nested(t, nested(t, p.Scope, "c0").Scope, "o0")
+	s := nested(t, nested(t, p.Scope, "RD").Scope, "s")
+	s0 := nested(t, nested(t, p.Scope, "r0").Scope, "s0")
+
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "alone")); len(owned) != 0 || len(inherited) != 1 || inherited[0] != o0 {
+		t.Errorf("ObjectivesOf(alone) = %v, %v; want [], [o0]", owned, inherited)
+	}
+	o1 := nested(t, nested(t, p.Scope, "owned").Scope, "o1")
+	if got := m.ImplicitRoleRedefinitions(o1); len(got) != 1 || got[0] != o0 {
+		t.Errorf("ImplicitRoleRedefinitions(owned::o1) = %v, want [o0]", got)
+	}
+	if owned, inherited := m.ObjectivesOf(nested(t, p.Scope, "owned")); len(owned) != 1 || len(inherited) != 0 {
+		t.Errorf("ObjectivesOf(owned) = %v, %v; want [o1], []", owned, inherited)
+	}
+	for _, name := range []string{"both", "deep"} {
+		owned, inherited := m.ObjectivesOf(nested(t, p.Scope, name))
+		if len(owned) != 0 || len(inherited) != 2 || inherited[0] != o || inherited[1] != o0 {
+			t.Errorf("ObjectivesOf(%s) = %v, %v; want [], [o o0]", name, owned, inherited)
+		}
+	}
+	if got := m.SubjectParameterOf(nested(t, p.Scope, "rAlone")); got != s0 {
+		t.Errorf("SubjectParameterOf(rAlone) = %v, want s0", got)
+	}
+	s1 := nested(t, nested(t, p.Scope, "rOwned").Scope, "s1")
+	if got := m.ImplicitRoleRedefinitions(s1); len(got) != 1 || got[0] != s0 {
+		t.Errorf("ImplicitRoleRedefinitions(rOwned::s1) = %v, want [s0]", got)
+	}
+	if owned, inherited := m.SubjectsOf(nested(t, p.Scope, "rBoth")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != s || inherited[1] != s0 {
+		t.Errorf("SubjectsOf(rBoth) = %v, %v; want [], [s s0]", owned, inherited)
+	}
+}
