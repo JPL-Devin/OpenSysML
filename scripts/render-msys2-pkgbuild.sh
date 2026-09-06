@@ -36,7 +36,7 @@ trap cleanup EXIT
 
 # makepkg forbids hyphens in pkgver; only x.y.z[-(alpha|beta|rc)N] tags are accepted so that
 # 0.6.0-rc1 -> 0.6.0rc1 stays unambiguous and orders before 0.6.0 for vercmp.
-if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*)?$ ]]; then
+if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]+)?$ ]]; then
   echo "error: tag '$TAG' is not vX.Y.Z or vX.Y.Z-(alpha|beta|rc)N" >&2
   exit 2
 fi
