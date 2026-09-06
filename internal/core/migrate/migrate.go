@@ -35,6 +35,7 @@ func FromModel(name string, model *xmi.Model) *Result {
 		names:    map[*xmi.Element]string{},
 		extras:   map[*xmi.Element][]func(){},
 		flows:    map[*xmi.Element][]*xmi.Element{},
+		outcomes: map[*xmi.Element]*flowOutcome{},
 		unplaced: map[*xmi.Element]*placement{},
 		taken:    map[*xmi.Element]map[string]bool{},
 	}
@@ -42,8 +43,17 @@ func FromModel(name string, model *xmi.Model) *Result {
 	for _, root := range model.Roots {
 		m.root(root)
 	}
+	m.flushFlows()
 	m.extensions()
 	return &Result{Notation: []byte(m.w.String()), Report: m.report}
+}
+
+// flowOutcome gathers what each realizing connector did for one item flow, so
+// the flow is reported once however many connectors realize it.
+type flowOutcome struct {
+	pending int
+	written []string
+	notes   []string
 }
 
 // extensions accounts for the diagrams and other tool-private content the
@@ -80,6 +90,8 @@ type migration struct {
 	extras map[*xmi.Element][]func()
 	// flows lists the item flows each connector realizes.
 	flows map[*xmi.Element][]*xmi.Element
+	// outcomes accumulates each item flow's result over its realizing connectors.
+	outcomes map[*xmi.Element]*flowOutcome
 	// unplaced records where each Satisfy or Verify was placed, and why not.
 	unplaced map[*xmi.Element]*placement
 	// taken holds synthesized names reserved in a body, by owner.
@@ -108,8 +120,11 @@ func (m *migration) prepare() {
 		m.distinguish(e)
 		switch e.Type {
 		case "InformationFlow":
-			for _, c := range m.model.Refs(e, "realizingConnector") {
-				m.flows[c] = append(m.flows[c], e)
+			if cs := m.model.Refs(e, "realizingConnector"); len(cs) > 0 {
+				m.outcomes[e] = &flowOutcome{pending: len(cs)}
+				for _, c := range cs {
+					m.flows[c] = append(m.flows[c], e)
+				}
 			}
 		case "ConnectorEnd":
 			for _, role := range []string{"role", "partWithPort"} {
@@ -985,7 +1000,7 @@ func (m *migration) connector(c *xmi.Element) {
 		if path == "" {
 			m.unmapped(c, note)
 			for _, f := range m.flows[c] {
-				m.unmapped(f, "its realizing connector is not migrated")
+				m.flowDone(f, nil, []string{"realizing connector " + describe(c) + " is not migrated"})
 			}
 			return
 		}
@@ -1049,13 +1064,13 @@ func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string
 	conveyed := m.model.Refs(f, "conveyed")
 	missing := m.dangling(f, "conveyed")
 	if len(conveyed) == 0 {
-		m.unmapped(f, joinNotes("the item flow conveys nothing", missing))
+		m.flowDone(f, nil, []string{joinNotes("the item flow conveys nothing", missing)})
 		return
 	}
 	src := m.model.Ref(f, "informationSource")
 	dst := m.model.Ref(f, "informationTarget")
 	if src == nil || dst == nil {
-		m.unmapped(f, "the item flow's source or target is not in the document")
+		m.flowDone(f, nil, []string{"the item flow's source or target is not in the document"})
 		return
 	}
 	from, to := paths[0], paths[1]
@@ -1064,7 +1079,7 @@ func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string
 	case m.model.Ref(ends[1], "role") == src && m.model.Ref(ends[0], "role") == dst:
 		from, to = paths[1], paths[0]
 	default:
-		m.unmapped(f, "the item flow's source and target are not the roles of its realizing connector's ends")
+		m.flowDone(f, nil, []string{"the item flow's source and target are not the roles of the ends of realizing connector " + describe(ends[0].Parent)})
 		return
 	}
 	var written, notes []string
@@ -1086,14 +1101,47 @@ func (m *migration) itemFlow(f *xmi.Element, ends []*xmi.Element, paths []string
 		m.w.line("flow " + from + "." + writeName(m.nameOf(sp)) + " to " + to + "." + writeName(m.nameOf(dp)) + ";")
 		written = append(written, item.Name)
 	}
-	note := strings.Join(notes, "; ")
+	m.flowDone(f, written, notes)
+}
+
+// flowDone records one realizing connector's result for f and reports the flow
+// once the last of them is in.
+func (m *migration) flowDone(f *xmi.Element, written, notes []string) {
+	o := m.outcomes[f]
+	o.written = append(o.written, written...)
+	o.notes = append(o.notes, notes...)
+	o.pending--
+	if o.pending == 0 {
+		m.reportFlow(f, o)
+	}
+}
+
+// reportFlow adds f's single report entry from what its connectors did.
+func (m *migration) reportFlow(f *xmi.Element, o *flowOutcome) {
+	delete(m.outcomes, f)
+	note := strings.Join(o.notes, "; ")
 	switch {
-	case len(written) == 0:
-		m.add(f, Unmapped, "", note)
+	case len(o.written) == 0:
+		m.unmapped(f, note)
 	case note != "":
-		m.add(f, Approximated, "", "only the flow of "+strings.Join(written, ", ")+" is written; "+note)
+		m.add(f, Approximated, "", "only the flow of "+strings.Join(o.written, ", ")+" is written; "+note)
 	default:
 		m.add(f, Mapped, "", "")
+	}
+}
+
+// flushFlows reports the item flows still waiting on a realizing connector
+// that was never written because its owner is not migrated.
+func (m *migration) flushFlows() {
+	var rest []*xmi.Element
+	for f := range m.outcomes {
+		rest = append(rest, f)
+	}
+	sort.Slice(rest, func(i, j int) bool { return rest[i].ID < rest[j].ID })
+	for _, f := range rest {
+		o := m.outcomes[f]
+		o.notes = append(o.notes, fmt.Sprintf("%d realizing connector(s) are owned by elements that are not migrated", o.pending))
+		m.reportFlow(f, o)
 	}
 }
 

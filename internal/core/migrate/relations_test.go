@@ -560,7 +560,7 @@ func TestBrokenNestedPathFailsTheConnector(t *testing.T) {
 			}
 			for id, want := range map[string]string{
 				"_conn": "property path names _missing, which is not in the document",
-				"_if":   "its realizing connector is not migrated",
+				"_if":   "realizing connector 'feed' is not migrated",
 			} {
 				es := entriesFor(r, id)
 				if len(es) != 1 || es[0].Verdict != migrate.Unmapped || !strings.Contains(es[0].Note, want) {
@@ -572,4 +572,78 @@ func TestBrokenNestedPathFailsTheConnector(t *testing.T) {
 			}
 		})
 	}
+}
+
+// multiConnectorFlow builds a flow realized by two connectors, each of whose
+// second end is a nested path with the given last segment.
+func multiConnectorFlow(t *testing.T, path1, path2 string) *migrate.Result {
+	return migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_gas" name="Gas"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_fuel" name="Fuel">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_fp" name="fuel" type="_gas"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_engine" name="Engine">
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_in" name="in" type="_fuel"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_car" name="Car">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p_engine" name="engine" type="_engine" aggregation="composite"/>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_p_spare" name="spare" type="_engine" aggregation="composite"/>
+      <ownedAttribute xmi:type="uml:Port" xmi:id="_pt_out" name="out" type="_fuel"/>
+      <ownedConnector xmi:type="uml:Connector" xmi:id="_c1" name="feed1">
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e1" role="_pt_out"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e2" role="_pt_in"/>
+      </ownedConnector>
+      <ownedConnector xmi:type="uml:Connector" xmi:id="_c2" name="feed2">
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e3" role="_pt_out"/>
+        <end xmi:type="uml:ConnectorEnd" xmi:id="_e4" role="_pt_in"/>
+      </ownedConnector>
+      <packagedElement xmi:type="uml:InformationFlow" xmi:id="_if" informationSource="_pt_out" informationTarget="_pt_in" conveyed="_gas" realizingConnector="_c1 _c2"/>
+    </packagedElement>`, `
+  <sysml:Block xmi:id="_s0" base_Class="_gas"/>
+  <sysml:InterfaceBlock xmi:id="_s1" base_Class="_fuel"/>
+  <sysml:FlowProperty xmi:id="_s1f" base_Property="_fp" direction="inout"/>
+  <sysml:Block xmi:id="_s3" base_Class="_engine"/>
+  <sysml:Block xmi:id="_s4" base_Class="_car"/>
+  <sysml:NestedConnectorEnd xmi:id="_n1" base_ConnectorEnd="_e2"><propertyPath xmi:idref="`+path1+`"/></sysml:NestedConnectorEnd>
+  <sysml:NestedConnectorEnd xmi:id="_n2" base_ConnectorEnd="_e4"><propertyPath xmi:idref="`+path2+`"/></sysml:NestedConnectorEnd>
+  <sysml:ItemFlow xmi:id="_st_if" base_InformationFlow="_if"/>`)
+}
+
+// TestFlowOverSeveralConnectorsIsReportedOnce covers an item flow realized by
+// two connectors: one report entry whatever each connector did.
+func TestFlowOverSeveralConnectorsIsReportedOnce(t *testing.T) {
+	t.Run("both broken", func(t *testing.T) {
+		r := multiConnectorFlow(t, "_missing1", "_missing2")
+		es := entriesFor(r, "_if")
+		if len(es) != 1 || es[0].Verdict != migrate.Unmapped ||
+			!strings.Contains(es[0].Note, "'feed1' is not migrated") || !strings.Contains(es[0].Note, "'feed2' is not migrated") {
+			t.Errorf("entries for _if = %+v, want one unmapped entry naming both connectors", es)
+		}
+		if n := strings.Count(string(r.Notation), "not migrated: «ItemFlow»"); n != 1 {
+			t.Errorf("the flow is commented %d times, want 1:\n%s", n, r.Notation)
+		}
+	})
+	t.Run("one broken", func(t *testing.T) {
+		r := multiConnectorFlow(t, "_missing", "_p_spare")
+		wantLine(t, r.Notation, "flow 'out'.fuel to spare.'in'.fuel;")
+		es := entriesFor(r, "_if")
+		if len(es) != 1 || es[0].Verdict != migrate.Approximated ||
+			!strings.Contains(es[0].Note, "only the flow of Gas is written; realizing connector 'feed1' is not migrated") {
+			t.Errorf("entries for _if = %+v, want one approximation naming feed1", es)
+		}
+		if strings.Contains(string(r.Notation), "not migrated: «ItemFlow»") {
+			t.Errorf("a partly written flow is commented as not migrated:\n%s", r.Notation)
+		}
+		for _, d := range errors(t, "flows.sysml", r.Notation) {
+			t.Errorf("%v", d)
+		}
+	})
+	t.Run("both written", func(t *testing.T) {
+		r := multiConnectorFlow(t, "_p_engine", "_p_spare")
+		wantLine(t, r.Notation, "flow 'out'.fuel to engine.'in'.fuel;")
+		wantLine(t, r.Notation, "flow 'out'.fuel to spare.'in'.fuel;")
+		if es := entriesFor(r, "_if"); len(es) != 1 || es[0].Verdict != migrate.Mapped {
+			t.Errorf("entries for _if = %+v, want one mapped entry", es)
+		}
+	})
 }
