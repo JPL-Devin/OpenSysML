@@ -49,7 +49,7 @@ func (w *writer) block(header string, body func()) {
 		return
 	}
 	w.line(header + " {")
-	w.buf().WriteString(inner)
+	_, _ = w.buf().WriteString(inner)
 	w.line("}")
 }
 
