@@ -1591,6 +1591,27 @@ func testCoordinateFrameFailureModes(t *testing.T) {
 			attribute def Unitless :> IntervalScale;
 			attribute unitless : Unitless;`,
 			"IntervalScale", "unitless", ErrNoValue, "states no unit; MeasurementScale declares unit: MeasurementUnit"},
+		{"scale placed on itself", `
+			attribute loop : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = loop; :>> origin = 1.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [loop], K)", ErrCyclicFeatureValue, "coordinate frame loop is defined in terms of itself"},
+		{"scales placed on each other", `
+			attribute a : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = b; :>> origin = 1.0 [b]; } }
+			attribute b : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = a; :>> origin = 2.0 [a]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [a], K)", ErrCyclicFeatureValue, "coordinate frame a is defined in terms of itself"},
+		{"scales mapped onto each other", `
+			attribute a : IntervalScale {
+				:>> unit = K;
+				private attribute p : DefinitionalQuantityValue { :>> num = 1; :>> definition = "p"; }
+				private attribute m : QuantityValueMapping { :>> mappedQuantityValue = p; :>> referenceQuantityValue = 2.0 [b]; }
+				:>> quantityValueMapping = m;
+			}
+			attribute b : IntervalScale {
+				:>> unit = K;
+				private attribute p : DefinitionalQuantityValue { :>> num = 1; :>> definition = "p"; }
+				private attribute m : QuantityValueMapping { :>> mappedQuantityValue = p; :>> referenceQuantityValue = 2.0 [a]; }
+				:>> quantityValueMapping = m;
+			}`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [K], a)", ErrCyclicFeatureValue, "coordinate frame a is defined in terms of itself"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := fmt.Sprintf(`

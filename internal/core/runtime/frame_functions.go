@@ -11,19 +11,15 @@ import (
 // frameIndex evaluates the index of `num [ref]` when it names a coordinate frame
 // or measurement scale rather than a unit; false for any other index.
 func (ec *EvalContext) frameIndex(index ast.Node) (*CoordinateFrame, bool, error) {
-	var qn *ast.QualifiedName
-	switch n := index.(type) {
-	case *ast.FeatureReference:
-		qn = n.Name
-	case *ast.QualifiedName:
-		qn = n
+	switch index.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.FeatureChainExpr:
 	default:
 		return nil, false, nil
 	}
-	if qn == nil || ec.ctx.resolver == nil {
+	if ec.ctx.resolver == nil {
 		return nil, false, nil
 	}
-	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
+	sym, ok := ec.ctx.resolver.ResolveTarget(ec.scope, index)
 	if !ok || sym == nil {
 		return nil, false, nil
 	}

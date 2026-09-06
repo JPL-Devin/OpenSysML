@@ -223,6 +223,9 @@ func vectorQuantityHeldSame(prior, now *VectorQuantity) bool {
 	if prior == nil || now == nil || prior.Dimension() != now.Dimension() {
 		return prior == now
 	}
+	if !sameVectorFrame(prior, now) {
+		return false
+	}
 	for i := range prior.Num {
 		if !heldSame(NewQuantityValue(prior.component(i)), NewQuantityValue(now.component(i))) {
 			return false

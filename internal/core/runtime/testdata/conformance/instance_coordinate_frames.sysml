@@ -20,6 +20,8 @@ package test {
 	public import VectorCalculations::*;
 	private import ScalarValues::*;
 
+	part def Holder { attribute frame : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); } }
+
 	part def Rig {
 		attribute spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }
 		attribute velocityCF : CartesianVelocity3dCoordinateFrame[1] = spatialCF / s;
@@ -34,8 +36,20 @@ package test {
 		attribute pIsSpatial : Boolean = p.mRef == spatialCF;
 		attribute uniform : Quantities::VectorQuantityValue = VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m];
 		attribute uniformUnit : LengthUnit = uniform.mRef;
+		attribute doubled : Position3dVector = p + p;
+		attribute doubledFrame : Boolean = doubled.mRef == spatialCF;
+		attribute halvedFrame : Boolean = (p / 2).mRef == spatialCF and (-p).mRef == spatialCF;
+		attribute rate : Quantities::VectorQuantityValue = p / 1 [s];
+		attribute rateFrame : Boolean = rate.mRef == velocityCF;
+		attribute mixedFrames : Position3dVector = p + (1.0, 2.0, 3.0) [datum];
+		attribute framedPlusUniform : Position3dVector = p + uniform;
+		attribute framedIsUniform : Boolean = p == uniform;
+		attribute framedIsOther : Boolean = p == (1.0, 2.0, 3.0) [datum];
+		attribute chained : Position3dVector = (1.0, 2.0, 3.0) [holder.frame];
+		attribute chainedFrame : Boolean = chained.mRef == holder.frame;
 
 		attribute datum : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (mm, mm, mm); }
+		part holder : Holder;
 		attribute metres : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }
 		attribute shifted : CartesianSpatial3dCoordinateFrame[1] {
 			:>> mRefs = (mm, mm, mm);

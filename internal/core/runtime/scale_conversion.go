@@ -179,7 +179,9 @@ func nearlyEqual(a, b float64) bool {
 
 // toRatioReference expresses a quantity on a scale in the unit the scale is
 // placed on, through every scale in between; a quantity in a unit is itself.
+// A scale reached twice is a cycle, which reading the scales normally catches first.
 func (ctx *Context) toRatioReference(q Quantity) (Quantity, error) {
+	var passed []*CoordinateFrame
 	for {
 		scale, ok, err := ctx.scaleOfUnit(q.Unit)
 		if err != nil {
@@ -188,6 +190,12 @@ func (ctx *Context) toRatioReference(q Quantity) (Quantity, error) {
 		if !ok {
 			return q, nil
 		}
+		for _, seen := range passed {
+			if seen.equal(scale) {
+				return Quantity{}, fmt.Errorf("%w: coordinate frame %s is defined in terms of itself", ErrCyclicFeatureValue, ctx.scaleName(scale))
+			}
+		}
+		passed = append(passed, scale)
 		anchor, err := ctx.anchorOf(scale)
 		if err != nil {
 			return Quantity{}, err

@@ -465,6 +465,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 // names the instance featuring the value being evaluated ([KerML, 8.4.2]).
 const thatName = "that"
 
+// selfName is the feature every thing takes from Anything: it names the object
+// itself ([KerML] Base::Anything::self), as `mRefs = self` does.
+const selfName = "self"
+
 // thisName is the context occurrence of what is being evaluated, which for a
 // performance an object owns is that object ([KerML] Occurrences::this).
 const thisName = "this"
@@ -547,6 +551,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			val, err := ec.evalIn(bound.scope).inEnv(bound.env).Eval(bound.expr)
 			delete(ec.resolving, name)
 			return val, err
+		}
+		// Then `self`, the object itself, which Anything declares with no value of
+		// its own to read.
+		if name == selfName && ec.self != nil {
+			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
 		}
 		// Then the bound instance: a feature value holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
@@ -2494,8 +2503,8 @@ func vectorQuantityEqual(a, b *VectorQuantity) bool {
 	if a.Dimension() != b.Dimension() {
 		return false
 	}
-	// Two vectors written over frames are equal in one frame only.
-	if a.Frame != nil && b.Frame != nil && !a.Frame.equal(b.Frame) {
+	// Vectors are equal over one mRef only: the same frame, or none for both.
+	if !sameVectorFrame(a, b) {
 		return false
 	}
 	for i := 0; i < a.Dimension(); i++ {
@@ -2504,6 +2513,14 @@ func vectorQuantityEqual(a, b *VectorQuantity) bool {
 		}
 	}
 	return true
+}
+
+// sameVectorFrame holds when both vectors are over one frame or neither is over any.
+func sameVectorFrame(a, b *VectorQuantity) bool {
+	if (a.Frame == nil) != (b.Frame == nil) {
+		return false
+	}
+	return a.Frame == nil || a.Frame.equal(b.Frame)
 }
 
 // sequenceEqual checks structural equality of sequences (element-wise).

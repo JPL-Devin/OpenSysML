@@ -60,6 +60,39 @@ func TestEvalCoordinateFrames(t *testing.T) {
 	wants(t, run(t, s, "%eval Frames::p.num"), "= [1.0, 2.0, 3.0]")
 }
 
+// Arithmetic over vectors in one frame stays in it; a number keeps the frame and a
+// quantity composes it, as `CoordinateFrame*` and `/` do; vectors over two frames,
+// or over a frame and none, are not combined, and a framed vector equals no
+// unframed one.
+func TestEvalFramedVectorArithmetic(t *testing.T) {
+	s := coordinateFrameSession(t)
+	wants(t, run(t, s, "%eval Frames::p + Frames::p"), "= ⟨2.0, 4.0, 6.0⟩ [spatialCF]")
+	wants(t, run(t, s, "%eval (Frames::p - (1.0, 1.0, 1.0) [Frames::spatialCF]).mRef == Frames::spatialCF"), "= true")
+	wants(t, run(t, s, "%eval -Frames::p"), "= ⟨-1.0, -2.0, -3.0⟩ [spatialCF]")
+	wants(t, run(t, s, "%eval 2 * Frames::p"), "= ⟨2.0, 4.0, 6.0⟩ [spatialCF]")
+	wants(t, run(t, s, "%eval (Frames::p / 2).mRef == Frames::spatialCF"), "= true")
+	wants(t, run(t, s, "%eval (Frames::p / 1 [s]).mRef == Frames::velocityCF"), "= true")
+	wants(t, run(t, s, "%eval Frames::p / 1 [s]"), "= ⟨1.0, 2.0, 3.0⟩ [spatialCF / s]")
+	wants(t, run(t, s, "%eval VectorCalculations::inner(Frames::p, Frames::p)"), "= 14.0")
+	wants(t, run(t, s, "%eval Frames::p + (1.0, 2.0, 3.0) [Frames::datum]"),
+		"error:", "type mismatch", "combines vectors over the coordinate frames spatialCF and datum; transform one into the other's frame first")
+	wants(t, run(t, s, "%eval Frames::p + VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m]"),
+		"error:", "type mismatch", "combines a vector over the coordinate frame spatialCF with one over no frame")
+	wants(t, run(t, s, "%eval VectorCalculations::inner(Frames::p, (1.0, 2.0, 3.0) [Frames::datum])"),
+		"error:", "combines vectors over the coordinate frames spatialCF and datum")
+	wants(t, run(t, s, "%eval Frames::p == VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m]"), "= false")
+	wants(t, run(t, s, "%eval Frames::p == (1.0, 2.0, 3.0) [Frames::datum]"), "= false")
+	wants(t, run(t, s, "%eval Frames::p == (1.0, 2.0, 3.0) [Frames::spatialCF]"), "= true")
+}
+
+// A frame written as a feature chain indexes a vector literal as a name does.
+func TestEvalVectorOverChainedFrame(t *testing.T) {
+	s := coordinateFrameSession(t)
+	wants(t, run(t, s, "%eval (1.0, 2.0, 3.0) [Frames::vehicle.body]"), "= ⟨1.0, 2.0, 3.0⟩ [body]")
+	wants(t, run(t, s, "%eval (1.0, 2.0, 3.0) [Frames::vehicle.body].mRef == Frames::vehicle.body"), "= true")
+	wants(t, run(t, s, "%eval (1.0, 2.0, 3.0) [Frames::car.carDatum].mRef.mRefs"), "= [mm, mm, mm]")
+}
+
 // A scale is a value whose unit reads and whose placement converts; one the
 // library places on no other reference converts to none, by name.
 func TestEvalMeasurementScales(t *testing.T) {
@@ -122,5 +155,18 @@ func TestFeaturesListFrameTransformation(t *testing.T) {
 		if strings.Contains(got, absent) {
 			t.Errorf("%%features Frames::lbcf lists %q:\n%s", absent, got)
 		}
+	}
+}
+
+// A scale's listing reads the library's `mRefs = self` and `elements = self` as the
+// scale itself, named once rather than expanded into itself; `dimensions = ()` is null.
+func TestFeaturesListMeasurementScale(t *testing.T) {
+	s := coordinateFrameSession(t)
+	run(t, s, "%instantiate SI::'°C_abs'")
+	got := run(t, s, "%features SI::'°C_abs'")
+	wants(t, got, "\n  unit = '°C'", "\n    origin = 273.15 [K]", "\n  dimensions = null",
+		"\n  mRefs = [Instance(ID: 1)]", "\n  elements = [Instance(ID: 1)]", "\n  flattenedSize = 1")
+	if strings.Contains(got, "error") || strings.Count(got, "\n  mRefs = ") != 1 || strings.Contains(got, "\n    mRefs = ") {
+		t.Errorf("%%features SI::'°C_abs' errs or lists the scale inside itself:\n%s", got)
 	}
 }

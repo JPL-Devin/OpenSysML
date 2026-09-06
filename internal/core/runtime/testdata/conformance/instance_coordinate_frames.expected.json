@@ -27,6 +27,29 @@
     ]},
     "pIsSpatial": {"type": "Boolean", "value": true},
     "uniformUnit": {"type": "MeasurementRef", "unit": "m"},
+    "doubled": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 2.0, "unit": "m"},
+      {"type": "Quantity", "value": 4.0, "unit": "m"},
+      {"type": "Quantity", "value": 6.0, "unit": "m"}
+    ]},
+    "doubledFrame": {"type": "Boolean", "value": true},
+    "halvedFrame": {"type": "Boolean", "value": true},
+    "rate": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "m/s"},
+      {"type": "Quantity", "value": 2.0, "unit": "m/s"},
+      {"type": "Quantity", "value": 3.0, "unit": "m/s"}
+    ]},
+    "rateFrame": {"type": "Boolean", "value": true},
+    "mixedFrames": {"error": "type mismatch: function VectorFunctions::'+' combines vectors over the coordinate frames spatialCF and datum; transform one into the other's frame first"},
+    "framedPlusUniform": {"error": "type mismatch: function VectorFunctions::'+' combines a vector over the coordinate frame spatialCF with one over no frame; write both over the frame (`(x, y, z) [spatialCF]`)"},
+    "framedIsUniform": {"type": "Boolean", "value": false},
+    "framedIsOther": {"type": "Boolean", "value": false},
+    "chained": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "m"},
+      {"type": "Quantity", "value": 2.0, "unit": "m"},
+      {"type": "Quantity", "value": 3.0, "unit": "m"}
+    ]},
+    "chainedFrame": {"type": "Boolean", "value": true},
 
     "datum": {"type": "CoordinateFrame", "text": "datum [mm, mm, mm]"},
     "shifted": {"type": "CoordinateFrame", "text": "shifted [mm, mm, mm]"},

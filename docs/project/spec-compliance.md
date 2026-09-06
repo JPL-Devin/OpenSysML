@@ -1001,7 +1001,16 @@ the flat sequence of its elements:
   literal over a frame, `VectorCalculations::'['((1.0, 2.0, 3.0), spatialCF)`,
   is a `ValVectorQuantity` with the frame's unit per axis and **the frame as
   `mRef`** (`p.mRef == spatialCF`, `p.num` the three numbers); an element count
-  off `mRef.flattenedSize` is `ErrMultiplicityViolation`. A quantity on a
+  off `mRef.flattenedSize` is `ErrMultiplicityViolation`; the frame may be named
+  by a feature chain (`(1.0, 2.0, 3.0) [vehicle.body]`). Vector arithmetic keeps
+  the frame: `p + p`, `p - q`, `-p`, `2 * p` and `p / 2` are over `p`'s frame, and
+  `p / 1 [s]` is over the frame `CoordinateFrame/` composes (`(p / 1 [s]).mRef ==
+  velocityCF`), while `'+'`, `'-'`, `inner` and `angle` between vectors over two
+  frames, or over a frame and over none, are `ErrTypeMismatch` naming both — the
+  library gives such a pair no common coordinates, and `transform` is the way
+  from one frame to the other. A vector over a frame equals no vector over
+  another frame or over none, so restating a feature's vector over another frame
+  is a change its dependents follow. A quantity on a
   scale, `21.5 [SI::'°C_abs']` or `0 [Time::UTC]`, is a scalar quantity whose
   magnitude is in the scale's unit and whose `mRef` is the scale.
   `ConvertQuantity` converts **through the scale's placement**: a scale `S`
@@ -1021,7 +1030,9 @@ the flat sequence of its elements:
   transformation or mapping; a placement whose `origin` is not a quantity on
   the source (the validation suite's `definitionalEpochInUTC`, an
   `Iso8601DateTime`), or whose `basisDirections` is not the identity `1 [R]`,
-  is a typed error naming that. `transform(transformation, sourceVector)`
+  is a typed error naming that; a chain of placements that returns to a scale
+  it passed (a scale placed on itself, or two on each other) is
+  `ErrCyclicFeatureValue` naming the scale, not a loop. `transform(transformation, sourceVector)`
   (`frame_transform.go`) re-expresses a vector quantity over a frame in the
   transformation's target: `sourceVector.mRef` must be the transformation's
   `source` (`ErrTypeMismatch` naming both otherwise, a uniform-unit vector with

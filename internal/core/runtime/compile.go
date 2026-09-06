@@ -447,7 +447,7 @@ func (c *calcCompiler) compileName(qn *ast.QualifiedName, scope *symbols.Scope, 
 	if slot, ok := layout.lookup(name); ok {
 		return slotNode(slot), nil
 	}
-	if name == thatName || name == thisName {
+	if name == thatName || name == selfName || name == thisName {
 		return nil, ineligible(fmt.Sprintf("name %q reads the bound object", name))
 	}
 	sym, ok := c.ctx.resolver.LookupName(scope, name)
