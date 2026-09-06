@@ -340,6 +340,61 @@ func TestObjectiveWithGuardedDivision(t *testing.T) {
 	}
 }
 
+// TestDerivedAnalysisObjectivesRedefineByPosition: an analysis definition or
+// usage restating its general's several objectives without naming them takes
+// each one's direction at the same position, and the restatement stands in for
+// the objective it redefines rather than beside it (which, being valueless,
+// would refuse the whole analysis).
+func TestDerivedAnalysisObjectivesRedefineByPosition(t *testing.T) {
+	ctx, idx := fixture(t, "derived_objectives.sysml", `package test {
+		private import ScalarValues::*;
+		private import TradeStudies::*;
+		analysis def Base {
+			attribute cost : Integer;
+			attribute margin : Integer;
+			require constraint { cost >= 1 and cost <= 9 }
+			require constraint { margin >= 0 and margin <= cost }
+			objective cheapest : MinimizeObjective;
+			objective widestMargin : MaximizeObjective;
+		}
+		analysis def Derived :> Base {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+		analysis d : Base {
+			objective { in calc :>> eval { cost + 1 } }
+			objective { in calc :>> eval { margin } }
+		}
+	}`)
+	for _, name := range []string{"test::Derived", "test::d"} {
+		sym := symbolNamed(t, idx, name)
+		objectives := ctx.ObjectivesOf(sym, sym.OwnerScope)
+		if len(objectives) != 2 {
+			t.Fatalf("%s states %d objectives, want its 2 restatements: %+v", name, len(objectives), objectives)
+		}
+		want := []struct {
+			direction runtime.ObjectiveDirection
+			typ, text string
+		}{{runtime.Minimize, "MinimizeObjective", "cost + 1"}, {runtime.Maximize, "MaximizeObjective", "margin"}}
+		for i, w := range want {
+			got := objectives[i]
+			if got.Direction != w.direction || got.Type == nil || got.Type.Name != w.typ || got.Text() != w.text {
+				t.Errorf("%s objective %d = %v %v %q, want %v %s %q", name, i, got.Direction, got.Type, got.Text(), w.direction, w.typ, w.text)
+			}
+		}
+		q, err := Analysis(ctx, sym, sym.OwnerScope)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		script := Script(q)
+		for _, line := range []string{"(minimize (+ |test::Base::cost| 1))", "(maximize |test::Base::margin|)"} {
+			if strings.Count(script, line) != 1 {
+				t.Errorf("%s script states %q %d times, want once:\n%s", name, line, strings.Count(script, line), script)
+			}
+		}
+	}
+}
+
 // TestObjectiveRefusals: every objective outside the translatable subset refuses
 // with a typed error naming why and where, rather than being skipped.
 func TestObjectiveRefusals(t *testing.T) {

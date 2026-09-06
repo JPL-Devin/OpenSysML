@@ -116,6 +116,59 @@ func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
 	}
 }
 
+// An analysis case may state several objectives; each redefines the general's
+// objective at its own position, so a later one keeps that one's type and members.
+func TestAnalysisObjectivesRedefineByPosition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		requirement def Min { attribute a; }
+		requirement def Max { attribute b; }
+		analysis def Base {
+			objective cheapest : Min;
+			objective widestMargin : Max;
+		}
+		analysis def Derived :> Base { objective; objective; objective; }
+		analysis derived : Base { objective; objective; objective; }
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	cheapest := nested(t, base.Scope, "cheapest")
+	widestMargin := nested(t, base.Scope, "widestMargin")
+	minDef := nested(t, p.Scope, "Min")
+	maxDef := nested(t, p.Scope, "Max")
+	for _, name := range []string{"Derived", "derived"} {
+		owner := nested(t, p.Scope, name)
+		owned, inherited := m.ObjectivesOf(owner)
+		if len(owned) != 3 || len(inherited) != 0 {
+			t.Fatalf("ObjectivesOf(%s) = %v, %v; want three owned, none inherited", name, owned, inherited)
+		}
+		first, second, third := owned[0], owned[1], owned[2]
+		if got := m.ImplicitRoleRedefinitions(first); len(got) != 1 || got[0] != cheapest {
+			t.Errorf("ImplicitRoleRedefinitions(%s's first objective) = %v, want [cheapest]", name, got)
+		}
+		if got := m.AllSupertypes(first); len(got) != 2 || got[0] != cheapest || got[1] != minDef {
+			t.Errorf("AllSupertypes(%s's first objective) = %v, want [cheapest Min]", name, got)
+		}
+		if got := m.ImplicitRoleRedefinitions(second); len(got) != 1 || got[0] != widestMargin {
+			t.Errorf("ImplicitRoleRedefinitions(%s's second objective) = %v, want [widestMargin]", name, got)
+		}
+		if got := m.AllSupertypes(second); len(got) != 2 || got[0] != widestMargin || got[1] != maxDef {
+			t.Errorf("AllSupertypes(%s's second objective) = %v, want [widestMargin Max]", name, got)
+		}
+		if got, ok := m.LookupMember(second, "b"); !ok || got != nested(t, maxDef.Scope, "b") {
+			t.Errorf("LookupMember(%s's second objective, b) = %v, %v; want Max::b", name, got, ok)
+		}
+		if _, ok := m.LookupMember(second, "a"); ok {
+			t.Errorf("%s's second objective sees Min::a through the first general objective", name)
+		}
+		if got := m.ImplicitRoleRedefinitions(third); len(got) != 0 {
+			t.Errorf("ImplicitRoleRedefinitions(%s's third objective) = %v, want none: the general states two", name, got)
+		}
+		if got := m.AllSupertypes(third); len(got) != 0 {
+			t.Errorf("AllSupertypes(%s's third objective) = %v, want none", name, got)
+		}
+	}
+}
+
 // Only the first owned objective redefines, and it takes the first objective
 // of each general; ObjectivesOf then reports what remains inherited.
 func TestObjectivesOfMasksOnlyTheFirstOfEachGeneral(t *testing.T) {

@@ -14,7 +14,9 @@ const (
 )
 
 // ImplicitRoleRedefinitions returns the same-role features of the owner's generals that sym
-// does not redefine by name: every one for a subject, each general's first for a first objective.
+// does not redefine by name: every one for a subject, each general's first for a first
+// objective. An analysis case may state several objectives, and each one redefines the
+// general's objective at the same position.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	role := roleOf(sym)
 	if role == noCaseRole || sym.OwnerScope == nil {
@@ -24,8 +26,10 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	if !behaviorLike(owner) {
 		return nil
 	}
+	position := 0
 	if role == objectiveRole {
-		if owned := ownedRoles(owner, role); len(owned) == 0 || owned[0] != sym {
+		position = rolePosition(owner, role, sym)
+		if position < 0 || (position > 0 && !analysisCase(owner)) {
 			return nil
 		}
 	}
@@ -37,8 +41,11 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 			continue
 		}
 		inherited := m.effectiveRoles(sup, role, seenCases)
-		if role == objectiveRole && len(inherited) > 1 {
-			inherited = inherited[:1]
+		if role == objectiveRole {
+			if position >= len(inherited) {
+				continue
+			}
+			inherited = inherited[position : position+1]
 		}
 		for _, f := range inherited {
 			if !seenRoles[f] {
@@ -149,6 +156,30 @@ func ownedRoles(sym *symbols.Symbol, role caseRole) []*symbols.Symbol {
 		}
 	}
 	return out
+}
+
+// rolePosition is sym's index among the role features owner declares, -1 when
+// it is not one of them.
+func rolePosition(owner *symbols.Symbol, role caseRole, sym *symbols.Symbol) int {
+	for i, owned := range ownedRoles(owner, role) {
+		if owned == sym {
+			return i
+		}
+	}
+	return -1
+}
+
+func analysisCase(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefAnalysisCase
+	case *ast.Usage:
+		return d.Kind == ast.UsageAnalysisCase
+	}
+	return false
 }
 
 func roleOf(sym *symbols.Symbol) caseRole {
