@@ -92,6 +92,118 @@
       }
     },
     {
+      "id": "evaluate_calc/a_measurement_reference_argument_is_the_unit_the_calc_converts_to",
+      "description": "A bare unit sent as an argument reaches the calc as a measurement reference ConvertQuantity accepts as its target, so 3 km converts to 3000 m.",
+      "rpc": "EvaluateCalc",
+      "requires_capabilities": [
+        "measurement_refs"
+      ],
+      "model": {
+        "fixture": "measurement_ref.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "M::toUnit",
+        "arguments": [
+          {
+            "quantity": {
+              "int_magnitude": 3,
+              "unit": "km",
+              "unit_term": {
+                "factors": [
+                  {
+                    "unit_id": "SI::metre",
+                    "exponent": 1
+                  }
+                ],
+                "scale_num": 1000,
+                "scale_den": 1
+              }
+            }
+          },
+          {
+            "measurement_ref": {
+              "unit": "m",
+              "unit_term": {
+                "factors": [
+                  {
+                    "unit_id": "SI::metre",
+                    "exponent": 1
+                  }
+                ],
+                "scale_num": 1,
+                "scale_den": 1
+              },
+              "unit_id": "SI::metre"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "quantity": {
+              "real_magnitude": 3000.0,
+              "unit": "m"
+            }
+          }
+        },
+        "absent": [
+          "error"
+        ]
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "measurement_refs"
+      }
+    },
+    {
+      "id": "evaluate_calc/a_measurement_reference_argument_without_its_reduction_is_refused",
+      "description": "A named unit sent without its reduction cannot be a runtime measurement reference, so the answer reports the malformed argument in band, as it does a quantity sent without one.",
+      "rpc": "EvaluateCalc",
+      "requires_capabilities": [
+        "measurement_refs"
+      ],
+      "model": {
+        "fixture": "measurement_ref.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "M::toUnit",
+        "arguments": [
+          {
+            "quantity": {
+              "int_magnitude": 3,
+              "unit": "km",
+              "unit_term": {
+                "factors": [
+                  {
+                    "unit_id": "SI::metre",
+                    "exponent": 1
+                  }
+                ],
+                "scale_num": 1000,
+                "scale_den": 1
+              }
+            }
+          },
+          {
+            "measurement_ref": {
+              "unit": "m"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "contains": {
+          "error": "reduction"
+        },
+        "absent": [
+          "result"
+        ]
+      }
+    },
+    {
       "id": "evaluate_calc/a_malformed_vector_argument_is_refused",
       "description": "A vector whose component is not a number cannot be a runtime vector, so the answer reports the malformed argument in band, as it does a quantity sent without its reduction.",
       "rpc": "EvaluateCalc",

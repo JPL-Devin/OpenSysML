@@ -284,6 +284,34 @@ def test_structured_values_are_added_value_arms():
         assert older.SerializeToString() == payload
 
 
+def test_a_measurement_reference_is_an_added_value_arm():
+    """The bare measurement reference arm is new field 15."""
+    fields = sysml_pb2.Value.DESCRIPTOR.fields_by_name
+    assert fields["measurement_ref"].number == 15
+    ref_fields = sysml_pb2.MeasurementRef.DESCRIPTOR.fields_by_name
+    assert {name: f.number for name, f in ref_fields.items()} == {
+        "unit": 1, "unit_term": 2, "unit_id": 3,
+    }
+
+    value = sysml_pb2.Value(measurement_ref=sysml_pb2.MeasurementRef(
+        unit="km",
+        unit_term=sysml_pb2.UnitTerm(
+            scale_num=1000.0, scale_den=1.0,
+            factors=[sysml_pb2.UnitFactor(unit_id="SI::metre", exponent=1.0)],
+        ),
+        unit_id="SI::kilometre",
+    ))
+    payload = value.SerializeToString()
+    again = sysml_pb2.Value()
+    again.ParseFromString(payload)
+    assert again == value
+
+    # A client whose schema predates the arm keeps the bytes intact.
+    older = sysml_pb2.ServerInfoRequest()
+    older.ParseFromString(payload)
+    assert older.SerializeToString() == payload
+
+
 def test_apply_edits_is_an_added_rpc():
     """The edit RPC is new, so it displaces nothing a client already calls."""
     service = sysml_pb2.DESCRIPTOR.services_by_name["SysMLService"]

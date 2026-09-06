@@ -148,6 +148,8 @@ What a request asks for is fixed per capability:
 | `enum_values` | Response-population capability: encode enum values as unsupported nulls; no request asks for them. |
 | `unset_value` | Response-population capability: encode unset values as unsupported nulls; no request asks for them. |
 | `complex_values` | Response-population capability: encode complex numbers as unsupported nulls; no request asks for them. |
+| `structured_values` | Encode arrays, vectors and vector quantities as unsupported nulls; refuse a request carrying one, at any depth. |
+| `measurement_refs` | Encode bare measurement references as unsupported nulls; refuse a request carrying one, at any depth. |
 
 The default service reports and supports every capability above. `make conformance` also starts a
 second service with `strict_conformance` and `oslc_query` withheld, verifies that its advertisement

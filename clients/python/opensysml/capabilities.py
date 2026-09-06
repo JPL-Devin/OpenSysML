@@ -93,6 +93,13 @@ CAPABILITY_COMPLEX_VALUES = "complex_values"
 #: an error, and refuses one sent to it with ``UNIMPLEMENTED``.
 CAPABILITY_STRUCTURED_VALUES = "structured_values"
 
+#: A bare measurement reference — a unit with no magnitude, ``SI::m`` or
+#: ``m / s`` — as ``Value.measurement_ref``, read as
+#: :class:`~opensysml.values.MeasurementRef`. Without it the service sends an
+#: unsupported null naming the unit, which is an error, and refuses one sent to
+#: it with ``UNIMPLEMENTED``.
+CAPABILITY_MEASUREMENT_REFS = "measurement_refs"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

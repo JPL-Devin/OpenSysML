@@ -109,9 +109,17 @@ func (ctx *Context) MeasurementUnitValue(sym *symbols.Symbol) (Value, bool, erro
 	if err != nil {
 		return Value{}, true, fmt.Errorf("%w: %s: %w", ErrNotAQuantity, sym.Name, err)
 	}
-	name := unitSymbolName(sym)
-	product := semantics.NamedUnitProduct(sym, name, term.Dimensionless())
-	return NewMeasurementRefValue(Unit{Text: name, Product: product, Term: term}), true, nil
+	return DeclaredMeasurementRef(sym, "", term), true, nil
+}
+
+// DeclaredMeasurementRef is the reference a unit declaration names, reducing to
+// term, spelt as text (`SI::km`) or, given none, by its symbol (`km`).
+func DeclaredMeasurementRef(sym *symbols.Symbol, text string, term semantics.UnitTerm) Value {
+	if text == "" {
+		text = unitSymbolName(sym)
+	}
+	product := semantics.NamedUnitProduct(sym, text, term.Dimensionless())
+	return NewMeasurementRefValue(Unit{Text: text, Product: product, Term: term})
 }
 
 // measurementScaleValue is the typed refusal a measurement scale declaration
