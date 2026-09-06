@@ -797,9 +797,9 @@ the flat sequence of its elements:
   exactly as `[m] * [s]` does for a quantity), and it prints as the unit a
   quantity prints after its magnitude: `m`, `'m/s'`, `m*s`, `m**2`. Two
   references are equal, and hash alike, when they reduce to the same term
-  (`SI::'m/s' == m / s`, `km != m`); a dimensionless reference is compared by
-  its named product as well (`rad != sr`, `rad != one`), the reduction alone
-  telling them apart no more than it does for quantities. It is typed by the unit
+  (`SI::'m/s' == m / s`, `km != m`, `km / m == m / mm`); a reference naming a
+  unit of dimension one is only itself (`rad != sr`, `one != m / m`), as a
+  quantity in it stays a quantity where a cancelled ratio is a number. It is typed by the unit
   definition declaring it (`m` is a `LengthUnit`, hence a `MeasurementUnit`,
   `ScalarMeasurementReference`, `TensorMeasurementReference`); a composed unit is
   a `DerivedUnit` — the library's "unit that depends on powers of other

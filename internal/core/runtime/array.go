@@ -162,24 +162,25 @@ func (vq *VectorQuantity) component(i int) *Quantity {
 	return &Quantity{Num: vq.Num[i], Unit: vq.Units[i]}
 }
 
-// uniformUnit is the one unit every axis is expressed in, when there is one.
-func (vq *VectorQuantity) uniformUnit() (Unit, bool) {
+// sharedUnit is the one unit every axis measures in, spelt as the first axis
+// spells it (`m` for axes in `m` and `SI::m`), when the axes' references are equal.
+func (vq *VectorQuantity) sharedUnit() (Unit, bool) {
 	if len(vq.Units) == 0 {
 		return Unit{}, false
 	}
-	first := vq.Units[0]
+	first := &MeasurementRef{Unit: vq.Units[0]}
 	for _, u := range vq.Units[1:] {
-		if u.String() != first.String() {
+		if !first.equal(&MeasurementRef{Unit: u}) {
 			return Unit{}, false
 		}
 	}
-	return first, true
+	return vq.Units[0], true
 }
 
 // format renders `⟨1.0, 2.0⟩ [m]`, or `⟨1.0 [m], 2.0 [rad]⟩` when the axes differ.
 func (vq *VectorQuantity) format(element func(semantics.Value) string) string {
 	parts := make([]string, len(vq.Num))
-	if unit, ok := vq.uniformUnit(); ok {
+	if unit, ok := vq.sharedUnit(); ok {
 		for i, n := range vq.Num {
 			parts[i] = element(n)
 		}

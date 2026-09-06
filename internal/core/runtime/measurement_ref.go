@@ -54,8 +54,8 @@ func (r *MeasurementRef) String() string {
 	return r.Unit.String()
 }
 
-// equal holds for one reduction at one scale (`SI::'m/s' == m/s`, `km != m`);
-// dimension-one units reduce to nothing, so those must share a spelling (`rad != sr`).
+// equal holds for one reduction at one scale (`SI::'m/s' == m/s`, `km/m == m/mm`);
+// a named dimension-one unit reduces to nothing, so it is only itself (`rad != sr`).
 func (r *MeasurementRef) equal(other *MeasurementRef) bool {
 	if r == nil || other == nil {
 		return r == other
@@ -63,7 +63,7 @@ func (r *MeasurementRef) equal(other *MeasurementRef) bool {
 	if !r.Unit.Term.Same(other.Unit.Term) {
 		return false
 	}
-	if r.Unit.Term.Dimensionless() {
+	if r.namesDimensionOne() || other.namesDimensionOne() {
 		return r.Unit.Product.Equal(other.Unit.Product)
 	}
 	return true
@@ -77,10 +77,16 @@ func (r *MeasurementRef) key() string {
 	}
 	scale := r.Unit.Term.Scale
 	key := r.Unit.Term.DimensionKey() + "@" + strconv.FormatFloat(scale.Num/scale.Den, 'g', -1, 64)
-	if r.Unit.Term.Dimensionless() {
+	if r.namesDimensionOne() {
 		key += "|" + r.Unit.Product.String()
 	}
 	return key
+}
+
+// namesDimensionOne reports a unit of dimension one by name (`rad`, `one`), not a
+// ratio that cancels to a number (`km/m`).
+func (r *MeasurementRef) namesDimensionOne() bool {
+	return r.Unit.Term.Dimensionless() && r.Unit.Product.NamesDimensionOne()
 }
 
 // MeasurementUnitValue is the reference a measurement-unit declaration names
@@ -219,10 +225,10 @@ func (ctx *Context) quantityFeature(val Value, name string) (Value, bool, error)
 	return Value{}, false, nil
 }
 
-// vectorQuantityMRef is the one unit a vector quantity's axes share; axes in
-// different units have no scalar reference faithful to all, a typed error.
+// vectorQuantityMRef is the one reference a vector quantity's axes share, however
+// spelt; axes in different units have no scalar reference faithful to all, a typed error.
 func vectorQuantityMRef(vq *VectorQuantity) (Value, error) {
-	unit, ok := vq.uniformUnit()
+	unit, ok := vq.sharedUnit()
 	if !ok {
 		return Value{}, fmt.Errorf(
 			"%w: Quantities::VectorQuantityValue::mRef: the axes of %s carry different units, and no one measurement reference names them all",

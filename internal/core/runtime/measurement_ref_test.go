@@ -33,6 +33,9 @@ func measurementRefContext(t *testing.T) (*Context, *symbols.Scope) {
 			attribute notAnArea : AreaValue = m * m;
 			attribute vq : Quantities::VectorQuantityValue = VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m];
 			attribute scaled = VectorFunctions::VectorOf((1.0, 2.0)) [m] * (2 [s]);
+			package Imperial {
+				attribute <m> mile : LengthUnit { :>> unitConversion : ConversionByConvention { :>> referenceUnit = SI::m; :>> conversionFactor = 1609.344; } }
+			}
 		}
 	`))
 	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
@@ -119,7 +122,8 @@ func TestMeasurementRefValues(t *testing.T) {
 }
 
 // TestMeasurementRefEquality: references are equal at one reduction and one
-// scale, dimension-one units by spelling, and a set keys them the same way.
+// scale, a ratio that cancels included; a named dimension-one unit is only
+// itself; and a set keys them the same way.
 func TestMeasurementRefEquality(t *testing.T) {
 	ctx, scope := measurementRefContext(t)
 
@@ -138,9 +142,14 @@ func TestMeasurementRefEquality(t *testing.T) {
 		{"m ** 2", "m * m", true},
 		{"area", "m ** 2", true},
 		{"m / m", "s / s", true},
+		{"km / m", "m / mm", true},
+		{"km / m", "m / m", false},
 		{"m / m", "MeasurementReferences::one", false},
+		{"km / m", "MeasurementReferences::one", false},
 		{"rad", "rad", true},
 		{"rad", "sr", false},
+		{"rad", "m / m", false},
+		{"rad / rad", "m / m", true},
 		{"m", "3", false},
 		{"m", `"m"`, false},
 		{"m", "1 [m]", false},
@@ -277,34 +286,52 @@ func TestMeasurementRefReport(t *testing.T) {
 	}
 }
 
-// TestVectorQuantityMRefNeedsOneUnit: a vector quantity whose axes carry
-// different units has no one scalar reference, so mRef is a typed error.
+// TestVectorQuantityMRefNeedsOneUnit: a vector quantity's mRef is the one
+// reference its axes share, however each is spelt; axes measuring differently,
+// even under one spelling, have no one scalar reference, so mRef is a typed error.
 func TestVectorQuantityMRefNeedsOneUnit(t *testing.T) {
 	ctx, scope := measurementRefContext(t)
-	metre, err := evalIn(t, ctx, scope, "m")
-	if err != nil {
-		t.Fatalf("m: %v", err)
+	unitOf := func(src string) Unit {
+		val, err := evalIn(t, ctx, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if val.Kind != ValMeasurementRef {
+			t.Fatalf("%s = %s, want a measurement reference", src, FormatValue(val))
+		}
+		return val.MeasurementRef().Unit
 	}
-	second, err := evalIn(t, ctx, scope, "s")
-	if err != nil {
-		t.Fatalf("s: %v", err)
+	metre, qualified, second, mile := unitOf("m"), unitOf("(1 [SI::m]).mRef"), unitOf("s"), unitOf("Imperial::mile")
+	if qualified.String() == metre.String() || mile.String() != metre.String() {
+		t.Fatalf("spellings %q, %q and %q do not exercise the cases", metre, qualified, mile)
 	}
 	num := []semantics.Value{{Kind: semantics.ValReal, Real: 1}, {Kind: semantics.ValReal, Real: 2}}
-
-	uniform := NewVectorQuantityValue(num, []Unit{metre.MeasurementRef().Unit, metre.MeasurementRef().Unit})
-	got, ok, err := ctx.structuredFeature(uniform, "mRef")
-	if !ok || err != nil || !valueEqual(got, metre) {
-		t.Fatalf("mRef of %s = %s, %v, %v; want m", FormatValue(uniform), FormatValue(got), ok, err)
+	wantMRef := func(units []Unit, want Unit) {
+		t.Helper()
+		vq := NewVectorQuantityValue(num, units)
+		got, ok, err := ctx.structuredFeature(vq, "mRef")
+		if !ok || err != nil || !valueEqual(got, measurementRefOf(want)) || FormatValue(got) != want.String() {
+			t.Fatalf("mRef of %s = %s, %v, %v; want %s", FormatValue(vq), FormatValue(got), ok, err, want)
+		}
+	}
+	wantNoMRef := func(units []Unit, axes string) {
+		t.Helper()
+		vq := NewVectorQuantityValue(num, units)
+		_, ok, err := ctx.structuredFeature(vq, "mRef")
+		if !ok || !errors.Is(err, ErrUnevaluableLibraryFunction) {
+			t.Fatalf("mRef of %s = %v, %v; want %v", FormatValue(vq), ok, err, ErrUnevaluableLibraryFunction)
+		}
+		want := "Quantities::VectorQuantityValue::mRef: the axes of " + axes + " carry different units, and no one measurement reference names them all"
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
 	}
 
-	mixed := NewVectorQuantityValue(num, []Unit{metre.MeasurementRef().Unit, second.MeasurementRef().Unit})
-	_, ok, err = ctx.structuredFeature(mixed, "mRef")
-	if !ok || !errors.Is(err, ErrUnevaluableLibraryFunction) {
-		t.Fatalf("mRef of %s = %v, %v; want %v", FormatValue(mixed), ok, err, ErrUnevaluableLibraryFunction)
-	}
-	if want := "Quantities::VectorQuantityValue::mRef: the axes of ⟨1.0 [m], 2.0 [s]⟩ carry different units, and no one measurement reference names them all"; !strings.Contains(err.Error(), want) {
-		t.Errorf("error %q does not mention %q", err, want)
-	}
+	wantMRef([]Unit{metre, metre}, metre)
+	wantMRef([]Unit{metre, qualified}, metre)
+	wantMRef([]Unit{qualified, metre}, qualified)
+	wantNoMRef([]Unit{metre, second}, "⟨1.0 [m], 2.0 [s]⟩")
+	wantNoMRef([]Unit{metre, mile}, "⟨1.0 [m], 2.0 [m]⟩")
 }
 
 // TestMeasurementRefDescribed: the kind describes, renders and traces itself.

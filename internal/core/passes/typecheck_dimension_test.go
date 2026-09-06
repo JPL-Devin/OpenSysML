@@ -172,13 +172,25 @@ func TestBoundComposedMeasurementUnit(t *testing.T) {
 // TestComposedMeasurementUnitAsAnArgument: an operator expression over units is
 // a measurement reference where an overload is chosen by argument type, so
 // ToString(m / s) selects MeasurementRefCalculations::ToString and a quantity
-// parameter refuses it by name.
+// parameter refuses it by name; one over numbers (`1 * 1`) is the number it
+// evaluates to, not the DerivedUnit unit notation would read it as.
 func TestComposedMeasurementUnitAsAnArgument(t *testing.T) {
 	wantNoDimensionDiags(t, `private import MeasurementRefCalculations::*;
 		attribute text : ScalarValues::String = ToString(m / s);`)
 	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
 		attribute q : LengthValue = ConvertQuantity(3 [km], m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(3 [km], km / m * m);`)
 	wantOneDimensionError(t, `private import QuantityCalculations::*;
 		attribute q : LengthValue = ConvertQuantity(m, m);`,
 		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found LengthUnit")
+	wantOneDimensionError(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(m / m, m);`,
+		"argument 1 of ConvertQuantity expects ScalarQuantityValue, found DerivedUnit")
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 * 1, m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 / 1, m);`)
+	wantNoDimensionDiags(t, `private import QuantityCalculations::*;
+		attribute q : LengthValue = ConvertQuantity(1 ** 2, m);`)
 }

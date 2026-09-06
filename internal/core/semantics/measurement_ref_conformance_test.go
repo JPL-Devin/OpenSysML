@@ -24,7 +24,13 @@ func measurementRefModel(t *testing.T) (*semantics.Model, *symbols.Index) {
 		attribute area = m * m;
 		attribute speed = m / s;
 		attribute cubed = m ** 3;
+		attribute ratio = km / m;
 		attribute sum = m + m;
+		attribute one = 1 * 1;
+		attribute unity = 1 / 1;
+		attribute square = 1 ** 2;
+		attribute twice = 2 * m;
+		attribute whole = m / 1;
 	}`))).ParseFile())
 	idx.ExpandWildcardImports()
 	return semantics.NewModel(resolve.New(idx)), idx
@@ -101,7 +107,8 @@ func TestMeasurementRefConforms(t *testing.T) {
 }
 
 // TestMeasurementRefExpr: `*`, `/` and `**` over units are a DerivedUnit of the
-// composed dimension; `+` over units and expressions over no unit are not references.
+// composed dimension; `+` over units, and `*`, `/` or `**` with a number for an
+// operand (`1 * 1`, `2 * m`), are not references, though unit notation reads `1`.
 func TestMeasurementRefExpr(t *testing.T) {
 	m, idx := measurementRefModel(t)
 	derivedUnit := dimensionSymbol(t, idx, "MeasurementReferences::DerivedUnit")
@@ -115,6 +122,8 @@ func TestMeasurementRefExpr(t *testing.T) {
 		{"T::speed", "ISQSpaceTime::SpeedUnit", true},
 		{"T::speed", "ISQBase::LengthUnit", false},
 		{"T::cubed", "ISQSpaceTime::VolumeUnit", true},
+		{"T::ratio", "MeasurementReferences::DerivedUnit", true},
+		{"T::ratio", "ISQBase::LengthUnit", false},
 	} {
 		t.Run(tc.feature+" : "+tc.want, func(t *testing.T) {
 			scope, e := boundOperatorExpr(t, idx, tc.feature)
@@ -130,11 +139,13 @@ func TestMeasurementRefExpr(t *testing.T) {
 			}
 		})
 	}
-	scope, sum := boundOperatorExpr(t, idx, "T::sum")
-	if got := m.MeasurementRefExprType(scope, sum); got != nil {
-		t.Errorf("m + m typed %v, want no measurement reference", got)
-	}
-	if _, ok := m.MeasurementRefExprConformance(scope, sum, derivedUnit); ok {
-		t.Error("m + m judged as a measurement reference")
+	for _, feature := range []string{"T::sum", "T::one", "T::unity", "T::square", "T::twice", "T::whole"} {
+		scope, e := boundOperatorExpr(t, idx, feature)
+		if got := m.MeasurementRefExprType(scope, e); got != nil {
+			t.Errorf("%s typed %v, want no measurement reference", feature, got)
+		}
+		if _, ok := m.MeasurementRefExprConformance(scope, e, derivedUnit); ok {
+			t.Errorf("%s judged as a measurement reference", feature)
+		}
 	}
 }

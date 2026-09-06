@@ -769,20 +769,51 @@ func (m *Model) measurementRefExpr(scope *symbols.Scope, e *ast.OperatorExpr) (*
 	if m == nil || e == nil {
 		return nil, UnitTerm{}, false
 	}
-	switch e.Operator {
-	case ast.OpMul, ast.OpDiv, ast.OpPow:
-	default:
-		return nil, UnitTerm{}, false
-	}
 	unit := m.libSymbol(fqnDerivedUnit)
 	if unit == nil {
 		return nil, UnitTerm{}, false
 	}
-	term, err := m.UnitTermOfExpr(scope, e)
-	if err != nil {
+	term, ok := m.measurementRefOperand(scope, e)
+	if !ok {
 		return nil, UnitTerm{}, false
 	}
 	return unit, term, true
+}
+
+// measurementRefOperand reduces a unit's name, `*`/`/` of two such, or `**` of one
+// by a number; a number itself (`1 * 1`) is none, though unit notation reads `1`.
+func (m *Model) measurementRefOperand(scope *symbols.Scope, node ast.Node) (UnitTerm, bool) {
+	switch n := node.(type) {
+	case *ast.FeatureReference, *ast.QualifiedName:
+		term, err := m.UnitTermOfExpr(scope, n)
+		return term, err == nil
+	case *ast.OperatorExpr:
+		if len(n.Operands) != 2 {
+			return UnitTerm{}, false
+		}
+		base, ok := m.measurementRefOperand(scope, n.Operands[0])
+		if !ok {
+			return UnitTerm{}, false
+		}
+		switch n.Operator {
+		case ast.OpMul, ast.OpDiv:
+			other, ok := m.measurementRefOperand(scope, n.Operands[1])
+			if !ok {
+				return UnitTerm{}, false
+			}
+			if n.Operator == ast.OpMul {
+				return base.Times(other), true
+			}
+			return base.DividedBy(other), true
+		case ast.OpPow:
+			exp, ok := m.Eval(n.Operands[1])
+			if !ok || !exp.IsNumeric() {
+				return UnitTerm{}, false
+			}
+			return base.Pow(exp.AsReal()), true
+		}
+	}
+	return UnitTerm{}, false
 }
 
 // incommensurableSum finds, in quantity arithmetic, a sum or difference of
