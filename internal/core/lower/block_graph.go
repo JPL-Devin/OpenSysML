@@ -78,6 +78,18 @@ func outsideBlockFlow(member ast.Node) bool {
 // node, a node per run of plain statements, a succession in declaration order.
 // nodeBody says the members are a nested action's own, so a parameter is its own.
 func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *ActionGraph {
+	return lowerBlockFlowWith(members, scope, func(graph *ActionGraph, nodes []ast.Node, member ast.Node) (Statement, bool) {
+		return blockStep(graph, nodes, member, scope, nodeBody)
+	})
+}
+
+// blockStepLowering lowers a member of a block's flow that is not a node of it,
+// given the graph and its action nodes, reporting whether it states a step.
+type blockStepLowering func(graph *ActionGraph, nodes []ast.Node, member ast.Node) (Statement, bool)
+
+// lowerBlockFlowWith lowers a block to its declaration-order flow, lowering the
+// members between action nodes with step.
+func lowerBlockFlowWith(members []ast.Node, scope *symbols.Scope, step blockStepLowering) *ActionGraph {
 	graph := &ActionGraph{
 		Scope:     scope,
 		Nodes:     make([]ast.Node, 0, len(members)),
@@ -108,7 +120,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 			lowerFlowNode(graph, actual, scope)
 			continue
 		}
-		stmt, states := blockStep(graph, nodes, actual, scope, nodeBody)
+		stmt, states := step(graph, nodes, actual)
 		if !states {
 			continue
 		}
@@ -142,6 +154,12 @@ func recordBlockNodes(graph *ActionGraph) {
 		}
 		graph.BlockNodes[node] = nodes
 	}
+}
+
+// BlockNodes returns the action nodes the blocks among stmts declare, in
+// declaration order: the nodes a body's performance runs as subperformances.
+func BlockNodes(stmts []Statement) []ast.Node {
+	return blockNodesOf(stmts, nil)
 }
 
 // blockNodesOf appends the action nodes the blocks among stmts declare, in

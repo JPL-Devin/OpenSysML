@@ -90,6 +90,9 @@ type Context struct {
 	// under way, so reading several outputs of one usage answers from one
 	// execution of its body. An activation's evaluations end with it.
 	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
+	// calcUsageRunning holds the calc usages whose bodies are running, so a body
+	// reading its own usage is a recursion rather than a nested evaluation.
+	calcUsageRunning map[calcUsageKey]*calcShape
 
 	// activations numbers the body activations begun in this context: a calc
 	// invocation, a block entry, a loop iteration, a body application.
@@ -297,7 +300,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		realLiterals:      make(map[*ast.LiteralReal]float64),
 		compileCalcs:      CalcCompileFromEnv(),
 
-		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRuns:    make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRunning: make(map[calcUsageKey]*calcShape),
 
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,

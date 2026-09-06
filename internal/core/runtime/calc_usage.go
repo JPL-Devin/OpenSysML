@@ -191,8 +191,47 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 			return out, true
 		}
 	}
+	if name == resultOutputName {
+		return shape.anonymousResult()
+	}
 	return calcOutput{}, false
 }
+
+// resultOutputName is the name an unnamed result parameter answers to.
+const resultOutputName = "result"
+
+// anonymousResult is the unnamed result a `return` or a trailing result
+// expression produces, which reads under the name `result`.
+func (shape *calcShape) anonymousResult() (calcOutput, bool) {
+	for _, out := range shape.Outputs {
+		if out.IsResult && out.Name == "" {
+			return calcOutput{Name: resultOutputName, Value: out.Value, Owner: out.Owner, Decl: out.Decl, IsResult: true}, true
+		}
+	}
+	if shape.ResultExpr != nil {
+		return calcOutput{Name: resultOutputName, Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, true
+	}
+	return calcOutput{}, false
+}
+
+// returnsResult reports a calc usage whose value is the unnamed result it
+// returns, so naming the usage itself reads that result.
+func (ctx *Context) returnsResult(sym *symbols.Symbol) bool {
+	shape, err := ctx.calcShapeOf(sym)
+	if err != nil {
+		return false
+	}
+	for _, out := range shape.Outputs {
+		if out.Name == resultOutputName {
+			return false
+		}
+	}
+	_, anonymous := shape.anonymousResult()
+	return anonymous
+}
+
+// resultSegments is the member path reading the unnamed result of a usage.
+var resultSegments = []ast.NameSegment{{Text: resultOutputName}}
 
 // outputNames renders the output features the calc declares, for a diagnostic
 // about one it does not.
@@ -316,6 +355,9 @@ type calcRun struct {
 	// activation is the execution this run is, so a usage its outputs read is
 	// evaluated once for the whole run rather than once per output.
 	activation int64
+	// perf is the case's performance, whose steps an output binding reads by name
+	// (`step.pin`); nil for a calc, which performs none.
+	perf *actionFrame
 }
 
 // newCalcRun holds the environment one evaluation of a calc computed.
@@ -422,6 +464,10 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 	if reader.self != nil {
 		key.instance = reader.self.ID
 	}
+	// A binding of the usage that reads the usage itself reads this same evaluation.
+	if run := reader.calcRun; run != nil && run.shape.reads(sym) {
+		return run, nil
+	}
 	if run, ok := ctx.calcUsageRuns[reader.activation][key]; ok {
 		if ctx.trace != nil {
 			ctx.trace.RecordCalcUsageReuse(shape.Name)
@@ -429,7 +475,12 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 		return run, nil
 	}
 
-	ec, nested, env, err := ctx.bindCalcUsage(shape, reader)
+	leave, err := ctx.enterCalcUsage(shape, key)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
+	ec, nested, env, err := ctx.bindCalcUsage(shape, reader, calcArgs{})
 	if err != nil {
 		return nil, err
 	}
@@ -444,6 +495,23 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 	}
 	runs[key] = run
 	return run, nil
+}
+
+// enterCalcUsage marks the usage's body as running until leave is called; a usage
+// read while its own body runs would run itself without end, so that is an error.
+func (ctx *Context) enterCalcUsage(shape *calcShape, key calcUsageKey) (leave func(), err error) {
+	if running := ctx.calcUsageRunning[key]; running != nil && running.reads(shape.Sym) {
+		return nil, fmt.Errorf("%w: %s reads itself while its body runs", ErrCalcUsageRecursion, shape.Label)
+	}
+	ctx.calcUsageRunning[key] = shape
+	return func() { delete(ctx.calcUsageRunning, key) }, nil
+}
+
+// reads reports whether sym, read from within the body of the usage this is the
+// shape of, is that usage itself rather than a same-named usage its body declares
+// (a `calc next : Down` inside Down, read while a `next` runs, is the next level down).
+func (shape *calcShape) reads(sym *symbols.Symbol) bool {
+	return shape.Sym == sym && sym.OwnerScope != shape.bodyScope()
 }
 
 // bodyUsageSymbol resolves the usage a body-local declaration declares, in the
@@ -480,10 +548,10 @@ func (ctx *Context) forgetCalcUsage(activation int64, sym *symbols.Symbol) {
 	}
 }
 
-// bindCalcUsage binds a calc usage's inputs, answering with the environment the
-// usage's body runs in, the environment reading it (null unless it is nested in
-// a calc), and the bindings themselves.
-func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalContext, *EvalContext, frame, error) {
+// bindCalcUsage binds a calc usage's inputs from args and its own declarations,
+// answering with the environment the usage's body runs in, the environment
+// reading it (null unless it is nested in a calc), and the bindings themselves.
+func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext, args calcArgs) (*EvalContext, *EvalContext, frame, error) {
 	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, reader.scope), reader.self)
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
@@ -501,9 +569,9 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 		nested = reader.nestedEnv(ctx.calcScope(shape.Sym, shape.Sym, reader.scope))
 	}
 
-	// A usage passes no arguments: every input binds from the value the usage or
-	// its definition declares for it.
-	if err := ctx.bindCalcParameters(shape, ec, calcArgs{}, reader.scope, env, nested); err != nil {
+	// Read as a feature, a usage passes no arguments: every input binds from the
+	// value the usage or its definition declares for it.
+	if err := ctx.bindCalcParameters(shape, ec, args, reader.scope, env, nested); err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
@@ -545,6 +613,7 @@ func (ctx *Context) runCalcUsage(
 ) (*calcRun, error) {
 	host := &calcStmtHost{ctx: ctx, shape: shape, self: reader.self}
 	engine := newStmtEngineIn(ctx, host, env, nil)
+	host.attachPerformances(engine)
 	result, returned, err := runCalcSteps(engine, host, shape)
 	if err != nil {
 		if ec.trace != nil {
@@ -562,7 +631,7 @@ func (ctx *Context) runCalcUsage(
 
 	run := newCalcRun(shape, reader.scope, reader.self, env)
 	run.outer, run.result, run.returned = nested, result, returned
-	run.activation = engine.activation
+	run.activation, run.perf = engine.activation, host.performance()
 	// A `return` produces the value of the result parameter, so reading that
 	// parameter answers from the run rather than evaluating its binding again.
 	// Any other output states its own value — a declaration binding or a body
@@ -570,6 +639,8 @@ func (ctx *Context) runCalcUsage(
 	if returned {
 		if out, err := shape.designatedOutput(); err == nil && out.Name != "" && out.IsResult {
 			run.outputs[out.Name] = result
+		} else if _, anonymous := shape.anonymousResult(); anonymous {
+			run.outputs[resultOutputName] = result
 		}
 	}
 	return run, nil
@@ -678,6 +749,9 @@ func (run *calcRun) bindingEnv(ctx *Context, owner *symbols.Symbol) *EvalContext
 		ec = run.outer.nestedEnv(scope)
 	}
 	ec.pushFrame(run.env)
+	if run.perf != nil {
+		ec.pushFrame(performanceFrame(run.perf))
+	}
 	ec.calcRun = run
 	return ec
 }
@@ -741,6 +815,9 @@ func (ec *EvalContext) evalCalcUsageMembers(sym *symbols.Symbol, parts []ast.Nam
 			break
 		}
 		run, parts = nested, parts[1:]
+		if len(parts) == 0 && ec.ctx.returnsResult(run.shape.Sym) {
+			parts = resultSegments
+		}
 		if len(parts) == 0 {
 			return Value{}, fmt.Errorf(
 				"%w: %s computes output features (%s); read one of them",
@@ -836,6 +913,9 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 // against that object so its inputs read the object's feature values. Naming the usage
 // itself names no value: its outputs are what it computes.
 func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance, parts []ast.NameSegment) (Value, error) {
+	if len(parts) == 0 && ec.ctx.returnsResult(sym) {
+		parts = resultSegments
+	}
 	if len(parts) == 0 {
 		return Value{}, fmt.Errorf(
 			"%w: calc usage %s computes output features (%s); read one of them",

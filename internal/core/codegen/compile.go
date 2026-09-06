@@ -147,7 +147,7 @@ func (c *Compiler) compileCalc(sym *symbols.Symbol) (*Func, error) {
 		fc.env.bind(name, b)
 	}
 
-	stmts := lower.CalcBody(body, sym.Scope)
+	stmts := lower.CalcBody(sym.Decl, body, sym.Scope)
 	if !lower.Returns(stmts) {
 		return nil, fc.unsupported("a calc that binds `out` features rather than returning a value")
 	}

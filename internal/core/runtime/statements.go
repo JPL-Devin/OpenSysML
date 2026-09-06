@@ -334,6 +334,9 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 	case lower.Loop:
 		return e.loop(s)
 	case lower.Block:
+		if s.Own {
+			return e.runBlock(s)
+		}
 		return e.block(s)
 	case lower.Effect:
 		return flowNext, e.host.effect(s)

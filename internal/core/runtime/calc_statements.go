@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -9,11 +10,43 @@ import (
 
 // calcStmtHost runs a calculation body's statements: it owns its locals, its
 // output features and its returned value, and rejects every outside effect.
+// A case body (an analysis) is an action's: its action nodes run as
+// subperformances of the case, which perfs holds; a calc's body performs nothing.
 type calcStmtHost struct {
 	ctx    *Context
 	shape  *calcShape
 	self   *Instance
 	result Value // the value its `return` yielded
+	perfs  *performances
+	env    *stmtEnv // the body's values, which a step's outputs return to
+}
+
+// attachPerformances makes the host perform the action nodes of a case body as
+// subperformances of the case, whose performance is the root the body reads through.
+func (h *calcStmtHost) attachPerformances(engine *stmtEngine) {
+	if !h.shape.performs() {
+		return
+	}
+	root := &actionFrame{
+		scope:      h.shape.bodyScope(),
+		data:       make(map[string]Value),
+		features:   make(map[string]ast.FeatureDirection),
+		subactions: make(map[ast.Node]*actionFrame),
+		nodes:      h.shape.Nodes,
+		label:      h.shape.Label,
+		outer:      append(append([]frame{}, engine.env.enclosing...), engine.env.data),
+	}
+	h.perfs = &performances{ctx: h.ctx, self: h.self, root: root, owner: h}
+	h.env = engine.env
+	engine.env.perf = root
+}
+
+// performance is the case's own performance, nil for a calculation.
+func (h *calcStmtHost) performance() *actionFrame {
+	if h.perfs == nil {
+		return nil
+	}
+	return h.perfs.root
 }
 
 // calcBodyDescription names a calculation body in a diagnostic; the invocation
@@ -85,13 +118,41 @@ func (h *calcStmtHost) performer() *Instance {
 	return h.self
 }
 
+// effect performs the action a `perform` in a case body names, its outputs
+// returning to the body's values; a calculation states no effect at all.
 func (h *calcStmtHost) effect(s lower.Effect) error {
-	return fmt.Errorf("%w: a calculation cannot state '%s'", ErrCalcSideEffect, s.Kind)
+	if h.perfs == nil || s.Kind != lower.EffectPerform {
+		return fmt.Errorf("%w: a calculation cannot state '%s'", ErrCalcSideEffect, s.Kind)
+	}
+	inv, ok := performedInvocation(s.Node)
+	if !ok {
+		return fmt.Errorf("%s: 'perform' names no action to perform", h.describe())
+	}
+	_, outputs, err := invokeAction(h.ctx, s.Scope, inv, h.env.values(), h.self)
+	if err != nil {
+		return fmt.Errorf("%s: %w", h.describe(), err)
+	}
+	names := make([]string, 0, len(outputs))
+	for name := range outputs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !h.env.assign(name, outputs[name]) {
+			h.env.data.set(name, outputs[name])
+		}
+	}
+	return nil
 }
 
-// performNode runs a nested action of a block in a frame of the body, since a calculation
-// keeps no performances; performing an action, a flow of its own or a connector at its pins is rejected.
+// performNode performs a nested action of a case body as a subperformance of the
+// case (performances.performNode). A calculation keeps no performances: its nested
+// action runs in a frame of the body, and performing an action, a flow of its own or
+// a connector at its pins is rejected.
 func (h *calcStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if h.perfs != nil {
+		return h.perfs.performNode(h.perfs.root, engine, graph, node)
+	}
 	if _, performs := nestedInvocation(node); performs {
 		return flowNext, fmt.Errorf("%w: a calculation cannot perform action %s", ErrCalcSideEffect, ActionNodeName(node))
 	}
@@ -118,6 +179,43 @@ func (h *calcStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph,
 		engine.env.declare(feature.Name, value)
 	}
 	return engine.run(graph.Bodies[node])
+}
+
+// setFeature writes a feature the case's performance holds; it holds none of its
+// own, so the write reaches the body's values.
+func (h *calcStmtHost) setFeature(name string, value Value) error {
+	if written, err := h.assignAround(name, value); written || err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: %s holds no %s", ErrBindingEnd, h.describe(), name)
+}
+
+// assignAround writes what a step's performance returns to the same-named value
+// of the body: an output the case declares, or a parameter or local it holds.
+func (h *calcStmtHost) assignAround(name string, value Value) (bool, error) {
+	if h.env.assignLocal(name, value) {
+		return true, nil
+	}
+	if h.declaredOutput(name) || h.env.data.has(name) {
+		if err := h.ctx.checkNamedWrite(h.shape.bodyScope(), h.describe(), name, value); err != nil {
+			return true, err
+		}
+		h.env.data.set(name, value)
+		return true, nil
+	}
+	return false, nil
+}
+
+// pauseAt sets no breakpoint: a case's steps are not stepped interactively.
+func (h *calcStmtHost) pauseAt(ast.Node) error {
+	return nil
+}
+
+// runOwnFlow refuses the token flow a step states of its own (`first`, a
+// succession inside it): a case body runs its steps in sequence, not as tokens.
+func (h *calcStmtHost) runOwnFlow(perf *actionFrame) error {
+	return fmt.Errorf("%w: %s: the flow %s states of its own is not executable in a case body; perform an action that states it",
+		ErrCaseStepFlow, h.describe(), nodeDescription(perf.node))
 }
 
 // connectsPins reports whether graph states a binding or flow at a pin of node.

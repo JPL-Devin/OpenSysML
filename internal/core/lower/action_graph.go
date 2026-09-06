@@ -231,6 +231,9 @@ type Block struct {
 	// semantics it has (block_graph.go). Statements is empty for such a block: the
 	// statements are the bodies of the flow's nodes.
 	Graph *ActionGraph
+	// Own marks the flow a case body states of its own (case_body.go), which runs
+	// in the body's frame rather than a block's so its results read what it left.
+	Own bool
 }
 
 // A block is a statement in its own right: the anonymous action usage a loop or

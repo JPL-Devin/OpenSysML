@@ -109,6 +109,8 @@ type calcShape struct {
 	// Steps is Body without the bindings of its `out` features, which are
 	// evaluated when those features are read rather than run as statements.
 	Steps []lower.Statement
+	// Nodes are the action nodes the body's flow performs as the steps of a case.
+	Nodes []ast.Node
 	// BodyOutputs are the output features some statement of the body assigns,
 	// whatever path the execution takes. A calc that binds its outputs this way
 	// computes them though it returns nothing, so it states a computation.
@@ -165,6 +167,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 		BodyOwner: bodyOwner,
 		Steps:     calcSteps(body),
 	}
+	shape.Nodes = lower.BlockNodes(shape.Steps)
 	shape.Params = ctx.calcParameters(chain, &shape.Aliases)
 	shape.Outputs = ctx.calcOutputs(chain, &shape.Aliases)
 	shape.ParamNames = make([]string, len(shape.Params))
@@ -290,7 +293,7 @@ func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
 	var owner *symbols.Symbol
 	for i := len(chain) - 1; i >= 0; i-- {
 		link := chain[i]
-		stmts := lower.CalcBody(declMembers(link.Decl), link.Scope)
+		stmts := lower.CalcBody(link.Decl, declMembers(link.Decl), link.Scope)
 		if lower.Returns(stmts) {
 			return stmts, link
 		}
@@ -667,6 +670,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, caller
 	frame.host = calcStmtHost{ctx: ctx, shape: shape, self: self}
 	frame.env = stmtEnv{data: frame.locals()}
 	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation, frameBuf: frame.engine.frameBuf}
+	frame.host.attachPerformances(&frame.engine)
 	result, returned, err := runCalcSteps(&frame.engine, &frame.host, shape)
 	if err != nil {
 		return Value{}, err
@@ -682,7 +686,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, caller
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
 	run := newCalcRun(shape, callerScope, self, frame.locals())
-	run.activation = activation
+	run.activation, run.perf = activation, frame.host.performance()
 	// The invocation already holds this evaluation's nesting feature value.
 	run.onStack = true
 	return run.value(ctx, out)
@@ -741,6 +745,20 @@ func (shape *calcShape) hasParameter(name string) bool {
 		}
 	}
 	return false
+}
+
+// performs reports whether the body's action nodes are performed as steps: a case
+// is an action, so its body is; a calc's body performs nothing.
+func (shape *calcShape) performs() bool {
+	return shape.Kind == "analysis"
+}
+
+// bodyScope is the namespace the body's names resolve in.
+func (shape *calcShape) bodyScope() *symbols.Scope {
+	if shape.BodyOwner != nil {
+		return shape.BodyOwner.Scope
+	}
+	return shape.Sym.Scope
 }
 
 // bindCalcParameter resolves the value of one parameter: its argument (by
@@ -1029,26 +1047,14 @@ func isCalcDecl(decl ast.Node) bool {
 	}
 }
 
-// isAnalysisDecl reports whether a declaration is an analysis case definition or usage.
 // calcKindLabel names what sym declares — a calc or an analysis case — and how
 // diagnostics about it refer to it.
 func calcKindLabel(sym *symbols.Symbol, name string) (kind, label string) {
 	kind = "calc"
-	if isAnalysisDecl(sym.Decl) {
+	if lower.PerformsSteps(sym.Decl) {
 		kind = "analysis"
 	}
 	return kind, kind + " " + name
-}
-
-func isAnalysisDecl(decl ast.Node) bool {
-	switch d := decl.(type) {
-	case *ast.Definition:
-		return d.Kind == ast.DefAnalysisCase
-	case *ast.Usage:
-		return d.Kind == ast.UsageAnalysisCase
-	default:
-		return false
-	}
 }
 
 // isCalcSymbol reports whether sym declares a calc, reading its declaration when

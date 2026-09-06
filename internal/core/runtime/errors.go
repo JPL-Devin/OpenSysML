@@ -119,6 +119,14 @@ var (
 	// does not declare itself, which would make the calculation impure.
 	ErrCalcExternalAssignment = errors.New("assignment outside the calculation body")
 
+	// ErrCaseStepFlow is returned when a step of a case body states a token flow of
+	// its own (`first`, a succession inside it), which a case body cannot run.
+	ErrCaseStepFlow = errors.New("a step of a case body states a flow of its own")
+
+	// ErrCalcUsageRecursion is returned when a calc or analysis usage's body reads
+	// the usage itself: bound once, it would run itself without end.
+	ErrCalcUsageRecursion = errors.New("a calc usage runs itself")
+
 	// ErrReturnOutsideCalc is returned when a `return` is executed by a host that
 	// has no result to return, an action node's body.
 	ErrReturnOutsideCalc = errors.New("'return' outside a calculation body")
