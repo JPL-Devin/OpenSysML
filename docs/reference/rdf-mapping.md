@@ -1079,12 +1079,20 @@ metaclass or `sysml:isEvent`, `assert` from the metaclass with `not` from
 says it was written so and as a modifier ahead of `occurrence`/`constraint`
 otherwise. What is still refused is a keyword that takes a reference in place
 of a name — `perform`, `exhibit`, a state's `entry`/`do`/`exit`, `event`,
-`assert` — with neither a `sysml:declaredName` nor a `sysml:references`, since
-the two shapes such a keyword is written in are `perform a` and `perform action
-a`, and the graph has nothing to put in either place. The parser never produces
-that shape (`perform;` declares a feature named `perform`), so only a graph from
-another tool, or one edited by hand, states it; the decoder's refusal names the
-keyword and the predicate missing.
+`assert` — in a shape the notation cannot state. With neither a
+`sysml:declaredName` nor a `sysml:references` the graph has nothing to put in
+either of the keyword's two places, `perform a` and `perform action a`. With a
+`sysml:declaredName` under `perform`, `exhibit`, `entry`/`do`/`exit` or `event`
+the name has no place at all: `event e;` names the `e` it refers to, and the
+declaration is spelled `event occurrence e;`, which the graph does not state.
+Under `assert` a name is read only where a typing, specialization, `references`
+clause or value follows it (`assert safe : Safe;`, which the parser reads as a
+declaration), so a named assertion that nothing but a body or a multiplicity
+follows — `assert c { … }`, `assert c[1]` — is refused rather than written as a
+reference to a different constraint. The parser never produces these shapes
+(`perform;` declares a feature named `perform`), so only a graph from another
+tool, or one edited by hand, states them; the decoder's refusal names the
+keyword and the fact at odds.
 
 **A metadata annotation is carried structurally**, as described under [What
 each element carries](#what-each-element-carries): its type, its `about`

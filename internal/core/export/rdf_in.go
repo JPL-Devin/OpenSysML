@@ -1483,6 +1483,14 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration),
 	// as `event m.start` and `assert c` name an occurrence or a constraint.
 	referencing := referenceMemberKeyword(keyword) || keyword == "event" || asserted
+	if referencing && len(identWords) > 0 && !asserted {
+		// `event e;` names the `e` it refers to; a declared `e` spells its kind
+		// keyword out (`event occurrence e;`), which the graph does not state.
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `%s` declaration <%s>", keyword, el.iri),
+			Note: fmt.Sprintf("it declares a name (sysml:declaredName), which `%s` written as the kind keyword cannot: `%s <name>` names the feature it refers to, and a declaration is written `%s %s <name>`, so the notation would come back as a reference to a different element", keyword, keyword, keyword, usageKeyword(kind)),
+		}
+	}
 	if referencing && len(identWords) == 0 && len(references) == 0 {
 		// With neither, `perform;` would come back as a feature named `perform`.
 		written := keyword
@@ -1516,12 +1524,13 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", err
 	}
 	typedPart := ""
+	namedMult := false
 	switch {
 	case len(typed) > 0:
 		typedPart, multPart = multPart, ""
 	case len(identWords) > 0 && multPart != "":
 		identWords[len(identWords)-1] += multPart
-		multPart = ""
+		namedMult, multPart = true, ""
 	case referenced && multPart != "":
 		words[len(words)-1] += multPart
 		multPart = ""
@@ -1566,7 +1575,17 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		}
 	}
 	head := strings.Join(words, " ") + multPart
-	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+	value, hasValue := d.stringOf(el, rdf.SysML+pValue)
+	// `assert c;`, `assert c[1]` and `assert c { … }` name the `c` they refer to;
+	// a declared `c` is read only where a typing, specialization or value follows.
+	if asserted && len(identWords) > 0 && !strings.HasPrefix(identWords[0], "<") &&
+		(namedMult || (len(relationships) == 0 && !hasValue)) {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `assert` declaration <%s>", el.iri),
+			Note: "it declares a name (sysml:declaredName) that nothing but a body or a multiplicity follows, the shape in which `assert <name>` names the constraint it refers to, so the notation would come back as a reference to a different element; a declaration is written `assert constraint <name>`",
+		}
+	}
+	if hasValue {
 		head += " " + d.valueOperator(el) + " " + value
 	}
 	return head, nil
