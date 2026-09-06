@@ -173,7 +173,7 @@ func (ctx *Context) redefines(obj, prev Objective) bool {
 func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 	typ := ctx.extractType(objSym)
 	obj := Objective{
-		Name:       objSym.Name,
+		Name:       ctx.model.EffectiveNameOf(objSym),
 		Symbol:     objSym,
 		Type:       typ,
 		Direction:  ctx.objectiveDirection(typ),
@@ -198,7 +198,7 @@ func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 		return obj
 	}
 	// An objective restating another takes the value the restated one states.
-	for _, restated := range ctx.relatedFeatures(objSym, owner, ast.RelRedefines) {
+	for _, restated := range ctx.restatedObjectives(objSym, owner) {
 		if obj.ReboundBest == nil {
 			obj.ReboundBest = ctx.reboundBestOf(restated)
 		}
@@ -207,6 +207,28 @@ func (ctx *Context) objectiveOf(objSym, owner *symbols.Symbol) Objective {
 		}
 	}
 	return obj
+}
+
+// restatedObjectives returns the objectives objSym restates as seen from owner,
+// those its clause names first, then those it redefines by position or role,
+// each followed by the ones they restate in turn.
+func (ctx *Context) restatedObjectives(objSym, owner *symbols.Symbol) []*symbols.Symbol {
+	seen := map[*symbols.Symbol]bool{objSym: true}
+	var out []*symbols.Symbol
+	add := func(syms []*symbols.Symbol) {
+		for _, sym := range syms {
+			if !seen[sym] {
+				seen[sym] = true
+				out = append(out, sym)
+			}
+		}
+	}
+	add(ctx.relatedFeatures(objSym, owner, ast.RelRedefines))
+	for i := 0; i < len(out); i++ {
+		add(ctx.model.AllRedefinedFeatures(out[i]))
+	}
+	add(ctx.model.AllRedefinedFeatures(objSym))
+	return out
 }
 
 // readEvalValue reads the objective's value from the lowered body of its own

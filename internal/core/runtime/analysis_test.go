@@ -342,6 +342,15 @@ func TestObjectivesOfRedeclared(t *testing.T) {
 			analysis def Other :> Base;
 			analysis def Diamond :> Other, Refined;
 			analysis def Reversed :> Refined, Other;
+			analysis def Positional :> Base {
+				objective;
+			}
+			analysis def Twice :> Positional {
+				objective { subject :>> selectedAlternative; }
+			}
+			analysis def Narrowed :> Refined {
+				objective : MinimizeObjective;
+			}
 		}
 	`)
 	for _, tc := range []struct{ name, want string }{
@@ -349,6 +358,10 @@ func TestObjectivesOfRedeclared(t *testing.T) {
 		{"Renamed", "minimize cheapest = cost + 2; maximize widest = margin"},
 		{"Diamond", "minimize cheapest = cost + 1; maximize widest = margin"},
 		{"Reversed", "minimize cheapest = cost + 1; maximize widest = margin"},
+		// A positional restatement stating no `eval` keeps the inherited value.
+		{"Positional", "minimize cheapest = cost; maximize widest = margin"},
+		{"Twice", "minimize cheapest = cost; maximize widest = margin"},
+		{"Narrowed", "minimize cheapest = cost + 1; maximize widest = margin"},
 	} {
 		got := objectiveLabels(objectivesOfCase(t, ctx, scope, tc.name))
 		if got != tc.want {
@@ -531,7 +544,7 @@ func TestObjectivesOfAnalysisUsage(t *testing.T) {
 
 // A restatement deeper in one branch of a diamond stands for the common
 // ancestor's objective seen through the other branch, in whichever order the
-// generals are written and traversed.
+// generals are written and traversed, and goes by the name it inherits.
 func TestObjectivesOfUnevenDiamond(t *testing.T) {
 	ctx, scope := analysisFixture(t, `
 		package test {
@@ -559,7 +572,7 @@ func TestObjectivesOfUnevenDiamond(t *testing.T) {
 	`)
 	for _, name := range []string{"D", "Reversed"} {
 		got := objectiveLabels(objectivesOfCase(t, ctx, scope, name))
-		if want := "minimize  = cost + margin"; got != want {
+		if want := "minimize cheapest = cost + margin"; got != want {
 			t.Errorf("%s: objectives are [%s], want [%s]", name, got, want)
 		}
 	}
