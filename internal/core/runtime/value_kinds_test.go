@@ -49,6 +49,10 @@ func kindSamples() map[ValueKind][2]Value {
 			NewVectorQuantityValue([]semantics.Value{integerValue(1).Const, integerValue(2).Const}, []Unit{second, second}),
 		},
 		ValMeasurementRef: {NewMeasurementRefValue(metre), NewMeasurementRefValue(second)},
+		ValTensorQuantity: {
+			NewTensorQuantityValue([]int64{2, 2}, []semantics.Value{integerValue(1).Const, integerValue(2).Const, integerValue(3).Const, integerValue(4).Const}, []Unit{metre, metre, metre, metre}),
+			NewTensorQuantityValue([]int64{2, 2}, []semantics.Value{integerValue(1).Const, integerValue(2).Const, integerValue(3).Const, integerValue(4).Const}, []Unit{second, second, second, second}),
+		},
 	}
 }
 

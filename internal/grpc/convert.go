@@ -302,6 +302,9 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: pvq}}
 	case runtime.ValMeasurementRef:
 		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: MeasurementRefToProto(val.MeasurementRef())}}
+	case runtime.ValTensorQuantity:
+		// No wire arm carries dimensions above one with a unit per component.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}

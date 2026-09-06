@@ -405,19 +405,12 @@ func leadingName(target ast.Node) ast.Node {
 	return nil
 }
 
-// memberChain walks qn's segments as members of owner, following inheritance
-// where a semantic model is attached.
+// memberChain walks qn's segments as members of owner, reading each segment as
+// the document walk does (see chainMember).
 func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName, chain ast.Node) (*symbols.Symbol, bool) {
 	cur := owner
 	for i, part := range qn.Parts {
-		next, ok := r.lookupMember(cur, part.Text)
-		if ok && namedByChain(next, chain) {
-			next, ok = r.lookupContributedMember(cur, part.Text)
-		}
-		if !ok {
-			next, ok = r.LocalBinding(cur.Scope, part.Text)
-			ok = ok && !namedByChain(next, chain)
-		}
+		next, ok := r.chainMember(cur, part.Text, chain)
 		if !ok {
 			next, ok = r.implicitlyNamedMember(cur.Scope, part.Text, nil)
 		}

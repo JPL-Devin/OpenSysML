@@ -467,9 +467,6 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
-	// ValueMultiplicity is the end multiplicity written ahead of the value when
-	// the value is a connector end: the `[0..1]` of `bind a = [0..1] b`.
-	ValueMultiplicity *Multiplicity
 	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
 	// part (KerML FeatureValue::isDefault, isInitial).
 	ValueIsDefault bool

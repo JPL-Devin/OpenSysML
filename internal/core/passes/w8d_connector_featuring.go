@@ -130,16 +130,6 @@ func w8dConnectorEndTargets(u *ast.Usage) []ast.Node {
 			ends = append(ends, u.FlowEnds.To)
 		}
 	}
-	if u.Kind == ast.UsageBinding {
-		for _, rel := range u.Relationships {
-			if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
-				ends = append(ends, rel.Target)
-			}
-		}
-		if u.Value != nil {
-			ends = append(ends, u.Value)
-		}
-	}
 	return ends
 }
 

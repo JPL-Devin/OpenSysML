@@ -1,0 +1,151 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Binding Connector Ends" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="AB"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="Tank"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Membership visibility="default"
+                (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Membership visibility="default"
+                (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false all=true
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false all=true
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e1"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=a
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="e2"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=b
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e3"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=a
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="e4"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=b
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="x2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e5"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=a
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="e6"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=b
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e7"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=a
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="e8"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=b
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="x3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=AB
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="x4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Documentation locale=""))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Documentation locale=""))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="x5" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="x"
+                  (FeatureReference name="p")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="y"
+                  (FeatureReference name="q")))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="Tank::a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="Tank::b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="$::Binding Connector Ends::Tank::a"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName)))))))))

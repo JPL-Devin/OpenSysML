@@ -1279,11 +1279,6 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 		}
 		isAll := p.acceptSufficientAll()
-		if kw == "bind" {
-			u := p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll)
-			return applyPrefixes(normalizeAnonymousBindingEnd(u))
-		}
-
 		// `render` names the rendering a view uses (ViewRenderingMember) and
 		// `frame` the concern a requirement frames (FramedConcernMember). Each
 		// owns a usage that either references an existing element —
@@ -1907,144 +1902,6 @@ func (p *Parser) atGuardedSuccession() bool {
 	return false
 }
 
-// isAnonymousSuccession checks if we're at the start of anonymous succession ends (no name).
-// Anonymous succession patterns:
-// - `succession [mult] first [mult] x then y` - mult + "first" keyword (NO name between)
-// - `succession first [mult] x then y` - starts with "first" keyword
-// - `succession x then y` - identifier followed by "then" (not name, but first connector end)
-// - `succession x.y then z` - feature chain followed by "then" (not name, but first connector end)
-// Named succession patterns (NOT anonymous):
-// - `succession [mult] name first [mult] x then y` - mult + identifier + "first" (identifier is NAME)
-// - `succession name first [mult] x then y` - identifier + "first"
-func (p *Parser) isAnonymousSuccession() bool {
-	if p.at(lexer.LBracket) {
-		// Starts with multiplicity - lookahead past it to check what follows
-		i := 1
-		// Skip multiplicity tokens: [, expressions (identifiers, numbers, operators), .., *, ]
-		depth := 1 // track bracket nesting for complex expressions
-		for i < 30 && depth > 0 {
-			tok := p.peekN(i)
-			if tok.Kind == lexer.RBracket {
-				depth--
-				if depth == 0 {
-					// Found closing bracket, check next token
-					i++
-					break
-				}
-			}
-			if tok.Kind == lexer.LBracket {
-				depth++
-			}
-			// Allow any token inside multiplicity (expressions can be complex)
-			// Just skip to matching closing bracket
-			i++
-		}
-		// After closing bracket, check next token
-		nextTok := p.peekN(i)
-		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "first" {
-			// Pattern: `succession [mult] first ...` - anonymous
-			return true
-		}
-		// Pattern: `succession [mult] identifier ...` - could be named or anonymous
-		// Check if identifier followed by "first" keyword (named) or "then" keyword (anonymous)
-		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName || nextTok.Kind == lexer.Keyword {
-			i++
-			// Skip feature chain (dots, identifiers)
-			for i < 30 {
-				tok := p.peekN(i)
-				if tok.Kind == lexer.Keyword && tok.KeywordID == "first" {
-					// Pattern: `succession [mult] name first ...` - NAMED succession
-					return false
-				}
-				if tok.Kind == lexer.Keyword && tok.KeywordID == "then" {
-					// Pattern: `succession [mult] x.y then ...` - anonymous (x.y is connector end)
-					return true
-				}
-				if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket || tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
-					i++
-					continue // skip multiplicity
-				}
-				if tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Identifier || tok.Kind == lexer.Keyword {
-					i++
-					continue // skip feature chain parts
-				}
-				// Unknown token, assume named
-				return false
-			}
-		}
-		// Couldn't determine, assume named
-		return false
-	}
-	if p.atKeyword("first") {
-		return true // starts with "first" keyword
-	}
-	// Check for pattern: identifier/feature chain + "then" (means identifier is connector end, not name)
-	if p.atName() || p.atNameOrKeyword() || p.at(lexer.Keyword) {
-		// Special case: if identifier immediately followed by "first", it's a NAMED succession
-		// Pattern: succession name first [mult] x then y
-		// Also check: succession name[mult] first x then y
-		nextIdx := 1
-		nextTok := p.peekN(nextIdx)
-
-		// Skip multiplicity if present: [...]
-		if nextTok.Kind == lexer.LBracket {
-			depth := 1
-			nextIdx++
-			for nextIdx < 30 && depth > 0 {
-				tok := p.peekN(nextIdx)
-				if tok.Kind == lexer.LBracket {
-					depth++
-				} else if tok.Kind == lexer.RBracket {
-					depth--
-				}
-				nextIdx++
-			}
-			nextTok = p.peekN(nextIdx)
-		}
-
-		// Check if "first" follows (after optional multiplicity)
-		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "first" {
-			return false // NAMED succession
-		}
-
-		// Count identifiers before "then" to distinguish:
-		// - succession name end1 then end2 (2 identifiers) - NAMED
-		// - succession end1 then end2 (1 identifier) - ANONYMOUS
-		identCount := 1 // current identifier (at position 0)
-		for i := 1; i < 30; i++ {
-			tok := p.peekN(i)
-			if tok.Kind == lexer.EOF {
-				return false
-			}
-			if tok.Kind == lexer.Keyword && tok.KeywordID == "then" {
-				// Found "then" - check identifier count
-				// If 1 identifier before "then", it's anonymous (identifier is connector end)
-				// If 2+ identifiers, first is name, second is connector end - NAMED
-				return identCount == 1
-			}
-			// Count identifiers (simple names, not part of feature chains)
-			// Only count as separate identifier if preceded by whitespace/nothing, not dot/::
-			if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
-				prevTok := p.peekN(i - 1)
-				if prevTok.Kind != lexer.Dot && prevTok.Kind != lexer.ColonColon {
-					identCount++
-				}
-			}
-			// Skip over multiplicity syntax, dots, :: for feature chains
-			if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket ||
-				tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star ||
-				tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Whitespace {
-				continue
-			}
-			// If not identifier/keyword and not "then", stop searching
-			if tok.Kind != lexer.Identifier && tok.Kind != lexer.UnrestrictedName && tok.Kind != lexer.Keyword {
-				return false
-			}
-		}
-	}
-	return false
-}
-
 // parseUsage parses a usage. keyword is the kind keyword as consumed from the
 // token stream, kept for the same reason as in parseDefinition.
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods featureMods, isAll bool) *ast.Usage {
@@ -2135,119 +1992,10 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		return u
 	}
 
-	// Handle UsageBinding special syntax: binding [mult] name = [mult] target; OR binding name[mult] of [mult] target = [mult] value;
+	// A binding connector states an optional declaration and two connector ends,
+	// each read by parseConnectorEnd like a succession's or a connector's.
 	if kind == ast.UsageBinding {
-		// Check for multiplicity before name: binding [mult] name ...
-		if p.at(lexer.LBracket) {
-			if keyword == "bind" {
-				// `bind [mult] a = b` declares no connector, so the multiplicity is
-				// the first end's (SysML.xtext:1020 BindingConnectorAsUsage, ConnectorEnd).
-				p.parseBindingEnd(u)
-			} else {
-				u.Multiplicity = p.parseMultiplicity()
-			}
-		}
-
-		// The UsageDeclaration before `bind` may specialize without naming the
-		// connector: `binding : AB bind a = b;` (SysML.xtext BindingConnectorAsUsage).
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-		// `binding { … }` states its ends as body members and so names nothing
-		// at all (KerML.xtext BindingConnectorDeclaration).
-		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) || hasBindingEnd(u) {
-			// no declaration and no ends before the body, or the first end is stated
-		} else if p.atKeyword("bind") {
-			// `binding [mult] bind [mult] src = [mult] tgt` states the connector's
-			// ends after the `bind` keyword instead of naming the connector, so the
-			// keyword is consumed rather than read as the name.
-			p.advance()
-			p.parseBindingEnd(u)
-		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.ColonColon && p.peekN(1).Kind != lexer.LBracket {
-			// Parse source (name or feature chain like x.field)
-			// Check if simple name or feature chain
-			// Simple name - use as identification
-			u.Ident = p.parseIdentification()
-		} else if p.atNameOrKeyword() && p.peekN(1).Kind == lexer.LBracket {
-			// Name with multiplicity after it: name[mult]
-			// Parse as identification first
-			u.Ident = p.parseIdentification()
-			// Don't parse multiplicity yet, handle after checking for "of"
-		} else {
-			// A qualified name or feature chain here states the binding's first
-			// end, not the connector's name.
-			source := p.parseRelationshipTarget()
-			if source != nil {
-				u.Relationships = append(u.Relationships, bindingEnd(source))
-			}
-		}
-
-		// A named declaration specializes either side of its multiplicity
-		// (FeatureSpecializationPart): `binding ab1 : AB bind a = b;`.
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-		// Check for multiplicity after name (before "of"): name[mult] of ...
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-		}
-
-		// `binding name bind src = tgt` both names the connector and states its
-		// ends, so the keyword follows the declaration instead of replacing it.
-		if p.atKeyword("bind") {
-			p.advance()
-			p.parseBindingEnd(u)
-		}
-
-		// Check for source expression: binding [mult] name[mult2] source = target
-		// If we have name[mult] and next token is NOT "of" or "=", parse source expression
-		if u.Ident.Name != "" && !p.atKeyword("of") && !p.at(lexer.Eq) && (p.atName() || p.atNameOrKeyword()) {
-			// Parse source as relationship target
-			source := p.parseRelationshipTarget()
-			if source != nil {
-				u.Relationships = append(u.Relationships, bindingEnd(source))
-			}
-		}
-
-		// Check for "of" keyword (binding name of [mult] target = value)
-		// In KerML, `of x = y` states both ends (KerML.xtext:875); SysML spells
-		// that form `bind` and keeps `=` as a value.
-		sawOf := p.atKeyword("of") && p.src.Kind() == source.KindKerML
-		if p.acceptKeyword("of") {
-			// `of` names the feature the binding binds, not its type.
-			p.parseBindingEnd(u)
-		}
-
-		// A KerML binding has no feature value, so `x = y` states its two ends and
-		// what looked like the name is the first (KerML.xtext:879).
-		endsOnly := sawOf || (p.src.Kind() == source.KindKerML && p.at(lexer.Eq))
-		if endsOnly && u.Ident.Name != "" && !hasBindingEnd(u) {
-			u = normalizeAnonymousBindingEnd(u)
-		}
-
-		// Parse value: = [mult] expr
-		if op, ok := p.accept(lexer.Eq); ok {
-			u.ValueOperatorSpan = op.Span
-			if endsOnly {
-				p.parseBindingEnd(u)
-			} else {
-				if p.at(lexer.LBracket) {
-					u.ValueMultiplicity = p.parseMultiplicity()
-				}
-				// The right side is the second ConnectorEndMember (SysML.xtext:1020),
-				// so it names a feature; an expression there is an error.
-				u.Value = p.ParseExpression()
-				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !namesFeature(u.Value) {
-					const msg = "a binding end names a feature, not an expression; " +
-						"declare a feature with the expression as its value and bind to that"
-					p.error(u.Value.Span(), msg)
-					en := &ast.ErrorNode{Message: msg}
-					en.NodeSpan = u.Value.Span()
-					u.Value = en
-				}
-			}
-		}
-
-		// Parse body or semicolon
+		p.parseBindingDeclaration(u, keyword)
 		leave := p.pushBodyContext(usageBodyContext(kind))
 		members, hasBody := p.parseDefUsageBody()
 		leave()
@@ -2266,12 +2014,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	var isAnonymous bool
 	switch kind {
 	case ast.UsageSuccession:
-		isAnonymous = p.isAnonymousSuccession()
+		// A name may only precede `first` (KerML.xtext:891), so `first` or an end
+		// followed by `then` — past any leading multiplicity — means there is none.
+		isAnonymous = p.peekIsKeyword(p.pastBracketed(0), "first") || p.atConnectorBinaryEnds("then")
 	case ast.UsageConnector:
-		isAnonymous = p.atConnectorBinaryEnds()
+		isAnonymous = p.atConnectorBinaryEnds("to")
 	}
 	anonymousConnector := kind == ast.UsageConnector && isAnonymous
-	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && p.at(lexer.LBracket) {
+	// `succession [mult] a then b` declares no connector, so the multiplicity is the
+	// first end's (KerML.xtext:891); `succession [mult] first a then b` keeps its own.
+	leadingEndMultiplicity := kind == ast.UsageSuccession && p.at(lexer.LBracket) && p.atConnectorBinaryEnds("then")
+	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && !leadingEndMultiplicity && p.at(lexer.LBracket) {
 		earlyMultiplicity = p.parseMultiplicity()
 	}
 
@@ -2325,22 +2078,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 	}
 
-	// Parse post-multiplicity modifiers (ordered/nonunique)
-	postMods := p.parsePostModifiers()
-	if postMods.isOrdered {
-		u.IsOrdered = true
-	}
-	if postMods.isNonunique {
-		u.IsNonunique = true
-	}
-
-	// DEBUG: trace token after post-modifiers
-	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n",
-	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
-
-	// Parse additional relationships after modifiers (e.g., :> target)
-	postRels := p.parseRelationships(true)
-	u.Relationships = append(u.Relationships, postRels...)
+	p.parseSpecializationsAfterMultiplicity(u)
 	p.checkTypeDeclarationSpecialization(u, keyword)
 
 	p.parseUsageValue(u)
@@ -3070,33 +2808,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 				u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
 			}
 
-			// Parse optional multiplicity
-			if p.at(lexer.LBracket) {
-				u.Multiplicity = p.parseMultiplicity()
-			}
 			u.CrossFeature = mods.cross
-
-			// Parse post-multiplicity modifiers (ordered/nonunique)
-			postMods := p.parsePostModifiers()
-			if postMods.isOrdered {
-				u.IsOrdered = true
-			}
-			if postMods.isNonunique {
-				u.IsNonunique = true
-			}
-
-			// Parse additional relationships
-			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-			// A multiplicity may follow the specializations instead of preceding
-			// them (KerML.xtext FeatureSpecializationPart): `ref redefines x[4];`.
-			if u.Multiplicity == nil && p.at(lexer.LBracket) {
-				u.Multiplicity = p.parseMultiplicity()
-				if post := p.parsePostModifiers(); post.isOrdered || post.isNonunique {
-					u.IsOrdered = u.IsOrdered || post.isOrdered
-					u.IsNonunique = u.IsNonunique || post.isNonunique
-				}
-			}
+			p.parseFeatureSpecializationPart(u)
 
 			// Parse optional value (= expr or default expr)
 			p.parseUsageValue(u)
@@ -3132,23 +2845,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Parse typing/relationships
 		p.advance() // consume ':'
 		u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
-
-		// Parse optional multiplicity
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// Parse post-multiplicity modifiers (ordered/nonunique)
-		postMods := p.parsePostModifiers()
-		if postMods.isOrdered {
-			u.IsOrdered = true
-		}
-		if postMods.isNonunique {
-			u.IsNonunique = true
-		}
-
-		// Parse additional relationships
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+		p.parseFeatureSpecializationPart(u)
 
 		// Parse optional value (= expr or default expr)
 		p.parseUsageValue(u)
@@ -3455,25 +3152,131 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	return u
 }
 
-// bindingEnd records the first end of a binding connector. A connector end
-// reference-subsets the feature it names (KerML OwnedReferenceSubsetting), so
-// it resolves outside the connector rather than as an inherited redefinition.
-func bindingEnd(target ast.Node) *ast.Relationship {
-	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+// parseBindingDeclaration parses a binding connector from after its kind keyword
+// to its body: SysML `UsageDeclaration? 'bind' end '=' end` (SysML.xtext
+// BindingConnectorAsUsage) or KerML `FeatureDeclaration ('of' end '=' end)? |
+// 'of'? end '=' end` (KerML.xtext BindingConnectorDeclaration); either file
+// kind takes either spelling.
+func (p *Parser) parseBindingDeclaration(u *ast.Usage, keyword string) {
+	if keyword == "bind" {
+		p.parseBindingEnds(u)
+		return
+	}
+	switch {
+	case p.at(lexer.LBrace) || p.at(lexer.Semicolon):
+		// `binding { end …; end …; }` states its ends as members.
+	case p.acceptKeyword("of"), p.acceptKeyword("bind"), p.atBindingEnds():
+		p.parseBindingEnds(u)
+	default:
+		p.parseBindingFeatureDeclaration(u)
+		if p.acceptKeyword("of") || p.acceptKeyword("bind") {
+			p.parseBindingEnds(u)
+		}
+	}
 }
 
-// parseBindingEnd parses a connector end of a binding, its end multiplicity
-// included (`[0..1] tf.edges`), and records it as an end of u.
-func (p *Parser) parseBindingEnd(u *ast.Usage) {
-	var mult *ast.Multiplicity
+// parseBindingFeatureDeclaration parses the declaration a binding may state
+// before its ends: `Identification? FeatureSpecializationPart?` (KerML.xtext
+// FeatureDeclaration), as in `binding ab : AB [1] bind a = b`.
+func (p *Parser) parseBindingFeatureDeclaration(u *ast.Usage) {
+	if p.atName() || p.at(lexer.Lt) {
+		u.Ident = p.parseIdentification()
+	}
+	p.parseFeatureSpecializationPart(u)
+}
+
+// atBindingEnds reports whether the cursor is at a whole ConnectorEnd followed
+// by `=`, which states a KerML binding's ends where a declaration could stand
+// (KerML.xtext:875): `binding a = b`, `binding [1] e ::> a = b`.
+func (p *Parser) atBindingEnds() bool {
+	from := p.pastBracketed(0)
+	if p.endThenAt(from, lexer.Eq, "") {
+		return true
+	}
+	if !p.atNameAt(from) {
+		return false
+	}
+	if p.peekN(from+1).Kind == lexer.ColonColonGt || p.peekIsKeyword(from+1, "references") {
+		return p.endThenAt(from+2, lexer.Eq, "")
+	}
+	return false
+}
+
+// parseBindingEnds parses the two ends of a binding, `end '=' end`, recording a
+// diagnostic and stopping where an end or the `=` is missing.
+func (p *Parser) parseBindingEnds(u *ast.Usage) {
+	first := p.parseBindingEnd()
+	if first == nil {
+		return
+	}
+	u.ConnectorEnds = append(u.ConnectorEnds, first)
+	if !p.accept2(lexer.Eq) {
+		p.error(p.peek().Span, "expected '=' between binding ends")
+		return
+	}
+	if second := p.parseBindingEnd(); second != nil {
+		u.ConnectorEnds = append(u.ConnectorEnds, second)
+	}
+}
+
+// parseBindingEnd parses one binding end. A missing end or an expression written
+// there is reported and kept as an ErrorNode target, so the end still counts.
+func (p *Parser) parseBindingEnd() *ast.ConnectorEnd {
+	start := p.peek().Span.Offset
+	global := p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon
+	if p.at(lexer.LBracket) || p.atNameOrKeyword() || global {
+		cp := p.checkpoint()
+		end := p.parseConnectorEnd()
+		expression := end != nil && p.atExpressionOperator()
+		if expression {
+			p.restore(cp)
+		}
+		p.release()
+		if !expression {
+			return end
+		}
+	}
+	end := &ast.ConnectorEnd{}
 	if p.at(lexer.LBracket) {
-		mult = p.parseMultiplicity()
+		end.Multiplicity = p.parseMultiplicity()
 	}
-	if target := p.parseRelationshipTarget(); target != nil {
-		end := bindingEnd(target)
-		end.Multiplicity = mult
-		u.Relationships = append(u.Relationships, end)
+	if p.at(lexer.Semicolon) || p.at(lexer.LBrace) || p.at(lexer.RBrace) || p.atEOF() {
+		const msg = "expected a binding end"
+		p.error(p.peek().Span, msg)
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		end.Target = en
+	} else if expr := p.ParseExpression(); expr != nil {
+		en, failed := expr.(*ast.ErrorNode)
+		if !failed {
+			const msg = "a binding end names a feature, not an expression; " +
+				"declare a feature with the expression as its value and bind to that"
+			p.error(expr.Span(), msg)
+			en = &ast.ErrorNode{Message: msg}
+			en.NodeSpan = expr.Span()
+		}
+		end.Target = en
 	}
+	end.NodeSpan = p.spanFrom(start)
+	return end
+}
+
+// atExpressionOperator reports whether the current token continues the name
+// before it into an expression, which a connector end never is.
+func (p *Parser) atExpressionOperator() bool {
+	switch p.peek().Kind {
+	case lexer.Question, lexer.QuestionQ, lexer.Pipe, lexer.Amp, lexer.EqEq, lexer.NotEq,
+		lexer.EqEqEq, lexer.NotEqEq, lexer.Lt, lexer.Gt, lexer.Le, lexer.Ge, lexer.Plus,
+		lexer.Minus, lexer.Star, lexer.Slash, lexer.Percent, lexer.StarStar, lexer.Caret,
+		lexer.LParen, lexer.Arrow, lexer.DotQuestion, lexer.At, lexer.AtAt:
+		return true
+	case lexer.Keyword:
+		switch p.peek().KeywordID {
+		case "and", "or", "xor", "implies", "as", "istype", "hastype", "meta":
+			return true
+		}
+	}
+	return false
 }
 
 // namesFeature reports whether a parsed expression names a feature, as a
@@ -3485,29 +3288,6 @@ func namesFeature(n ast.Node) bool {
 		return true
 	}
 	return false
-}
-
-// hasBindingEnd reports whether a binding already states an end.
-func hasBindingEnd(u *ast.Usage) bool {
-	for _, r := range u.Relationships {
-		if r.Kind == ast.RelReferences {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeAnonymousBindingEnd(u *ast.Usage) *ast.Usage {
-	if u == nil || u.Kind != ast.UsageBinding || u.Ident.Name == "" || hasBindingEnd(u) {
-		return u
-	}
-	target := &ast.QualifiedName{
-		Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}},
-	}
-	target.NodeSpan = u.Ident.NameSpan
-	u.Relationships = append(u.Relationships, bindingEnd(target))
-	u.Ident = ast.Identification{}
-	return u
 }
 
 // parseRelationshipTarget parses a relationship target which can be either:
@@ -3571,6 +3351,25 @@ func (p *Parser) parsePreNameRelationships(isUsage bool) []*ast.Relationship {
 		return nil
 	}
 	return p.parseRelationships(isUsage)
+}
+
+// parseFeatureSpecializationPart parses a usage's
+// `FeatureSpecialization* MultiplicityPart? FeatureSpecialization*` (KerML.xtext:574) onto u.
+func (p *Parser) parseFeatureSpecializationPart(u *ast.Usage) {
+	u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+	if p.at(lexer.LBracket) {
+		u.Multiplicity = p.parseMultiplicity()
+	}
+	p.parseSpecializationsAfterMultiplicity(u)
+}
+
+// parseSpecializationsAfterMultiplicity parses the `ordered`/`nonunique` tail of
+// a MultiplicityPart and the FeatureSpecialization* that may follow it onto u.
+func (p *Parser) parseSpecializationsAfterMultiplicity(u *ast.Usage) {
+	post := p.parsePostModifiers()
+	u.IsOrdered = u.IsOrdered || post.isOrdered
+	u.IsNonunique = u.IsNonunique || post.isNonunique
+	u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 }
 
 // parseRelationships parses zero or more relationship clauses. isUsage selects
@@ -3712,7 +3511,7 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			p.parseConnectorEnds(u, "connect")
 		} else if p.at(lexer.LParen) {
 			p.parseNaryConnectorEnds(u)
-		} else if !declaresConnector(u) && p.atConnectorBinaryEnds() {
+		} else if !declaresConnector(u) && p.atConnectorBinaryEnds("to") {
 			p.parseConnectorEnds(u, "")
 		} else {
 			p.parseConnectorFromTo(u)
@@ -3948,20 +3747,21 @@ func declaresConnector(u *ast.Usage) bool {
 	return u.Ident.Name != "" || u.Ident.ShortName != "" || len(u.Relationships) > 0 || u.Multiplicity != nil
 }
 
-// atConnectorBinaryEnds reports whether a connector states its ends without
-// `from`: `connector a to b`, `connector [0..1] a to b`, `connector e ::> a.x to b`.
-// A name may only precede `from` (KerML.xtext BinaryConnectorDeclaration:836),
-// so the first token here is the first end (ConnectorEnd:854).
-func (p *Parser) atConnectorBinaryEnds() bool {
+// atConnectorBinaryEnds reports whether the cursor is at a whole ConnectorEnd
+// (KerML.xtext:854: `[0..1]`? (`e ::>` | `e references`)? `$::`? chain) followed by
+// the delimiter kw — `to` for a connector, `then` for a succession. A name may only
+// precede `from`/`first` (KerML.xtext:836, :891), so such an end has no declaration
+// before it: `connector [0..1] a to b`, `succession [1] e ::> a then b`.
+func (p *Parser) atConnectorBinaryEnds(kw string) bool {
 	from := p.pastBracketed(0)
-	if p.endThenKeywordAt(from, "to") {
+	if p.endThenKeywordAt(from, kw) {
 		return true
 	}
 	if !p.atNameAt(from) {
 		return false
 	}
 	if p.peekN(from+1).Kind == lexer.ColonColonGt || p.peekIsKeyword(from+1, "references") {
-		return p.endThenKeywordAt(from+2, "to")
+		return p.endThenKeywordAt(from+2, kw)
 	}
 	return false
 }
@@ -3973,9 +3773,15 @@ func (p *Parser) atEndThenKeyword(kw string) bool {
 	return p.endThenKeywordAt(0, kw)
 }
 
-// endThenKeywordAt is atEndThenKeyword from the token at offset from; the end
-// may be a global `$::`-qualified name.
+// endThenKeywordAt is atEndThenKeyword from the token at offset from.
 func (p *Parser) endThenKeywordAt(from int, kw string) bool {
+	return p.endThenAt(from, lexer.Keyword, kw)
+}
+
+// endThenAt reports whether a connector end — a name, feature chain or global
+// `$::` path — starts at offset from and is followed by a token of kind k, or by
+// the keyword kw where k is lexer.Keyword.
+func (p *Parser) endThenAt(from int, k lexer.Kind, kw string) bool {
 	if p.peekN(from).Kind == lexer.Dollar && p.peekN(from+1).Kind == lexer.ColonColon {
 		from += 2
 	}
@@ -3991,7 +3797,10 @@ func (p *Parser) endThenKeywordAt(from int, kw string) bool {
 			return false
 		}
 	}
-	return p.peekIsKeyword(i, kw)
+	if k == lexer.Keyword {
+		return p.peekIsKeyword(i, kw)
+	}
+	return p.peekN(i).Kind == k
 }
 
 // atFlowShorthand reports whether the parser sits at a bare flow shorthand

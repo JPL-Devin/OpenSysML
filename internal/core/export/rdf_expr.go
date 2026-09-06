@@ -361,6 +361,12 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
+		if triple.Predicate.Value == rdf.OpenSysML+xRelatedFeature {
+			// A connector end is refused as one before its feature is written.
+			if _, err := d.endNameText(triple.Object, el); err != nil {
+				return err
+			}
+		}
 		text, err := d.expressionOperand(triple.Object, el, positionBinding(strings.TrimPrefix(triple.Predicate.Value, rdf.SysML)))
 		if err != nil {
 			return err

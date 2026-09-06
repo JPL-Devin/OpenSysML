@@ -1104,9 +1104,7 @@ elmt:Bodies__Ctx__bd
     sysml:owningRelationship elmt:Bodies__Ctx__bd_om ;
     sysml:owningMembership elmt:Bodies__Ctx__bd_om ;
     sysml:declaredName "bd" ;
-    sysml:references "x.a"^^sysx:Expression ;
-    sysml:value expr:Bodies__Ctx__bd_pvalue ;
-    sysx:relatedFeature expr:Bodies__Ctx__bd_pend0, expr:Bodies__Ctx__bd_pvalue ;
+    sysx:relatedFeature expr:Bodies__Ctx__bd_pend0, expr:Bodies__Ctx__bd_pend1 ;
     sysx:endForm "equals" ;
     sysx:endVerb "bind" ;
     sysx:hasBody "true"^^xsd:boolean ;
@@ -1130,21 +1128,6 @@ elmt:Bodies__Ctx__bd_om
     sysml:ownedMemberFeature elmt:Bodies__Ctx__bd ;
     sysml:owningType elmt:Bodies__Ctx .
 
-expr:Bodies__Ctx__bd_pvalue
-    a sysml:FeatureChainExpression ;
-    sysx:sourceText "y.b" ;
-    sysml:elementId "Bodies__Ctx__bd_pvalue" ;
-    sysml:argument expr:Bodies__Ctx__bd_pvalue_pa0 ;
-    sysml:targetFeature elmt:Bodies__B__b ;
-    sysx:endIndex "1"^^xsd:integer .
-
-expr:Bodies__Ctx__bd_pvalue_pa0
-    a sysml:FeatureReferenceExpression ;
-    sysx:sourceText "y" ;
-    sysml:elementId "Bodies__Ctx__bd_pvalue_pa0" ;
-    sysml:referent elmt:Bodies__Ctx__y ;
-    sysx:argumentIndex "0"^^xsd:integer .
-
 expr:Bodies__Ctx__bd_pend0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "x.a" ;
@@ -1158,6 +1141,21 @@ expr:Bodies__Ctx__bd_pend0_pa0
     sysx:sourceText "x" ;
     sysml:elementId "Bodies__Ctx__bd_pend0_pa0" ;
     sysml:referent elmt:Bodies__Ctx__x ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Bodies__Ctx__bd_pend1
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "y.b" ;
+    sysml:elementId "Bodies__Ctx__bd_pend1" ;
+    sysml:argument expr:Bodies__Ctx__bd_pend1_pa0 ;
+    sysml:targetFeature elmt:Bodies__B__b ;
+    sysx:endIndex "1"^^xsd:integer .
+
+expr:Bodies__Ctx__bd_pend1_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "y" ;
+    sysml:elementId "Bodies__Ctx__bd_pend1_pa0" ;
+    sysml:referent elmt:Bodies__Ctx__y ;
     sysx:argumentIndex "0"^^xsd:integer .
 
 elmt:Bodies__Ctx__bd__w
@@ -1195,9 +1193,7 @@ elmt:Bodies__Ctx___406
     sysml:owner elmt:Bodies__Ctx ;
     sysml:owningRelationship elmt:Bodies__Ctx___406_om ;
     sysml:owningMembership elmt:Bodies__Ctx___406_om ;
-    sysml:references "x.a"^^sysx:Expression ;
-    sysml:value expr:Bodies__Ctx___406_pvalue ;
-    sysx:relatedFeature expr:Bodies__Ctx___406_pend0, expr:Bodies__Ctx___406_pvalue ;
+    sysx:relatedFeature expr:Bodies__Ctx___406_pend0, expr:Bodies__Ctx___406_pend1 ;
     sysx:endForm "equals" ;
     sysx:declaredKeyword "bind" ;
     sysx:hasBody "true"^^xsd:boolean ;
@@ -1221,21 +1217,6 @@ elmt:Bodies__Ctx___406_om
     sysml:ownedMemberFeature elmt:Bodies__Ctx___406 ;
     sysml:owningType elmt:Bodies__Ctx .
 
-expr:Bodies__Ctx___406_pvalue
-    a sysml:FeatureChainExpression ;
-    sysx:sourceText "y.b" ;
-    sysml:elementId "Bodies__Ctx___406_pvalue" ;
-    sysml:argument expr:Bodies__Ctx___406_pvalue_pa0 ;
-    sysml:targetFeature elmt:Bodies__B__b ;
-    sysx:endIndex "1"^^xsd:integer .
-
-expr:Bodies__Ctx___406_pvalue_pa0
-    a sysml:FeatureReferenceExpression ;
-    sysx:sourceText "y" ;
-    sysml:elementId "Bodies__Ctx___406_pvalue_pa0" ;
-    sysml:referent elmt:Bodies__Ctx__y ;
-    sysx:argumentIndex "0"^^xsd:integer .
-
 expr:Bodies__Ctx___406_pend0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "x.a" ;
@@ -1249,6 +1230,21 @@ expr:Bodies__Ctx___406_pend0_pa0
     sysx:sourceText "x" ;
     sysml:elementId "Bodies__Ctx___406_pend0_pa0" ;
     sysml:referent elmt:Bodies__Ctx__x ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Bodies__Ctx___406_pend1
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "y.b" ;
+    sysml:elementId "Bodies__Ctx___406_pend1" ;
+    sysml:argument expr:Bodies__Ctx___406_pend1_pa0 ;
+    sysml:targetFeature elmt:Bodies__B__b ;
+    sysx:endIndex "1"^^xsd:integer .
+
+expr:Bodies__Ctx___406_pend1_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "y" ;
+    sysml:elementId "Bodies__Ctx___406_pend1_pa0" ;
+    sysml:referent elmt:Bodies__Ctx__y ;
     sysx:argumentIndex "0"^^xsd:integer .
 
 elmt:Bodies__Ctx___406__w

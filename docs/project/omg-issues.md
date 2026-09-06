@@ -13,6 +13,8 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
 | `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
+| `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def outer` | `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` — a vector, where the outer product of two vectors of orders one is a tensor of order two (`TensorCalculations::'['` returns `TensorQuantityValue[1]` for exactly that shape) | nothing: `outer` is `ErrUnevaluableLibraryFunction` naming the declaration and its return type (`runtime/quantity_functions.go` `registerVectorCalculations`); the checker types a call by the declared `VectorQuantityValue` | No `VectorQuantityValue` holds an outer product, and answering a `TensorQuantityValue` would disagree with the checker and the declaration; the draft below asks for `return : TensorQuantityValue[1]` |
+| `Domain Libraries/Quantities and Units/TensorCalculations.sysml` | `calc def isUnitTensorQuantity` | `calc def isUnitTensorQuantity { in x : TensorQuantityValue[1]; return : Boolean[1]; }` — no body, and no statement of which tensor is the unit one beside `isUnitVectorQuantity` (a vector of norm one) | the identity of a square order-two tensor: `true` when every diagonal component is one and every other zero; a tensor of any other shape (a vector, a 2×3, an order three) is `ErrUnevaluableLibraryFunction` naming the shape it needs (`runtime/tensor_functions.go` `tensorIsUnit`) | The library names no unit tensor; the identity matrix is the one tensor with an established claim to the name, and it exists for square order two alone, so a reading over other shapes would be invented. Recorded so the reading can be checked against a future release that gives the calculation a body |
 | `Domain Libraries/Geometry/ShapeItems.sysml` | `item def CuboidOrTriangularPrism` (`Cuboid`, `RectangularCuboid`, `Box`) | `item tfe [2] :> edges;` … `binding [1] bind [0..1] tf.edges = [0..1] tfe;` `binding [1] bind [0..1] ff.edges = [0..1] tfe;` — every named edge group and vertex group (`tfe`…`urre`, `tflv`…`brrv`) is valued only by bindings whose ends link *one unspecified* value each; and `item :>> vertices; assert constraint { size(vertices) == size(edges) }` beside `Quadrilateral`'s `item :>> vertices [8];` and `StructuredSpaceObject`'s `faces.vertices subsets vertices` | the groups and everything read through them (`box.tfe`, `box.tflv`, `box.tfe.length`, `box.vertices`) are the typed `ErrBindingEnd` naming the binding; the runtime never picks a member (`runtime/binding.go` `UndeterminedBindingError`) | No conjunction of the bindings, the `MatesWith` connections and the `size(...)` assertions identifies which of a face's four edges a group holds, so no evaluator can name `tfe`; and a `Cuboid`'s `vertices` cannot be both a superset of its six faces' 48 vertex objects and 24 long. The draft below records both |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
@@ -134,6 +136,84 @@ number computed over the vector's `num` components — `norm(⟨3.0, 4.0⟩ [m])
 declaration (`runtime/vector_functions.go`; conformance
 `calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
 results as declared (`runtime/quantity_functions.go`).
+
+## `VectorCalculations::outer` — a `VectorQuantityValue` return for an order-two product
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/VectorCalculations.sysml`:
+
+```sysml
+    calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }
+```
+
+and from `TensorCalculations.sysml` in the same directory:
+
+```sysml
+    calc def '[' specializes BaseFunctions::'[' { 
+    	in elements: Number[1..n] ordered nonunique; 
+    	in mRef: TensorMeasurementReference[1]; 
+    	return quantity: TensorQuantityValue[1];
+    	private attribute n = mRef.flattenedSize;
+    }
+```
+
+````markdown
+**Library defect:** `VectorCalculations::outer` declares
+`return : VectorQuantityValue[1]`. The outer product of two vectors of orders
+one is a tensor of order two — `dimensions` of two entries, `order` two — and
+`Quantities::VectorQuantityValue` is the subtype of `TensorQuantityValue` whose
+`dimensions` has at most one entry (`VectorMeasurementReference::dimensions :
+Positive[0..1]`), so no value of the declared type can hold the result. The
+sibling `TensorCalculations::'['` returns `TensorQuantityValue[1]` for exactly
+this shape, and `TensorCalculations::tensorVectorMult`/`vectorTensorMult`
+return `VectorQuantityValue` where the contraction does lower the order.
+Should `outer` declare `return : TensorQuantityValue[1]`?
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates no `VectorCalculations` or `TensorCalculations` call
+(`cmd/pilot-exec-diff`, `tensor_quantities.cases`: all twelve probes, `outer` among
+them, are pinned `pilot-unevaluated`), so it
+offers no reference answer. OpenSysML leaves `outer` unevaluable with a reason
+naming the declared return type (`runtime/quantity_functions.go`
+`registerVectorCalculations`; robustness `tensor_quantity_failure_modes`), and
+types a call by the declaration, as the checker must.
+
+## `TensorCalculations::isUnitTensorQuantity` — the reading OpenSysML takes
+
+Not a defect report; a record of a reading the text does not fix.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/TensorCalculations.sysml`:
+
+```sysml
+    calc def isZeroTensorQuantity { 
+    	in x : TensorQuantityValue[1]; 
+    	return : Boolean[1];
+    }
+    calc def isUnitTensorQuantity { 
+    	in x : TensorQuantityValue[1]; 
+    	return : Boolean[1];
+    }
+```
+
+`isZeroTensorQuantity` has one reading — every component zero — and OpenSysML
+answers it for a tensor of any shape. `isUnitTensorQuantity` has a body neither
+here nor in a Kernel function it specializes, and `VectorCalculations::isUnitVectorQuantity`
+(a vector of norm one) does not generalize: a tensor has no single norm the
+library names. The one tensor with an established claim to the name is the
+identity matrix, which exists for a square tensor of order two alone (the
+library's own matrix, `AffineTransformationMatrix3d`, is an order-two `Array`).
+OpenSysML therefore answers
+`isUnitTensorQuantity` for a square order-two tensor (`true` exactly when the
+diagonal is one and the rest zero) and reports any other shape as
+`ErrUnevaluableLibraryFunction` naming the shape it needs
+(`runtime/tensor_functions.go` `tensorIsUnit`; conformance
+`instance_tensor_quantity`, `instance_tensor_quantity_failures`). Nothing is
+invented for a vector, a rectangular or a higher-order tensor.
 
 ## `ShapeItems::CuboidOrTriangularPrism` — edge and vertex groups fixed only by `[0..1]` bindings, and a vertex count its faces exceed
 

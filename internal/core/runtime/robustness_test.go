@@ -96,6 +96,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
 	t.Run("state_def_specializing_the_library_state_action", testStateDefSpecializingTheLibraryStateAction)
 	t.Run("state_def_specializing_a_library_state_keeps_its_content", testStateDefSpecializingALibraryStateKeepsItsContent)
+	t.Run("exhibited_state_typed_by_the_library_state_action", testExhibitedStateTypedByTheLibraryStateAction)
+	t.Run("exhibited_state_typed_by_the_library_state_action_with_a_body", testExhibitedStateTypedByTheLibraryStateActionWithABody)
+	t.Run("exhibited_state_typed_by_a_state_action_specialization", testExhibitedStateTypedByAStateActionSpecialization)
 	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
@@ -147,7 +150,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_multiple_collection_contributors", testBindingMultipleCollectionContributors)
 	t.Run("binding_propagation_spends_element_budget", testBindingPropagationSpendsElementBudget)
 	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
-	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
+	t.Run("binding_bare_ends_bind", testBindingBareEndsBind)
 	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
 	t.Run("binding_single_valueless", testBindingSingleValueless)
 	t.Run("binding_cycle", testBindingCycle)
@@ -332,6 +335,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
 	t.Run("measurement_reference_failure_modes", testMeasurementReferenceFailureModes)
+	t.Run("tensor_quantity_failure_modes", testTensorQuantityFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -831,10 +835,13 @@ func testBindingDistinctMaterializedObjectsConflict(t *testing.T) {
 	}
 }
 
-func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-named-single-end>", parseAndBuild(t, `package P {
+// `binding bnd = a` states two ends (KerML.xtext BindingConnectorDeclaration);
+// `bnd` is the first end, not the binding's name.
+func testBindingBareEndsBind(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-bare-ends>", parseAndBuild(t, `package P {
 		part def Sys {
 			attribute a = 5;
+			attribute bnd;
 			binding bnd = a;
 		}
 	}`))
@@ -842,12 +849,12 @@ func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate: %v", err)
 	}
-	fv, err := inst.GetFeatureValue(ctx, "a")
+	fv, err := inst.GetFeatureValue(ctx, "bnd")
 	if err != nil {
-		t.Fatalf("GetFeatureValue(a) = %v, want 5", err)
+		t.Fatalf("GetFeatureValue(bnd) = %v, want 5", err)
 	}
 	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
-		t.Errorf("a = %#v, want integer 5", got)
+		t.Errorf("bnd = %#v, want integer 5", got)
 	}
 }
 
@@ -1312,7 +1319,8 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrUnevaluableLibraryFunction},
 		{"coordinate transformation", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrUnevaluableLibraryFunction},
 		{"outer product", "Quantities::TensorQuantityValue", "VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
-		{"tensor sum", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
+		{"tensor sum of number sequences", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrTypeMismatch},
+		{"tensor product", "Quantities::TensorQuantityValue", "TensorCalculations::tensorTensorMult(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((3.0, 4.0)) [SI::m])", ErrUnevaluableLibraryFunction},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := fmt.Sprintf(`
@@ -1340,6 +1348,70 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("value err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// testTensorQuantityFailureModes: a tensor the library does not determine is a typed
+// error at the call, never a value: components that do not fill the reference,
+// operands of two shapes, incommensurable components, a unit predicate over a
+// shape with no identity, and the five calculations the library leaves bodiless
+// and underspecified, each naming itself.
+func testTensorQuantityFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  error
+		names string
+	}{
+		{"element count", "TensorCalculations::'['((1.0, 2.0, 3.0), stressRef)", ErrMultiplicityViolation, "n = mRef.flattenedSize"},
+		{"one reference for four components", "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), oneRef)", ErrMultiplicityViolation, "oneRef"},
+		{"a unit as the reference", "TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), (Pa, Pa, Pa, Pa))", ErrTypeMismatch, "TensorMeasurementReference"},
+		{"shape mismatch", "stress + TensorCalculations::'['((1.0, 2.0, 3.0), rowRef)", ErrMultiplicityViolation, "dimensions [2, 2] and [3] differ"},
+		{"tensor minus scalar", "stress - 2 [Pa]", ErrMultiplicityViolation, "dimensions [2, 2] and [] differ"},
+		{"incommensurable components", "stress + TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), lengthRef)", ErrIncommensurableUnits, ""},
+		{"non-square unit predicate", "TensorCalculations::isUnitTensorQuantity(TensorCalculations::'['((1.0, 2.0, 3.0), rowRef))", ErrUnevaluableLibraryFunction, "only a square tensor of order two has an identity"},
+		{"unset covariance", "stress.contravariantOrder", ErrUnevaluableLibraryFunction, "orderSum"},
+		{"tensor times vector", "TensorCalculations::tensorVectorMult(stress, VectorFunctions::VectorOf((1.0, 2.0)) [Pa])", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorVectorMult"},
+		{"vector times tensor", "TensorCalculations::vectorTensorMult(VectorFunctions::VectorOf((1.0, 2.0)) [Pa], stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::vectorTensorMult"},
+		{"tensor times tensor", "TensorCalculations::tensorTensorMult(stress, stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
+		{"tensor times tensor by operator", "stress * stress", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
+		{"outer product", "VectorCalculations::outer(VectorFunctions::VectorOf((1.0, 2.0)) [Pa], VectorFunctions::VectorOf((1.0, 2.0)) [Pa])", ErrUnevaluableLibraryFunction, "VectorCalculations::outer"},
+		{"transform", "TensorCalculations::transform(stressRef, stress)", ErrUnevaluableLibraryFunction, "TensorCalculations::transform"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					private import ISQ::*;
+					private import SI::*;
+					private import MeasurementReferences::*;
+					private import Quantities::*;
+					attribute stressRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa); }
+					attribute lengthRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = (Pa, m, Pa, Pa); }
+					attribute rowRef : TensorMeasurementReference { :>> dimensions = (3); :>> mRefs = (Pa, Pa, Pa); }
+					attribute oneRef : TensorMeasurementReference { :>> dimensions = (2, 2); :>> mRefs = Pa; }
+					attribute stress = TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), stressRef);
+					part def Holder {
+						attribute value : TensorQuantityValue = %s;
+					}
+				}
+			`, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+			if sym == nil {
+				t.Fatal("part def Holder not found")
+			}
+			inst, err := ctx.Instantiate(sym)
+			if err != nil {
+				t.Fatalf("Instantiate err = %v", err)
+			}
+			_, err = inst.GetFeatureValue(ctx, "value")
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("value err = %v, want %v", err, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.names) {
+				t.Errorf("value err = %v, want it to state %q", err, tc.names)
 			}
 		})
 	}
@@ -5141,6 +5213,134 @@ func testStateDefSpecializingALibraryStateKeepsItsContent(t *testing.T) {
 	}
 	if got := FormatValue(seen); got != "1" {
 		t.Fatalf("burn.seen = %s, want 1", got)
+	}
+}
+
+// A body-less usage typed by the library's StateAction, however named, lowers
+// without recursing into `ref state self` and fails only for no initial state.
+func testExhibitedStateTypedByTheLibraryStateAction(t *testing.T) {
+	for _, tc := range []struct{ name, typing string }{
+		{"imported", "StateAction"},
+		{"qualified", "States::StateAction"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `
+			package test {
+				private import States::StateAction;
+				part def Mission {
+					attribute mass = 1;
+					exhibit state phases : ` + tc.typing + `;
+				}
+			}`
+			_, _, err := instantiateWithLibraries(t, src, "test::Mission")
+			if err == nil {
+				t.Fatal("expected the machine with no initial state to fail materialization")
+			}
+			if errors.Is(err, lower.ErrRecursiveStateTyping) {
+				t.Fatalf("error = %v, want StateAction's content withheld rather than recursed into", err)
+			}
+			if !errors.Is(err, ErrNoInitialState) {
+				t.Fatalf("error = %v, want ErrNoInitialState", err)
+			}
+			for _, want := range []string{"phases", "Mission", "StateAction"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %v, want it to name %s", err, want)
+				}
+			}
+		})
+	}
+}
+
+// testExhibitedStateTypedByTheLibraryStateActionWithABody: a state usage typed
+// by StateAction and stating its own body runs that body, inheriting nothing.
+func testExhibitedStateTypedByTheLibraryStateActionWithABody(t *testing.T) {
+	src := `
+	package test {
+		private import States::StateAction;
+		part def Mission {
+			attribute mass = 2;
+			exhibit state phases : StateAction { entry; then x; state x; }
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	assertExhibitedMachineIn(t, ctx, inst, "mass", 2, "x")
+}
+
+// A usage typed by a definition specializing StateAction inherits that
+// definition's content and nothing of the library's.
+func testExhibitedStateTypedByAStateActionSpecialization(t *testing.T) {
+	t.Run("with_content", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction { entry; then x; state x; }
+			part def Mission {
+				attribute mass = 3;
+				exhibit state phases : Phase;
+			}
+		}`
+		ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		assertExhibitedMachineIn(t, ctx, inst, "mass", 3, "x")
+	})
+	t.Run("own_body", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction;
+			part def Mission {
+				attribute mass = 4;
+				exhibit state phases : Phase { entry; then x; state x; }
+			}
+		}`
+		ctx, inst, err := instantiateWithLibraries(t, src, "test::Mission")
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		assertExhibitedMachineIn(t, ctx, inst, "mass", 4, "x")
+	})
+	t.Run("empty", func(t *testing.T) {
+		src := `
+		package test {
+			private import States::StateAction;
+			state def Phase :> StateAction;
+			part def Mission {
+				attribute mass = 5;
+				exhibit state phases : Phase;
+			}
+		}`
+		_, _, err := instantiateWithLibraries(t, src, "test::Mission")
+		if !errors.Is(err, ErrNoInitialState) {
+			t.Fatalf("error = %v, want ErrNoInitialState", err)
+		}
+		if !strings.Contains(err.Error(), "phases") || !strings.Contains(err.Error(), "Phase") {
+			t.Errorf("error = %v, want it to name the machine and its definition", err)
+		}
+	})
+}
+
+// assertExhibitedMachineIn checks that an object exhibits a machine resting in
+// the named state, and that an ordinary attribute of it still reads.
+func assertExhibitedMachineIn(t *testing.T, ctx *Context, inst *Instance, attr string, want int64, state string) {
+	t.Helper()
+	fv, err := inst.GetFeatureValue(ctx, attr)
+	if err != nil {
+		t.Fatalf("%s: %v", attr, err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != want {
+		t.Errorf("%s = %s, want %d", attr, FormatValue(got), want)
+	}
+	machine, ok := inst.ExhibitedState()
+	if !ok || machine.State == nil {
+		t.Fatal("the object exhibits no machine")
+	}
+	if got := finalStateName(t, machine.State); got != state {
+		t.Errorf("final state = %q, want %q", got, state)
 	}
 }
 

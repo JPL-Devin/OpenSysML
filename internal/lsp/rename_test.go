@@ -354,3 +354,31 @@ func assertNoOverlap(t *testing.T, edits []protocol.TextEdit) {
 		}
 	}
 }
+
+// A binding's named end is a feature of the binding, so renaming it rewrites
+// the chain that reaches it through the binding and leaves the referenced
+// feature alone; renaming that feature rewrites the end's `::>` target.
+func TestRenameBindingConnectorEnd(t *testing.T) {
+	src := "package P {\n\tpart def V {\n\t\tattribute a;\n\t\tattribute b;\n\t\tbinding bb bind e1 ::> a = e2 references b;\n\t\tattribute viaEnd :> bb.e1;\n\t}\n}\n"
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_binding_end.sysml", src)
+	got, err := applyRename(t, ws, name, "e1 ::>", "left")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := strings.NewReplacer("bind e1 ::>", "bind left ::>", "bb.e1", "bb.left").Replace(src)
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+
+	ws = model.NewWorkspace()
+	name = openRenameDoc(t, ws, "/tmp/rename_binding_target.sysml", src)
+	got, err = applyRename(t, ws, name, "a;", "alpha")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want = strings.NewReplacer("attribute a;", "attribute alpha;", "e1 ::> a =", "e1 ::> alpha =").Replace(src)
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
