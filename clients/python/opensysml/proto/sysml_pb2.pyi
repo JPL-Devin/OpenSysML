@@ -627,7 +627,7 @@ class AttributeInfo(_message.Message):
     def __init__(self, name: _Optional[str] = ..., type: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ..., unit: _Optional[str] = ...) -> None: ...
 
 class Value(_message.Message):
-    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset", "complex")
+    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset", "complex", "array", "vector", "vector_quantity")
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -639,6 +639,9 @@ class Value(_message.Message):
     ENUM_LITERAL_FIELD_NUMBER: _ClassVar[int]
     UNSET_FIELD_NUMBER: _ClassVar[int]
     COMPLEX_FIELD_NUMBER: _ClassVar[int]
+    ARRAY_FIELD_NUMBER: _ClassVar[int]
+    VECTOR_FIELD_NUMBER: _ClassVar[int]
+    VECTOR_QUANTITY_FIELD_NUMBER: _ClassVar[int]
     int_value: int
     real_value: float
     bool_value: bool
@@ -650,7 +653,30 @@ class Value(_message.Message):
     enum_literal: EnumLiteral
     unset: bool
     complex: Complex
-    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ..., complex: _Optional[_Union[Complex, _Mapping]] = ...) -> None: ...
+    array: Array
+    vector: Vector
+    vector_quantity: VectorQuantity
+    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ..., complex: _Optional[_Union[Complex, _Mapping]] = ..., array: _Optional[_Union[Array, _Mapping]] = ..., vector: _Optional[_Union[Vector, _Mapping]] = ..., vector_quantity: _Optional[_Union[VectorQuantity, _Mapping]] = ...) -> None: ...
+
+class Array(_message.Message):
+    __slots__ = ("dimensions", "elements")
+    DIMENSIONS_FIELD_NUMBER: _ClassVar[int]
+    ELEMENTS_FIELD_NUMBER: _ClassVar[int]
+    dimensions: _containers.RepeatedScalarFieldContainer[int]
+    elements: _containers.RepeatedCompositeFieldContainer[Value]
+    def __init__(self, dimensions: _Optional[_Iterable[int]] = ..., elements: _Optional[_Iterable[_Union[Value, _Mapping]]] = ...) -> None: ...
+
+class Vector(_message.Message):
+    __slots__ = ("components",)
+    COMPONENTS_FIELD_NUMBER: _ClassVar[int]
+    components: _containers.RepeatedCompositeFieldContainer[Value]
+    def __init__(self, components: _Optional[_Iterable[_Union[Value, _Mapping]]] = ...) -> None: ...
+
+class VectorQuantity(_message.Message):
+    __slots__ = ("components",)
+    COMPONENTS_FIELD_NUMBER: _ClassVar[int]
+    components: _containers.RepeatedCompositeFieldContainer[Quantity]
+    def __init__(self, components: _Optional[_Iterable[_Union[Quantity, _Mapping]]] = ...) -> None: ...
 
 class Complex(_message.Message):
     __slots__ = ("real", "imaginary")

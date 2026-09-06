@@ -2,6 +2,7 @@ package org.openmbee.opensysml;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A value the service evaluated: an immutable variant of {@code sysml.Value}.
@@ -121,6 +122,162 @@ public sealed interface Value {
      */
     public EnumerationValue {
       Objects.requireNonNull(literal, "literal");
+    }
+  }
+
+  /**
+   * A multidimensional array: its shape and its elements flattened in row-major order, the last
+   * dimension varying fastest. A rank-0 array holds exactly one element; an element is any value,
+   * a nested array or a quantity included.
+   *
+   * <p>Only a service advertising the {@code structured_values} capability reports one as itself
+   * rather than as an unsupported {@link NullValue}.
+   *
+   * @param dimensions the extent of each dimension, all positive
+   * @param elements the elements, row-major, exactly as many as the dimensions multiply to
+   */
+  record ArrayValue(List<Long> dimensions, List<Value> elements) implements Value {
+    /**
+     * Creates an array, copying the dimensions and the elements.
+     *
+     * @param dimensions the extent of each dimension, never {@code null}
+     * @param elements the elements, never {@code null}
+     * @throws IllegalArgumentException if a dimension is not positive, or the elements do not fill
+     *     the dimensions exactly
+     */
+    public ArrayValue {
+      dimensions = List.copyOf(dimensions);
+      elements = List.copyOf(elements);
+      long size = 1;
+      for (long extent : dimensions) {
+        if (extent <= 0) {
+          throw new IllegalArgumentException("array dimension is not positive: " + extent);
+        }
+        size = Math.multiplyExact(size, extent);
+      }
+      if (size != elements.size()) {
+        throw new IllegalArgumentException(
+            "array of dimensions " + dimensions + " holds " + elements.size()
+                + " element(s), want " + size);
+      }
+    }
+
+    /**
+     * Number of dimensions.
+     *
+     * @return the rank
+     */
+    public int rank() {
+      return dimensions.size();
+    }
+
+    /**
+     * The element at a multi-index, one coordinate per dimension.
+     *
+     * @param index the coordinates, each within its dimension
+     * @return the element there
+     * @throws IndexOutOfBoundsException if the index has the wrong rank or a coordinate is outside
+     *     its dimension
+     */
+    public Value get(long... index) {
+      if (index.length != dimensions.size()) {
+        throw new IndexOutOfBoundsException(
+            "index has " + index.length + " coordinate(s), array has rank " + dimensions.size());
+      }
+      long flat = 0;
+      for (int i = 0; i < index.length; i++) {
+        long extent = dimensions.get(i);
+        if (index[i] < 0 || index[i] >= extent) {
+          throw new IndexOutOfBoundsException(
+              "coordinate " + index[i] + " is outside dimension " + i + " of extent " + extent);
+        }
+        flat = flat * extent + index[i];
+      }
+      return elements.get((int) flat);
+    }
+  }
+
+  /**
+   * A vector of numbers, each an {@link IntegerValue} or a {@link RealValue} as the model computed
+   * it: one value, never a sequence of numbers.
+   *
+   * <p>Only a service advertising the {@code structured_values} capability reports one as itself
+   * rather than as an unsupported {@link NullValue}.
+   *
+   * @param components the components, in order
+   */
+  record VectorValue(List<Value> components) implements Value {
+    /**
+     * Creates a vector, copying the components.
+     *
+     * @param components the components, each an {@link IntegerValue} or a {@link RealValue}
+     * @throws IllegalArgumentException if a component is not a number
+     */
+    public VectorValue {
+      components = List.copyOf(components);
+      for (Value component : components) {
+        if (!(component instanceof IntegerValue) && !(component instanceof RealValue)) {
+          throw new IllegalArgumentException(
+              "vector component is not a number: " + component.getClass().getSimpleName());
+        }
+      }
+    }
+
+    /**
+     * Number of components.
+     *
+     * @return the dimension
+     */
+    public int dimension() {
+      return components.size();
+    }
+  }
+
+  /**
+   * A vector whose components are quantities, each with its own unit: {@code VectorOf((3.0, 4.0))
+   * [m]} holds two metres. The units usually agree but need not.
+   *
+   * <p>Only a service advertising the {@code structured_values} capability reports one as itself
+   * rather than as an unsupported {@link NullValue}.
+   *
+   * @param components the components, at least one
+   */
+  record VectorQuantityValue(List<Quantity> components) implements Value {
+    /**
+     * Creates a vector quantity, copying the components.
+     *
+     * @param components the components, never empty
+     * @throws IllegalArgumentException if there are no components
+     */
+    public VectorQuantityValue {
+      components = List.copyOf(components);
+      if (components.isEmpty()) {
+        throw new IllegalArgumentException("vector quantity has no components");
+      }
+    }
+
+    /**
+     * Number of components.
+     *
+     * @return the dimension
+     */
+    public int dimension() {
+      return components.size();
+    }
+
+    /**
+     * The one unit every component is written in, or empty when they differ.
+     *
+     * @return the shared unit as written, when there is one
+     */
+    public Optional<String> unit() {
+      Optional<String> first = components.get(0).unit();
+      for (Quantity component : components) {
+        if (!component.unit().equals(first)) {
+          return Optional.empty();
+        }
+      }
+      return first;
     }
   }
 

@@ -29,6 +29,7 @@ const (
 	CapabilityStrictConformance = sysmlgrpc.CapabilityStrictConformance
 	CapabilityParseSources      = sysmlgrpc.CapabilityParseSources
 	CapabilityComplexValues     = sysmlgrpc.CapabilityComplexValues
+	CapabilityStructuredValues  = sysmlgrpc.CapabilityStructuredValues
 )
 
 // ServerInfo describes the implementation answering a Client's calls.
