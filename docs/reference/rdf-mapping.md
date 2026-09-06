@@ -1151,8 +1151,9 @@ would be refused as a duplicate.
   the graph is refused naming both rather than the first being kept. Every
   `sysx:` property is single-valued but the members and parameters of a body,
   `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
-  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
-  is one triple to the graph, so only differing objects are a conflict
+  the `sysml:` properties, the boolean `is…` flags and `sysml:portionKind`
+  are. A triple stated twice is one triple to the graph, so only differing
+  objects are a conflict
 - a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
   with no `sysml:value`: the flags spell the operator a feature value is
   written with (`default =`, `:=`), so without a value there is nothing to

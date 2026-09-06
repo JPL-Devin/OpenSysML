@@ -335,14 +335,14 @@ var multiValuedProperties = map[string]bool{
 }
 
 // singleValued reports a property the decoder reads one value of: every sysx:
-// property not listed above, and the ontology's boolean `is…` flags.
+// property not listed above, the ontology's boolean `is…` flags and its portion kind.
 func singleValued(predicate string) bool {
 	name := rdf.LocalName(predicate)
 	switch {
 	case strings.HasPrefix(predicate, rdf.OpenSysML):
 		return !multiValuedProperties[name]
 	case strings.HasPrefix(predicate, rdf.SysML):
-		return strings.HasPrefix(name, "is")
+		return strings.HasPrefix(name, "is") || name == pPortionKind
 	}
 	return false
 }
