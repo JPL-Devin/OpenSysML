@@ -359,3 +359,41 @@ func TestCustomStereotypesWithStandardNamesAreNotConsumed(t *testing.T) {
 		t.Errorf("_d entries = %+v", es)
 	}
 }
+
+func TestRequirementTagsComeOnlyFromStandardStereotypes(t *testing.T) {
+	custom := `<custom:Requirement xmlns:custom="http://example.com/custom" xmi:id="_c" base_Class="_r" Id="X9" Text="Custom text."/>`
+	standard := `<sysml:Requirement xmi:id="_s" base_Class="_r" Id="R1" Text="Shall."/>`
+	for name, apps := range map[string]string{"custom first": custom + standard, "standard first": standard + custom} {
+		t.Run(name, func(t *testing.T) {
+			r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_r" name="Req"/>`, apps)
+			wantLine(t, r.Notation, "requirement def <R1> Req {")
+			wantLine(t, r.Notation, "doc /* Shall. */")
+			wantNoLine(t, r.Notation, "X9> Req")
+			wantNoLine(t, r.Notation, "doc /* Custom text. */")
+			wantLine(t, r.Notation, "applied stereotype «Requirement»: Id = X9; Text = Custom text.")
+		})
+	}
+}
+
+func TestUnmappedElementsKeepStereotypeMetadata(t *testing.T) {
+	r := migrateDocument(t, `
+    <packagedElement xmi:type="uml:Class" xmi:id="_a" name="A"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_b" name="B"/>
+    <packagedElement xmi:type="uml:Activity" xmi:id="_act" name="Run"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="_d" name="link" client="_a" supplier="_gone"/>`,
+		`<sysml:Block xmi:id="_s1" base_Class="_a"/><sysml:Block xmi:id="_s2" base_Class="_b"/>
+  <custom:Tracked xmlns:custom="http://example.com/custom" xmi:id="_c1" base_Activity="_act" owner="ops" priority="2"/>
+  <custom:Reviewed xmlns:custom="http://example.com/custom" xmi:id="_c2" base_Activity="_act"/>
+  <custom:Mount xmlns:custom="http://example.com/custom" xmi:id="_c3" base_Dependency="_d" kind="hard"/>
+  <custom:Legacy xmlns:custom="http://example.com/custom" xmi:id="_c4" base_Dependency="_d"/>`)
+	wantLine(t, r.Notation, "«Tracked» (owner = ops; priority = 2), «Reviewed»")
+	es := entriesFor(r, "_act")
+	if len(es) != 1 || es[0].Verdict != migrate.Unmapped || !strings.Contains(es[0].Note, "«Tracked» (owner = ops; priority = 2), «Reviewed»") {
+		t.Errorf("_act entries = %+v", es)
+	}
+	es = entriesFor(r, "_d")
+	if len(es) != 1 || !strings.Contains(es[0].Note, "«Mount» (kind = hard)") || !strings.Contains(es[0].Note, "«Legacy»") {
+		t.Errorf("_d entries = %+v", es)
+	}
+}

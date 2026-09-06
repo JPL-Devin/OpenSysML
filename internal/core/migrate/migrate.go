@@ -435,19 +435,21 @@ func joinNotes(a, b string) string {
 
 // requirementID reads the requirement's Id tag, as SysML or MagicDraw spell it.
 func requirementID(e *xmi.Element) string {
-	for _, s := range e.Stereotypes {
-		for _, tag := range []string{"Id", "id", "ID"} {
-			if v := s.Tag(tag); v != "" {
-				return v
-			}
-		}
-	}
-	return ""
+	return requirementTag(e, "Id", "id", "ID")
 }
 
 func requirementText(e *xmi.Element) string {
+	return requirementTag(e, "Text", "text")
+}
+
+// requirementTag reads a tag from the standard requirement stereotypes only;
+// a custom stereotype's same-named tag stays in its comment.
+func requirementTag(e *xmi.Element, tags ...string) string {
 	for _, s := range e.Stereotypes {
-		for _, tag := range []string{"Text", "text"} {
+		if !isStandard(s) || !isRequirementStereotype(s.Name) {
+			continue
+		}
+		for _, tag := range tags {
 			if v := s.Tag(tag); v != "" {
 				return v
 			}
@@ -1696,8 +1698,31 @@ func isRequirementStereotype(name string) bool {
 // unmapped records an element with no v2 form and keeps a trace of it as a
 // comment where it would have been written.
 func (m *migration) unmapped(e *xmi.Element, note string) {
+	note = joinNotes(note, m.stereotypeSummary(e))
 	m.w.lines(commentLines("not migrated: " + kindOf(e) + " " + describe(e) + " — " + note))
 	m.add(e, Unmapped, "", note)
+}
+
+// stereotypeSummary lists every stereotype applied to e with its tags, so an
+// element left behind keeps its metadata; "" when none is applied.
+func (m *migration) stereotypeSummary(e *xmi.Element) string {
+	var parts []string
+	for _, s := range e.Stereotypes {
+		var tags []string
+		for k, vs := range s.Tags {
+			tags = append(tags, k+" = "+strings.Join(m.tagValues(vs), ", "))
+		}
+		sort.Strings(tags)
+		part := "«" + s.Name + "»"
+		if len(tags) > 0 {
+			part += " (" + strings.Join(tags, "; ") + ")"
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "applied stereotypes " + strings.Join(parts, ", ")
 }
 
 // unmappedExpr records a constraint whose expression has no v2 form, keeping

@@ -10,8 +10,8 @@ package 'Vehicle Design' {
             /* «ValueType» tags with no v2 form: quantityKind = Vehicle Design::Value Types::mass; unit = Vehicle Design::Value Types::kilogram */
         }
         attribute def Speed :> Mass;
-        /* not migrated: «Unit» InstanceSpecification 'kilogram' — units and quantity kinds are not migrated; use the SI and ISQ libraries */
-        /* not migrated: «QuantityKind» InstanceSpecification 'mass' — units and quantity kinds are not migrated; use the SI and ISQ libraries */
+        /* not migrated: «Unit» InstanceSpecification 'kilogram' — units and quantity kinds are not migrated; use the SI and ISQ libraries; applied stereotypes «Unit» (quantityKind = Vehicle Design::Value Types::mass; symbol = kg) */
+        /* not migrated: «QuantityKind» InstanceSpecification 'mass' — units and quantity kinds are not migrated; use the SI and ISQ libraries; applied stereotypes «QuantityKind» */
         enum def Color {
             red;
             green;
@@ -116,10 +116,10 @@ package Requirements {
         end #RequirementDerivation::original originalRequirement : 'Mass Requirement';
         end #RequirementDerivation::derive derivedRequirement : 'Engine Mass Requirement';
     }
-    /* not migrated: «Verify» Abstraction (_dep_verify_block) — a verify whose client is not a test case has no v2 form */
-    /* not migrated: «Refine» Abstraction (_dep_refine) — its end Vehicle Design::Drive is not migrated */
+    /* not migrated: «Verify» Abstraction (_dep_verify_block) — a verify whose client is not a test case has no v2 form; applied stereotypes «Verify» */
+    /* not migrated: «Refine» Abstraction (_dep_refine) — its end Vehicle Design::Drive is not migrated; applied stereotypes «Refine» */
     dependency 'Speed Requirement' to 'Vehicle Design'::Engine; /* «Trace» */
-    /* not migrated: «Allocate» Abstraction (_dep_allocate) — its end Vehicle Design::Drive is not migrated */
+    /* not migrated: «Allocate» Abstraction (_dep_allocate) — its end Vehicle Design::Drive is not migrated; applied stereotypes «Allocate» */
     allocate 'Vehicle Design'::Motor to 'Vehicle Design'::Engine;
     dependency 'Vehicle Design'::Wheel to 'Vehicle Design'::Engine;
     verification def 'Mass Test' {

@@ -3,12 +3,12 @@
 # migrated 89 element(s): 67 mapped, 14 approximated, 8 unmapped (3 skipped as profile or library content)
 
 ## unmapped (8)
-«Verify» Abstraction	Requirements::<Abstraction>	_dep_verify_block	(a verify whose client is not a test case has no v2 form)
-«Refine» Abstraction	Requirements::<Abstraction>	_dep_refine	(its end Vehicle Design::Drive is not migrated)
-«Allocate» Abstraction	Requirements::<Abstraction>	_dep_allocate	(its end Vehicle Design::Drive is not migrated)
+«Verify» Abstraction	Requirements::<Abstraction>	_dep_verify_block	(a verify whose client is not a test case has no v2 form; applied stereotypes «Verify»)
+«Refine» Abstraction	Requirements::<Abstraction>	_dep_refine	(its end Vehicle Design::Drive is not migrated; applied stereotypes «Refine»)
+«Allocate» Abstraction	Requirements::<Abstraction>	_dep_allocate	(its end Vehicle Design::Drive is not migrated; applied stereotypes «Allocate»)
 Activity	Vehicle Design::Drive	_act_drive	(behaviors are not migrated yet)
-«Unit» InstanceSpecification	Vehicle Design::Value Types::kilogram	_unit_kg	(units and quantity kinds are not migrated; use the SI and ISQ libraries)
-«QuantityKind» InstanceSpecification	Vehicle Design::Value Types::mass	_qk_mass	(units and quantity kinds are not migrated; use the SI and ISQ libraries)
+«Unit» InstanceSpecification	Vehicle Design::Value Types::kilogram	_unit_kg	(units and quantity kinds are not migrated; use the SI and ISQ libraries; applied stereotypes «Unit» (quantityKind = Vehicle Design::Value Types::mass; symbol = kg))
+«QuantityKind» InstanceSpecification	Vehicle Design::Value Types::mass	_qk_mass	(units and quantity kinds are not migrated; use the SI and ISQ libraries; applied stereotypes «QuantityKind»)
 StateMachine	Vehicle Design::Vehicle::Vehicle States	_sm_vehicle	(behaviors are not migrated yet)
 Operation	Vehicle Design::Vehicle::start	_op_start	(operations and receptions are not migrated; v2 has no operation)
 
