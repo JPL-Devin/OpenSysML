@@ -98,6 +98,11 @@
       {"type": "Quantity", "value": 5.0, "unit": "mm"}
     ]},
     "qNullFrame": {"type": "Boolean", "value": true},
+    "mixedMoved": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 10000.0, "unit": "mm"},
+      {"type": "Quantity", "value": 0.02, "unit": "m"},
+      {"type": "Quantity", "value": 30.0, "unit": "m"}
+    ]},
 
     "celsius": {"type": "CoordinateFrame", "text": "'°C_abs' ['°C']"},
     "celsiusUnit": {"type": "MeasurementRef", "unit": "'°C'"},

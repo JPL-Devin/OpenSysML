@@ -24,19 +24,17 @@ func identityPose(n int) framePose {
 	return pose
 }
 
-// isIdentity reports a pose that moves nothing.
-func (p framePose) isIdentity() bool {
+// reorients reports a pose whose basis is not the source's own: one that mixes
+// the axes, as a pure translation does not.
+func (p framePose) reorients() bool {
 	for i, row := range p.basis {
-		if p.origin[i] != 0 {
-			return false
-		}
 		for j, x := range row {
 			if (i == j && x != 1) || (i != j && x != 0) {
-				return false
+				return true
 			}
 		}
 	}
-	return true
+	return false
 }
 
 // transformVector is VectorCalculations::transform: sourceVector, over the
@@ -231,7 +229,7 @@ func (ctx *Context) applyPose(name string, t *CoordinateTransformation, pose fra
 	for i := range v {
 		v[i] = vq.Num[i].AsReal() - pose.origin[i]
 	}
-	if !pose.isIdentity() {
+	if pose.reorients() {
 		// A basis change mixes the axes, so they must share one unit to mix.
 		for i := 1; i < n; i++ {
 			if !(&MeasurementRef{Unit: t.Source.Axes[0]}).equal(&MeasurementRef{Unit: t.Source.Axes[i]}) {

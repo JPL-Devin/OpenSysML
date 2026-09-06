@@ -18,6 +18,13 @@ package Demo {
 		:>> mRefs = (mm, mm, mm);
 		:>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (0.0, 0.0, 5.0) [datum]; }
 	}
+	attribute placed : CoordinateFramePlacement { :>> source = datum; :>> target = lifted; :>> origin = (0.0, 0.0, 5.0) [datum]; }
+	attribute alsoPlaced : CoordinateFramePlacement { :>> source = datum; :>> target = lifted; :>> origin = (0.0, 0.0, 5.0) [datum]; }
+	attribute trs : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Translation((0.0, 0.0, 5.0) [datum]); }
+	attribute alsoTrs : TranslationRotationSequence { :>> source = datum; :>> target = lifted; :>> elements = new Translation((0.0, 0.0, 5.0) [datum]); }
+	attribute def Bespoke :> CoordinateTransformation;
+	attribute bespoke : Bespoke { :>> source = datum; :>> target = lifted; }
+	attribute alsoBespoke : Bespoke { :>> source = datum; :>> target = lifted; }
 }`
 
 func frameKindContext(t *testing.T) (*Context, *symbols.Scope) {
@@ -101,5 +108,59 @@ func TestCoordinateFrameHashesAsItCompares(t *testing.T) {
 		if set.Contains(val) != (src != "Time::UTC") {
 			t.Errorf("set.Contains(%s) = %v", src, set.Contains(val))
 		}
+	}
+}
+
+// TestCoordinateTransformationHashesAsItCompares: transformations of one shape
+// and content are one value whichever object states them, a shapeless one is its
+// object, and a snapshot taken before a write is not the one taken after.
+func TestCoordinateTransformationHashesAsItCompares(t *testing.T) {
+	ctx, scope := frameKindContext(t)
+	eval := func(src string) Value {
+		t.Helper()
+		val, err := evalIn(t, ctx, scope, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		return val
+	}
+	sameAndHashed := func(a, b Value, want bool) {
+		t.Helper()
+		if got := valueEqual(a, b); got != want {
+			t.Errorf("%s == %s is %v, want %v", FormatValue(a), FormatValue(b), got, want)
+		}
+		set := NewSet()
+		set.Add(a)
+		set.Add(b)
+		if got := set.Size() == 1; got != want {
+			t.Errorf("a set of %s and %s holds %d values, want one: %v", FormatValue(a), FormatValue(b), set.Size(), want)
+		}
+		if !set.Contains(b) {
+			t.Errorf("a set holding %s does not contain it", FormatValue(b))
+		}
+	}
+	sameAndHashed(eval("lifted.transformation"), eval("placed"), true)
+	sameAndHashed(eval("placed"), eval("alsoPlaced"), true)
+	sameAndHashed(eval("trs"), eval("alsoTrs"), true)
+	sameAndHashed(eval("trs"), eval("lifted.transformation"), false)
+	sameAndHashed(eval("bespoke"), eval("bespoke"), true)
+	sameAndHashed(eval("bespoke"), eval("alsoBespoke"), false)
+
+	before := eval("lifted.transformation")
+	placement := ctx.instances[before.CoordinateTransformation().Object]
+	if placement == nil {
+		t.Fatal("lifted.transformation is held by no object")
+	}
+	if err := placement.SetFeatureValue(ctx, "origin", eval("(0.0, 0.0, 6.0) [datum]")); err != nil {
+		t.Fatalf("SetFeatureValue(origin): %v", err)
+	}
+	after := eval("lifted.transformation")
+	if before.CoordinateTransformation().Object != after.CoordinateTransformation().Object {
+		t.Fatal("the write moved the transformation to another object")
+	}
+	sameAndHashed(before, after, false)
+	sameAndHashed(after, eval("placed"), false)
+	if got := FormatValue(eval("lifted.transformation.origin")); got != "⟨0.0, 0.0, 6.0⟩ [datum]" {
+		t.Errorf("lifted.transformation.origin = %s after the write", got)
 	}
 }

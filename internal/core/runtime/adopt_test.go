@@ -1555,7 +1555,7 @@ const adoptFrameSrc = `package Demo {
 		:>> mRefs = (mm, mm, mm);
 		:>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (10.0, 0.0, 0.0) [datum]; }
 	}
-	part def Body { attribute frame : CoordinateFrame; attribute velocity : CoordinateFrame; attribute pos : Quantities::VectorQuantityValue; attribute placement : CoordinateTransformation; }
+	part def Body { attribute cf : CoordinateFrame; attribute velocity : CoordinateFrame; attribute pos : Quantities::VectorQuantityValue; attribute placement : CoordinateTransformation; }
 	part body : Body;
 }`
 
@@ -1570,7 +1570,7 @@ func TestAdoptRebindsTheFramesAWrittenValueNames(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 	for feature, src := range map[string]string{
-		"frame": "datum", "velocity": "datum / s", "pos": "(1.0, 2.0, 3.0) [datum]", "placement": "placed.transformation",
+		"cf": "datum", "velocity": "datum / s", "pos": "(1.0, 2.0, 3.0) [datum]", "placement": "placed.transformation",
 	} {
 		val, err := evalIn(t, prev, scope, src)
 		if err != nil {
@@ -1587,9 +1587,9 @@ func TestAdoptRebindsTheFramesAWrittenValueNames(t *testing.T) {
 		t.Fatalf("Adopt: %v", err)
 	}
 	datum := lookupOne(t, ctx.resolver.Index(), "Demo::datum")
-	frame, err := body.GetFeatureValue(ctx, "frame")
+	frame, err := body.GetFeatureValue(ctx, "cf")
 	if err != nil {
-		t.Fatalf("GetFeatureValue(frame): %v", err)
+		t.Fatalf("GetFeatureValue(cf): %v", err)
 	}
 	if decl := frame.Value.CoordinateFrame().Decl; decl != datum {
 		t.Errorf("frame names %p, want the datum declared by the re-analysis %p", decl, datum)
@@ -1603,12 +1603,12 @@ func TestAdoptRebindsTheFramesAWrittenValueNames(t *testing.T) {
 	}
 	newScope := lookupOne(t, ctx.resolver.Index(), "Demo").Scope
 	for expr, want := range map[string]string{
-		"body.frame":          "datum [mm, mm, mm]",
-		"body.frame == datum": "true",
-		"body.frame istype CartesianSpatial3dCoordinateFrame": "true",
+		"body.cf":          "datum [mm, mm, mm]",
+		"body.cf == datum": "true",
+		"body.cf istype CartesianSpatial3dCoordinateFrame": "true",
 		"body.velocity":                                           "datum / s [mm/s, mm/s, mm/s]",
 		"body.velocity == datum / s":                              "true",
-		"body.pos.mRef == body.frame":                             "true",
+		"body.pos.mRef == body.cf":                                "true",
 		"body.placement == placed.transformation":                 "true",
 		"VectorCalculations::transform(body.placement, body.pos)": "⟨-9.0, 2.0, 3.0⟩ [placed]",
 	} {

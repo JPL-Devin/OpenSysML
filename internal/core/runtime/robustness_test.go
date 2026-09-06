@@ -1591,6 +1591,25 @@ func testCoordinateFrameFailureModes(t *testing.T) {
 			attribute def Muddled :> Time::TimeScale { :>> unit = s; :>> transformation : CoordinateFramePlacement { :>> source = Time::UTC; :>> origin = "2024-01-01T00:00:00Z"; } }
 			attribute muddled : Muddled;`,
 			"ISQ::DurationValue", "ConvertQuantity(3.0 [Time::UTC], muddled)", ErrUnevaluableLibraryFunction, "muddled: the origin of its transformation transformation is string, not a quantity on UTC"},
+		{"scale whose one basis direction is the identity in another unit", `
+			attribute shifted : IntervalScale { :>> unit = m; :>> transformation : CoordinateFramePlacement { :>> source = m; :>> origin = 10.0 [m]; :>> basisDirections = 1000.0 [mm]; } }`,
+			"LengthValue", "ConvertQuantity(3.0 [shifted], m)", nil, ""},
+		{"scale whose basis direction scales the axis in another unit", `
+			attribute shifted : IntervalScale { :>> unit = s; :>> transformation : CoordinateFramePlacement { :>> source = s; :>> origin = 10.0 [s]; :>> basisDirections = 1.0 [min]; } }`,
+			"DurationValue", "ConvertQuantity(3.0 [shifted], s)", ErrUnevaluableLibraryFunction, "the basisDirection 1.0 [min] of its transformation transformation is not the identity 1 [s]"},
+		{"scale with two basis directions", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = (1.0 [K], 1.0 [K]); } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrMultiplicityViolation, "states 2 basisDirections over K of one axis"},
+		{"scale whose basis direction is in an incommensurable unit", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = 1.0 [m]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrIncommensurableUnits, "the basisDirection 1.0 [m] of its transformation transformation is not on K, its source"},
+		{"scale whose basis direction is over another frame", `
+			attribute line : CoordinateFrame { :>> mRefs = (K); }
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = (1.0) [line]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrTypeMismatch, "is a vector quantity in line, not a quantity on K, its source"},
+		{"scale whose basis direction scales the axis", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = 2.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrUnevaluableLibraryFunction, "is not the identity 1 [K], and the library gives a scale no other basis"},
 		{"scale with no unit", `
 			attribute def Unitless :> IntervalScale;
 			attribute unitless : Unitless;`,

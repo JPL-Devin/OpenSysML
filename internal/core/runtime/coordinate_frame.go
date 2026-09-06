@@ -261,14 +261,11 @@ func (t *CoordinateTransformation) shapeName() string {
 	return "an unrecognized CoordinateTransformation"
 }
 
-// equal holds for one object, or for two transformations of equal source, target,
-// shape and content: `lbcf.transformation == trs` is how a model states a frame's placement.
+// equal holds for equal source, target, shape and content (`lbcf.transformation == trs`);
+// a transformation of no recognized shape has no content, so it equals only its own object.
 func (t *CoordinateTransformation) equal(other *CoordinateTransformation) bool {
 	if t == nil || other == nil {
 		return t == other
-	}
-	if t.Object != 0 && t.Object == other.Object {
-		return true
 	}
 	if !t.Source.equal(other.Source) || !t.Target.equal(other.Target) {
 		return false
@@ -299,6 +296,8 @@ func (t *CoordinateTransformation) equal(other *CoordinateTransformation) bool {
 		}
 	case t.Affine != nil:
 		return *t.Affine == *other.Affine
+	default:
+		return t.Object == other.Object
 	}
 	return true
 }
@@ -340,6 +339,8 @@ func (t *CoordinateTransformation) key() string {
 		}
 	case t.Affine != nil:
 		b.WriteString(fmt.Sprintf("|m:%v%v", t.Affine.Rotation, t.Affine.Translation))
+	default:
+		b.WriteString("|obj:" + strconv.FormatInt(t.Object, 10))
 	}
 	return b.String()
 }

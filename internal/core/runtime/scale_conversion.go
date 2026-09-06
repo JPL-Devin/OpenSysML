@@ -98,29 +98,39 @@ func (ctx *Context) placementAnchor(name string, scale *CoordinateFrame) (*scale
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: the origin of its transformation %s: %w", ErrIncommensurableUnits, name, t.Name(), err)
 	}
+	if dirs := t.Placement.BasisDirections; len(dirs) > 1 {
+		return nil, fmt.Errorf("%w: %s: its transformation %s states %d basisDirections over %s of one axis; a placement states none or one per axis",
+			ErrMultiplicityViolation, name, t.Name(), len(dirs), t.Source.Name())
+	}
 	for _, dir := range t.Placement.BasisDirections {
-		if err := ctx.identityBasis(name, t, dir); err != nil {
+		if err := identityBasis(name, t, dir); err != nil {
 			return nil, err
 		}
 	}
 	return &scaleAnchor{source: t.Source, origin: onSource}, nil
 }
 
-// identityBasis accepts the one basis direction a scale may state, of magnitude
-// one on its source; a magnitude of any other size scales the axis, which the
-// library gives no meaning for a scale.
-func (ctx *Context) identityBasis(name string, t *CoordinateTransformation, dir Value) error {
+// identityBasis accepts the one basis direction a scale may state: a quantity on its
+// source of magnitude one there; any other size scales the axis, which the library gives no meaning.
+func identityBasis(name string, t *CoordinateTransformation, dir Value) error {
 	q, ok := asQuantity(dir)
-	if !ok {
-		if vq := dir.VectorQuantity(); vq != nil && vq.Dimension() == 1 {
-			q, ok = vq.component(0), true
+	if vq := dir.VectorQuantity(); !ok && vq != nil && vq.Dimension() == 1 {
+		if vq.Frame != nil && !vq.Frame.equal(t.Source) {
+			return fmt.Errorf("%w: %s: the basisDirection of its transformation %s is a vector quantity in %s, not a quantity on %s, its source",
+				ErrTypeMismatch, name, t.Name(), vq.Frame.Name(), t.Source.Name())
 		}
+		q, ok = vq.component(0), true
 	}
 	if !ok {
 		return fmt.Errorf("%w: %s: a basisDirection of its transformation %s is %s, not a quantity on %s",
 			ErrUnevaluableLibraryFunction, name, t.Name(), describeValue(dir), t.Source.Name())
 	}
-	if q.Num.AsReal() != 1 {
+	onSource, err := semantics.ConvertQuantity(*q, t.Source.Axes[0])
+	if err != nil {
+		return fmt.Errorf("%w: %s: the basisDirection %s of its transformation %s is not on %s, its source: %w",
+			ErrIncommensurableUnits, name, q.String(), t.Name(), t.Source.Name(), err)
+	}
+	if onSource.Num.AsReal() != 1 {
 		return fmt.Errorf("%w: %s: the basisDirection %s of its transformation %s is not the identity 1 [%s], and the library gives a scale no other basis",
 			ErrUnevaluableLibraryFunction, name, q.String(), t.Name(), t.Source.Name())
 	}

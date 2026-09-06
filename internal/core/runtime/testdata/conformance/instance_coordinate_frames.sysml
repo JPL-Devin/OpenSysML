@@ -20,7 +20,7 @@ package test {
 	public import VectorCalculations::*;
 	private import ScalarValues::*;
 
-	part def Holder { attribute frame : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); } }
+	part def Holder { attribute cf : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); } }
 
 	part def Rig {
 		attribute spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }
@@ -45,8 +45,8 @@ package test {
 		attribute framedPlusUniform : Position3dVector = p + uniform;
 		attribute framedIsUniform : Boolean = p == uniform;
 		attribute framedIsOther : Boolean = p == (1.0, 2.0, 3.0) [datum];
-		attribute chained : Position3dVector = (1.0, 2.0, 3.0) [holder.frame];
-		attribute chainedFrame : Boolean = chained.mRef == holder.frame;
+		attribute chained : Position3dVector = (1.0, 2.0, 3.0) [holder.cf];
+		attribute chainedFrame : Boolean = chained.mRef == holder.cf;
 
 		attribute datum : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (mm, mm, mm); }
 		part holder : Holder;
@@ -130,6 +130,12 @@ package test {
 		}
 		attribute qNull : Position3dVector = transform(unmoved.transformation, q);
 		attribute qNullFrame : Boolean = qNull.mRef == unmoved;
+		attribute mixed : CoordinateFrame { :>> mRefs = (m, mm, m); }
+		attribute mixedShifted : CoordinateFrame {
+			:>> mRefs = (mm, m, m);
+			:>> transformation : CoordinateFramePlacement { :>> source = mixed; :>> origin = (1.0, 2.0, 3.0) [mixed]; }
+		}
+		attribute mixedMoved : Position3dVector = transform(mixedShifted.transformation, (11.0, 22.0, 33.0) [mixed]);
 
 		attribute celsius : IntervalScale = SI::'°C_abs';
 		attribute celsiusUnit : TemperatureUnit = celsius.unit;
