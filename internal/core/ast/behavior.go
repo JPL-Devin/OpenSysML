@@ -553,8 +553,9 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 }
 
 // ConstraintReferenceOf returns the constraint or requirement an assume or
-// require member states by reference alone (`require P::r1;`, `require r1;`).
-func ConstraintReferenceOf(n Node) *QualifiedName {
+// require member states by reference alone (`require P::r1;`, `require r1;`,
+// `require h.r1;`): a qualified name or a feature chain.
+func ConstraintReferenceOf(n Node) Node {
 	switch m := n.(type) {
 	case *AssumeMember:
 		if m.Reference != nil {
@@ -570,10 +571,11 @@ func ConstraintReferenceOf(n Node) *QualifiedName {
 	return ConditionReference(n)
 }
 
-// ConditionReference returns the name an assume or require member's condition
-// consists of alone (`require r1;`): the reference form the parser keeps as a
-// condition expression, whose target is resolved as a reference subsetting's.
-func ConditionReference(n Node) *QualifiedName {
+// ConditionReference returns the name or feature chain an assume or require
+// member's condition consists of alone (`require r1;`, `require h.r1;`): the
+// reference form the parser keeps as a condition expression, whose target is
+// resolved as a reference subsetting's.
+func ConditionReference(n Node) Node {
 	var expr Node
 	switch m := n.(type) {
 	case *AssumeMember:
@@ -583,8 +585,15 @@ func ConditionReference(n Node) *QualifiedName {
 	default:
 		return nil
 	}
-	if fr, ok := expr.(*FeatureReference); ok {
-		return fr.Name
+	switch e := expr.(type) {
+	case *FeatureReference:
+		if e.Name != nil {
+			return e.Name
+		}
+	case *FeatureChainExpr:
+		if e.Member != nil {
+			return e
+		}
 	}
 	return nil
 }

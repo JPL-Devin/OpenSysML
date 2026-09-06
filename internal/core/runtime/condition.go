@@ -352,9 +352,9 @@ func statementKeyword(node ast.Node) (string, bool) {
 // reference-subsets a requirement states: that requirement's own conditions,
 // which requiring it requires. A reference naming anything else, or one that
 // does not resolve, states the condition its name evaluates to.
-func (ctx *Context) appendReferencedConditions(out []Condition, decl ast.Node, ref *ast.QualifiedName, scope *symbols.Scope,
+func (ctx *Context) appendReferencedConditions(out []Condition, decl ast.Node, ref ast.Node, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
-	if ref == nil || len(ref.Parts) == 0 {
+	if ref == nil {
 		return out
 	}
 	sym := ctx.referencedRequirement(scope, decl, ref)
@@ -379,7 +379,7 @@ func (ctx *Context) appendReferencedConditions(out []Condition, decl ast.Node, r
 // referencedRequirement resolves the requirement or constraint the require/assume
 // member decl reference-subsets, and returns nil when the reference names
 // anything else or does not resolve.
-func (ctx *Context) referencedRequirement(scope *symbols.Scope, decl ast.Node, ref *ast.QualifiedName) *symbols.Symbol {
+func (ctx *Context) referencedRequirement(scope *symbols.Scope, decl ast.Node, ref ast.Node) *symbols.Symbol {
 	if ctx.resolver == nil {
 		return nil
 	}

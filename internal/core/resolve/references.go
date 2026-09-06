@@ -59,7 +59,7 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 // uses; a lone name is the reference form, recorded as decl's reference target.
 func (c *refCollector) constraintCondition(scope *symbols.Scope, decl ast.Node, expr ast.Node) {
 	if ref := ast.ConditionReference(decl); ref != nil {
-		c.addReference(scope, decl, ref)
+		c.referenceTarget(scope, decl, ref)
 		return
 	}
 	c.expr(scope, expr)

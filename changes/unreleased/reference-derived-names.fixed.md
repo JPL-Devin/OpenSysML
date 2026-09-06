@@ -7,8 +7,9 @@
   `::> q` declare no name, so `h.q` written anywhere still names the inherited `H::q`; `assert
   h.q;` written inside `h` still does not find itself. A member redefining several features is
   named by the first (`part :>> engine :>> motor;` is `engine`), a declared short name suppresses
-  the derived name (`part <e> :>> engine;` is `e` alone), and a feature chain names nothing
-  (`part :>> p.q;`). Only a redefinition hides the inherited member it names; an ordinary `:>`
+  the derived name (`part <e> :>> engine;` is `e` alone), a redefined feature chain names nothing
+  (`part :>> p.q;`), and a `require`/`assume` stating a chain (`require h.rule;`) is a reference to
+  its last feature, named `rule` and requiring that constraint's conditions. Only a redefinition hides the inherited member it names; an ordinary `:>`
   subsetting or a reference no longer masks it, so a feature reached through such a member
   resolves as the reference validators resolve it. A name-conflict warning on a member with a
   derived name is reported on the whole declaration, where the validators place it.

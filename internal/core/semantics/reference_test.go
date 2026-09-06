@@ -359,3 +359,35 @@ func TestBareRequireAndAssumeReferenceTheNamedConstraint(t *testing.T) {
 		}
 	}
 }
+
+func TestChainedRequireAndAssumeReferenceTheChainsLastFeature(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		part def H { constraint rule : Q { attribute inner; } }
+		part h : H;
+		requirement r { require h.rule; }
+		requirement r2 { assume h.rule; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	rule := sym(t, sym(t, pkg.Scope, "H").Scope, "rule")
+	for _, owner := range []string{"r", "r2"} {
+		r := sym(t, pkg.Scope, owner)
+		refs := r.Scope.LookupLocalAll("rule")
+		if len(refs) != 1 || refs[0].Naming != symbols.NamedByReference {
+			t.Fatalf("%s: members bound as rule = %v, want one named by reference", owner, refs)
+		}
+		if got := m.ReferencedFeature(refs[0]); got != rule {
+			t.Errorf("%s: ReferencedFeature = %v, want H::rule", owner, got)
+		}
+		if got, ok := m.LookupMember(r, "rule"); !ok || got != refs[0] {
+			t.Errorf("%s: LookupMember(rule) = %v, want the reference member", owner, got)
+		}
+		if _, ok := m.LookupMember(refs[0], "inner"); !ok {
+			t.Errorf("%s: LookupMember(require, inner) not found", owner)
+		}
+		if got := r.Scope.LookupLocalAll("h"); len(got) != 0 {
+			t.Errorf("%s: the chain's head h is bound as a member: %v", owner, got)
+		}
+	}
+}
