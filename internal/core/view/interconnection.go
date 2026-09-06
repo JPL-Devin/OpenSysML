@@ -178,7 +178,7 @@ func ownerOf(sym *symbols.Symbol) *symbols.Symbol {
 // connectorLabel names a connection on an edge: its own name, else the type it
 // is declared with, else the keyword that declared it.
 func (r *Renderer) connectorLabel(connector *symbols.Symbol) string {
-	if name := simpleName(r.fqn(connector)); name != "" && !connector.EffectiveName {
+	if name := simpleName(r.fqn(connector)); name != "" && !connector.EffectiveName() {
 		return notationName(name)
 	}
 	if declared := declType(connector); declared != "" {

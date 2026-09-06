@@ -218,17 +218,18 @@ func TestFeatureValueOverridingOwnedConstraint(t *testing.T) {
 }
 
 // The binding of an owned constraint is found past a specialization that
-// restates the constraint without a value.
+// restates the constraint without a value. The restatement declares the name: a
+// requirement constraint derives none from what it redefines (pilot 2026-07).
 func TestFeatureValueOverridingOwnedConstraintIsTransitive(t *testing.T) {
 	const src = `package P {
 		constraint def C;
 		constraint c0 : C;
 		constraint c1 : C;
 		requirement def R { require constraint c : C = c0; }
-		requirement def S :> R { require constraint :>> c; }
+		requirement def S :> R { require constraint c :>> c; }
 		requirement def T :> S { require constraint :>> c = c1; }
 		requirement def RD { assume constraint a : C default = c0; }
-		requirement def SD :> RD { assume constraint :>> a; }
+		requirement def SD :> RD { assume constraint a :>> a; }
 		requirement def TD :> SD { assume constraint :>> a = c1; }
 	}`
 	overridingDiags(t, src, "= c1")

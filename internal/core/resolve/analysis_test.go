@@ -32,8 +32,21 @@ func TestResolveQualifiedRequirement(t *testing.T) {
 			}
 		}
 	}`)
-	if len(r.Diagnostics) != 0 {
-		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	onlyDuplicateNameWarnings(t, r, 2)
+}
+
+// onlyDuplicateNameWarnings checks that r reports exactly n duplicate-name
+// warnings and nothing else: both members of an objective that require and assume
+// one requirement are named by it (matched run against the pilot).
+func onlyDuplicateNameWarnings(t *testing.T, r *Resolver, n int) {
+	t.Helper()
+	for _, d := range r.Diagnostics {
+		if !d.Warning || d.Code != CodeNameConflict {
+			t.Fatalf("expected only duplicate-name warnings, got %v", r.Diagnostics)
+		}
+	}
+	if len(r.Diagnostics) != n {
+		t.Fatalf("expected %d duplicate-name warnings, got %v", n, r.Diagnostics)
 	}
 }
 
@@ -60,9 +73,7 @@ func TestResolveRequiredRequirementFeatureByPlainName(t *testing.T) {
 			}
 		}
 	}`)
-	if len(r.Diagnostics) != 0 {
-		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
-	}
+	onlyDuplicateNameWarnings(t, r, 2)
 }
 
 // A plain name the referenced requirement does not declare is still reported:

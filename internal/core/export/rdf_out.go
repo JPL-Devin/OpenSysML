@@ -696,7 +696,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		// The prefix a kind keyword was qualified with (`assume constraint c`) is
 		// part of the declaration; `assert` is the AssertConstraintUsage metaclass.
-		if n.PrefixKeyword != "" && !assertedConstraint(n) {
+		if n.PrefixKeyword != "" && !assertedConstraint(n) && !prefixCarriedByGraph(n) {
 			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
 		}
 		e.flags(subject, []boolProperty{
@@ -1533,7 +1533,7 @@ func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) 
 	if !declared {
 		return nil, "", false
 	}
-	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName {
+	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName() {
 		return nil, "", false
 	}
 	return sym.Decl, fqn, true
@@ -1689,6 +1689,23 @@ func referencesFeature(n *ast.Usage) bool {
 	for _, rel := range n.Relationships {
 		if rel.Kind == ast.RelReferences && rel.Target != nil {
 			return true
+		}
+	}
+	return false
+}
+
+// prefixCarriedByGraph reports a prefix the graph already states structurally:
+// a state's `entry`/`do`/`exit` by the subaction membership that owns the
+// action, an `include` by the inclusion relationship.
+func prefixCarriedByGraph(n *ast.Usage) bool {
+	switch n.PrefixKeyword {
+	case "entry", "do", "exit":
+		return n.Kind == ast.UsageAction
+	case "include":
+		for _, rel := range n.Relationships {
+			if rel.Kind == ast.RelIncludes {
+				return true
+			}
 		}
 	}
 	return false

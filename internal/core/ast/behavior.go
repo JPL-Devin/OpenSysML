@@ -552,21 +552,67 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 	return OwnedConstraint{}, false
 }
 
-// NamingFeature returns the relationship naming a constraint declared without a
-// name, as NamingFeature does for a usage; a short name alone is not a declared
-// name (KerML derives effectiveName from declaredName), so it leaves it in place.
-func (c OwnedConstraint) NamingFeature() *Relationship {
-	if c.Ident.Name != "" {
+// ConstraintReferenceOf returns the constraint or requirement an assume or
+// require member states by reference alone (`require P::r1;`, `require r1;`,
+// `require h.r1;`): a qualified name or a feature chain.
+func ConstraintReferenceOf(n Node) Node {
+	switch m := n.(type) {
+	case *AssumeMember:
+		if m.Reference != nil {
+			return m.Reference
+		}
+	case *RequireMember:
+		if m.Reference != nil {
+			return m.Reference
+		}
+	default:
 		return nil
 	}
-	return namingRelationship(c.Relationships, true)
+	return ConditionReference(n)
+}
+
+// ConditionReference returns the name or feature chain an assume or require
+// member's condition consists of alone (`require r1;`, `require h.r1;`): the
+// reference form the parser keeps as a condition expression, whose target is
+// resolved as a reference subsetting's.
+func ConditionReference(n Node) Node {
+	var expr Node
+	switch m := n.(type) {
+	case *AssumeMember:
+		expr = m.Expression
+	case *RequireMember:
+		expr = m.Expression
+	default:
+		return nil
+	}
+	switch e := expr.(type) {
+	case *FeatureReference:
+		if e.Name != nil {
+			return e.Name
+		}
+	case *FeatureChainExpr:
+		if e.Member != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// NamingFeature returns the relationship naming a constraint declared without a
+// name: a requirement constraint is named by the constraint it references
+// (SysML ConstraintUsage::namingFeature); a redefinition leaves it anonymous.
+func (c OwnedConstraint) NamingFeature() *Relationship {
+	if c.Ident.Declared() {
+		return nil
+	}
+	return namingReference(c.Relationships)
 }
 
 // EffectiveName returns the name the constraint answers to: its declared name,
 // else the name its naming feature supplies.
 func (c OwnedConstraint) EffectiveName() (string, source.Span) {
-	if c.Ident.Name != "" {
-		return c.Ident.Name, c.Ident.NameSpan
+	if c.Ident.Declared() {
+		return c.Ident.DeclaredName()
 	}
 	if rel := c.NamingFeature(); rel != nil {
 		return TargetName(rel.Target)
@@ -575,12 +621,13 @@ func (c OwnedConstraint) EffectiveName() (string, source.Span) {
 }
 
 // NamingFeature returns the relationship naming a subject declared without a
-// name, as for a usage: `subject <s> :>> vehicle;` answers to `vehicle`.
+// name: its first redefinition, as for a usage (`subject :>> vehicle;` answers
+// to `vehicle`); a subject that merely references a feature stays anonymous.
 func (m *SubjectMember) NamingFeature() *Relationship {
-	if m == nil || m.Ident.Name != "" {
+	if m == nil || m.Ident.Declared() {
 		return nil
 	}
-	return namingRelationship(m.Relationships, true)
+	return firstRedefinition(m.Relationships)
 }
 
 // EffectiveName returns the name the subject answers to: its declared name,
@@ -589,13 +636,27 @@ func (m *SubjectMember) EffectiveName() (string, source.Span) {
 	if m == nil {
 		return "", source.Span{}
 	}
-	if m.Ident.Name != "" {
-		return m.Ident.Name, m.Ident.NameSpan
+	if m.Ident.Declared() {
+		return m.Ident.DeclaredName()
 	}
 	if rel := m.NamingFeature(); rel != nil {
 		return TargetName(rel.Target)
 	}
 	return "", source.Span{}
+}
+
+// DeclNamedByReference reports whether an unnamed declaration is named by the
+// feature it references, and whether that reference is its only naming feature
+// (a requirement's assume/require/verify member, which no redefinition names).
+func DeclNamedByReference(decl Node) (byReference, referenceOnly bool) {
+	switch decl.(type) {
+	case *AssumeMember, *RequireMember:
+		return true, true
+	}
+	if u, ok := decl.(*Usage); ok && u.NamedByReference() {
+		return true, u.IsRequirementConstraint() || u.IsVerifiedRequirement()
+	}
+	return false, false
 }
 
 // DeclNamingFeature is NamingFeature over every declaration that may borrow its

@@ -88,7 +88,7 @@ func declarationTokens(scope *symbols.Scope) []Token {
 		for _, sym := range s.AllMembers() {
 			// An anonymous member has no name; a borrowed one is highlighted at
 			// the reference it came from.
-			if sym == nil || sym.EffectiveName || sym.NameSpan.Len == 0 {
+			if sym == nil || sym.EffectiveName() || sym.NameSpan.Len == 0 {
 				continue
 			}
 			class, mods := classify(sym)

@@ -623,8 +623,8 @@ func TestConstraintUnnamedRedefinitionValue(t *testing.T) {
 	}
 }
 
-// The symbol spelling reports identically, and a member with no short name says
-// the value is unreachable instead.
+// The symbol spelling reports identically, and a member with no short name takes
+// the first target's name, so the value is unreachable by the others'.
 func TestConstraintUnnamedRedefinitionValueSpellings(t *testing.T) {
 	cases := []struct {
 		name   string

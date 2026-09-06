@@ -37,7 +37,7 @@ func (r *PropertyReader) Values(sym *symbols.Symbol, property string) ([]string,
 		}
 		return presentValues(sym.Name)
 	case PropertyDeclaredName:
-		if sym.EffectiveName {
+		if sym.EffectiveName() {
 			return nil, false
 		}
 		return presentValues(sym.Name)

@@ -14,10 +14,10 @@
             (Usage kind="state" name="on" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (EntryMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="light" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+                  (Usage kind="action" name="light" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="entry")))
               (ExitMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="dark" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))
+                  (Usage kind="action" name="dark" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="exit")))))
           (TransitionMember source="" target="off" trigger="OffSignal")
           (TransitionMember source="on" target="off" trigger="OffSignal")))
       (Membership visibility="default"

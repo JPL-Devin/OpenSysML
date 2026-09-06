@@ -67,10 +67,11 @@ func TestBuildRequirementMemberShortNameKeys(t *testing.T) {
 	}
 }
 
-// A redefining subject, assume or require member without a name of its own takes
-// the redefined feature's name (KerML 7.3.4.5), as `part <p> :>> x` does, and is
-// registered under that name and its short name alike.
-func TestBuildRequirementMemberShortNameEffectiveName(t *testing.T) {
+// A redefining subject, assume or require member with a short name of its own
+// declares a name (KerML 7.3.4.5), so it takes none from the redefined feature
+// and is a member by its short name alone, as `part <p> :>> x` is (the pinned
+// pilot reports no duplicate when R2 also declares `subject x`).
+func TestBuildRequirementMemberShortNameSuppressesDerivedName(t *testing.T) {
 	root := build(t, `package P {
 	part def T;
 	constraint def C;
@@ -98,18 +99,14 @@ func TestBuildRequirementMemberShortNameEffectiveName(t *testing.T) {
 		if !ok {
 			t.Fatalf("short name %q not found in R2", p.short)
 		}
-		byName, ok := req.Scope.LookupLocal(p.name)
-		if !ok {
-			t.Fatalf("redefined name %q not found in R2", p.name)
+		if _, ok := req.Scope.LookupLocal(p.name); ok {
+			t.Errorf("R2 answers to %q; a short-named redefinition derives no name", p.name)
 		}
-		if byShort != byName {
-			t.Errorf("<%s> and %q map to different symbols", p.short, p.name)
+		if byShort.Name != p.short || byShort.ShortName != p.short {
+			t.Errorf("<%s> = %q <%s>, want a member by <%s> alone", p.short, byShort.Name, byShort.ShortName, p.short)
 		}
-		if byShort.Name != p.name || byShort.ShortName != p.short {
-			t.Errorf("<%s> = %q <%s>, want %q <%s>", p.short, byShort.Name, byShort.ShortName, p.name, p.short)
-		}
-		if !byShort.EffectiveName || byShort.NamingTarget == nil {
-			t.Errorf("<%s> effective=%v target=%v; want a name borrowed from its redefinition", p.short, byShort.EffectiveName, byShort.NamingTarget)
+		if byShort.EffectiveName() || byShort.NamingTarget != nil {
+			t.Errorf("<%s> effective=%v target=%v; want a declared name", p.short, byShort.EffectiveName(), byShort.NamingTarget)
 		}
 	}
 }

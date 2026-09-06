@@ -58,13 +58,20 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 // that clause outside its relationship list when it is written with the
 // `references` keyword, so it is asked for its own.
 func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
-	if end, ok := sym.Decl.(*ast.ConnectorEnd); ok {
-		return end.ReferencedTarget()
+	switch decl := sym.Decl.(type) {
+	case *ast.ConnectorEnd:
+		return decl.ReferencedTarget()
+	case *ast.Usage:
+		if rel := decl.ReferenceSubsetting(); rel != nil {
+			return rel.Target
+		}
+		return nil
+	}
+	if ref := ast.ConstraintReferenceOf(sym.Decl); ref != nil {
+		return ref
 	}
 	for _, rel := range RelationshipsOf(sym) {
-		// `include 'add fuel'` is an OwnedReferenceSubsetting in the grammar
-		// (SysML.xtext IncludeUseCaseUsage), so an inclusion contributes too.
-		if rel != nil && (rel.Kind == ast.RelReferences || rel.Kind == ast.RelIncludes) && rel.Target != nil {
+		if rel != nil && rel.Kind.ReferenceSubsets() && rel.Target != nil {
 			return rel.Target
 		}
 	}

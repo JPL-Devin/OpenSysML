@@ -137,7 +137,7 @@ visibility. Locked by `TestConnectorEndDoesNotReferenceAFeatureOfTheConnector` a
 A feature with no declared name takes the **effective name** of the feature it redefines (KerML
 7.3.4.5), so `feature redefines c` binds a name only if `c` resolves. Where `c` is private in the
 redefined scope it does not, and the member binds nothing — indexing the borrowed name anyway masks
-the later error a reference through it should draw. `bindsEffectiveName`
+the later error a reference through it should draw. `BindsName`
 (`internal/core/resolve/unqualified.go`) excludes a member whose effective name comes from a
 redefinition that names no visible feature, memoized in `Resolver.effNames` under the existing
 `naming` cycle guard and applied through `localBinding` on every local step of the unqualified walk.
