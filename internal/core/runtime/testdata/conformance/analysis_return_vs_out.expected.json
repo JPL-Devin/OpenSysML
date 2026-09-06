@@ -1,0 +1,12 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::unnamed",
+  "outputs": {
+    "doubled": {"type": "Real", "value": 10.0}
+  },
+  "result": {"type": "Real", "value": 20.0},
+  "reads": {
+    "test::namedRead": {"type": "Real", "value": 15.0}
+  }
+}

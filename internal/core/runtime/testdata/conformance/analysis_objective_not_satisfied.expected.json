@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::budget",
+  "outputs": {
+    "total": {"type": "Real", "value": 12.0}
+  },
+  "verdicts": {
+    "affordable": "not satisfied"
+  }
+}

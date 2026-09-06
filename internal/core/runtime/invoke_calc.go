@@ -180,6 +180,10 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// A calc computes nothing when it neither returns a value nor binds an output
 	// feature — by a declaration or by an assignment in its body.
 	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
+		if len(shape.Outputs) > 0 && shape.resultOutput() == nil {
+			return nil, fmt.Errorf("%w: %s binds none of its outputs (%s)",
+				ErrNoResultExpression, label, shape.outputNames())
+		}
 		return nil, fmt.Errorf("%w: %s has no return expression%s", ErrNoResultExpression, label, unboundResultHint(chain))
 	}
 
@@ -407,7 +411,20 @@ type calcArgs struct {
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
+	if err := ctx.requireCalcNotCase(sym); err != nil {
+		return Value{}, err
+	}
 	return ctx.invokeCalc(sym, calcArgs{positional: args}, scope)
+}
+
+// requireCalcNotCase refuses an analysis case as the target of a calc
+// invocation: run as a case, it also binds a subject and reports its verdicts.
+func (ctx *Context) requireCalcNotCase(sym *symbols.Symbol) error {
+	if sym == nil || !IsAnalysisSymbol(sym) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s is %s, not a calc definition or usage; run it as an analysis case",
+		ErrNotACalc, ctx.qualifiedSymbolName(sym), describeDecl(sym.Decl))
 }
 
 // InvokeCalcNamed invokes a calculation with arguments bound by parameter name.
@@ -415,6 +432,9 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 func (ctx *Context) InvokeCalcNamed(sym *symbols.Symbol, args map[string]Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
+	if err := ctx.requireCalcNotCase(sym); err != nil {
+		return Value{}, err
+	}
 	return ctx.invokeCalc(sym, calcArgs{named: args}, scope)
 }
 
@@ -571,12 +591,12 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	}
 
 	if ec.trace != nil {
-		ec.trace.RecordCalcEnter(shape.Name)
+		ec.trace.RecordCalculationEnter(shape.Kind, shape.Name)
 	}
 
 	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, locals, nil); err != nil {
 		if ec.trace != nil {
-			ec.trace.RecordCalcExitError(shape.Name, err)
+			ec.trace.RecordCalculationExitError(shape.Kind, shape.Name, err)
 		}
 		return Value{}, err
 	}
@@ -584,9 +604,9 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	result, err := ctx.runCalcBody(shape, frame, callerScope, self, activation)
 	if ec.trace != nil {
 		if err != nil {
-			ec.trace.RecordCalcExitError(shape.Name, err)
+			ec.trace.RecordCalculationExitError(shape.Kind, shape.Name, err)
 		} else {
-			ec.trace.RecordCalcExit(shape.Name, result)
+			ec.trace.RecordCalculationExit(shape.Kind, shape.Name, result)
 		}
 	}
 	if err != nil {

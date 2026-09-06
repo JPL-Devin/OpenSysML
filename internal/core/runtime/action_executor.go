@@ -854,8 +854,8 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 	case *ast.ActionExecutionNode:
 		return e.stepActionExecutionNode(tokenIdx)
 	case *ast.Usage:
-		// Nested action invocation
-		if node.Kind == ast.UsageAction {
+		// Nested action invocation, or a nested case performed as a step
+		if node.Kind == ast.UsageAction || lower.IsCaseNode(node) {
 			return e.stepNestedAction(tokenIdx)
 		}
 		return fmt.Errorf("unsupported usage kind in action: %v", node.Kind)
@@ -952,10 +952,11 @@ func (e *ActionExecutor) removeToken(tokenIdx int) {
 // retireToken ends a token's flow. Its effects live in the action's features, so
 // retiring it carries nothing out; the action completes once no token is left.
 // The last token of a nested flow instead leaves it, completing its node — unless
-// a body statement runs that flow, which completes the node once the run ends.
+// a body statement runs that flow (the root's included), which completes the
+// node once the run ends.
 func (e *ActionExecutor) retireToken(tokenIdx int) error {
 	frame := e.tokens[tokenIdx].frame
-	if frame == e.root {
+	if frame == e.root && !frame.inBody {
 		e.removeToken(tokenIdx)
 		if len(e.tokens) == 0 {
 			e.state = StateCompleted
@@ -1343,6 +1344,18 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	perf, err := e.beginPerformance(token.frame, graph, usage, nil)
 	if err != nil {
 		return err
+	}
+
+	// A nested case is a step of its own kind: the analysis it is runs to completion.
+	if isCaseStep(usage) {
+		return e.runPausable(tokenIdx, func() error {
+			if err := e.performCase(perf); err != nil {
+				return err
+			}
+			return e.endPerformance(perf)
+		}, func(tokenIdx int) error {
+			return e.completeNode(tokenIdx, perf)
+		})
 	}
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))

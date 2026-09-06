@@ -234,6 +234,9 @@ type Block struct {
 	// Own marks the flow a case body states of its own (case_body.go), which runs
 	// in the body's frame rather than a block's so its results read what it left.
 	Own bool
+	// Stated marks Graph as the token flow the body's successions and control
+	// nodes state; unset, Graph runs the body's steps in declaration order.
+	Stated bool
 }
 
 // A block is a statement in its own right: the anonymous action usage a loop or
@@ -811,9 +814,8 @@ func nodeAnswering(nodes []ast.Node, name string) ast.Node {
 func lowerFeatures(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 	if graph.Features == nil {
 		graph.Features = make(map[ast.Node][]Feature)
-		graph.Scopes = make(map[ast.Node]*symbols.Scope)
 	}
-	graph.Scopes[node] = scope
+	recordNodeScope(graph, node, scope)
 	var features []Feature
 	for _, member := range node.Members {
 		m, ok := unwrapMembership(member).(*ast.Usage)

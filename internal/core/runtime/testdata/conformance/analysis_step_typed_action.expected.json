@@ -1,0 +1,6 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::typed",
+  "result": {"type": "Real", "value": 10.0}
+}

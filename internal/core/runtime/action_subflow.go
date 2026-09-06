@@ -51,14 +51,19 @@ func (e *ActionExecutor) enterSubflow(tokenIdx int, perf *actionFrame) error {
 func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 	node := perf.node
 	if perf.graph == nil || perf.graph.Initial == nil {
-		return fmt.Errorf("%w: action node %s owns a flow that cannot be built",
-			ErrInvalidActionFlow, ActionNodeName(node))
+		return fmt.Errorf("%w: %s owns a flow that cannot be built",
+			ErrInvalidActionFlow, perf.describe())
 	}
 	perf.inBody = true
 	e.tokens = append(e.tokens, Token{ID: e.nextTokenID, Location: perf.graph.Initial, frame: perf})
 	e.nextTokenID++
+	// The root performance, a case body's own flow, has no node and is traced by name.
+	name := ActionNodeName(node)
+	if node == nil {
+		name = perf.describe()
+	}
 	if tr := e.trace(); tr != nil {
-		tr.RecordActionNodeEnter(ActionNodeName(node))
+		tr.RecordActionNodeEnter(name)
 	}
 	for perf.live > 0 {
 		if name := e.breakpointHit(); name != "" {
@@ -83,7 +88,7 @@ func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 			ErrActionDeadlock, len(e.tokensIn(perf)), perf.describe())
 	}
 	if tr := e.trace(); tr != nil {
-		tr.RecordActionNodeExit(ActionNodeName(node))
+		tr.RecordActionNodeExit(name)
 	}
 	return nil
 }

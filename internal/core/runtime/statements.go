@@ -164,6 +164,9 @@ type stmtHost interface {
 	// performNode runs a nested action a block's flow declares, node of graph,
 	// as a performance of its own with engine's block-locals in reach.
 	performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error)
+	// runFlow runs the token flow a body states of its own (lower.Block.Stated):
+	// its successions and control nodes, as the host's own performance.
+	runFlow(block lower.Block) (stmtFlow, error)
 	// performer is the object running the behavior, nil when it runs outside any
 	// object: what the body's names read and write through.
 	performer() *Instance
@@ -341,7 +344,7 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 	case lower.Effect:
 		return flowNext, e.host.effect(s)
 	case lower.Unsupported:
-		return flowNext, fmt.Errorf("%s: %s in a body is not executable", e.host.describe(), s.Description)
+		return flowNext, fmt.Errorf("%w: %s: %s in a body is not executable", ErrStatementNotExecutable, e.host.describe(), s.Description)
 	default:
 		return flowNext, fmt.Errorf("%s: unsupported statement %T", e.host.describe(), stmt)
 	}
@@ -387,12 +390,16 @@ func (e *stmtEngine) block(block lower.Block) (stmtFlow, error) {
 }
 
 // runBlock runs a block's statements, or the token flow it states where a member
-// of it is an action node rather than a statement.
+// of it is an action node rather than a statement: the host's where the body
+// states its successions, else its nodes one after another.
 func (e *stmtEngine) runBlock(block lower.Block) (stmtFlow, error) {
-	if block.Graph != nil {
-		return e.blockFlow(block)
+	switch {
+	case block.Graph == nil:
+		return e.run(block.Statements)
+	case block.Stated:
+		return e.host.runFlow(block)
 	}
-	return e.run(block.Statements)
+	return e.blockFlow(block)
 }
 
 // blockFlow runs a block that is a token flow of its own (lower/block_graph.go):

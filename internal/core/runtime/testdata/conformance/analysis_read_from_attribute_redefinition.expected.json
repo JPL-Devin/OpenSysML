@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::cityAnalysis",
+  "outputs": {
+    "fe": {"type": "Real", "value": 50.0}
+  },
+  "reads": {
+    "test::economyRead": {"type": "Real", "value": 50.0}
+  }
+}

@@ -470,7 +470,7 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 	}
 	if run, ok := ctx.calcUsageRuns[reader.activation][key]; ok {
 		if ctx.trace != nil {
-			ctx.trace.RecordCalcUsageReuse(shape.Name)
+			ctx.trace.RecordCalcUsageReuse(shape.Kind, shape.Name)
 		}
 		return run, nil
 	}
@@ -554,7 +554,7 @@ func (ctx *Context) forgetCalcUsage(activation int64, sym *symbols.Symbol) {
 func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext, args calcArgs) (*EvalContext, *EvalContext, frame, error) {
 	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, reader.scope), reader.self)
 	if ec.trace != nil {
-		ec.trace.RecordCalcEnter(shape.Name)
+		ec.trace.RecordCalculationEnter(shape.Kind, shape.Name)
 	}
 
 	env := frame{vars: make(map[string]Value, len(shape.Params)), aliases: shape.Aliases}
@@ -573,7 +573,7 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext, args ca
 	// value the usage or its definition declares for it.
 	if err := ctx.bindCalcParameters(shape, ec, args, reader.scope, env, nested); err != nil {
 		if ec.trace != nil {
-			ec.trace.RecordCalcExitError(shape.Name, err)
+			ec.trace.RecordCalculationExitError(shape.Kind, shape.Name, err)
 		}
 		return nil, nil, frame{}, err
 	}
@@ -617,15 +617,15 @@ func (ctx *Context) runCalcUsage(
 	result, returned, err := runCalcSteps(engine, host, shape)
 	if err != nil {
 		if ec.trace != nil {
-			ec.trace.RecordCalcExitError(shape.Name, err)
+			ec.trace.RecordCalculationExitError(shape.Kind, shape.Name, err)
 		}
 		return nil, fmt.Errorf("%s: %w", shape.Label, err)
 	}
 	if ec.trace != nil {
 		if returned {
-			ec.trace.RecordCalcExit(shape.Name, result)
+			ec.trace.RecordCalculationExit(shape.Kind, shape.Name, result)
 		} else {
-			ec.trace.RecordCalcUsageExit(shape.Name)
+			ec.trace.RecordCalcUsageExit(shape.Kind, shape.Name)
 		}
 	}
 

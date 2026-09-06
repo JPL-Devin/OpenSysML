@@ -10,18 +10,19 @@ import (
 
 // calcStmtHost runs a calculation body's statements: it owns its locals, its
 // output features and its returned value, and rejects every outside effect.
-// A case body (an analysis) is an action's: its action nodes run as
-// subperformances of the case, which perfs holds; a calc's body performs nothing.
+// A case body (an analysis) is an action's: its steps run as subperformances of
+// the case, which flow steps the tokens of; a calc's body performs nothing.
 type calcStmtHost struct {
 	ctx    *Context
 	shape  *calcShape
 	self   *Instance
 	result Value // the value its `return` yielded
+	flow   *ActionExecutor
 	perfs  *performances
 	env    *stmtEnv // the body's values, which a step's outputs return to
 }
 
-// attachPerformances makes the host perform the action nodes of a case body as
+// attachPerformances makes the host perform the steps of a case body as
 // subperformances of the case, whose performance is the root the body reads through.
 func (h *calcStmtHost) attachPerformances(engine *stmtEngine) {
 	if !h.shape.performs() {
@@ -36,7 +37,16 @@ func (h *calcStmtHost) attachPerformances(engine *stmtEngine) {
 		label:      h.shape.Label,
 		outer:      append(append([]frame{}, engine.env.enclosing...), engine.env.data),
 	}
-	h.perfs = &performances{ctx: h.ctx, self: h.self, root: root, owner: h}
+	h.flow = &ActionExecutor{
+		performances:     performances{ctx: h.ctx, self: h.self, root: root, owner: h},
+		action:           h.shape.Sym,
+		state:            StateRunning,
+		nextTokenID:      1,
+		breakpoints:      make(map[string]bool),
+		firedBreakpoints: make(map[breakpointVisit]bool),
+		mergeVisited:     make(map[mergeVisit]bool),
+	}
+	h.perfs = &h.flow.performances
 	h.env = engine.env
 	engine.env.perf = root
 }
@@ -211,11 +221,34 @@ func (h *calcStmtHost) pauseAt(ast.Node) error {
 	return nil
 }
 
-// runOwnFlow refuses the token flow a step states of its own (`first`, a
-// succession inside it): a case body runs its steps in sequence, not as tokens.
+// runOwnFlow runs the token flow a step of the case states of its own to completion.
 func (h *calcStmtHost) runOwnFlow(perf *actionFrame) error {
-	return fmt.Errorf("%w: %s: the flow %s states of its own is not executable in a case body; perform an action that states it",
-		ErrCaseStepFlow, h.describe(), nodeDescription(perf.node))
+	return h.flow.runSubflow(perf)
+}
+
+// runFlow runs the token flow a case body states with its successions and control
+// nodes, as the case's own performance; a calculation states none.
+func (h *calcStmtHost) runFlow(block lower.Block) (stmtFlow, error) {
+	if h.flow == nil {
+		return flowNext, fmt.Errorf("%w: %s: a flow of steps in a body is not executable",
+			ErrStatementNotExecutable, h.describe())
+	}
+	if block.Graph.Initial == nil {
+		reason := "no step starts the flow"
+		if _, err := lower.CaseFlowStart(block.Graph); err != nil {
+			reason = err.Error()
+		}
+		return flowNext, fmt.Errorf("%w: %s: %s", ErrInvalidActionFlow, h.describe(), reason)
+	}
+	root := h.flow.root
+	h.flow.graph = block.Graph
+	root.graph = block.Graph
+	root.connections = block.Graph.Connections
+	root.live = 1
+	if err := h.flow.runSubflow(root); err != nil {
+		return flowNext, err
+	}
+	return flowNext, nil
 }
 
 // connectsPins reports whether graph states a binding or flow at a pin of node.

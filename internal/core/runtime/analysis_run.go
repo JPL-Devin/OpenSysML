@@ -161,7 +161,8 @@ type AnalysisVerdict struct {
 	// Kind is "objective" or "assertion".
 	Kind string
 
-	// Name names the objective, or the asserted condition as written.
+	// Name names the objective or the asserted constraint usage, or spells an
+	// anonymous assertion's condition as written.
 	Name string
 
 	// Status is what the check decided.
@@ -363,9 +364,23 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 			sym: sym, kind: run.shape.Kind, what: "assertion",
 			element: run.shape.Name, self: run.self, bindings: bindings,
 		}
-		verdicts = append(verdicts, ctx.analysisVerdict("assertion", cond.Label(), check, []Condition{cond}))
+		verdicts = append(verdicts, ctx.analysisVerdict("assertion", assertionName(cond), check, []Condition{cond}))
 	}
 	return verdicts
+}
+
+// assertionName names an asserted condition: the named constraint stating it, or
+// the condition as written when only a case (the one run, or its definition) names it.
+func assertionName(cond Condition) string {
+	for i := len(cond.Constraints) - 1; i >= 0; i-- {
+		if name := cond.Constraints[i].Name; name != "" {
+			return name
+		}
+	}
+	if owner := cond.Owner(); owner != nil && !IsAnalysisSymbol(owner) {
+		return owner.Name
+	}
+	return cond.Label()
 }
 
 // analysisVerdict evaluates one check's conditions and words what it decided.
