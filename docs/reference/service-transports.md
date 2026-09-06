@@ -52,14 +52,17 @@ capability's definition rather than something a client has to guess:
 | The capability describes | A request that needs it | What a client should do |
 |---|---|---|
 | what the service can be *asked*: `strict_conformance`, `inline_language`, `parse_sources`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query`, `document_query`, `render_document` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
-| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value`, `complex_values`, `structured_values` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
+| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value`, `complex_values`, `structured_values`, `measurement_refs` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
 
-`complex_values` and `structured_values` sit in both rows: a complex — or an array, vector or
-vector quantity — in a response is reported as an `unsupported` null without it, and one in an
-action input or calc argument is refused with `UNIMPLEMENTED` rather than read as another value
-— a service that predates the arm would read it as an unknown field, so every client checks
-the list before sending one (`structured_values` covers a structured value nested inside a
-sequence or array as well as one at the top level). In the other direction, a client built
+`complex_values`, `structured_values` and `measurement_refs` sit in both rows: a complex — or
+an array, vector or vector quantity, or a bare measurement reference — in a response is
+reported as an `unsupported` null without it, and one in an action input or calc argument is
+refused with `UNIMPLEMENTED` rather than read as another value — a service that predates the
+arm would read it as an unknown field, so every client checks the list before sending one
+(each covers its value nested inside a sequence or array as well as one at the top level;
+`measurement_refs` is its own capability rather than part of `structured_values`, so a client
+built against the three structured arms keeps reading a bare reference as the unsupported null
+it read before). In the other direction, a client built
 before an arm existed parses a newer service's answer as an unknown field — a `Value` with no
 kind set — and no client this repository ships reads that as a plain null or crashes: Python
 raises `UnsupportedValueError`, Rust returns `Error::Decode`, Go reads an `unsupported` null
