@@ -23,6 +23,12 @@ package DisjoiningMember {
 	// Feature-chain ends, as the Kernel Semantic Library writes them.
 	disjoint earlier.successors from later.predecessors;
 
+	// A global name and a word KerML does not reserve begin an end too.
+	feature part : Occ;
+	disjoint $::DisjoiningMember::A from B;
+	disjoining part disjoint part from B;
+	disjoining E disjoint $::DisjoiningMember::part.successors from later;
+
 	// The declaration clause stays a clause of the declaration it follows.
 	class C specializes A disjoint from B;
 }

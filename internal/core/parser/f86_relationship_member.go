@@ -72,8 +72,7 @@ func (p *Parser) atRelationshipMember() bool {
 			if t.Kind == lexer.Keyword && t.KeywordID == name {
 				return p.atRelationshipMemberFirstEnd(off + 1)
 			}
-			if t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName &&
-				t.Kind != lexer.Lt && t.Kind != lexer.Gt {
+			if !p.atNameAt(off) && t.Kind != lexer.Lt && t.Kind != lexer.Gt {
 				break
 			}
 		}
@@ -93,11 +92,14 @@ func (p *Parser) atRelationshipMemberKeyword() bool {
 
 // atRelationshipMemberFirstEnd reports whether a name starts at off, which is
 // what tells `inverse f of g;` (a member) from the `inverse of g` clause of a
-// feature declaration. A feature-chain end (`disjoint a.b from c.d;`) starts
-// with a name too, so it answers here as well.
+// feature declaration. It accepts what parseRelationshipTarget reads: a name
+// (a word KerML does not reserve among them), a global `$::` name, or the start
+// of a feature chain.
 func (p *Parser) atRelationshipMemberFirstEnd(off int) bool {
-	t := p.peekN(off)
-	return t.Kind == lexer.Identifier || t.Kind == lexer.UnrestrictedName
+	if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+		off += 2
+	}
+	return p.atNameAt(off)
 }
 
 // parseRelationshipMember parses a keyword-first KerML relationship member into

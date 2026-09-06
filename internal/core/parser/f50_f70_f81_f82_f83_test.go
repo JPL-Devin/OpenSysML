@@ -62,6 +62,18 @@ func TestF50F70F81F82F83AndF62F63Parse(t *testing.T) {
 			"namespace_disjoint.kerml",
 		},
 		{
+			"global_disjoint_end",
+			"package P { classifier A; classifier B; disjoint $::P::A from B; }",
+			`(RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="$::P::A" target="B"`,
+			"global_disjoint_end.kerml",
+		},
+		{
+			"keyword_named_disjoint_end",
+			"package P { classifier B; feature part : B; disjoining part disjoint part from B; }",
+			`(RelationshipMember visibility="default" kind="disjoint" name="part" keyword="disjoint" source="part" target="B"`,
+			"keyword_named_disjoint_end.kerml",
+		},
+		{
 			"classifier_multiplicity",
 			"package P { classifier A; classifier B [1] specializes A; }",
 			"(Multiplicity",

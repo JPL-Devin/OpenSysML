@@ -31,6 +31,13 @@
           (Documentation locale="")))
       (RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="earlier.successors" target="later.predecessors" conjugated=false)
       (Membership visibility="default"
+        (Usage kind="attribute" name="part" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=Occ
+            (*ast.QualifiedName))))
+      (RelationshipMember visibility="default" kind="disjoint" name="" keyword="disjoint" source="$::DisjoiningMember::A" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="disjoint" name="part" keyword="disjoint" source="part" target="B" conjugated=false)
+      (RelationshipMember visibility="default" kind="disjoint" name="E" keyword="disjoint" source="$::DisjoiningMember::part.successors" target="later" conjugated=false)
+      (Membership visibility="default"
         (Usage kind="class" name="C" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="specializes" target=A
             (*ast.QualifiedName))
