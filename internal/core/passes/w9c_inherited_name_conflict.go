@@ -122,8 +122,9 @@ func (c *w9cConflictChecker) candidates(reach w9cReach) map[string][]w9cCandidat
 	return byName
 }
 
-// ownMembers is the visible member sym declares under each name. A document
-// that re-declares a library file shares its names, so only sym's copy counts.
+// ownMembers is the visible member sym declares under each name, its short
+// name included (KerML 7.2.2). A document that re-declares a library file
+// shares its names, so only sym's copy counts.
 func (c *w9cConflictChecker) ownMembers(sym *symbols.Symbol) map[string]*symbols.Symbol {
 	out := map[string]*symbols.Symbol{}
 	// The index carries a library type's nested names in both cache states;
@@ -135,8 +136,21 @@ func (c *w9cConflictChecker) ownMembers(sym *symbols.Symbol) map[string]*symbols
 			continue
 		}
 		out[name] = member
+		if short := shortNameOf(member); short != "" && short != name {
+			out[short] = member
+		}
 	}
 	return out
+}
+
+// shortNameOf is a symbol's short name, read from its declaration when the
+// index did not record one.
+func shortNameOf(sym *symbols.Symbol) string {
+	if sym.ShortName != "" {
+		return sym.ShortName
+	}
+	id, _ := symbols.DeclIdent(sym.Decl)
+	return id.ShortName
 }
 
 // checkOwnedNames reports each member sym declares whose name a library base
@@ -149,16 +163,35 @@ func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[str
 	owned, aliases := c.resolver.DistinguishableMembers(sym.Scope)
 	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
 		for _, mem := range mems {
-			cands := byName[mem.Name]
-			if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
-				c.hasUnresolvedRedefinition(mem) {
+			if resolve.ImplicitlyRedefined(mem) || c.hasUnresolvedRedefinition(mem) {
 				continue
 			}
-			if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
-				c.report(nameSpanOf(mem), mem.Name, from)
+			for _, key := range ownedKeysOf(mem) {
+				cands := byName[key.name]
+				if len(cands) == 0 {
+					continue
+				}
+				if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
+					c.report(key.span, key.name, from)
+				}
 			}
 		}
 	}
+}
+
+// ownedKeysOf is each identifier a member binds, short name included, at the
+// span it was written; a member naming itself another way binds its own name.
+func ownedKeysOf(mem *symbols.Symbol) []w9cKey {
+	keys := w9cKeysOf(mem)
+	if len(keys) == 0 {
+		return []w9cKey{{name: mem.Name, span: nameSpanOf(mem)}}
+	}
+	for i := range keys {
+		if keys[i].span == (source.Span{}) {
+			keys[i].span = nameSpanOf(mem)
+		}
+	}
+	return keys
 }
 
 // notSpecializedBy drops the inherited features mem redefines or subsets, which
