@@ -54,7 +54,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
-	walk := newObjectiveWalk()
+	walk := newRoleWalk()
 	seenRoles := m.explicitRedefinitions(sym)
 	for _, sup := range m.roleSources(owner) {
 		if !behaviorLike(sup) {
@@ -115,72 +115,76 @@ func (m *Model) positionalActorRedefinitions(owner, sym *symbols.Symbol) []*symb
 		return nil
 	}
 	var out []*symbols.Symbol
-	walk := &actorWalk{visiting: map[*symbols.Symbol]bool{owner: true}, done: map[*symbols.Symbol][]*symbols.Symbol{}}
+	walk := newRoleWalk()
+	placed := map[*symbols.Symbol]bool{sym: true}
+	replaced := replacements{}
 	for _, sup := range m.roleSources(owner) {
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited := m.effectiveActors(sup, walk)
-		if position < len(inherited) && inherited[position] != sym && !slices.Contains(out, inherited[position]) {
-			out = append(out, inherited[position])
+		inherited, inheritedReplaced := m.effectiveActors(sup, walk)
+		for f, by := range inheritedReplaced {
+			for b := range by {
+				replaced.add(f, b)
+			}
+		}
+		if position < len(inherited) {
+			out = placeRole(out, placed, inherited[position], replaced)
 		}
 	}
 	return out
 }
 
-// actorWalk is the state of one effectiveActors query, as objectiveWalk is for objectives.
-type actorWalk struct {
-	visiting map[*symbols.Symbol]bool
-	done     map[*symbols.Symbol][]*symbols.Symbol
-	cuts     int
-}
-
-// effectiveActors lists sym's actor parameters in order: its own, then those its generals
-// present that none of its own redefines by clause or position (KerML §7.4.7.2).
-func (m *Model) effectiveActors(sym *symbols.Symbol, walk *actorWalk) []*symbols.Symbol {
+// effectiveActors lists sym's actor parameters: its own, then each general's that none of
+// its own redefines by clause or position (KerML §7.4.7.2), restatements merged as for objectives.
+func (m *Model) effectiveActors(sym *symbols.Symbol, walk *roleWalk) ([]*symbols.Symbol, replacements) {
 	if sym == nil {
-		return nil
+		return nil, nil
 	}
 	if walk.visiting[sym] {
 		walk.cuts++
-		return nil
+		return nil, nil
 	}
 	if done, ok := walk.done[sym]; ok {
-		return done
+		return done.roles, done.replaced
 	}
 	walk.visiting[sym] = true
 	defer delete(walk.visiting, sym)
 	cuts := walk.cuts
+	replaced := replacements{}
 	owned := ownedRoles(sym, actorRole)
+	explicit := make([]map[*symbols.Symbol]bool, len(owned))
+	for i, o := range owned {
+		explicit[i] = m.explicitRedefinitions(o)
+	}
 	out := append([]*symbols.Symbol(nil), owned...)
-	claimed := map[*symbols.Symbol]bool{}
+	placed := map[*symbols.Symbol]bool{}
 	for _, o := range owned {
-		claimed[o] = true
-		for target := range m.explicitRedefinitions(o) {
-			claimed[target] = true
-		}
+		placed[o] = true
 	}
 	for _, sup := range m.roleSources(sym) {
 		if !behaviorLike(sup) {
 			continue
 		}
-		inherited := m.effectiveActors(sup, walk)
-		for i, o := range owned {
-			if i < len(inherited) && !redefinesExplicitly(o) {
-				claimed[inherited[i]] = true
+		inherited, inheritedReplaced := m.effectiveActors(sup, walk)
+		for f, by := range inheritedReplaced {
+			for b := range by {
+				replaced.add(f, b)
 			}
 		}
-		for _, f := range inherited {
-			if !claimed[f] {
-				claimed[f] = true
-				out = append(out, f)
+		for i, f := range inherited {
+			for j, o := range owned {
+				if explicit[j][f] || (i == j && !redefinesExplicitly(o)) {
+					replaced.add(f, o)
+				}
 			}
+			out = placeRole(out, placed, f, replaced)
 		}
 	}
 	if walk.cuts == cuts {
-		walk.done[sym] = out
+		walk.done[sym] = effectiveRoleSet{roles: out, replaced: replaced}
 	}
-	return out
+	return out, replaced
 }
 
 // redefinesExplicitly reports whether sym's declaration carries a `:>>` clause.
@@ -243,29 +247,29 @@ func (r replacements) restates(by, sym *symbols.Symbol) bool {
 	return walk(sym)
 }
 
-// objectiveWalk is the state of one effectiveObjectives query: the cases on the current
-// path, which cut a cycle, and the finished ones, read once however many paths reach them.
-type objectiveWalk struct {
+// roleWalk is the state of one effectiveObjectives or effectiveActors query: the cases on
+// the current path, which cut a cycle, and the finished ones, read once however many paths reach them.
+type roleWalk struct {
 	visiting map[*symbols.Symbol]bool
-	done     map[*symbols.Symbol]effectiveObjectiveSet
+	done     map[*symbols.Symbol]effectiveRoleSet
 	cuts     int // cycles cut so far; a result computed across a cut is path-bound
 }
 
-// effectiveObjectiveSet is a finished effectiveObjectives answer; readers must not mutate it.
-type effectiveObjectiveSet struct {
-	objectives []*symbols.Symbol
-	replaced   replacements
+// effectiveRoleSet is a finished answer of a roleWalk; readers must not mutate it.
+type effectiveRoleSet struct {
+	roles    []*symbols.Symbol
+	replaced replacements
 }
 
-func newObjectiveWalk() *objectiveWalk {
-	return &objectiveWalk{visiting: map[*symbols.Symbol]bool{}, done: map[*symbols.Symbol]effectiveObjectiveSet{}}
+func newRoleWalk() *roleWalk {
+	return &roleWalk{visiting: map[*symbols.Symbol]bool{}, done: map[*symbols.Symbol]effectiveRoleSet{}}
 }
 
 // effectiveObjectives lists sym's objectives by position: each general's, replaced by the
 // owned one redefining it by clause or position, then the owned ones redefining none. A
 // restatement met through one general stands for the objective it restates met through
 // another. Every general is read in full, and once per walk when no cycle cuts it short.
-func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([]*symbols.Symbol, replacements) {
+func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *roleWalk) ([]*symbols.Symbol, replacements) {
 	if sym == nil {
 		return nil, nil
 	}
@@ -274,7 +278,7 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([
 		return nil, nil
 	}
 	if done, ok := walk.done[sym]; ok {
-		return done.objectives, done.replaced
+		return done.roles, done.replaced
 	}
 	walk.visiting[sym] = true
 	defer delete(walk.visiting, sym)
@@ -305,7 +309,7 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([
 					break
 				}
 			}
-			out = placeObjective(out, placed, f, replaced)
+			out = placeRole(out, placed, f, replaced)
 		}
 	}
 	for _, o := range owned {
@@ -315,14 +319,14 @@ func (m *Model) effectiveObjectives(sym *symbols.Symbol, walk *objectiveWalk) ([
 		}
 	}
 	if walk.cuts == cuts {
-		walk.done[sym] = effectiveObjectiveSet{objectives: out, replaced: replaced}
+		walk.done[sym] = effectiveRoleSet{roles: out, replaced: replaced}
 	}
 	return out, replaced
 }
 
-// placeObjective adds f to out: in place of an objective it restates, nowhere when one
-// already placed restates it, and at the end otherwise.
-func placeObjective(out []*symbols.Symbol, placed map[*symbols.Symbol]bool, f *symbols.Symbol, replaced replacements) []*symbols.Symbol {
+// placeRole adds f to out: in place of a role it restates, nowhere when one already
+// placed restates it, and at the end otherwise.
+func placeRole(out []*symbols.Symbol, placed map[*symbols.Symbol]bool, f *symbols.Symbol, replaced replacements) []*symbols.Symbol {
 	if placed[f] {
 		return out
 	}

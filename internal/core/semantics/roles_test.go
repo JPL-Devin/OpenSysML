@@ -529,6 +529,39 @@ func TestActorsRedefineByPosition(t *testing.T) {
 	}
 }
 
+// A restatement of an actor met through one branch of a diamond stands for the actor it
+// restates met through the other, whichever branch is written first.
+func TestActorRestatementWinsAcrossDiamond(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A; part def R :> A; part def Ship;
+		use case def Base { subject s : Ship; actor a : A; }
+		use case def Left :> Base;
+		use case def Right :> Base { actor r : R; }
+		use case def LR :> Left, Right;
+		use case def RL :> Right, Left;
+		use case lr : LR { actor x; }
+		use case rl : RL { actor y; }
+		use case def Both :> Left, Right { actor z; }
+		use case def Deep :> LR { actor w; actor extra : A; }
+	}`)
+	p := sym(t, root, "P")
+	r := nested(t, nested(t, p.Scope, "Right").Scope, "r")
+	rDef := nested(t, p.Scope, "R")
+	for _, tc := range []struct{ owner, actor string }{{"lr", "x"}, {"rl", "y"}, {"Both", "z"}, {"Deep", "w"}} {
+		actor := nested(t, nested(t, p.Scope, tc.owner).Scope, tc.actor)
+		if got := m.ImplicitRoleRedefinitions(actor); len(got) != 1 || got[0] != r {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want [r]", tc.owner, tc.actor, got)
+		}
+		if got := m.AllSupertypes(actor); !containsAll(got, r, rDef) {
+			t.Errorf("AllSupertypes(%s::%s) = %v, want r and R among them", tc.owner, tc.actor, got)
+		}
+	}
+	extra := nested(t, nested(t, p.Scope, "Deep").Scope, "extra")
+	if got := m.ImplicitRoleRedefinitions(extra); len(got) != 0 {
+		t.Errorf("ImplicitRoleRedefinitions(Deep::extra) = %v, want none: the diamond has one actor", got)
+	}
+}
+
 // Actors through a tower of diamonds are read once per case, not once per path.
 func TestActorsThroughLayeredDiamondsAreLinear(t *testing.T) {
 	const layers = 60
