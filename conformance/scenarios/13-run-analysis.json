@@ -2,7 +2,7 @@
   "scenarios": [
     {
       "id": "run_analysis/a_usage_binding_its_subject_reports_its_outputs_and_objective",
-      "description": "The usage binds the ship whose cost and other sum to 12, under the default limit of 20, so the output is 12 and the objective holds.",
+      "description": "The usage binds the ship whose cost and other sum to 12, under the default limit of 20, so the output is 12, the objective holds, and the ship is the subject reported.",
       "rpc": "RunAnalysis",
       "requires_capabilities": [
         "verification"
@@ -29,10 +29,14 @@
               "kind": "objective",
               "element_id": "An::CostAnalysis::affordable",
               "element": "affordable",
-              "holds": true
+              "holds": true,
+              "instance_type_id": "An::ship"
             }
           ]
         },
+        "non_empty": [
+          "instances"
+        ],
         "absent": [
           "error"
         ]

@@ -67,6 +67,8 @@ class TestAnalysisIntegration:
         assert [v.kind for v in result.verdicts] == ["objective"]
         assert result.verdicts[0].holds
         assert result.verdicts[0].element_id == "An::CostAnalysis::affordable"
+        assert result.verdicts[0].instance_type_id == "An::ship"
+        assert [inst.id for inst in result.instances][0] == result.verdicts[0].instance_id
         assert result.satisfied
 
     def test_a_case_without_objective_has_no_verdict(self):

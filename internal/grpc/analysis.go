@@ -66,6 +66,9 @@ func (s *Service) RunAnalysis(ctx context.Context, req *pb.RunAnalysisRequest) (
 			FailureReason: failureReason(err),
 		}, nil
 	}
+	// The case reports the subject it ran on: the one supplied, or the one the
+	// usage or the enclosing case bound.
+	subject = result.Subject
 	resp := &pb.RunAnalysisResponse{Instances: v.instanceGraph(subject)}
 	for _, out := range result.Outputs {
 		resp.Outputs = append(resp.Outputs, &pb.CalcOutput{

@@ -206,6 +206,10 @@ type AnalysisResult struct {
 	// Case is the qualified name of the case that ran.
 	Case string
 
+	// Subject is the object the case ran on — supplied, bound by the usage or
+	// taken from the enclosing case; nil for a case declaring no subject.
+	Subject *Instance
+
 	// Outputs are the case's out and return parameters, in declaration order;
 	// a value the body returned into an unnamed result is named "result".
 	Outputs []CalcOutputValue
@@ -245,7 +249,7 @@ func (ctx *Context) RunAnalysis(sym *symbols.Symbol, args AnalysisArgs, scope *s
 		return AnalysisResult{}, err
 	}
 
-	result := AnalysisResult{Case: shape.Name}
+	result := AnalysisResult{Case: shape.Name, Subject: run.boundSubject(ctx)}
 	if result.Outputs, err = run.outputValues(ctx); err != nil {
 		return AnalysisResult{}, err
 	}
@@ -319,6 +323,23 @@ func (shape *calcShape) analysisArgs(args AnalysisArgs) (calcArgs, error) {
 		named[open[i].Name] = value
 	}
 	return calcArgs{named: named}, nil
+}
+
+// boundSubject is the object the run's subject parameter holds, nil when the
+// case declares none or the binding names no object.
+func (run *calcRun) boundSubject(ctx *Context) *Instance {
+	param, ok := run.shape.subjectParameter()
+	if !ok {
+		return nil
+	}
+	value, ok := run.env.lookup(param.Name)
+	if !ok || value.Kind != ValInstance {
+		return nil
+	}
+	if inst, ok := ctx.Instance(value.Instance); ok {
+		return inst
+	}
+	return nil
 }
 
 // outputValues evaluates every output the case declares, in declaration order,

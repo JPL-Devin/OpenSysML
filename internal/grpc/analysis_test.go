@@ -99,6 +99,12 @@ func TestRunAnalysisUsageBindsItsOwnSubject(t *testing.T) {
 	if !v.Holds || v.Error != "" || v.Condition != "" {
 		t.Errorf("verdict = %v, want it to hold", v)
 	}
+	if v.InstanceId == 0 || v.InstanceTypeId != "An::ship" {
+		t.Errorf("verdict is about instance %d of %q, want the ship the usage binds", v.InstanceId, v.InstanceTypeId)
+	}
+	if len(resp.Instances) == 0 || resp.Instances[0].Id != v.InstanceId {
+		t.Errorf("instances = %v, want the bound subject first", resp.Instances)
+	}
 }
 
 // TestRunAnalysisWithoutObjectiveReportsOutputsAlone verifies a case stating no
