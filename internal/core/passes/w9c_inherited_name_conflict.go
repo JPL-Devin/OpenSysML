@@ -201,20 +201,32 @@ func ownedKeysOf(mem *symbols.Symbol) []w9cKey {
 	return keys
 }
 
-// notSpecializedBy drops the inherited features mem redefines or subsets, which
-// it is then free to reuse the name of.
+// notSpecializedBy drops the inherited features mem redefines, subsets or is an
+// alias for, which it is then free to reuse the name of.
 func (c *w9cConflictChecker) notSpecializedBy(
 	mem *symbols.Symbol,
 	cands []w9cCandidate,
 ) []w9cCandidate {
+	target := c.aliasTarget(mem)
 	out := make([]w9cCandidate, 0, len(cands))
 	for _, cand := range cands {
-		if cand.member == mem || c.specializes(mem, cand.member) {
+		if cand.member == mem || cand.member == target || c.specializes(mem, cand.member) {
 			continue
 		}
 		out = append(out, cand)
 	}
 	return out
+}
+
+// aliasTarget is the element an alias names, or nil for any other member.
+func (c *w9cConflictChecker) aliasTarget(mem *symbols.Symbol) *symbols.Symbol {
+	if c.resolver == nil {
+		return nil
+	}
+	if target, ok := c.resolver.ResolveAliasTarget(mem); ok {
+		return target
+	}
+	return nil
 }
 
 // hasUnresolvedRedefinition reports whether sym declares a redefinition whose

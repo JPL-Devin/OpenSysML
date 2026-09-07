@@ -442,6 +442,10 @@ func TestW9CInheritedShortNamesConflict(t *testing.T) {
 	attribute def AliasLong :> CylindricalPosition3dVector {
 		alias <hh> height for RedefShort::h;
 	}
+	attribute def AliasSelf :> CylindricalPosition3dVector {
+		alias <h> H for height;
+		alias height for CylindricalPosition3dVector::height;
+	}
 }`
 	for _, warm := range []bool{false, true} {
 		diags := w9cLibraryDiags(t, src, warm)
