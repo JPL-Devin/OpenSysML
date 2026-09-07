@@ -400,6 +400,39 @@ still asks a solver which
 values would make the objectives best; `%analysis` reports what they are for the values the model
 has.
 
+An objective typed by a requirement definition binds that definition's `subject` as a requirement
+usage does, in every spelling — `objective : MassLimit { subject = ship; }`, `subject s = ship;`
+or `subject :>> s = ship;` — and the binding may read the case's subject, its `in` parameters and
+locals, and its steps' outputs (`subject = inner.picked;`). An objective that binds no subject
+takes the library's default for it: the case's result (`Cases::Case::obj` declares `subject subj
+default Case::result`, SysML v2 §7.22). So an objective typed by `MassLimit` in a case that
+`return`s a `Ship` checks the ship returned, while in a case that returns a `Real` it is
+`undecided`, saying so: `subject s defaults to the case's result (Cases::Case::obj): type mismatch:
+1000.0 (a Real) is not a Ship`. A case that returns nothing leaves such a subject unbound, and the
+verdict says to bind it or return a result.
+
+```sysml
+requirement def MassLimit {
+    subject s : Ship;
+    attribute limit : Real = 2000.0;
+    require constraint { s.hullMass < limit }
+}
+analysis def MassCheck {
+    subject ship : Ship;
+    objective : MassLimit { subject = ship; }
+    return r : Real = ship.hullMass;
+}
+analysis light : MassCheck { subject ship = O::ship; }
+```
+
+```bash
+$ sysml -analysis O::light mass.sysml
+✓ package O
+✓ O::light
+  r = 1000.0
+  objective obj: satisfied
+```
+
 A case usage owned by a part definition (`part def Holder { analysis inner : CostAnalysis {
 subject s = h; } part h : Ship; }`) is a feature of every object of that type, as a `calc` usage
 owned by a part is: `holder.inner.total` runs the case on first read and keeps the result until a
@@ -410,8 +443,13 @@ What stops a case is reported as an error naming it, never as a silent empty res
 `subject` nothing binds (`analysis An::CostAnalysis: s subject is unbound: bind it
 (`subject s = <element>`) or run it on an object`), an `in` parameter with neither argument nor
 default, a step that fails, a body that deadlocks or exhausts the step budget, and a case whose
-body runs itself. The verification-case body uses the same grammar but is not run this way yet;
-`%requirement` and `%satisfy` check it as before.
+body runs itself. A case that recurses without bound — through a nested `analysis` step that
+performs its own definition, or a `calc def` through a `calc` usage member typed by itself — hits
+the calc depth limit, and the error collapses the repeated frames to one line as `-calc`'s does:
+`analysis An::rec: node again: analysis An::Rec::again: … 9999 frames: node again: calc recursion
+limit exceeded: calc An::Rec::again nested 10000 deep (unbounded recursion?; raise
+OPENSYSML_MAX_CALC_DEPTH to allow more)`. The verification-case body uses the same grammar but is
+not run this way yet; `%requirement` and `%satisfy` check it as before.
 
 ## Token-flow patterns
 

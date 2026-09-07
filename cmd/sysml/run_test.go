@@ -160,7 +160,7 @@ func TestRunCalc(t *testing.T) {
 // its own subject, and a definition whose subject and inputs a run supplies.
 const analysisModel = `package An {
     private import ScalarValues::*;
-    part def Ship { attribute cost : Real = 5.0; attribute other : Real = 7.0; }
+    part def Ship { attribute cost : Real default = 5.0; attribute other : Real = 7.0; }
     calc def Sum { in a : Real; in b : Real; return : Real = a + b; }
     analysis def Priced {
         subject s : Ship;
@@ -172,6 +172,13 @@ const analysisModel = `package An {
     part ship : Ship;
     analysis shipCost : Priced { subject s = ship; in tax = 0.0; }
     part def Holder { analysis inner : Priced { subject s = h; in tax = 0.0; } part h : Ship; }
+    requirement def Affordable { subject it : Ship; require constraint { it.cost < 6.0 } }
+    part dear : Ship { attribute :>> cost = 9.0; }
+    analysis def Checked { subject s : Ship; objective : Affordable { subject = s; } return r : Real = s.cost; }
+    analysis cheap : Checked { subject s = ship; }
+    analysis pricey : Checked { subject s = dear; }
+    analysis def Unbound { subject s : Ship; objective : Affordable; return r : Real = s.cost; }
+    analysis unbound : Unbound { subject s = ship; }
 }`
 
 // TestRunAnalysis checks that an analysis case runs outside the prompt: from
@@ -189,6 +196,15 @@ func TestRunAnalysis(t *testing.T) {
 		"✗ An::Priced(tax = 0.5, limit = 10.0)", "total = 18.0", "objective obj: not satisfied: total <= limit")
 	wantReport(t, check(t, binary, analysisModel, "-instantiate", "An::Holder", "-analysis", "An::Holder::inner"), 0,
 		"✓ An::Holder::inner", "total = 12.0")
+
+	// An objective typed by a requirement def binds the def's subject by keyword
+	// alone, and one binding none defaults to the case's result, of the wrong type here.
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::cheap"), 0,
+		"✓ An::cheap", "r = 5.0", "objective obj: satisfied")
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::pricey"), 1,
+		"✗ An::pricey", "r = 9.0", "objective obj: not satisfied: it.cost < 6.0")
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::unbound"), 2,
+		"? An::unbound", "r = 5.0", "objective obj: undecided: objective obj: subject it defaults to the case's result (Cases::Case::obj): type mismatch: 5.0 (a Real) is not a Ship")
 
 	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Priced(0.5)"), 2, "subject is unbound")
 	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Sum"), 2, "not an analysis case")

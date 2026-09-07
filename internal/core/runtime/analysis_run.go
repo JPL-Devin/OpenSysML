@@ -375,11 +375,16 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 		if name == "" {
 			name = "objective"
 		}
-		check := conditionCheck{
-			sym: obj.Symbol, kind: "objective", what: "require condition",
-			element: name, self: run.self, bindings: bindings,
+		var verdict AnalysisVerdict
+		if own, err := ctx.objectiveBindings(run, obj.Symbol, name, bindings); err != nil {
+			verdict = AnalysisVerdict{Kind: "objective", Name: name, Status: VerdictUndecided, Detail: err.Error()}
+		} else {
+			check := conditionCheck{
+				sym: obj.Symbol, kind: "objective", what: "require condition",
+				element: name, self: run.self, bindings: own,
+			}
+			verdict = ctx.analysisVerdict("objective", name, check, obj.Conditions)
 		}
-		verdict := ctx.analysisVerdict("objective", name, check, obj.Conditions)
 		verdict.Symbol = obj.Symbol
 		verdicts = append(verdicts, verdict)
 	}
@@ -397,6 +402,83 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 		verdicts = append(verdicts, verdict)
 	}
 	return verdicts
+}
+
+// objectiveBindings are the case's bindings plus the subject and actors the objective binds
+// itself, as a requirement's are; a subject left unbound is the case's result (Cases::Case::obj).
+func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name string, caseBindings map[string]Value) (map[string]Value, error) {
+	members := ctx.chainMembers(obj, obj.OwnerScope)
+	own, err := ctx.memberBindings(obj, "objective", name, members, run.self, nil, caseBindings)
+	if err != nil {
+		return nil, err
+	}
+	bindings := make(map[string]Value, len(caseBindings)+len(own))
+	for k, v := range caseBindings {
+		bindings[k] = v
+	}
+	for k, v := range own {
+		bindings[k] = v
+	}
+	subject, unbound := ctx.unboundObjectiveSubject(obj, members, own)
+	if subject == nil {
+		return bindings, nil
+	}
+	result, ok := run.caseResult(caseBindings)
+	if !ok {
+		return nil, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
+	}
+	if typ := ctx.extractType(subject); typ != nil {
+		if conforms, _, err := ctx.valueConforms(declScope(obj), &result, typ, admitDeclared); err == nil && !conforms {
+			return nil, fmt.Errorf("objective %s: subject %s defaults to the case's result (Cases::Case::obj): %w: %s (%s) is not a %s",
+				name, subject.Name, ErrTypeMismatch, FormatValue(result), describeValue(result), symbolText(typ))
+		}
+	}
+	for unboundName := range unbound {
+		bindings[unboundName] = result
+	}
+	return bindings, nil
+}
+
+// unboundObjectiveSubject is the objective's subject no binding the model writes supplies,
+// with the names its conditions read it by; nil when every subject is bound.
+func (ctx *Context) unboundObjectiveSubject(obj *symbols.Symbol, members []scopedMember, own map[string]Value) (*symbols.Symbol, map[string]bool) {
+	features := ctx.conditionFeatures(obj)
+	var subject *symbols.Symbol
+	unbound := make(map[string]bool)
+	for _, member := range members {
+		decl, ok := subjectDeclaration(member.node)
+		if !ok {
+			continue
+		}
+		sym := memberSymbol(member.scope, member.node)
+		if sym == nil {
+			continue
+		}
+		names := ctx.memberNames(obj, member, decl.Name, sym.ShortName)
+		if _, bound := boundUnder(own, names); bound || decl.Value != nil {
+			return nil, nil
+		}
+		for _, n := range names {
+			if feat, ok := features[n]; ok && feat.expr != nil && !ctx.libraryDeclared(feat.decl) {
+				return nil, nil
+			}
+			unbound[n] = true
+		}
+		if subject == nil || ctx.extractType(sym) != nil {
+			subject = sym
+		}
+	}
+	return subject, unbound
+}
+
+// caseResult is the value the run's result parameter holds; false when the case returns none.
+func (run *calcRun) caseResult(bindings map[string]Value) (Value, bool) {
+	name := resultOutputName
+	if out := run.shape.resultOutput(); out != nil && out.Name != "" {
+		name = out.Name
+	}
+	value, ok := bindings[name]
+	return value, ok
 }
 
 // analysisChecks reports whether the case states an objective or asserts a

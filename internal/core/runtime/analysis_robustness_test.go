@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,6 +33,16 @@ const analysisModel = `
 		analysis def Recursive {
 			in n : Real;
 			return : Real = Recursive(n);
+		}
+		analysis def RecursiveStep {
+			subject s : Ship;
+			analysis again : RecursiveStep { subject s = s; }
+			return r : Real = again.r;
+		}
+		calc def RecursiveUsage {
+			in n : Real;
+			calc g : RecursiveUsage { in n = n; }
+			return : Real = g;
 		}
 		analysis def Looping {
 			subject s : Ship;
@@ -84,6 +95,8 @@ func TestAnalysisRobustness(t *testing.T) {
 	t.Run("unknown_named_argument", testAnalysisUnknownNamedArgument)
 	t.Run("failing_step", testAnalysisFailingStep)
 	t.Run("self_recursion", testAnalysisSelfRecursion)
+	t.Run("recursion_through_a_step", testAnalysisRecursionThroughAStep)
+	t.Run("recursion_through_a_calc_usage", testCalcRecursionThroughAUsage)
 	t.Run("usage_reading_its_own_output", testAnalysisUsageReadingItsOwnOutput)
 	t.Run("outputs_reading_each_other", testAnalysisOutputsReadingEachOther)
 	t.Run("output_never_bound", testAnalysisOutputNeverBound)
@@ -192,6 +205,55 @@ func testAnalysisSelfRecursion(t *testing.T) {
 	if !strings.Contains(err.Error(), "test::Recursive") {
 		t.Errorf("error %q does not name the case", err)
 	}
+}
+
+// recursionFrames is the collapsed frame count a recursion-limit message reports.
+var recursionFrames = regexp.MustCompile(`… (\d+) frames:`)
+
+// assertRecursionCollapsed checks that a recursion-limit error reads as one
+// line: bounded, naming the recurring case or calc a handful of times at most,
+// reporting how many frames collapsed, and still the typed error.
+func assertRecursionCollapsed(t *testing.T, err error, name string) {
+	t.Helper()
+	if !errors.Is(err, ErrCalcRecursionLimit) {
+		t.Fatalf("error = %v, want ErrCalcRecursionLimit", err)
+	}
+	msg := err.Error()
+	if len(msg) > 1024 {
+		t.Errorf("message is %d bytes, want one line: %.200s…", len(msg), msg)
+	}
+	if n := strings.Count(msg, name); n == 0 || n > 4 {
+		t.Errorf("message names %s %d times, want 1–4: %q", name, n, msg)
+	}
+	if m := recursionFrames.FindStringSubmatch(msg); m == nil || m[1] == "0" || m[1] == "1" {
+		t.Errorf("message %q does not report the collapsed frames", msg)
+	}
+	if !strings.Contains(msg, "OPENSYSML_MAX_CALC_DEPTH") {
+		t.Errorf("message %q does not say how to raise the limit", msg)
+	}
+}
+
+// testAnalysisRecursionThroughAStep: a case performing itself as a nested
+// analysis step hits the recursion limit with a message that collapses the
+// repeated frames rather than nesting `node again:` once per level.
+func testAnalysisRecursionThroughAStep(t *testing.T) {
+	ctx, idx, sym := analysisRuntime(t, "test::RecursiveStep")
+	ctx.maxSteps = DefaultMaxSteps
+	ship := instanceOfUsage(t, ctx, idx, "test::ship")
+	_, err := ctx.RunAnalysis(sym, AnalysisArgs{Subject: ship}, nil, nil)
+	assertRecursionCollapsed(t, err, "test::RecursiveStep::again")
+	if !strings.Contains(err.Error(), "test::RecursiveStep") {
+		t.Errorf("error %q does not name the case", err)
+	}
+}
+
+// testCalcRecursionThroughAUsage: a calc def recursing through its own calc
+// usage member collapses the same way a calc def calling itself does.
+func testCalcRecursionThroughAUsage(t *testing.T) {
+	ctx, _, sym := analysisRuntime(t, "test::RecursiveUsage")
+	ctx.maxSteps = DefaultMaxSteps
+	_, err := ctx.InvokeCalc(sym, []Value{constReal(1)}, nil)
+	assertRecursionCollapsed(t, err, "test::RecursiveUsage::g")
 }
 
 // testAnalysisUsageReadingItsOwnOutput: a usage whose output reads itself is a

@@ -634,7 +634,7 @@ func (ctx *Context) runCalcUsage(
 		if ec.trace != nil {
 			ec.trace.RecordCalculationExitError(shape.Kind, shape.Name, err)
 		}
-		return nil, fmt.Errorf("%s: %w", shape.Label, err)
+		return nil, calcFrame(shape.Kind, shape.Name, err)
 	}
 	if ec.trace != nil {
 		if returned {
@@ -722,7 +722,7 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 
 	value, err := run.bindingEnv(ctx, out.Owner).Eval(out.Value)
 	if err != nil {
-		return Value{}, fmt.Errorf("%s: output %s: %w", run.shape.Label, run.outputDescription(out), err)
+		return Value{}, calcFrame(run.shape.Kind, run.shape.Name, fmt.Errorf("output %s: %w", run.outputDescription(out), err))
 	}
 	// A binding gives the output its value as a write does, so it answers to the
 	// output's declared type and multiplicity the same way.

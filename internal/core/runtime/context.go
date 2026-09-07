@@ -822,11 +822,12 @@ func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 
 // memberBindings evaluates the values members bind by name — a subject or actor
 // supplied by an expression (`actor operator = limit;`) — so a condition naming
-// one reads it. element names the requirement in messages. A non-nil subject is
-// the object supplied from outside (the `by` of a satisfaction assertion): it
-// binds every subject the members declare, whose own binding is then neither
-// evaluated nor used.
-func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
+// one reads it. kind and element name the checked element in messages. A non-nil
+// subject is the object supplied from outside (the `by` of a satisfaction
+// assertion): it binds every subject the members declare, whose own binding is
+// then neither evaluated nor used. enclosing are the values bound around the
+// element (a case's, for its objective), which the binding expressions read.
+func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing map[string]Value) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
 	// The bindings are evaluated as one, so a calc usage two of them read answers
@@ -837,6 +838,9 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		ec := NewEvalContextIn(ctx, memberScope, self)
 		ec.activation = activation
 		ec.features = features
+		if enclosing != nil {
+			ec.Push(enclosing)
+		}
 		ec.Push(bindings)
 		return ec
 	}
@@ -877,7 +881,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		}
 		value, err := evalIn(member.scope).Eval(expr)
 		if err != nil {
-			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
+			return nil, fmt.Errorf("%s %s: %s binding evaluation failed: %w", kind, element, what, err)
 		}
 		for _, name := range names {
 			bindings[name] = value
@@ -1019,7 +1023,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	members := ctx.chainMembers(sym, scope)
 
 	// First pass: process subject/actor bindings
-	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, subject.instance, nil)
+	reqBindings, err := ctx.memberBindings(sym, "requirement", sym.Name, members, subject.instance, nil, nil)
 
 	if err != nil {
 		return ctx.checkResultOf(false, subject), err
