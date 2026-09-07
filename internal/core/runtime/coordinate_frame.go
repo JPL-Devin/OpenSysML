@@ -234,6 +234,18 @@ func (t *CoordinateTransformation) Name() string {
 	return "a coordinate transformation"
 }
 
+// sameDimensions is CoordinateTransformation's validSourceTargetDimensions: source
+// and target state the same dimensions, so a vector over one is shaped for the other.
+func (t *CoordinateTransformation) sameDimensions(name string) error {
+	if equalInt64s(t.Source.Dimensions, t.Target.Dimensions) && len(t.Source.Axes) == len(t.Target.Axes) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s: %s relates %s of dimensions %s (%d axes) to %s of dimensions %s (%d axes); CoordinateTransformation asserts source.dimensions == target.dimensions",
+		ErrMultiplicityViolation, name, t.Name(),
+		t.Source.Name(), FormatValue(intSequence(t.Source.Dimensions)), len(t.Source.Axes),
+		t.Target.Name(), FormatValue(intSequence(t.Target.Dimensions)), len(t.Target.Axes))
+}
+
 // String renders the transformation as its name over the frames it relates:
 // `trs (datum → lbcf)`.
 func (t *CoordinateTransformation) String() string {

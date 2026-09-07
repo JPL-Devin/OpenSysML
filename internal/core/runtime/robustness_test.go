@@ -1567,7 +1567,11 @@ func testCoordinateFrameFailureModes(t *testing.T) {
 		{"transformation between frames of different dimensions", `
 			attribute plane : CoordinateFrame { :>> mRefs = (mm, mm); }
 			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : NullTransformation { :>> source = plane; } }`,
-			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0) [plane])", ErrMultiplicityViolation, "relates plane of 2 axes to odd of 3 axes; CoordinateTransformation asserts source.dimensions == target.dimensions"},
+			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0) [plane])", ErrMultiplicityViolation, "relates plane of dimensions [2] (2 axes) to odd of dimensions [3] (3 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
+		{"transformation between frames of one axis but different dimensions", `
+			attribute lineA : CoordinateFrame { :>> dimensions = 1; :>> mRefs = mm; }
+			attribute lineB : CoordinateFrame { :>> dimensions = (); :>> mRefs = mm; :>> transformation : NullTransformation { :>> source = lineA; } }`,
+			"Quantities::VectorQuantityValue", "transform(lineB.transformation, 3.0 [lineA])", ErrMultiplicityViolation, "relates lineA of dimensions [1] (1 axes) to lineB of dimensions [] (1 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
 		{"transformation whose target is another frame", `
 			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : NullTransformation { :>> source = datum; :>> target = datum; } }`,
 			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "target is datum, but the transformation is odd's own, whose target it is"},
@@ -1603,6 +1607,10 @@ func testCoordinateFrameFailureModes(t *testing.T) {
 		{"scale whose basis direction scales the axis in another unit", `
 			attribute shifted : IntervalScale { :>> unit = s; :>> transformation : CoordinateFramePlacement { :>> source = s; :>> origin = 10.0 [s]; :>> basisDirections = 1.0 [min]; } }`,
 			"DurationValue", "ConvertQuantity(3.0 [shifted], s)", ErrUnevaluableLibraryFunction, "the basisDirection 1.0 [min] of its transformation transformation is not the identity 1 [s]"},
+		{"scale placed on a frame of two axes", `
+			attribute plane : CoordinateFrame { :>> mRefs = (K, K); }
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = plane; :>> origin = 10.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrMultiplicityViolation, "relates plane of dimensions [2] (2 axes) to shifted of dimensions [] (1 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
 		{"scale with two basis directions", `
 			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = (1.0 [K], 1.0 [K]); } }`,
 			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrMultiplicityViolation, "states 2 basisDirections over K of one axis"},

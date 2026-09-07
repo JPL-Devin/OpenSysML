@@ -86,8 +86,11 @@ func (ctx *Context) placementAnchor(name string, scale *CoordinateFrame) (*scale
 		return nil, fmt.Errorf("%w: %s: its transformation %s is %s; a scale is placed on its source by a CoordinateFramePlacement",
 			ErrUnevaluableLibraryFunction, name, t.Name(), t.shapeName())
 	}
-	if t.Source == nil {
-		return nil, fmt.Errorf("%w: %s: its transformation %s states no source", ErrNoValue, name, t.Name())
+	if t.Source == nil || t.Target == nil {
+		return nil, fmt.Errorf("%w: %s: its transformation %s states no source or no target", ErrNoValue, name, t.Name())
+	}
+	if err := t.sameDimensions(name); err != nil {
+		return nil, err
 	}
 	origin, ok := asQuantity(t.Placement.Origin)
 	if !ok {

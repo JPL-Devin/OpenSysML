@@ -61,9 +61,8 @@ func transformVector(name string, ctx *Context, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: function %s: sourceVector.mRef is %s, not %s, the source of %s",
 			ErrTypeMismatch, name, vq.Frame.Name(), t.Source.Name(), t.Name())
 	}
-	if len(t.Target.Axes) != len(t.Source.Axes) {
-		return Value{}, fmt.Errorf("%w: function %s: %s relates %s of %d axes to %s of %d axes; CoordinateTransformation asserts source.dimensions == target.dimensions",
-			ErrMultiplicityViolation, name, t.Name(), t.Source.Name(), len(t.Source.Axes), t.Target.Name(), len(t.Target.Axes))
+	if err := t.sameDimensions("function " + name); err != nil {
+		return Value{}, err
 	}
 	pose, err := ctx.poseOf(name, t)
 	if err != nil {
