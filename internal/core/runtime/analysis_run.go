@@ -431,16 +431,25 @@ func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name st
 	if err := ctx.checkDefaultSubject(obj, subject, decl, name, result); err != nil {
 		return frame{}, err
 	}
+	if err := ctx.classifyHeld(subject, result); err != nil {
+		return frame{}, fmt.Errorf("%s: %w", defaultSubjectWhat(name, subject), err)
+	}
 	for unboundName := range unbound {
 		bindings[unboundName] = result
 	}
 	return caseBindings.withVars(bindings), nil
 }
 
-// checkDefaultSubject reports a case result the objective's subject cannot hold
-// as its default: more or fewer values than decl states, or one not of its type.
+// defaultSubjectWhat names the objective's subject defaulting to the case's result in a refusal.
+func defaultSubjectWhat(name string, subject *symbols.Symbol) string {
+	return fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
+}
+
+// checkDefaultSubject reports a case result the objective's subject cannot hold as its
+// default: more or fewer values than decl states, or one not of its type. It changes nothing;
+// the caller classifies the result by the subject once it passes.
 func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, decl calcMemberDecl, name string, result Value) error {
-	what := fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
+	what := defaultSubjectWhat(name, subject)
 	if msg := ctx.writeCountRefusal(decl.Target, &result); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}

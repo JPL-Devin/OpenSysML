@@ -883,11 +883,37 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		if err != nil {
 			return nil, fmt.Errorf("%s %s: %s binding evaluation failed: %w", kind, element, what, err)
 		}
+		for _, feature := range ctx.boundFeatures(sym, member) {
+			if err := ctx.holdAs(member.scope, fmt.Sprintf("%s %s: %s binding", kind, element, what), feature, value); err != nil {
+				return nil, err
+			}
+		}
 		for _, name := range names {
 			bindings[name] = value
 		}
 	}
 	return bindings, nil
+}
+
+// boundFeatures are the features a bound member of owner values: itself and those it redefines.
+func (ctx *Context) boundFeatures(owner *symbols.Symbol, member scopedMember) []*symbols.Symbol {
+	memberSym := memberSymbol(member.scope, member.node)
+	if memberSym == nil {
+		return nil
+	}
+	return append([]*symbols.Symbol{memberSym}, ctx.redefinedFeatures(memberSym, owner)...)
+}
+
+// holdAs admits val as a value of feature and classifies the objects it holds by it, as a
+// declared feature value is held (KerML §7.3.4.1); what names the binding in a refusal.
+func (ctx *Context) holdAs(scope *symbols.Scope, what string, feature *symbols.Symbol, val Value) error {
+	if err := ctx.checkWriteType(scope, what, ctx.extractType(feature), val, admitDeclared); err != nil {
+		return err
+	}
+	if err := ctx.classifyHeld(feature, val); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return nil
 }
 
 // memberNames are the names a condition may read a bound member of owner by: its

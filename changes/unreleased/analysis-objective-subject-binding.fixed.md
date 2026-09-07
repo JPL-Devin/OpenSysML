@@ -11,7 +11,10 @@
   mismatch: 1000.0 (a Real) is not a Ship`), one of the wrong multiplicity (one `Ship` for a
   `Ship[2]` subject) is `undecided` as a multiplicity violation — an objective redeclaring the
   subject without one (`subject :>> pair;`) keeps the `[2]` — and a case returning none says to
-  bind it or return one.
+  bind it or return one. An object bound to a subject, by the default or by an expression, in an
+  objective or a requirement usage, is held as a value of it: a `Ship` bound to a `subject t :
+  Tanker` gains `Tanker`'s features, so `t.cargo` answers where it read `member cargo not found`,
+  and a value the subject cannot hold at all is refused as a `type mismatch` instead.
 - **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
   examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as
   an empty sequence when the case's result was unnamed (a trailing expression or `return : Real`),

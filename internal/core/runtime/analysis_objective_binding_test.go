@@ -401,6 +401,83 @@ func TestObjectiveSubjectBindingOnAnObject(t *testing.T) {
 	}
 }
 
+const classifiedSubjectModel = `
+	package test {
+		private import ScalarValues::*;
+		part def Ship { attribute hullMass : Real; }
+		part def Tanker :> Ship { attribute cargo : Real = 100.0; }
+		part def Buoy { attribute hullMass : Real = 1.0; }
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part heavy : Ship { attribute :>> hullMass = 5000.0; }
+		part buoy : Buoy;
+		requirement def LadenLimit {
+			subject t : Tanker;
+			require constraint { t.hullMass + t.cargo < 2000.0 }
+		}
+		requirement keyword : LadenLimit { subject = ship; }
+		requirement keywordHeavy : LadenLimit { subject = heavy; }
+		requirement named : LadenLimit { subject t = ship; }
+		requirement disjoint : LadenLimit { subject = buoy; }
+		analysis def Pick {
+			subject s : Ship;
+			objective : LadenLimit;
+			return picked : Ship = s;
+		}
+		analysis defaulted : Pick { subject s = ship; }
+		analysis defaultedHeavy : Pick { subject s = heavy; }
+		analysis def PickBound {
+			subject s : Ship;
+			objective : LadenLimit { subject = s; }
+			return picked : Ship = s;
+		}
+		analysis bound : PickBound { subject s = ship; }
+		analysis boundHeavy : PickBound { subject s = heavy; }
+		analysis def PickBuoy {
+			subject b : Buoy;
+			objective : LadenLimit { subject = b; }
+			return picked : Buoy = b;
+		}
+		analysis boundDisjoint : PickBuoy { subject b = buoy; }
+	}
+`
+
+// TestBoundSubjectIsClassifiedByItsType pins that an object bound to a subject of a narrower
+// type than it was declared with is held as one (KerML §7.3.4.1): the subject's own features
+// (Tanker's cargo) answer the conditions, defaulted from the result or bound by an expression,
+// in a requirement as in an objective. A value the subject cannot hold is refused before it.
+func TestBoundSubjectIsClassifiedByItsType(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, classifiedSubjectModel))
+	for fqn, want := range map[string]VerdictStatus{
+		"test::defaulted":      VerdictSatisfied,
+		"test::defaultedHeavy": VerdictNotSatisfied,
+		"test::bound":          VerdictSatisfied,
+		"test::boundHeavy":     VerdictNotSatisfied,
+	} {
+		verdict := objectiveVerdict(t, ctx, idx, fqn)
+		if verdict.Status != want {
+			t.Errorf("%s: objective %s, want %s (%s)", fqn, verdict.Status, want, verdict.Detail)
+		}
+	}
+	for fqn, want := range map[string]error{"test::keyword": nil, "test::keywordHeavy": ErrViolated, "test::named": nil} {
+		if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil); !errors.Is(err, want) {
+			t.Errorf("%s: error = %v, want %v", fqn, err, want)
+		}
+	}
+
+	refused := objectiveVerdict(t, ctx, idx, "test::boundDisjoint")
+	if refused.Status != VerdictUndecided {
+		t.Fatalf("a Buoy for a Tanker subject: %s (%s), want undecided", refused.Status, refused.Detail)
+	}
+	for _, want := range []string{"objective obj: subject binding", "type mismatch", "Tanker"} {
+		if !strings.Contains(refused.Detail, want) {
+			t.Errorf("detail %q does not say %q", refused.Detail, want)
+		}
+	}
+	if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, "test::disjoint"), nil); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("requirement disjoint: error = %v, want %v", err, ErrTypeMismatch)
+	}
+}
+
 // TestObjectiveBindingKeepsErrorIdentity pins that the undecided detail of a
 // mismatched default carries the typed error the requirement engine raises.
 func TestObjectiveBindingKeepsErrorIdentity(t *testing.T) {

@@ -417,7 +417,11 @@ to the case's result (Cases::Case::obj): type mismatch: 1000.0 (a Real) is not a
 must also fit the subject's multiplicity: one `Ship` for a `subject pair : Ship[2]` is `undecided`
 as a `multiplicity violation` (an objective redeclaring the subject without one, `subject :>> pair;`,
 keeps the `[2]`). A case that returns nothing leaves such a subject unbound, and the
-verdict says to bind it or return a result.
+verdict says to bind it or return a result. Bound either way, an object is held as a value of the
+subject, so one declared a `Ship` and bound to a `subject t : Tanker` is a `Tanker` for the
+conditions, its `cargo` answering `t.cargo`, exactly as a requirement usage's `subject = ship;`
+holds it; a value the subject cannot hold at all (a `Buoy` for a `Tanker`) is refused as a
+`type mismatch` before any condition is read.
 
 ```sysml
 requirement def MassLimit {
