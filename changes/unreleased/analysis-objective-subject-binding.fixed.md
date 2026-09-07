@@ -16,7 +16,10 @@
   Tanker` gains `Tanker`'s features, so `t.cargo` answers where it read `member cargo not found`,
   and a value the subject cannot hold at all is refused as a `type mismatch` instead; an expression
   yielding more or fewer values than the subject declares (one `Ship` for `Ship[2]`, or none) is
-  refused as a multiplicity violation, as the default already was.
+  refused as a multiplicity violation, as the default already was. The object a satisfaction
+  assertion supplies with `by` is held to the subject the same way: `satisfy laden by ship` reads
+  `t.cargo` of a `Ship` bound to a `Tanker` subject, and a `Buoy` supplied for a `Ship` is refused
+  (`subject: type mismatch: Buoy #1 (buoy) is not a Ship`) rather than checked.
 - **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
   examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as
   an empty sequence when the case's result was unnamed (a trailing expression or `return : Real`),

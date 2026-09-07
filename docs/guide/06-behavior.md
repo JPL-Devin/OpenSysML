@@ -423,7 +423,9 @@ conditions, its `cargo` answering `t.cargo`, exactly as a requirement usage's `s
 holds it; a value the subject cannot hold at all (a `Buoy` for a `Tanker`) is refused as a
 `type mismatch` before any condition is read, and an expression yielding more or fewer values
 than the subject declares (one `Ship` for a `subject pair : Ship[2]`, or none) as a
-`multiplicity violation`, just as the default is.
+`multiplicity violation`, just as the default is. The object a satisfaction assertion supplies
+with `by` is held to the subject's declaration the same way: classified by its type, refused as a
+`type mismatch` where it cannot be, and as a `multiplicity violation` where one object is too few.
 
 ```sysml
 requirement def MassLimit {

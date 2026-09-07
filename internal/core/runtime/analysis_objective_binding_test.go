@@ -572,6 +572,110 @@ func TestBoundSubjectHonoursMultiplicity(t *testing.T) {
 	}
 }
 
+const suppliedSubjectModel = `
+	package test {
+		private import ScalarValues::*;
+		private import RealFunctions::sum;
+		part def Ship { attribute hullMass : Real; }
+		part def Tanker :> Ship { attribute cargo : Real = 100.0; }
+		part def Buoy { attribute hullMass : Real = 1.0; }
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part heavy : Ship { attribute :>> hullMass = 5000.0; }
+		part buoy : Buoy;
+
+		requirement def LadenLimit {
+			subject t : Tanker;
+			require constraint { t.hullMass + t.cargo < 2000.0 }
+		}
+		requirement def SubLadenLimit :> LadenLimit { subject :>> t; }
+		requirement def PairLimit {
+			subject pair : Ship[2];
+			require constraint { sum(pair.hullMass) < 8000.0 }
+		}
+		requirement laden : LadenLimit;
+		requirement subLaden : SubLadenLimit;
+		requirement pairLimit : PairLimit;
+		part context {
+			assert satisfy laden by ship;
+			assert satisfy laden by heavy;
+			assert satisfy laden by buoy;
+			assert satisfy subLaden by buoy;
+			assert satisfy pairLimit by ship;
+		}
+	}
+`
+
+// TestSuppliedSubjectIsHeldToItsDeclaration pins that the object a satisfaction supplies with `by`
+// is held to the subject's declaration as an expression's value is: classified by its type (Tanker's
+// cargo answers), refused as a type mismatch where it cannot be, or as a multiplicity violation
+// where one object is too few, the redefined subject's declaration included.
+func TestSuppliedSubjectIsHeldToItsDeclaration(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, suppliedSubjectModel))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 5 {
+		t.Fatalf("found %d satisfaction assertions, want 5", len(assertions))
+	}
+	want := []struct {
+		err   error
+		parts []string
+	}{
+		{nil, nil},
+		{ErrViolated, []string{"t.hullMass + t.cargo < 2000.0"}},
+		{ErrTypeMismatch, []string{"satisfy laden by buoy: subject", "is not a Tanker"}},
+		{ErrTypeMismatch, []string{"satisfy subLaden by buoy: subject", "is not a Tanker"}},
+		{ErrMultiplicityViolation, []string{"satisfy pairLimit by ship: subject", "1 value(s) bound to a feature with multiplicity lower bound 2"}},
+	}
+	for i, a := range assertions {
+		_, err := ctx.EvaluateSatisfaction(a)
+		if !errors.Is(err, want[i].err) {
+			t.Errorf("%s: error = %v, want %v", a.Text(), err, want[i].err)
+			continue
+		}
+		for _, part := range want[i].parts {
+			if !strings.Contains(err.Error(), part) {
+				t.Errorf("%s: error %q does not say %q", a.Text(), err, part)
+			}
+		}
+	}
+}
+
+// TestHoldAsReportsAnUndeterminedValueType pins that a value whose type cannot be judged (an object
+// the runtime does not know) is refused with that error, not passed as conforming, and that the
+// objects beside it are left unclassified.
+func TestHoldAsReportsAnUndeterminedValueType(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, suppliedSubjectModel))
+	ship, err := ctx.Instantiate(oneSymbol(t, idx, "test::Ship"))
+	if err != nil {
+		t.Fatalf("Instantiate(Ship): %v", err)
+	}
+	owner, pair := oneSymbol(t, idx, "test::PairLimit"), oneSymbol(t, idx, "test::PairLimit::pair")
+	unknown := ship.ID + 1000
+	if _, known := ctx.instances[unknown]; known {
+		t.Fatalf("instance %d unexpectedly exists", unknown)
+	}
+	seq := NewSequence()
+	seq.Append(Value{Kind: ValInstance, Instance: ship.ID})
+	seq.Append(Value{Kind: ValInstance, Instance: unknown})
+	writes, journals := len(ctx.journalWrites), ctx.journals
+
+	err = ctx.holdAs(declScope(owner), "subject binding", ctx.boundMemberDecl(owner, []*symbols.Symbol{pair}), NewSequenceValue(seq), pair)
+	if !errors.Is(err, ErrUndeterminedValueType) {
+		t.Fatalf("error = %v, want ErrUndeterminedValueType", err)
+	}
+	if errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("error = %v, must not be reported as a type mismatch", err)
+	}
+	if !strings.HasPrefix(err.Error(), "subject binding: ") {
+		t.Errorf("error %q does not name the binding", err)
+	}
+	if len(ship.classifiers) != 0 {
+		t.Errorf("ship classified by %v, want nothing classified on refusal", ship.classifiers)
+	}
+	if len(ctx.journalWrites) != writes || ctx.journals != journals {
+		t.Errorf("journal changed on refusal: %d writes, %d open, want %d, %d", len(ctx.journalWrites), ctx.journals, writes, journals)
+	}
+}
+
 // TestObjectiveBindingKeepsErrorIdentity pins that the undecided detail of a
 // mismatched default carries the typed error the requirement engine raises.
 func TestObjectiveBindingKeepsErrorIdentity(t *testing.T) {

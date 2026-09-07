@@ -77,12 +77,25 @@ func (d calcMemberDecl) admits(ctx *Context, scope *symbols.Scope, what string, 
 		return nil
 	}
 	for _, element := range elementsOf(value) {
-		if conforms, _, err := ctx.valueConforms(scope, &element, typ, admitDeclared); err == nil && !conforms {
-			return fmt.Errorf("%s: %w: %s (%s) is not a %s",
-				what, ErrTypeMismatch, FormatValue(element), describeValue(element), symbolText(typ))
+		conforms, _, err := ctx.valueConforms(scope, &element, typ, admitDeclared)
+		if err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+		if !conforms {
+			return fmt.Errorf("%s: %w: %s is not a %s", what, ErrTypeMismatch, ctx.elementText(element), symbolText(typ))
 		}
 	}
 	return nil
+}
+
+// elementText names one value in a refusal: an object by its carrier label, a value by what it is.
+func (ctx *Context) elementText(element Value) string {
+	if id, ok := element.Object(); ok {
+		if inst := ctx.instances[id]; inst != nil && inst.Type != nil {
+			return ctx.carrierLabels([]carrier{{instance: inst}})[0]
+		}
+	}
+	return fmt.Sprintf("%s (%s)", FormatValue(element), describeValue(element))
 }
 
 // boundMemberDecl is what a member of owner declares for a value bound to it, folded along the

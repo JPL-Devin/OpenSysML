@@ -825,7 +825,8 @@ func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 // one reads it. kind and element name the checked element in messages. A non-nil
 // subject is the object supplied from outside (the `by` of a satisfaction
 // assertion): it binds every subject the members declare, whose own binding is
-// then neither evaluated nor used. enclosing are the values bound around the
+// then neither evaluated nor used, held to their declaration as an expression's
+// value is. enclosing are the values bound around the
 // element (a case run's, for its objective), which the binding expressions read.
 func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing frame) (map[string]Value, error) {
 	bindings := make(map[string]Value)
@@ -864,8 +865,12 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 			continue
 		}
 		if isSubject && subject != nil {
+			value := Value{Kind: ValInstance, Instance: subject.ID}
+			if err := ctx.holdBound(sym, member, fmt.Sprintf("%s %s: subject", kind, element), value); err != nil {
+				return nil, err
+			}
 			for _, name := range names {
-				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
+				bindings[name] = value
 			}
 			continue
 		}
@@ -883,9 +888,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		if err != nil {
 			return nil, fmt.Errorf("%s %s: %s binding evaluation failed: %w", kind, element, what, err)
 		}
-		features := ctx.boundFeatures(sym, member)
-		if err := ctx.holdAs(member.scope, fmt.Sprintf("%s %s: %s binding", kind, element, what),
-			ctx.boundMemberDecl(sym, features), value, features...); err != nil {
+		if err := ctx.holdBound(sym, member, fmt.Sprintf("%s %s: %s binding", kind, element, what), value); err != nil {
 			return nil, err
 		}
 		for _, name := range names {
@@ -895,13 +898,15 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 	return bindings, nil
 }
 
-// boundFeatures are the features a bound member of owner values: itself and those it redefines.
-func (ctx *Context) boundFeatures(owner *symbols.Symbol, member scopedMember) []*symbols.Symbol {
+// holdBound holds val as the value of a bound member of owner: itself and the features it
+// redefines, checked against their declaration folded together (see holdAs).
+func (ctx *Context) holdBound(owner *symbols.Symbol, member scopedMember, what string, val Value) error {
 	memberSym := memberSymbol(member.scope, member.node)
 	if memberSym == nil {
 		return nil
 	}
-	return append([]*symbols.Symbol{memberSym}, ctx.redefinedFeatures(memberSym, owner)...)
+	features := append([]*symbols.Symbol{memberSym}, ctx.redefinedFeatures(memberSym, owner)...)
+	return ctx.holdAs(member.scope, what, ctx.boundMemberDecl(owner, features), val, features...)
 }
 
 // holdAs checks val against decl's multiplicity and type, then classifies its objects by each of
