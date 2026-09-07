@@ -436,6 +436,12 @@ func TestW9CInheritedShortNamesConflict(t *testing.T) {
 	attribute def DiamondMasked :> CylindricalPosition3dVector, PlanetaryPosition3dVector {
 		attribute h :>> CylindricalPosition3dVector::height, PlanetaryPosition3dVector::altitude;
 	}
+	attribute def AliasShort :> CylindricalPosition3dVector {
+		alias <h> H for RedefShort::h;
+	}
+	attribute def AliasLong :> CylindricalPosition3dVector {
+		alias <hh> height for RedefShort::h;
+	}
 }`
 	for _, warm := range []bool{false, true} {
 		diags := w9cLibraryDiags(t, src, warm)
@@ -455,6 +461,8 @@ func TestW9CInheritedShortNamesConflict(t *testing.T) {
 			"24:2 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
 			"24:2 " + msgW9CDuplicateInherited + " 'mRef' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
 			"25:2 " + msgW9CDuplicateInherited + " 'mRef' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
+			"29:10 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"32:14 " + msgW9CDuplicateInherited + " 'height' from CylindricalPosition3dVector",
 		}
 		sort.Strings(got)
 		sort.Strings(want)

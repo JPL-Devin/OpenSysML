@@ -179,12 +179,19 @@ func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[str
 	}
 }
 
-// ownedKeysOf is each identifier a member binds, short name included, at the
-// span it was written; a member naming itself another way binds its own name.
+// ownedKeysOf is each identifier a member or alias binds, short name included,
+// at the span it was written; a member naming itself another way binds its own name.
 func ownedKeysOf(mem *symbols.Symbol) []w9cKey {
-	keys := w9cKeysOf(mem)
-	if len(keys) == 0 {
+	id, ok := symbols.DeclIdent(mem.Decl)
+	if !ok || (id.Name == "" && id.ShortName == "") {
 		return []w9cKey{{name: mem.Name, span: nameSpanOf(mem)}}
+	}
+	var keys []w9cKey
+	if id.ShortName != "" {
+		keys = append(keys, w9cKey{name: id.ShortName, span: id.ShortNameSpan})
+	}
+	if id.Name != "" && id.Name != id.ShortName {
+		keys = append(keys, w9cKey{name: id.Name, span: id.NameSpan})
 	}
 	for i := range keys {
 		if keys[i].span == (source.Span{}) {
