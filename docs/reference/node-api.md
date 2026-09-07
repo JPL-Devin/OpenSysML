@@ -200,7 +200,7 @@ TLS for an HTTPS page to reach it; and `connect-go` does not implement the base6
 The ergonomic layer covers `GetServerInfo`, `ParseFile`, `GetSymbol`, `Evaluate`
 and `Instantiate`. Deliberately absent, rather than half-implemented: generated
 model-ergonomics types, the edit API (`ApplyEdits`), RDF conversion (`Convert`),
-the verification helpers, `Query`, `GetDiagnostics`, `EvaluateCalc`,
+the verification helpers, `Query`, `GetDiagnostics`, `EvaluateCalc`, `RunAnalysis`,
 `ExecuteAction` and `ExecuteState`. The service serves all of them;
 `connection.rpc` is the escape hatch, being the generated Connect client, and
 `SysMLService` is exported for a caller building its own.

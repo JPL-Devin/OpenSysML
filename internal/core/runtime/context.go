@@ -97,6 +97,9 @@ type Context struct {
 	// under way, so reading several outputs of one usage answers from one
 	// execution of its body. An activation's evaluations end with it.
 	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
+	// calcUsageRunning holds the calc usages whose bodies are running, so a body
+	// reading its own usage is a recursion rather than a nested evaluation.
+	calcUsageRunning map[calcUsageKey]*calcShape
 
 	// activations numbers the body activations begun in this context: a calc
 	// invocation, a block entry, a loop iteration, a body application.
@@ -304,7 +307,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		realLiterals:      make(map[*ast.LiteralReal]float64),
 		compileCalcs:      CalcCompileFromEnv(),
 
-		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRuns:    make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRunning: make(map[calcUsageKey]*calcShape),
 
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
@@ -1101,9 +1105,26 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 // performAction runs action to completion, performed by self, and returns the
 // executor that ran it, whose root performance holds what it produced.
 func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
+	return ctx.performActionFrom(action, self, inputs, (*ActionExecutor).initialize)
+}
+
+// performActionStep runs action as a step of an enclosing behavior. A step
+// stating no flow performs none: it takes its inputs, binds its computed
+// outputs and ends at once, as an object performing such an action does.
+func (ctx *Context) performActionStep(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
+	return ctx.performActionFrom(action, self, inputs, func(exec *ActionExecutor) error {
+		if !exec.hasFlow() {
+			return exec.completeWithoutFlow()
+		}
+		return exec.initialize()
+	})
+}
+
+// performActionFrom creates the executor for action, seeds its inputs, starts
+// it with start, and runs it to completion.
+func (ctx *Context) performActionFrom(action *symbols.Symbol, self *Instance, inputs map[string]Value, start func(*ActionExecutor) error) (*ActionExecutor, error) {
 	defer ctx.beginRun()()
 
-	// Create executor
 	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
@@ -1114,12 +1135,13 @@ func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs
 		exec.SetInputs(inputs)
 	}
 
-	// Initialize execution (spawns initial token)
-	if err := exec.initialize(); err != nil {
+	if err := start(exec); err != nil {
 		return nil, fmt.Errorf("initialize action: %w", err)
 	}
+	if exec.state == StateCompleted {
+		return exec, nil
+	}
 
-	// Run to completion
 	if err := exec.RunToCompletion(); err != nil {
 		return nil, fmt.Errorf("execute action: %w", err)
 	}

@@ -158,6 +158,10 @@ func (p *inprocess) evaluateCalc(ctx context.Context, req *pb.EvaluateCalcReques
 	return answer(ctx, req, p.svc.EvaluateCalc)
 }
 
+func (p *inprocess) runAnalysis(ctx context.Context, req *pb.RunAnalysisRequest) (*pb.RunAnalysisResponse, error) {
+	return answer(ctx, req, p.svc.RunAnalysis)
+}
+
 func (p *inprocess) query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
 	return answer(ctx, req, p.svc.Query)
 }

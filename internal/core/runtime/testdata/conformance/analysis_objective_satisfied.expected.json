@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::shipCost",
+  "outputs": {
+    "result": {"type": "Real", "value": 12.0}
+  },
+  "verdicts": {
+    "affordable": "satisfied"
+  }
+}

@@ -133,7 +133,13 @@ func (tr *TraceRecorder) RecordActionNodeExit(node string) {
 
 // RecordCalcEnter records entering a calc invocation and opens a nesting level.
 func (tr *TraceRecorder) RecordCalcEnter(name string) {
-	tr.record(fmt.Sprintf("enter calc %s", name))
+	tr.RecordCalculationEnter("calc", name)
+}
+
+// RecordCalculationEnter records entering a calculation of the given kind — a
+// calc, or an analysis case — and opens a nesting level.
+func (tr *TraceRecorder) RecordCalculationEnter(kind, name string) {
+	tr.record(fmt.Sprintf("enter %s %s", kind, name))
 	tr.depth++
 }
 
@@ -165,16 +171,26 @@ func (tr *TraceRecorder) EndStatement() {
 
 // RecordCalcExit closes a calc invocation's nesting level and records its result.
 func (tr *TraceRecorder) RecordCalcExit(name string, result Value) {
+	tr.RecordCalculationExit("calc", name, result)
+}
+
+// RecordCalculationExit closes a calculation's nesting level and records its result.
+func (tr *TraceRecorder) RecordCalculationExit(kind, name string, result Value) {
 	tr.closeLevel()
-	tr.record(fmt.Sprintf("exit calc %s -> %s", name, FormatTraceValue(result)))
+	tr.record(fmt.Sprintf("exit %s %s -> %s", kind, name, FormatTraceValue(result)))
 }
 
 // RecordCalcExitError closes a calc invocation that failed, recording why.
 // The failure is part of the ordering contract: it says how far binding and
 // evaluation got before the calc gave up.
 func (tr *TraceRecorder) RecordCalcExitError(name string, err error) {
+	tr.RecordCalculationExitError("calc", name, err)
+}
+
+// RecordCalculationExitError closes a calculation that failed, recording why.
+func (tr *TraceRecorder) RecordCalculationExitError(kind, name string, err error) {
 	tr.closeLevel()
-	tr.record(fmt.Sprintf("exit calc %s -> error: %v", name, err))
+	tr.record(fmt.Sprintf("exit %s %s -> error: %v", kind, name, err))
 }
 
 // BeginEval opens a nesting level for one expression's sub-expressions.
@@ -508,16 +524,16 @@ func controlNodeName(name, kind string) string {
 // RecordCalcUsageExit closes the nesting level of a calc usage's evaluation,
 // which computes the usage's output features rather than one result, so there is
 // no single value to record for it.
-func (tr *TraceRecorder) RecordCalcUsageExit(name string) {
+func (tr *TraceRecorder) RecordCalcUsageExit(kind, name string) {
 	tr.closeLevel()
-	tr.record(fmt.Sprintf("exit calc %s", name))
+	tr.record(fmt.Sprintf("exit %s %s", kind, name))
 }
 
 // RecordCalcUsageReuse records a calc usage read again with the inputs it
 // already ran over, whose values come from that one run. It opens no nesting
 // level of its own, since nothing runs.
-func (tr *TraceRecorder) RecordCalcUsageReuse(name string) {
-	tr.record(fmt.Sprintf("reuse calc %s", name))
+func (tr *TraceRecorder) RecordCalcUsageReuse(kind, name string) {
+	tr.record(fmt.Sprintf("reuse %s %s", kind, name))
 }
 
 // RecordCalcOutput records the value one output feature of a calc usage took.

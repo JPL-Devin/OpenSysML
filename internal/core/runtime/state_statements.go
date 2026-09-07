@@ -146,6 +146,12 @@ func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph
 	return h.perfs.performNode(h.perfs.root, engine, graph, node)
 }
 
+// runFlow rejects a stated flow among statements: a state's behavior sequences its nodes.
+func (h *stateStmtHost) runFlow(lower.Block) (stmtFlow, error) {
+	return flowNext, fmt.Errorf("%w: %s: a flow of steps in a block is not executable",
+		ErrStatementNotExecutable, h.describe())
+}
+
 // setFeature writes a feature the behavior's performance holds; it holds none, so
 // the write reaches what is around it.
 func (h *stateStmtHost) setFeature(name string, value Value) error {

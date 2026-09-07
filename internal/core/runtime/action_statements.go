@@ -133,6 +133,13 @@ func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGrap
 	return h.exec.performNode(h.perf, engine, graph, node)
 }
 
+// runFlow rejects a stated flow among statements: an action's own flow is the
+// executor's, and a block of its body sequences its nodes.
+func (h *actionStmtHost) runFlow(lower.Block) (stmtFlow, error) {
+	return flowNext, fmt.Errorf("%w: %s: a flow of steps in a block is not executable",
+		ErrStatementNotExecutable, h.describe())
+}
+
 // performNode performs node, which a block of parent's body declares, as a subperformance
 // of parent with the block-locals entered around it in reach; a node owning a flow runs it
 // to completion here. A breakpoint on the node pauses the run before it performs.
@@ -144,17 +151,23 @@ func (e *performances) performNode(parent *actionFrame, engine *stmtEngine, grap
 	if err != nil {
 		return flowNext, err
 	}
-	if inv, ok := nestedInvocation(node); ok {
-		if err := e.performInvocation(perf, inv); err != nil {
+	if isCaseStep(node) {
+		if err := e.performCase(perf); err != nil {
 			return flowNext, err
 		}
-	}
-	if perf.graph != nil {
-		if err := e.owner.runOwnFlow(perf); err != nil {
+	} else {
+		if inv, ok := nestedInvocation(node); ok {
+			if err := e.performInvocation(perf, inv); err != nil {
+				return flowNext, err
+			}
+		}
+		if perf.graph != nil {
+			if err := e.owner.runOwnFlow(perf); err != nil {
+				return flowNext, err
+			}
+		} else if err := e.executeBody(perf, graph, node); err != nil {
 			return flowNext, err
 		}
-	} else if err := e.executeBody(perf, graph, node); err != nil {
-		return flowNext, err
 	}
 	if err := e.endPerformance(perf); err != nil {
 		return flowNext, err

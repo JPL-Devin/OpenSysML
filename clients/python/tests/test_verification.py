@@ -17,7 +17,7 @@ from opensysml.capabilities import (
 from opensysml.connection import Connection
 from opensysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
 from opensysml.proto import sysml_pb2
-from opensysml.verdict import CalcResult, Verdict
+from opensysml.verdict import AnalysisResult, CalcResult, Verdict
 
 
 def make_connection(stub):
@@ -278,11 +278,130 @@ def test_verification_requires_the_capability():
         lambda: conn.verify_requirement("Demo::r", "hash1"),
         lambda: conn.verify_satisfaction("hash1"),
         lambda: conn.calc("Demo::add", "hash1"),
+        lambda: conn.run_analysis("Demo::a", "hash1"),
     ):
         with pytest.raises(MissingCapabilityError):
             call()
     stub.VerifyConstraint.assert_not_called()
     stub.EvaluateCalc.assert_not_called()
+    stub.RunAnalysis.assert_not_called()
+
+
+def test_run_analysis_reports_outputs_and_verdicts():
+    stub = Mock()
+    stub.RunAnalysis.return_value = sysml_pb2.RunAnalysisResponse(
+        outputs=[
+            sysml_pb2.CalcOutput(name="total", value=sysml_pb2.Value(real_value=12.0)),
+        ],
+        verdicts=[
+            sysml_pb2.Verdict(
+                kind="objective", element_id="An::CostAnalysis::affordable",
+                element="affordable", holds=True, instance_id=1,
+                instance_type_id="An::ship",
+            ),
+            sysml_pb2.Verdict(
+                kind="assertion", element="cheap", holds=False,
+                condition="total < 10.0",
+            ),
+        ],
+        instances=[sysml_pb2.Instance(id=1, type_symbol_id="An::ship")],
+    )
+    conn = make_connection(stub)
+
+    result = conn.run_analysis(
+        "An::CostAnalysis", "hash1", subject="An::ship",
+        arguments=[2.5], named_arguments={"limit": 20.0},
+    )
+
+    request = stub.RunAnalysis.call_args[0][0]
+    assert request.model_hash == "hash1"
+    assert request.symbol_id == "An::CostAnalysis"
+    assert request.subject_symbol_id == "An::ship"
+    assert [arg.real_value for arg in request.arguments] == [2.5]
+    assert request.named_arguments["limit"].real_value == 20.0
+    assert isinstance(result, AnalysisResult)
+    assert result.outputs == {"total": 12.0}
+    assert [v.kind for v in result.verdicts] == ["objective", "assertion"]
+    assert result.verdicts[0].holds
+    assert result.verdicts[0].element_id == "An::CostAnalysis::affordable"
+    assert result.verdicts[1].condition == "total < 10.0"
+    assert not result.satisfied
+    assert not result
+    assert [inst.id for inst in result.instances] == [1]
+    assert result.verdicts[0].instances == result.instances
+    text = str(result)
+    assert "total = 12.0" in text
+    assert "objective affordable holds" in text
+    assert "assertion cheap fails" in text
+
+
+def test_run_analysis_without_objective_is_satisfied():
+    stub = Mock()
+    stub.RunAnalysis.return_value = sysml_pb2.RunAnalysisResponse(
+        outputs=[sysml_pb2.CalcOutput(name="x", value=sysml_pb2.Value(real_value=3.0))],
+    )
+    conn = make_connection(stub)
+
+    result = conn.run_analysis("An::plain", "hash1")
+
+    request = stub.RunAnalysis.call_args[0][0]
+    assert request.subject_symbol_id == ""
+    assert list(request.arguments) == []
+    assert dict(request.named_arguments) == {}
+    assert result.outputs == {"x": 3.0}
+    assert result.verdicts == []
+    assert result.satisfied
+    assert result
+
+
+def test_run_analysis_undecided_objective_is_an_error_on_the_verdict():
+    stub = Mock()
+    stub.RunAnalysis.return_value = sysml_pb2.RunAnalysisResponse(
+        verdicts=[
+            sysml_pb2.Verdict(
+                kind="objective", element="obj", holds=False,
+                error="no value for feature limit",
+                failure_reason=sysml_pb2.FAILURE_REASON_EVALUATION,
+            ),
+        ],
+    )
+    conn = make_connection(stub)
+
+    result = conn.run_analysis("An::a", "hash1")
+
+    assert not result.satisfied
+    assert not result.verdicts[0].evaluated
+    with pytest.raises(ExecutionError) as exc_info:
+        result.verdicts[0].raise_for_error()
+    assert "no value for feature limit" in str(exc_info.value)
+
+
+def test_run_analysis_failure_raises_with_diagnostics():
+    stub = Mock()
+    stub.RunAnalysis.return_value = sysml_pb2.RunAnalysisResponse(
+        error="analysis run failed: analysis An::a: s subject is unbound",
+        failure_reason=sysml_pb2.FAILURE_REASON_EVALUATION,
+        diagnostics=[sysml_pb2.Diagnostic(severity="error", message="subject is unbound")],
+    )
+    conn = make_connection(stub)
+
+    with pytest.raises(ExecutionError) as exc_info:
+        conn.run_analysis("An::a", "hash1")
+    assert "subject is unbound" in str(exc_info.value)
+    assert not isinstance(exc_info.value, WrongKindError)
+    assert len(exc_info.value.diagnostics) == 1
+
+
+def test_run_analysis_wrong_kind_raises():
+    stub = Mock()
+    stub.RunAnalysis.return_value = sysml_pb2.RunAnalysisResponse(
+        error="not an analysis case: An::ship is a part usage",
+        failure_reason=sysml_pb2.FAILURE_REASON_WRONG_KIND,
+    )
+    conn = make_connection(stub)
+
+    with pytest.raises(WrongKindError):
+        conn.run_analysis("An::ship", "hash1")
 
 
 def test_evicted_model_is_a_model_not_found_error():

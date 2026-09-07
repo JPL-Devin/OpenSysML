@@ -553,6 +553,32 @@ class Model:
         """
         return self._client.calc(symbol_id, self._hash, arguments=arguments)
 
+    def run_analysis(self, symbol_id, subject=None, arguments=None,
+                     named_arguments=None):
+        """Run one of this model's analysis cases.
+
+        Args:
+            symbol_id (str): FQN of the analysis case definition or usage
+            subject (str, optional): FQN of a part/usage to instantiate and run
+                the case on; a usage binding its own subject needs none
+            arguments (list, optional): Positional arguments for the case's
+                ``in`` parameters, as Python values
+            named_arguments (dict, optional): Arguments by parameter name
+
+        Returns:
+            AnalysisResult: The outputs the case computed and the verdict of
+                its objective and assertions
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not an
+                analysis case
+            ExecutionError: If the case could not run
+        """
+        return self._client.run_analysis(
+            symbol_id, self._hash, subject=subject, arguments=arguments,
+            named_arguments=named_arguments,
+        )
+
     def __getitem__(self, name):
         """Look a symbol up by short name or FQN, raising when there is none.
 

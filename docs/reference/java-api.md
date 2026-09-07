@@ -178,7 +178,7 @@ opt-out and its limitations in full.
 Deliberately out of scope, rather than half-implemented: the edit API
 (`ApplyEdits`), RDF conversion (`Convert`), the verification helpers
 (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`), behaviour
-execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `Query`/OSLC, and
+execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `RunAnalysis`, `Query`/OSLC, and
 generated model-ergonomics types. The service still serves all of them, but the
 public API offers no generic call: `org.openmbee.opensysml.proto` carries the request and
 response messages, and the transport that would send one is

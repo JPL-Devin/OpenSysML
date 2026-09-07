@@ -262,7 +262,7 @@ func (e *performances) bindArguments(perf *actionFrame, activation int64) error 
 		return nil
 	}
 	inv, performs := nestedInvocation(usage)
-	if !performs || inv.expr == nil {
+	if !performs || inv.expr == nil || lower.IsCaseNode(usage) {
 		return nil
 	}
 	scope := nodeScope(perf.flow, perf.node)
@@ -350,7 +350,7 @@ func (e *performances) nodePins(graph *lower.ActionGraph, node ast.Node) (nodePi
 			pins.result = feature.Name
 		}
 	}
-	if inv, performs := nestedInvocation(usage); performs {
+	if inv, performs := nestedInvocation(usage); performs && !lower.IsCaseNode(usage) {
 		sym, err := resolveActionSymbol(e.ctx, nodeScope(graph, node), inv)
 		if err != nil {
 			return nodePins{}, err
@@ -1069,7 +1069,7 @@ func (e *performances) performInvocation(perf *actionFrame, inv actionInvocation
 		return err
 	}
 
-	callee, err := e.ctx.performAction(sym, e.self, inputs)
+	callee, err := e.ctx.performActionStep(sym, e.self, inputs)
 	if err != nil {
 		return fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}

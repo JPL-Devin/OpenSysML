@@ -10,6 +10,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -182,7 +183,7 @@ func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared
 	var decl ast.Node
 	if ec.ctx.resolver != nil {
 		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
-			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction && !lower.IsCaseNode(usage) {
 				return nil, false, nil
 			}
 			decl = sym.Decl
@@ -334,6 +335,10 @@ func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
 		defer ctx.beginRun()()
 		if val, ok, err := ctx.declaredArrayValue(sym); ok {
 			return val, err
+		}
+		// A calc usage returning one unnamed result is read as that result.
+		if isCalcUsageSymbol(sym) && ctx.returnsResult(sym) {
+			return NewEvalContext(ctx, sym.OwnerScope).evalCalcUsageMembers(sym, resultSegments)
 		}
 		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
 	}
@@ -612,6 +617,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.occurrenceReference(sym); ok {
 					return val, err
 				}
+				// A calc usage returning one unnamed result is read as that result.
+				if isCalcUsageSymbol(sym) && ec.ctx.returnsResult(sym) {
+					return ec.evalCalcUsageMembers(sym, resultSegments)
+				}
 				// A feature declared with no value, whose multiplicity admits none,
 				// states the empty sequence — what an object holding nothing reads.
 				if val, ok := ec.emptyDeclaredFeature(sym); ok {
@@ -713,6 +722,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// A part, item or structured value names an object, read as that object.
 		if val, ok, err := ec.occurrenceReference(currentSym); ok {
 			return val, err
+		}
+		// A calc usage returning one unnamed result is read as that result.
+		if isCalcUsageSymbol(currentSym) && ec.ctx.returnsResult(currentSym) {
+			return ec.evalCalcUsageMembers(currentSym, resultSegments)
 		}
 		// A calc usage or a KerML type is never the empty sequence, whatever it admits.
 		if isCalcUsageSymbol(currentSym) || declaresType(currentSym) {

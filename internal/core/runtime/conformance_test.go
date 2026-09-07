@@ -117,6 +117,12 @@ type ExpectedOutcome struct {
 	// such an assertion is anonymous.
 	Assertions map[string]bool `json:"assertions,omitempty"`
 
+	// Analysis fields: the object run as the case's subject, by the qualified
+	// name of its usage, and the verdict ("satisfied", "not satisfied",
+	// "undecided") expected of each objective and assertion, by name.
+	Subject  string            `json:"subject,omitempty"`
+	Verdicts map[string]string `json:"verdicts,omitempty"`
+
 	// Performers are the objects that each perform the case's behavior, for a
 	// case whose contract depends on which object performs it — two objects
 	// selecting different variants of one variation route over their own.
@@ -281,6 +287,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runRequirementConformance(t, ctx, idx, sysmlPath, expected)
 	case "satisfy":
 		runSatisfyConformance(t, ctx, idx, sysmlPath, expected)
+	case "analysis":
+		runAnalysisConformance(t, ctx, idx, sysmlPath, expected)
 	case "instance":
 		runInstanceConformance(t, ctx, idx, expected)
 	default:
@@ -765,6 +773,99 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 			t.Errorf("requirement satisfied = %v, want %v", satisfied, *expected.Satisfied)
 		}
 	}
+}
+
+// runAnalysisConformance runs the analysis case the outcome names: on the
+// object `subject` names, with `inputs` as positional and `bindings` as named
+// arguments, and checks its outputs, its verdicts and the model's reads of it.
+func runAnalysisConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	rootScope := idx.DocumentRoot(path)
+	caseSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefAnalysisCase, ast.UsageAnalysisCase)
+
+	result, err := ctx.RunAnalysis(caseSym, analysisArgsOf(t, ctx, idx, expected), rootScope, nil)
+	if expected.Error != "" {
+		requireError(t, "RunAnalysis", err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Fatalf("RunAnalysis(%s) failed: %v", ctx.qualifiedSymbolName(caseSym), err)
+	}
+
+	values := make(map[string]Value, len(result.Outputs))
+	for _, out := range result.Outputs {
+		values[out.Name] = out.Value
+	}
+	for name, expectedVal := range expected.Outputs {
+		actual, ok := values[name]
+		if !ok {
+			t.Errorf("missing output %q among %v", name, outputNames(result.Outputs))
+			continue
+		}
+		validateValue(t, ctx, name, expectedVal, actual)
+	}
+	if expected.Result != nil {
+		actual, ok := values[resultOutputName]
+		if !ok {
+			t.Errorf("the case returned no result; its outputs are %v", outputNames(result.Outputs))
+		} else {
+			validateValue(t, ctx, resultOutputName, *expected.Result, actual)
+		}
+	}
+
+	verdicts := make(map[string]AnalysisVerdict, len(result.Verdicts))
+	for _, verdict := range result.Verdicts {
+		verdicts[verdict.Name] = verdict
+	}
+	for name, want := range expected.Verdicts {
+		verdict, ok := verdicts[name]
+		if !ok {
+			t.Errorf("no verdict for %q among %v", name, verdictNames(result.Verdicts))
+			continue
+		}
+		if got := verdict.Status.String(); got != want {
+			t.Errorf("%s %s: verdict %q (%s), want %q", verdict.Kind, name, got, verdict.Detail, want)
+		}
+	}
+	if len(result.Verdicts) != len(expected.Verdicts) {
+		t.Errorf("the case reported %d verdict(s) %v, the outcome states %d",
+			len(result.Verdicts), verdictNames(result.Verdicts), len(expected.Verdicts))
+	}
+
+	for name, expectedVal := range expected.Reads {
+		validateRead(t, ctx, idx, name, expectedVal)
+	}
+}
+
+// analysisArgsOf builds the arguments an analysis outcome states: the object its
+// subject names, materialized, and its positional and named parameter values.
+func analysisArgsOf(t *testing.T, ctx *Context, idx *symbols.Index, expected ExpectedOutcome) AnalysisArgs {
+	t.Helper()
+	args := AnalysisArgs{}
+	if expected.Subject != "" {
+		subject, err := ctx.Instantiate(oneSymbol(t, idx, expected.Subject))
+		if err != nil {
+			t.Fatalf("Instantiate(%s) failed: %v", expected.Subject, err)
+		}
+		args.Subject = subject
+	}
+	for _, input := range expected.Inputs {
+		args.Positional = append(args.Positional, expectedToRuntimeValue(t, input))
+	}
+	if len(expected.Bindings) > 0 {
+		args.Named = make(map[string]Value, len(expected.Bindings))
+		for name, value := range expected.Bindings {
+			args.Named[name] = expectedToRuntimeValue(t, value)
+		}
+	}
+	return args
+}
+
+func verdictNames(verdicts []AnalysisVerdict) []string {
+	names := make([]string, len(verdicts))
+	for i, verdict := range verdicts {
+		names[i] = verdict.Name
+	}
+	return names
 }
 
 // runSatisfyConformance evaluates the satisfaction assertions the case states

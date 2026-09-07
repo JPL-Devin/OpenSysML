@@ -122,8 +122,8 @@ func TestNestedCalcNamesTheFailingCalc(t *testing.T) {
 // TestMutualRecursionNamesTheFrameItCollapsed pins the collapsed frame naming
 // the calc it was entered for, not one an inner frame recorded.
 func TestMutualRecursionNamesTheFrameItCollapsed(t *testing.T) {
-	inner := calcFrame("a", errors.New("boom"))
-	got := calcFrame("a", calcFrame("b", inner)).Error()
+	inner := calcFrame("calc", "a", errors.New("boom"))
+	got := calcFrame("calc", "a", calcFrame("calc", "b", inner)).Error()
 	if !strings.HasPrefix(got, "calc a: … 2 frames: ") {
 		t.Errorf("err = %q; want the outer frame named a", got)
 	}

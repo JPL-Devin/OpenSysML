@@ -339,6 +339,80 @@ Each argument is written as `<parameter>=<expression>`. An unbound parameter, an
 names no parameter, and an operation the type does not own are each reported as errors. A `calc`
 or `constraint` cannot yet be invoked this way.
 
+## Running an analysis case
+
+An analysis case is a case, a case is a calculation, and a calculation is an action (SysML v2
+§7.22, §7.21, §7.19), so running one is performing an action whose result is its `out` and
+`return` parameters. `%analysis` and `-analysis` run a case the way `%calc` invokes a calc:
+the case's `subject` is an `in` parameter the usage binds (`subject s = ship;`) or the object
+named after the case supplies, the other `in` parameters take arguments in parentheses,
+positionally or by name, or their declared defaults, and the report lists what the case computed
+with its units and, after that, the verdict of its `objective`.
+
+```sysml
+package test {
+    private import ScalarValues::*;
+    part def Ship { attribute cost : Real = 5.0; }
+    part ship : Ship;
+
+    analysis steps {
+        subject s = ship;
+        action a {
+            out p : Real;
+            assign p := s.cost + 1.0;
+        }
+        then action b {
+            in q : Real = a.p;
+            out w : Real;
+            assign w := q * 10.0;
+        }
+        out total : Real = b.w + a.p;
+        return : Real = b.w;
+    }
+}
+```
+
+```bash
+$ sysml -analysis test::steps steps.sysml
+✓ package test
+✓ test::steps
+  total = 66.0
+  result = 60.0
+```
+
+The body's `action` steps run through the same executor `%action` debugs: `then` sequences them,
+each later step reading an earlier one's output by `step.pin`, and a body that states no
+succession performs its steps in declaration order, as a calc body does. A nested `analysis`
+usage is a step too; one that binds no subject of its own runs on the enclosing case's subject,
+and the enclosing case reads its outputs as features of it (`out total : Real = inner.m * 2.0;`).
+The `out` parameters and `return` are evaluated in the case's frame after the steps complete, so
+they may read the subject, the `in` parameters, the steps' outputs and call `calc def`s.
+`%trace on` shows the order: the case is entered, its subject bound, each step performed as an
+action node, then `return` and every `out` evaluated.
+
+The `objective` is a requirement the case frames; it is evaluated, not executed. After the body
+runs, its `require` and `assume` constraints are checked against the case's results by the same
+engine `%requirement` uses, and the verdict is printed beside them: `satisfied`, `not satisfied`
+with the condition that failed, or `undecided` with the reason a condition could not be evaluated
+(a feature the condition reads has no value). An `assert constraint { ... }` inside the body is
+checked the same way, against the values the run bound once its steps have completed. `%optimize`
+still asks a solver which
+values would make the objectives best; `%analysis` reports what they are for the values the model
+has.
+
+A case usage owned by a part definition (`part def Holder { analysis inner : CostAnalysis {
+subject s = h; } part h : Ship; }`) is a feature of every object of that type, as a `calc` usage
+owned by a part is: `holder.inner.total` runs the case on first read and keeps the result until a
+value it depends on changes, and an attribute redefined from an analysis output (`attribute :>>
+fuelEconomy = cityAnalysis.fuelEconomyResult;`) evaluates through the same path.
+
+What stops a case is reported as an error naming it, never as a silent empty result: a
+`subject` nothing binds (`analysis An::CostAnalysis: s subject is unbound: bind it
+(`subject s = <element>`) or run it on an object`), an `in` parameter with neither argument nor
+default, a step that fails, a body that deadlocks or exhausts the step budget, and a case whose
+body runs itself. The verification-case body uses the same grammar but is not run this way yet;
+`%requirement` and `%satisfy` check it as before.
+
 ## Token-flow patterns
 
 Each model below is in

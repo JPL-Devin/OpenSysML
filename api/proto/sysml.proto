@@ -43,15 +43,16 @@ service SysMLService {
   // Reported as the "apply_edits" capability.
   rpc ApplyEdits(ApplyEditsRequest) returns (ApplyEditsResponse);
 
-  // Verification: the answers the REPL's %constraint, %requirement, %satisfy
-  // and %calc give, so "does this model satisfy its requirements?" can be asked
-  // by a script. Each evaluates the same runtime paths the prompt does and
-  // returns a verdict rather than formatted lines. Reported as the
+  // Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+  // %calc and %analysis give, so "does this model satisfy its requirements?"
+  // can be asked by a script. Each evaluates the same runtime paths the prompt
+  // does and returns a verdict rather than formatted lines. Reported as the
   // "verification" capability.
   rpc VerifyConstraint(VerifyConstraintRequest) returns (VerifyConstraintResponse);
   rpc VerifyRequirement(VerifyRequirementRequest) returns (VerifyRequirementResponse);
   rpc VerifySatisfaction(VerifySatisfactionRequest) returns (VerifySatisfactionResponse);
   rpc EvaluateCalc(EvaluateCalcRequest) returns (EvaluateCalcResponse);
+  rpc RunAnalysis(RunAnalysisRequest) returns (RunAnalysisResponse);
 
   // Run a SysML v2 API & Services Query over a parsed model: scope/select/where
   // as the standard defines them, so a client that speaks that API can filter a
@@ -80,12 +81,15 @@ enum FailureReason {
 // Verdict is one verification's answer: whether the condition held, and, when
 // it did not, which condition the model answered false about.
 message Verdict {
-  // What was verified: "constraint", "requirement" or "satisfy".
+  // What was verified: "constraint", "requirement" or "satisfy"; for a check
+  // an analysis case run made, "objective" or "assertion".
   string kind = 1;
-  // FQN of the element verified; empty for an anonymous satisfy assertion.
+  // FQN of the element verified; empty for an anonymous satisfy assertion or
+  // an anonymous assertion in a case body.
   string element_id = 2;
   // The element as a reader names it: its FQN, or, for an anonymous satisfy
-  // assertion, the assertion as written ("satisfy Range by cruise").
+  // assertion, the assertion as written ("satisfy Range by cruise"); for an
+  // objective or assertion of a case, its name or its condition as written.
   string element = 3;
   // Whether the condition holds. False with an empty `error` is the model's own
   // answer; false with an `error` is no answer at all.
@@ -201,6 +205,45 @@ message EvaluateCalcResponse {
 message CalcOutput {
   string name = 1;
   Value value = 2;
+}
+
+// RunAnalysisRequest runs an analysis case, as %analysis does: its subject and
+// input parameters are bound from the request and from the case's own
+// declarations, its body runs, and every output it declares is reported with
+// the verdict of its objective and of each assertion in its body (SysML 7.22).
+message RunAnalysisRequest {
+  string model_hash = 1;
+  // FQN of the analysis case definition or usage.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate as the case's subject. Empty
+  // leaves the case's own `subject s = ...` binding to supply it; a case that
+  // binds none and is given none fails to run.
+  string subject_symbol_id = 3;
+  // Positional arguments for the case's input parameters, in declaration order;
+  // the subject is never among them.
+  repeated Value arguments = 4;
+  // Arguments bound to input parameters by name.
+  map<string, Value> named_arguments = 5;
+}
+
+// RunAnalysisResponse carries what the case computed and decided.
+message RunAnalysisResponse {
+  // The case's out and return parameters in declaration order; a value the
+  // body returned into an unnamed result is named "result".
+  repeated CalcOutput outputs = 1;
+  // What the case's objective and each assertion in its body decided, the
+  // objective first: kind "objective" or "assertion", holds for satisfied, the
+  // violated condition for not satisfied, and an error for undecided.
+  repeated Verdict verdicts = 2;
+  // Instances reachable from the subject the case ran on, including it, so its
+  // feature values need no follow-up RPC. Empty when the run named no object.
+  repeated Instance instances = 3;
+  // Set when the case could not be run — an unknown symbol, a subject that
+  // could not be built or bound, an input with no value, a failed step.
+  string error = 4;
+  repeated Diagnostic diagnostics = 5;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 6;
 }
 
 // ParseFileRequest specifies the source to parse

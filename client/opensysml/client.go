@@ -90,6 +90,15 @@ type Client interface {
 	// MeasurementRef argument, checked before anything is sent.
 	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
 
+	// RunAnalysis runs the named analysis case — a definition or a usage — and
+	// reports its outputs with the verdict of its objective and of each
+	// assertion in its body. Positional arguments bind its inputs in
+	// declaration order; Against names its subject and Binding a parameter by
+	// name. Requires the verification capability, and the complex_values or
+	// structured_values capability for a Complex or a structured argument,
+	// checked before anything is sent.
+	RunAnalysis(ctx context.Context, model *Model, symbolID string, opts ...AnalysisOption) (*Analysis, error)
+
 	// Query selects the model's elements the query matches, in declaration
 	// order. Requires the query capability.
 	Query(ctx context.Context, model *Model, query Query) ([]QueryElement, error)
@@ -221,6 +230,7 @@ type caller interface {
 	verifyRequirement(ctx context.Context, req *pb.VerifyRequirementRequest) (*pb.VerifyRequirementResponse, error)
 	verifySatisfaction(ctx context.Context, req *pb.VerifySatisfactionRequest) (*pb.VerifySatisfactionResponse, error)
 	evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error)
+	runAnalysis(ctx context.Context, req *pb.RunAnalysisRequest) (*pb.RunAnalysisResponse, error)
 	query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error)
 	runDocumentQuery(ctx context.Context, req *pb.RunDocumentQueryRequest) (*pb.RunDocumentQueryResponse, error)
 	renderDocument(ctx context.Context, req *pb.RenderDocumentRequest) (*pb.RenderDocumentResponse, error)

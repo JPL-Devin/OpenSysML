@@ -4,14 +4,17 @@
 /// it did not, which condition the model answered false about.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Verdict {
-    /// What was verified: "constraint", "requirement" or "satisfy".
+    /// What was verified: "constraint", "requirement" or "satisfy"; for a check
+    /// an analysis case run made, "objective" or "assertion".
     #[prost(string, tag="1")]
     pub kind: ::prost::alloc::string::String,
-    /// FQN of the element verified; empty for an anonymous satisfy assertion.
+    /// FQN of the element verified; empty for an anonymous satisfy assertion or
+    /// an anonymous assertion in a case body.
     #[prost(string, tag="2")]
     pub element_id: ::prost::alloc::string::String,
     /// The element as a reader names it: its FQN, or, for an anonymous satisfy
-    /// assertion, the assertion as written ("satisfy Range by cruise").
+    /// assertion, the assertion as written ("satisfy Range by cruise"); for an
+    /// objective or assertion of a case, its name or its condition as written.
     #[prost(string, tag="3")]
     pub element: ::prost::alloc::string::String,
     /// Whether the condition holds. False with an empty `error` is the model's own
@@ -165,6 +168,56 @@ pub struct CalcOutput {
     pub name: ::prost::alloc::string::String,
     #[prost(message, optional, tag="2")]
     pub value: ::core::option::Option<Value>,
+}
+/// RunAnalysisRequest runs an analysis case, as %analysis does: its subject and
+/// input parameters are bound from the request and from the case's own
+/// declarations, its body runs, and every output it declares is reported with
+/// the verdict of its objective and of each assertion in its body (SysML 7.22).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalysisRequest {
+    #[prost(string, tag="1")]
+    pub model_hash: ::prost::alloc::string::String,
+    /// FQN of the analysis case definition or usage.
+    #[prost(string, tag="2")]
+    pub symbol_id: ::prost::alloc::string::String,
+    /// Optional FQN of a part/usage to instantiate as the case's subject. Empty
+    /// leaves the case's own `subject s = ...` binding to supply it; a case that
+    /// binds none and is given none fails to run.
+    #[prost(string, tag="3")]
+    pub subject_symbol_id: ::prost::alloc::string::String,
+    /// Positional arguments for the case's input parameters, in declaration order;
+    /// the subject is never among them.
+    #[prost(message, repeated, tag="4")]
+    pub arguments: ::prost::alloc::vec::Vec<Value>,
+    /// Arguments bound to input parameters by name.
+    #[prost(map="string, message", tag="5")]
+    pub named_arguments: ::std::collections::HashMap<::prost::alloc::string::String, Value>,
+}
+/// RunAnalysisResponse carries what the case computed and decided.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalysisResponse {
+    /// The case's out and return parameters in declaration order; a value the
+    /// body returned into an unnamed result is named "result".
+    #[prost(message, repeated, tag="1")]
+    pub outputs: ::prost::alloc::vec::Vec<CalcOutput>,
+    /// What the case's objective and each assertion in its body decided, the
+    /// objective first: kind "objective" or "assertion", holds for satisfied, the
+    /// violated condition for not satisfied, and an error for undecided.
+    #[prost(message, repeated, tag="2")]
+    pub verdicts: ::prost::alloc::vec::Vec<Verdict>,
+    /// Instances reachable from the subject the case ran on, including it, so its
+    /// feature values need no follow-up RPC. Empty when the run named no object.
+    #[prost(message, repeated, tag="3")]
+    pub instances: ::prost::alloc::vec::Vec<Instance>,
+    /// Set when the case could not be run — an unknown symbol, a subject that
+    /// could not be built or bound, an input with no value, a failed step.
+    #[prost(string, tag="4")]
+    pub error: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag="5")]
+    pub diagnostics: ::prost::alloc::vec::Vec<Diagnostic>,
+    /// What kind of failure `error` reports.
+    #[prost(enumeration="FailureReason", tag="6")]
+    pub failure_reason: i32,
 }
 /// ParseFileRequest specifies the source to parse
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

@@ -335,7 +335,7 @@ above. Deliberately **not** in v1, rather than half-implemented:
 - RDF conversion (`Convert`);
 - verification helpers (`VerifyConstraint`, `VerifyRequirement`,
   `VerifySatisfaction`);
-- `Query`, `GetDiagnostics`, `EvaluateCalc`, `ExecuteAction`, `ExecuteState`.
+- `Query`, `GetDiagnostics`, `EvaluateCalc`, `RunAnalysis`, `ExecuteAction`, `ExecuteState`.
 
 `connection.rpc` is the escape hatch: it is the generated Connect client, so any
 RPC not covered here can still be called, without the ergonomic layer.

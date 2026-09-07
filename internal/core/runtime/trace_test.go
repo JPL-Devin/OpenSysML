@@ -140,6 +140,15 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, exp
 			t.Fatalf("evaluate calc usage: %v", err)
 		}
 		traceOutput = trace.String()
+	case "analysis":
+		// The run of the case traces the binding of its subject and inputs, each
+		// step of its body in the order they ran, and the outputs read after.
+		ctx.SetTrace(trace)
+		caseSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefAnalysisCase, ast.UsageAnalysisCase)
+		if _, err := ctx.RunAnalysis(caseSym, analysisArgsOf(t, ctx, idx, expected), rootScope, nil); err != nil {
+			t.Fatalf("run analysis: %v", err)
+		}
+		traceOutput = trace.String()
 	case "instance":
 		// Materializing the object records its own start: the objects built, the
 		// behaviors their types bind, and the bodies those behaviors run.
