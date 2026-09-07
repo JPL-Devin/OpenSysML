@@ -1213,9 +1213,16 @@ undecided. `-analysis`/`%analysis`, the `RunAnalysis` RPC with Connect, Go and P
 reads of an analysis usage's outputs as features (`An::shipCost.total`, `holder.inner.total`,
 `attribute :>> x = a.result;`) with memoization and invalidation are in. Left for A6: a verification
 case body lowers through the same code but is not run, and its verdict is still what `-requirement`
-computes. Left for X2: the pilot's `10c`/`10d` analyses and the `Analysis Examples` corpus stop on
-library functions that do not evaluate yet (`Interpolate`, `sum`/`collect` over sampled functions);
-`10a-Analysis.sysml` and the training corpus's `33. Analysis` models run.
+computes. What the corpora answer: the pilot's `10d-Dynamics Analysis.sysml` runs on a supplied
+subject and inputs (`accelerationProfile = [0.01, 0.01998…]`); `10a-Analysis.sysml` binds an
+untyped `part vehicle` to a `Vehicle` subject and states no mass values, so it is refused at the
+binding (typed) and a copy with typed, valued parts answers `200 [kg]`; the training corpus's
+`33. Analysis` fuel-economy cases and the `Analysis Examples` corpus state their step outputs only
+through `assert constraint` (`solveForPower.power` has no computation to run), so they end in the
+typed `no value for feature` refusal — the solver's territory, not the executor's — and
+`10c-Fuel Economy Analysis.sysml` passes a bodiless `calc cityScenario` as the value of
+`in calc scenario`, which X6 (a function as a value) has to admit before its steps can run. Left
+for A2: the training trade study's multi-valued `subject` is refused by multiplicity.
 
 ## A2 — a trade study iterates, evaluates and selects
 
