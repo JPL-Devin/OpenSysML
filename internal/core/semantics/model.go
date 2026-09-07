@@ -406,9 +406,9 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, general)
 	}
 
-	// The subject or objective of a case, requirement or their usages implicitly
-	// redefines the same role of each general, so it takes that role's type when
-	// it declares none (see roles.go).
+	// The subject, objective, actor or stakeholder of a case, requirement or their usages
+	// implicitly redefines the same role of each general, so it takes that role's type
+	// when it declares none (see roles.go).
 	for _, redefined := range m.ImplicitRoleRedefinitions(sym) {
 		if redefined == nil || redefined == sym || seen[redefined] {
 			continue

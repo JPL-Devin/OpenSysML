@@ -826,3 +826,90 @@ func TestObjectiveBindingKeepsErrorIdentity(t *testing.T) {
 		}
 	}
 }
+
+const implicitActorModel = `
+	package test {
+		private import ScalarValues::*;
+		part def Ship { attribute hullMass : Real; }
+		part def Pilot;
+		part def Buoy;
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part pilot : Pilot;
+		part copilot : Pilot;
+		part buoy : Buoy;
+
+		requirement def PilotedLimit {
+			subject t : Ship;
+			actor pilots : Pilot[2];
+			require constraint { t.hullMass < 2000.0 }
+		}
+		requirement two : PilotedLimit { subject = ship; actor pilots = (pilot, copilot); }
+		requirement one : PilotedLimit { subject = ship; actor pilots = pilot; }
+		requirement explicitOne : PilotedLimit { subject = ship; actor :>> pilots = pilot; }
+		requirement buoys : PilotedLimit { subject = ship; actor pilots = (buoy, buoy); }
+		requirement renamedTwo : PilotedLimit { subject = ship; actor crew = (pilot, copilot); }
+		requirement renamedOne : PilotedLimit { subject = ship; actor crew = pilot; }
+
+		requirement def Escorted :> PilotedLimit { subject :>> t; actor :>> pilots; actor tug : Ship; }
+		requirement escorted : Escorted { subject = ship; actor pilots = (pilot, copilot); actor tug = ship; }
+		requirement escortedByPilot : Escorted { subject = ship; actor pilots = (pilot, copilot); actor tug = pilot; }
+
+		analysis def Check {
+			subject ship : Ship;
+			objective : PilotedLimit { subject = ship; actor pilots = (pilot, copilot); }
+			return picked : Ship = ship;
+		}
+		analysis check : Check { subject ship = test::ship; }
+		analysis def CheckOne {
+			subject ship : Ship;
+			objective : PilotedLimit { subject = ship; actor pilots = pilot; }
+			return picked : Ship = ship;
+		}
+		analysis checkOne : CheckOne { subject ship = test::ship; }
+	}
+`
+
+// TestImplicitActorIsHeldToTheInheritedDeclaration pins that an actor bound without `:>>`
+// redefines the general's actor at its position, so its value is held to that actor's declaration.
+func TestImplicitActorIsHeldToTheInheritedDeclaration(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, implicitActorModel))
+	for _, fqn := range []string{"test::two", "test::renamedTwo", "test::escorted"} {
+		if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil); err != nil {
+			t.Errorf("%s: %v, want satisfied", fqn, err)
+		}
+	}
+	for fqn, want := range map[string]struct {
+		err   error
+		parts []string
+	}{
+		"test::one":             {ErrMultiplicityViolation, []string{"requirement one: actor binding", "1 value(s) bound to a feature with multiplicity lower bound 2"}},
+		"test::explicitOne":     {ErrMultiplicityViolation, []string{"requirement explicitOne: actor binding", "lower bound 2"}},
+		"test::renamedOne":      {ErrMultiplicityViolation, []string{"requirement renamedOne: actor binding", "lower bound 2"}},
+		"test::buoys":           {ErrTypeMismatch, []string{"requirement buoys: actor binding", "is not a Pilot"}},
+		"test::escortedByPilot": {ErrTypeMismatch, []string{"requirement escortedByPilot: actor binding", "is not a Ship"}},
+	} {
+		_, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil)
+		if !errors.Is(err, want.err) {
+			t.Errorf("%s: error = %v, want %v", fqn, err, want.err)
+			continue
+		}
+		for _, part := range want.parts {
+			if !strings.Contains(err.Error(), part) {
+				t.Errorf("%s: error %q does not say %q", fqn, err, part)
+			}
+		}
+	}
+
+	if verdict := objectiveVerdict(t, ctx, idx, "test::check"); verdict.Status != VerdictSatisfied {
+		t.Errorf("check: %s (%s), want satisfied", verdict.Status, verdict.Detail)
+	}
+	verdict := objectiveVerdict(t, ctx, idx, "test::checkOne")
+	if verdict.Status != VerdictUndecided {
+		t.Fatalf("checkOne: %s (%s), want undecided", verdict.Status, verdict.Detail)
+	}
+	for _, part := range []string{"objective obj: actor binding", "multiplicity violation", "lower bound 2"} {
+		if !strings.Contains(verdict.Detail, part) {
+			t.Errorf("checkOne: detail %q does not say %q", verdict.Detail, part)
+		}
+	}
+}
