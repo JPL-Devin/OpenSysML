@@ -14,7 +14,9 @@
   bind it or return one. An object bound to a subject, by the default or by an expression, in an
   objective or a requirement usage, is held as a value of it: a `Ship` bound to a `subject t :
   Tanker` gains `Tanker`'s features, so `t.cargo` answers where it read `member cargo not found`,
-  and a value the subject cannot hold at all is refused as a `type mismatch` instead.
+  and a value the subject cannot hold at all is refused as a `type mismatch` instead; an expression
+  yielding more or fewer values than the subject declares (one `Ship` for `Ship[2]`, or none) is
+  refused as a multiplicity violation, as the default already was.
 - **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
   examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as
   an empty sequence when the case's result was unnamed (a trailing expression or `return : Real`),

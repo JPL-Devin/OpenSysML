@@ -428,42 +428,14 @@ func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name st
 	if !ok {
 		return frame{}, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
 	}
-	if err := ctx.checkDefaultSubject(obj, subject, decl, name, result); err != nil {
+	what := fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
+	if err := ctx.holdAs(declScope(obj), what, decl, result, subject); err != nil {
 		return frame{}, err
-	}
-	if err := ctx.classifyHeld(subject, result); err != nil {
-		return frame{}, fmt.Errorf("%s: %w", defaultSubjectWhat(name, subject), err)
 	}
 	for unboundName := range unbound {
 		bindings[unboundName] = result
 	}
 	return caseBindings.withVars(bindings), nil
-}
-
-// defaultSubjectWhat names the objective's subject defaulting to the case's result in a refusal.
-func defaultSubjectWhat(name string, subject *symbols.Symbol) string {
-	return fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
-}
-
-// checkDefaultSubject reports a case result the objective's subject cannot hold as its
-// default: more or fewer values than decl states, or one not of its type. It changes nothing;
-// the caller classifies the result by the subject once it passes.
-func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, decl calcMemberDecl, name string, result Value) error {
-	what := defaultSubjectWhat(name, subject)
-	if msg := ctx.writeCountRefusal(decl.Target, &result); msg != "" {
-		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
-	}
-	typ := decl.Target.typ
-	if typ == nil {
-		return nil
-	}
-	for _, element := range elementsOf(result) {
-		if conforms, _, err := ctx.valueConforms(declScope(obj), &element, typ, admitDeclared); err == nil && !conforms {
-			return fmt.Errorf("%s: %w: %s (%s) is not a %s",
-				what, ErrTypeMismatch, FormatValue(element), describeValue(element), symbolText(typ))
-		}
-	}
-	return nil
 }
 
 // unboundObjectiveSubject is the objective's subject no binding the model writes supplies, its

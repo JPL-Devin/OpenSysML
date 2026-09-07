@@ -478,6 +478,100 @@ func TestBoundSubjectIsClassifiedByItsType(t *testing.T) {
 	}
 }
 
+const boundSubjectMultiplicityModel = `
+	package test {
+		private import ScalarValues::*;
+		private import RealFunctions::sum;
+		private import ControlFunctions::select;
+		part def Ship { attribute hullMass : Real; }
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part heavy : Ship { attribute :>> hullMass = 5000.0; }
+
+		requirement def PairLimit {
+			subject pair : Ship[2];
+			require constraint { sum(pair.hullMass) < 8000.0 }
+		}
+		requirement def SubPairLimit :> PairLimit { subject :>> pair; }
+		requirement def OneLimit {
+			subject s : Ship;
+			require constraint { s.hullMass < 8000.0 }
+		}
+
+		requirement twoForPair : PairLimit { subject = (ship, heavy); }
+		requirement oneForPair : PairLimit { subject = ship; }
+		requirement noneForPair : PairLimit { subject = (ship, heavy)->select { in s : Ship; s.hullMass > 9000.0 }; }
+		requirement redeclaredOneForPair : PairLimit { subject :>> pair = ship; }
+		requirement subTwoForPair : SubPairLimit { subject = (ship, heavy); }
+		requirement subOneForPair : SubPairLimit { subject = ship; }
+		requirement twoForOne : OneLimit { subject = (ship, heavy); }
+		requirement noneForOne : OneLimit { subject = (ship, heavy)->select { in s : Ship; s.hullMass > 9000.0 }; }
+
+		analysis def PickPair {
+			subject s : Ship;
+			objective : PairLimit { subject = (s, heavy); }
+			return picked : Ship = s;
+		}
+		analysis pickPair : PickPair { subject s = ship; }
+		analysis def PickOneForPair {
+			subject s : Ship;
+			objective : PairLimit { subject = s; }
+			return picked : Ship = s;
+		}
+		analysis pickOneForPair : PickOneForPair { subject s = ship; }
+		analysis def PickSubOneForPair {
+			subject s : Ship;
+			objective : SubPairLimit { subject :>> pair = s; }
+			return picked : Ship = s;
+		}
+		analysis pickSubOneForPair : PickSubOneForPair { subject s = ship; }
+	}
+`
+
+// TestBoundSubjectHonoursMultiplicity pins that a subject bound by an expression holds as many
+// values as it declares, a redeclaration without one keeping the redefined subject's (KerML §7.3.4.5):
+// too few, too many or none is a multiplicity violation, in a requirement as in an objective.
+func TestBoundSubjectHonoursMultiplicity(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, boundSubjectMultiplicityModel))
+	for _, fqn := range []string{"test::twoForPair", "test::subTwoForPair"} {
+		if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil); err != nil {
+			t.Errorf("%s: %v", fqn, err)
+		}
+	}
+	for fqn, want := range map[string]string{
+		"test::oneForPair":           "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::noneForPair":          "0 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::redeclaredOneForPair": "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::subOneForPair":        "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::twoForOne":            "2 value(s) bound to a feature with multiplicity upper bound 1",
+		"test::noneForOne":           "0 value(s) bound to a feature with multiplicity lower bound 1",
+	} {
+		_, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil)
+		if !errors.Is(err, ErrMultiplicityViolation) {
+			t.Fatalf("%s: error = %v, want %v", fqn, err, ErrMultiplicityViolation)
+		}
+		for _, part := range []string{"subject binding", want} {
+			if !strings.Contains(err.Error(), part) {
+				t.Errorf("%s: error %q does not say %q", fqn, err, part)
+			}
+		}
+	}
+
+	if verdict := objectiveVerdict(t, ctx, idx, "test::pickPair"); verdict.Status != VerdictSatisfied {
+		t.Errorf("pickPair: %s (%s), want satisfied", verdict.Status, verdict.Detail)
+	}
+	for _, fqn := range []string{"test::pickOneForPair", "test::pickSubOneForPair"} {
+		verdict := objectiveVerdict(t, ctx, idx, fqn)
+		if verdict.Status != VerdictUndecided {
+			t.Fatalf("%s: %s (%s), want undecided", fqn, verdict.Status, verdict.Detail)
+		}
+		for _, part := range []string{"objective obj: subject binding", "multiplicity violation", "lower bound 2"} {
+			if !strings.Contains(verdict.Detail, part) {
+				t.Errorf("%s: detail %q does not say %q", fqn, verdict.Detail, part)
+			}
+		}
+	}
+}
+
 // TestObjectiveBindingKeepsErrorIdentity pins that the undecided detail of a
 // mismatched default carries the typed error the requirement engine raises.
 func TestObjectiveBindingKeepsErrorIdentity(t *testing.T) {

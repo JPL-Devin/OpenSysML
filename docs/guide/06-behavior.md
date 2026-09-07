@@ -421,7 +421,9 @@ verdict says to bind it or return a result. Bound either way, an object is held 
 subject, so one declared a `Ship` and bound to a `subject t : Tanker` is a `Tanker` for the
 conditions, its `cargo` answering `t.cargo`, exactly as a requirement usage's `subject = ship;`
 holds it; a value the subject cannot hold at all (a `Buoy` for a `Tanker`) is refused as a
-`type mismatch` before any condition is read.
+`type mismatch` before any condition is read, and an expression yielding more or fewer values
+than the subject declares (one `Ship` for a `subject pair : Ship[2]`, or none) as a
+`multiplicity violation`, just as the default is.
 
 ```sysml
 requirement def MassLimit {

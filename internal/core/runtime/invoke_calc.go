@@ -63,6 +63,38 @@ func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) e
 	return nil
 }
 
+// admits reports a value the declaration cannot hold as a declared feature value: more or fewer
+// values than its multiplicity, or one not of its type. what names the binding; scope answers its names.
+func (d calcMemberDecl) admits(ctx *Context, scope *symbols.Scope, what string, value Value) error {
+	if d.Target == nil {
+		return nil
+	}
+	if msg := ctx.writeCountRefusal(d.Target, &value); msg != "" {
+		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
+	}
+	typ := d.Target.typ
+	if typ == nil {
+		return nil
+	}
+	for _, element := range elementsOf(value) {
+		if conforms, _, err := ctx.valueConforms(scope, &element, typ, admitDeclared); err == nil && !conforms {
+			return fmt.Errorf("%s: %w: %s (%s) is not a %s",
+				what, ErrTypeMismatch, FormatValue(element), describeValue(element), symbolText(typ))
+		}
+	}
+	return nil
+}
+
+// boundMemberDecl is what a member of owner declares for a value bound to it, folded along the
+// features it redefines, most specific first: a redeclaration keeps the type and multiplicity it omits.
+func (ctx *Context) boundMemberDecl(owner *symbols.Symbol, features []*symbols.Symbol) calcMemberDecl {
+	var decl calcMemberDecl
+	for i := len(features) - 1; i >= 0; i-- {
+		decl = ctx.calcMemberDeclFor(owner, features[i], features[i].Name).redeclaring(decl)
+	}
+	return decl
+}
+
 // calcMemberDeclOf resolves what a member of link declares for a value bound to it.
 func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, sym *symbols.Symbol, name string) calcMemberDecl {
 	if sym == nil {
