@@ -1,1 +1,0 @@
-- Parser: a `use case` definition or usage may now carry prefix metadata (`#structuredUseCase use case u;`); the two-word kind keyword was not recognised after `#` prefixes and the member was reported as `expected a namespace member`.
