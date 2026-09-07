@@ -122,8 +122,9 @@ func (c *w9cConflictChecker) candidates(reach w9cReach) map[string][]w9cCandidat
 	return byName
 }
 
-// ownMembers is the visible member sym declares under each name. A document
-// that re-declares a library file shares its names, so only sym's copy counts.
+// ownMembers is the visible member sym declares under each name, its short
+// name included (KerML 7.2.2). A document that re-declares a library file
+// shares its names, so only sym's copy counts.
 func (c *w9cConflictChecker) ownMembers(sym *symbols.Symbol) map[string]*symbols.Symbol {
 	out := map[string]*symbols.Symbol{}
 	// The index carries a library type's nested names in both cache states;
@@ -135,8 +136,21 @@ func (c *w9cConflictChecker) ownMembers(sym *symbols.Symbol) map[string]*symbols
 			continue
 		}
 		out[name] = member
+		if short := shortNameOf(member); short != "" && short != name {
+			out[short] = member
+		}
 	}
 	return out
+}
+
+// shortNameOf is a symbol's short name, read from its declaration when the
+// index did not record one.
+func shortNameOf(sym *symbols.Symbol) string {
+	if sym.ShortName != "" {
+		return sym.ShortName
+	}
+	id, _ := symbols.DeclIdent(sym.Decl)
+	return id.ShortName
 }
 
 // checkOwnedNames reports each member sym declares whose name a library base
@@ -149,32 +163,70 @@ func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[str
 	owned, aliases := c.resolver.DistinguishableMembers(sym.Scope)
 	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
 		for _, mem := range mems {
-			cands := byName[mem.Name]
-			if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
-				c.hasUnresolvedRedefinition(mem) {
+			if resolve.ImplicitlyRedefined(mem) || c.hasUnresolvedRedefinition(mem) {
 				continue
 			}
-			if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
-				c.report(nameSpanOf(mem), mem.Name, from)
+			for _, key := range ownedKeysOf(mem) {
+				cands := byName[key.name]
+				if len(cands) == 0 {
+					continue
+				}
+				if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
+					c.report(key.span, key.name, from)
+				}
 			}
 		}
 	}
 }
 
-// notSpecializedBy drops the inherited features mem redefines or subsets, which
-// it is then free to reuse the name of.
+// ownedKeysOf is each identifier a member or alias binds, short name included,
+// at the span it was written; a member naming itself another way binds its own name.
+func ownedKeysOf(mem *symbols.Symbol) []w9cKey {
+	id, ok := symbols.DeclIdent(mem.Decl)
+	if !ok || (id.Name == "" && id.ShortName == "") {
+		return []w9cKey{{name: mem.Name, span: nameSpanOf(mem)}}
+	}
+	var keys []w9cKey
+	if id.ShortName != "" {
+		keys = append(keys, w9cKey{name: id.ShortName, span: id.ShortNameSpan})
+	}
+	if id.Name != "" && id.Name != id.ShortName {
+		keys = append(keys, w9cKey{name: id.Name, span: id.NameSpan})
+	}
+	for i := range keys {
+		if keys[i].span == (source.Span{}) {
+			keys[i].span = nameSpanOf(mem)
+		}
+	}
+	return keys
+}
+
+// notSpecializedBy drops the inherited features mem redefines, subsets or is an
+// alias for, which it is then free to reuse the name of.
 func (c *w9cConflictChecker) notSpecializedBy(
 	mem *symbols.Symbol,
 	cands []w9cCandidate,
 ) []w9cCandidate {
+	target := c.aliasTarget(mem)
 	out := make([]w9cCandidate, 0, len(cands))
 	for _, cand := range cands {
-		if cand.member == mem || c.specializes(mem, cand.member) {
+		if cand.member == mem || cand.member == target || c.specializes(mem, cand.member) {
 			continue
 		}
 		out = append(out, cand)
 	}
 	return out
+}
+
+// aliasTarget is the element an alias names, or nil for any other member.
+func (c *w9cConflictChecker) aliasTarget(mem *symbols.Symbol) *symbols.Symbol {
+	if c.resolver == nil {
+		return nil
+	}
+	if target, ok := c.resolver.ResolveAliasTarget(mem); ok {
+		return target
+	}
+	return nil
 }
 
 // hasUnresolvedRedefinition reports whether sym declares a redefinition whose

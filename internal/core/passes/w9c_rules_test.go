@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -403,6 +404,83 @@ func TestW9CMembersInheritedThroughLibraryFeature(t *testing.T) {
 			t.Errorf("warm=%v: got %v, want %v", warm, got, want)
 		}
 	}
+}
+
+// Inherited short names conflict like primary ones (KerML 7.2.2); the pinned
+// validate-sysml reports each line below at the same column.
+func TestW9CInheritedShortNamesConflict(t *testing.T) {
+	src := `package Test {
+	private import ISQSpaceTime::*;
+	private import ISQ::LengthValue;
+	attribute def OwnedShort :> CylindricalPosition3dVector {
+		attribute h : LengthValue;
+	}
+	attribute def OwnedShortAsShort :> CylindricalPosition3dVector {
+		attribute <h> myHeight : LengthValue;
+	}
+	attribute def OwnedBoth :> CylindricalPosition3dVector {
+		attribute <h> height : LengthValue;
+	}
+	attribute def RedefShort :> CylindricalPosition3dVector {
+		attribute h :>> height;
+	}
+	attribute def RedefLongAsShort :> CylindricalPosition3dVector {
+		attribute <height> tall :>> h;
+	}
+	attribute def Through {
+		attribute pos :> cylindricalPosition3dVector {
+			attribute h : LengthValue;
+		}
+	}
+	attribute def Diamond :> CylindricalPosition3dVector, PlanetaryPosition3dVector;
+	attribute def DiamondMasked :> CylindricalPosition3dVector, PlanetaryPosition3dVector {
+		attribute h :>> CylindricalPosition3dVector::height, PlanetaryPosition3dVector::altitude;
+	}
+	attribute def AliasShort :> CylindricalPosition3dVector {
+		alias <h> H for RedefShort::h;
+	}
+	attribute def AliasLong :> CylindricalPosition3dVector {
+		alias <hh> height for RedefShort::h;
+	}
+	attribute def AliasSelf :> CylindricalPosition3dVector {
+		alias <h> H for height;
+		alias height for CylindricalPosition3dVector::height;
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		diags := w9cLibraryDiags(t, src, warm)
+		var got []string
+		for _, d := range diags {
+			if strings.HasPrefix(d.Message, msgW9CDuplicateInherited) {
+				line, col := lineCol(src, d.Span.Offset)
+				got = append(got, fmt.Sprintf("%d:%d %s", line, col, d.Message))
+			}
+		}
+		want := []string{
+			"5:13 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"8:14 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"11:14 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"11:17 " + msgW9CDuplicateInherited + " 'height' from CylindricalPosition3dVector",
+			"21:14 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"24:2 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
+			"24:2 " + msgW9CDuplicateInherited + " 'mRef' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
+			"25:2 " + msgW9CDuplicateInherited + " 'mRef' from CylindricalPosition3dVector, PlanetaryPosition3dVector",
+			"29:10 " + msgW9CDuplicateInherited + " 'h' from CylindricalPosition3dVector",
+			"32:14 " + msgW9CDuplicateInherited + " 'height' from CylindricalPosition3dVector",
+		}
+		sort.Strings(got)
+		sort.Strings(want)
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("warm=%v: got\n%s\nwant\n%s", warm, strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+}
+
+// lineCol is the 1-based line and column of a byte offset in src.
+func lineCol(src string, offset int) (int, int) {
+	line := 1 + strings.Count(src[:offset], "\n")
+	col := offset - strings.LastIndex(src[:offset], "\n")
+	return line, col
 }
 
 // ShapeItems redefines through its own features the way Ok above does, so
