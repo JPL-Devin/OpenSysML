@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::massOnly",
+  "outputs": {
+    "r": {"type": "Real", "value": 5000.0}
+  },
+  "verdicts": {
+    "obj": "undecided"
+  }
+}

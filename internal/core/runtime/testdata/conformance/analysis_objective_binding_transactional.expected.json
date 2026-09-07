@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::check",
+  "verdicts": {
+    "obj": "undecided",
+    "stillAShip": "satisfied"
+  }
+}

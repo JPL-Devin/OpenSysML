@@ -275,7 +275,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	// what satisfies the requirement (SysML v2 §8.3.17.15); the other values the
 	// requirement binds by name are visible to its conditions here too, as they
 	// are when the requirement is evaluated directly.
-	bindings, err := ctx.memberBindings(target, a.Text(), members, subject, subject)
+	bindings, err := ctx.memberBindings(target, "requirement", a.Text(), members, subject, subject, frame{})
 	if err != nil {
 		return ctx.satisfactionResult(false, subject, reached), err
 	}
@@ -290,7 +290,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 		// the same way `%requirement` on an instance does.
 		self:     subject,
 		element:  a.Text(),
-		bindings: bindings,
+		bindings: mapFrame(bindings),
 		negated:  a.Negated,
 	}, conds)
 	return ctx.satisfactionResult(holds, subject, reached), err

@@ -368,18 +368,23 @@ func (run *calcRun) outputValues(ctx *Context) ([]CalcOutputValue, error) {
 // analysisVerdicts checks the case's objectives and assertions against the
 // values its run bound: its parameters, its locals and its outputs.
 func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *symbols.Scope) []AnalysisVerdict {
-	bindings := run.bindings(ctx)
+	bindings := run.bindingsFrame(ctx)
 	var verdicts []AnalysisVerdict
 	for _, obj := range ctx.ObjectivesOf(sym, scope) {
 		name := obj.Name
 		if name == "" {
 			name = "objective"
 		}
-		check := conditionCheck{
-			sym: obj.Symbol, kind: "objective", what: "require condition",
-			element: name, self: run.self, bindings: bindings,
+		var verdict AnalysisVerdict
+		if own, err := ctx.objectiveBindings(run, obj.Symbol, name, bindings); err != nil {
+			verdict = AnalysisVerdict{Kind: "objective", Name: name, Status: VerdictUndecided, Detail: err.Error()}
+		} else {
+			check := conditionCheck{
+				sym: obj.Symbol, kind: "objective", what: "require condition",
+				element: name, self: run.self, bindings: own,
+			}
+			verdict = ctx.analysisVerdict("objective", name, check, obj.Conditions)
 		}
-		verdict := ctx.analysisVerdict("objective", name, check, obj.Conditions)
 		verdict.Symbol = obj.Symbol
 		verdicts = append(verdicts, verdict)
 	}
@@ -397,6 +402,84 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 		verdicts = append(verdicts, verdict)
 	}
 	return verdicts
+}
+
+// objectiveBindings are the case run's bindings plus the subject and actors the objective
+// binds itself, as a requirement's are; a subject left unbound is the case's result
+// (Cases::Case::obj). The frame stays the case's, so `Case::result` reads the run's.
+func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name string, caseBindings frame) (frame, error) {
+	members := ctx.chainMembers(obj, obj.OwnerScope)
+	own, err := ctx.memberBindings(obj, "objective", name, members, run.self, nil, caseBindings)
+	if err != nil {
+		return frame{}, err
+	}
+	bindings := make(map[string]Value, len(caseBindings.vars)+len(own))
+	for k, v := range caseBindings.vars {
+		bindings[k] = v
+	}
+	for k, v := range own {
+		bindings[k] = v
+	}
+	subject, decl, unbound := ctx.unboundObjectiveSubject(obj, members, own)
+	if subject == nil {
+		return caseBindings.withVars(bindings), nil
+	}
+	result, ok := run.caseResult(caseBindings.vars)
+	if !ok {
+		return frame{}, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
+	}
+	what := fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
+	if err := ctx.holdAs(declScope(obj), what, decl, result, subject); err != nil {
+		return frame{}, err
+	}
+	for unboundName := range unbound {
+		bindings[unboundName] = result
+	}
+	return caseBindings.withVars(bindings), nil
+}
+
+// unboundObjectiveSubject is the objective's subject no binding the model writes supplies, its
+// declaration folded along the chain (a redeclaration keeps what it omits) and its names; nil when bound.
+func (ctx *Context) unboundObjectiveSubject(obj *symbols.Symbol, members []scopedMember, own map[string]Value) (*symbols.Symbol, calcMemberDecl, map[string]bool) {
+	features := ctx.conditionFeatures(obj)
+	var subject *symbols.Symbol
+	var decl calcMemberDecl
+	unbound := make(map[string]bool)
+	for _, member := range members {
+		declared, ok := subjectDeclaration(member.node)
+		if !ok {
+			continue
+		}
+		sym := memberSymbol(member.scope, member.node)
+		if sym == nil {
+			continue
+		}
+		names := ctx.memberNames(obj, member, declared.Name, sym.ShortName)
+		if _, bound := boundUnder(own, names); bound || declared.Value != nil {
+			return nil, calcMemberDecl{}, nil
+		}
+		for _, n := range names {
+			if feat, ok := features[n]; ok && feat.expr != nil && !ctx.libraryDeclared(feat.decl) {
+				return nil, calcMemberDecl{}, nil
+			}
+			unbound[n] = true
+		}
+		if subject == nil || ctx.extractType(sym) != nil {
+			subject = sym
+		}
+		decl = ctx.calcMemberDeclFor(obj, sym, subject.Name).redeclaring(decl)
+	}
+	return subject, decl, unbound
+}
+
+// caseResult is the value the run's result parameter holds; false when the case returns none.
+func (run *calcRun) caseResult(bindings map[string]Value) (Value, bool) {
+	name := resultOutputName
+	if out := run.shape.resultOutput(); out != nil && out.Name != "" {
+		name = out.Name
+	}
+	value, ok := bindings[name]
+	return value, ok
 }
 
 // analysisChecks reports whether the case states an objective or asserts a
@@ -448,6 +531,12 @@ func (ctx *Context) analysisVerdict(kind, name string, check conditionCheck, con
 		verdict.Status = VerdictNotSatisfied
 	}
 	return verdict
+}
+
+// bindingsFrame is the run's bindings as a frame the case owns, so a condition reads
+// its features by qualified name (`MassCase::result`) and its steps' pins (`step.out`).
+func (run *calcRun) bindingsFrame(ctx *Context) frame {
+	return frame{vars: run.bindings(ctx), perf: run.perf, owner: run.shape}
 }
 
 // bindings are the values a run bound, by name: its parameters and locals, and

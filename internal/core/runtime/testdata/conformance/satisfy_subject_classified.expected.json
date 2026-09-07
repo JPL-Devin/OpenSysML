@@ -1,0 +1,9 @@
+{
+  "type": "satisfy",
+  "libraries": true,
+  "evaluate": "test::context",
+  "assertions": {
+    "satisfy laden by ship": true,
+    "satisfy laden by heavy": false
+  }
+}

@@ -63,6 +63,51 @@ func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) e
 	return nil
 }
 
+// admits reports a value the declaration cannot hold as a declared feature value: more or fewer
+// values than its multiplicity, or one not of its type. what names the binding; scope answers its names.
+func (d calcMemberDecl) admits(ctx *Context, scope *symbols.Scope, what string, value Value) error {
+	if d.Target == nil {
+		return nil
+	}
+	if msg := ctx.writeCountRefusal(d.Target, &value); msg != "" {
+		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
+	}
+	typ := d.Target.typ
+	if typ == nil {
+		return nil
+	}
+	for _, element := range elementsOf(value) {
+		conforms, _, err := ctx.valueConforms(scope, &element, typ, admitDeclared)
+		if err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+		if !conforms {
+			return fmt.Errorf("%s: %w: %s is not a %s", what, ErrTypeMismatch, ctx.elementText(element), symbolText(typ))
+		}
+	}
+	return nil
+}
+
+// elementText names one value in a refusal: an object by its carrier label, a value by what it is.
+func (ctx *Context) elementText(element Value) string {
+	if id, ok := element.Object(); ok {
+		if inst := ctx.instances[id]; inst != nil && inst.Type != nil {
+			return ctx.carrierLabels([]carrier{{instance: inst}})[0]
+		}
+	}
+	return fmt.Sprintf("%s (%s)", FormatValue(element), describeValue(element))
+}
+
+// boundMemberDecl is what a member of owner declares for a value bound to it, folded along the
+// features it redefines, most specific first: a redeclaration keeps the type and multiplicity it omits.
+func (ctx *Context) boundMemberDecl(owner *symbols.Symbol, features []*symbols.Symbol) calcMemberDecl {
+	var decl calcMemberDecl
+	for i := len(features) - 1; i >= 0; i-- {
+		decl = ctx.calcMemberDeclFor(owner, features[i], features[i].Name).redeclaring(decl)
+	}
+	return decl
+}
+
 // calcMemberDeclOf resolves what a member of link declares for a value bound to it.
 func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, sym *symbols.Symbol, name string) calcMemberDecl {
 	if sym == nil {
@@ -123,6 +168,8 @@ type calcShape struct {
 	compileState compileState
 	// ineligibleWhy says what kept the body out of the compiled tier.
 	ineligibleWhy string
+	// members indexes the chain's named members by binding name, built on first use.
+	members map[*symbols.Symbol]string
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -496,6 +543,7 @@ type invocationFrame struct {
 	slots    slotFrame
 	bindings map[string]Value
 	aliases  map[string]string
+	owner    *calcShape // the calc invoked, whose members the locals bind
 	host     calcStmtHost
 	env      stmtEnv
 	engine   stmtEngine
@@ -503,7 +551,7 @@ type invocationFrame struct {
 
 // locals is the frame the invocation's parameters and body locals are bound in.
 func (f *invocationFrame) locals() frame {
-	return frame{slots: &f.slots, vars: f.bindings, aliases: f.aliases}
+	return frame{slots: &f.slots, vars: f.bindings, aliases: f.aliases, owner: f.owner}
 }
 
 // maxFreeInvocationFrames bounds the frames kept, so one deep recursion does not
@@ -580,7 +628,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	defer ctx.endActivation(activation)
 
 	frame.slots.reset(shape.ParamNames)
-	frame.aliases = shape.Aliases
+	frame.aliases, frame.owner = shape.Aliases, shape
 	locals := frame.locals()
 	ec := &frame.ec
 	*ec = EvalContext{

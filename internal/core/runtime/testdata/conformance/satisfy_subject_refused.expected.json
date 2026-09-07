@@ -1,0 +1,5 @@
+{
+  "type": "satisfy",
+  "libraries": true,
+  "error": "satisfy massLimit by buoy: subject: type mismatch: Buoy #1 (buoy) is not a Ship"
+}

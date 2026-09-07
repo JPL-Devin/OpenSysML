@@ -28,7 +28,8 @@ import (
 
 // behaviorLike reports whether sym declares a behavior or step — the only
 // owning types whose directed features are parameters, and the only general
-// types whose parameters are implicitly redefined. An interaction is a behavior.
+// types whose parameters are implicitly redefined. An interaction is a behavior;
+// an objective is a requirement usage.
 func behaviorLike(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
@@ -48,7 +49,7 @@ func behaviorLike(sym *symbols.Symbol) bool {
 			ast.UsageConstraint, ast.UsageRequirement, ast.UsageCase,
 			ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
 			ast.UsageStep, ast.UsageBehavior, ast.UsagePredicate, ast.UsageBool,
-			ast.UsageInteraction:
+			ast.UsageInteraction, ast.UsageObjective:
 			return true
 		}
 	case *ast.AssumeMember, *ast.RequireMember:
