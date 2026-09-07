@@ -21,6 +21,11 @@ object (repeatable)
 Simulated time units to run each \-state machine for (default: only its
 initial transition)
 .TP
+.BI \-analysis " value"
+Run this analysis case and report its outputs and the verdict of its
+objective, as \-analysis "Pkg::Case(3.0) Pkg::part" with arguments for its
+inputs and an object as its subject (repeatable)
+.TP
 .BI \-calc " value"
 Invoke this calculation and report what it computed, as \-calc "Fall(3, 4)"
 (repeatable)
@@ -63,8 +68,8 @@ Evaluate expression and exit (shorthand)
 Evaluate expression and exit (can be specified multiple times)
 .TP
 .BI \-from " string"
-Input format for \-convert: sysml, kerml, ttl, turtle or rdf (default: from
-the input's extension)
+Input format for \-convert: sysml, kerml, ttl, turtle, rdf, or xmi/mdzip for a
+SysML v1 model to migrate (experimental; default: from the input's extension)
 .TP
 .B \-h
 Show this help (shorthand)
@@ -84,9 +89,18 @@ own
 Write the document element alone, without the page shell or a stylesheet, to
 embed in a page of your own
 .TP
+.BI \-html\-mermaid " string"
+Have the HTML page load Mermaid to draw its diagrams: cdn loads a pinned
+release from jsDelivr, a URL loads the script it names (default: diagrams stay
+Mermaid source)
+.TP
 .B \-html\-no\-default\-css
 Leave the default stylesheet out, so only \-html\-css sheets style the
 document
+.TP
+.BI \-html\-theme " string"
+Style the HTML page with a bundled theme layered over the default stylesheet:
+default, modern, print or report (default: the default stylesheet alone)
 .TP
 .BI \-instantiate " value"
 Create an object of this definition before the checks, so a verdict is about
@@ -104,6 +118,10 @@ Write a heap profile of the run to this file, for go tool pprof
 .B \-memstats
 Report on stderr what the run cost: wall time, memory allocated, memory taken
 from the OS
+.TP
+.BI \-migration\-report " string"
+With \-convert from xmi: write the element\-by\-element migration report to
+this file (JSON when it ends in .json, text otherwise)
 .TP
 .BI \-o " string"
 Write conversion output to this file (shorthand)
@@ -248,6 +266,10 @@ sysml \-validate model.sysml
 sysml \-validate \-strict model.sysml
 # Invoke a calculation
 sysml \-calc "Fall(3, 4)" model.sysml
+# Run an analysis case
+sysml \-analysis shipCost model.sysml
+# \&...on an object as its subject
+sysml \-analysis "CostAnalysis ship" model.sysml
 # Execute a document query
 sysml \-run\-query "Heavy root=scope" model.sysml
 # Run an action to completion
@@ -283,8 +305,14 @@ behavior its bodies state, refuses what it cannot write back, and its
 vocabulary may change without a compatibility path; see
 docs/reference/rdf\-mapping.md \(sc Status
 .PP
-Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is
-stable.
+SysML v1 migration is experimental: the mapping covers structure, ports and
+connectors, requirements, constraints, instances and allocations, reports
+every element it approximates or leaves behind, and what it writes for a v1
+element may change without a compatibility path; see
+docs/reference/sysml\-v1\-migration.md \(sc Status
+.PP
+Every run that converts RDF or migrates a v1 model says so on stderr. Saving
+to .sysml or .kerml is stable.
 .SH NATIVE COMPILATION
 .RS 2
 .nf
@@ -359,11 +387,19 @@ sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
 sysml model.sysml \-render\-documents rendered
 sysml model.sysml \-render\-documents site \-doc\-form html \-html\-css \e
     theme.css
+# a bundled theme
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
+    \-html\-theme report \-o report.html
+# diagrams drawn in the browser
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
+    \-html\-mermaid cdn \-o report.html
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
     \-pdf\-engine pandoc \-doc\-title\-page \-doc\-toc \-doc\-number\-sections \e
     \-o report.pdf
 # the default stylesheet
 sysml \-html\-default\-css \-o sysml\-document.css
+# a theme's full sheet
+sysml \-html\-default\-css \-html\-theme modern \-o modern.css
 .fi
 .RE
 .PP
@@ -381,10 +417,15 @@ subprocess, never linked in; diagrams are pre\-rendered to SVG with
 mermaid\-cli (mmdc). None of these tools is needed until PDF output is asked
 for; scripts/download\-doc\-pdf\-toolchain.sh provisions pinned copies.
 .PP
-HTML output needs nothing external and loads nothing: \-html\-css adds your
-own stylesheets, \-html\-no\-default\-css drops the default one,
+HTML output needs nothing external and loads nothing by default: \-html\-theme
+picks one of the bundled looks (default, modern, print, report), \-html\-css
+adds your own stylesheets, \-html\-no\-default\-css drops the default one,
 \-html\-fragment writes the document element alone to embed in a page of
-yours, and \-html\-default\-css writes the default sheet out to start from.
+yours, and \-html\-default\-css writes the default sheet out \(em or, with
+\-html\-theme, a theme's whole sheet \(em to start from. Diagrams are written
+as Mermaid source; \-html\-mermaid cdn has the page load a pinned Mermaid
+release from jsDelivr so a browser draws them, or names a URL of your own to
+load it from.
 .SH FLAG ORDER
 Flags may be written before or after the model they apply to. A file named
 like a flag is read as a file after \-\-, which ends the flags: sysml \-trace

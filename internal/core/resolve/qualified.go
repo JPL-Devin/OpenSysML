@@ -47,7 +47,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		cur = r.lookupInRoot(scope, first)
 	} else {
 		// Use import-aware lookup for first segment of multi-part names
-		res := r.walkUnqualifiedHiding(scope, first, hide)
+		res := r.walkUnqualifiedHiding(scope, first, hide.forLeadingSegment())
 		cur = res.sym
 	}
 	if cur == nil {
@@ -94,14 +94,17 @@ func (r *Resolver) qualifiedSegment(scope *symbols.Scope, qn *ast.QualifiedName,
 	// Try local scope lookup first if available. A segment names a member of
 	// the namespace the walk has reached, so it reaches only the visible ones.
 	if cur.Scope != nil {
-		all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
+		all = r.namedThroughNamespaces(r.LocalBindings(cur.Scope, seg.Text))
 	}
 
-	// A member cur inherits hides one its imports surface (KerML 8.3.3.1.4).
+	// A member cur inherits hides one its imports surface (KerML 8.3.3.1.4);
+	// what cur's features redefine is not inherited (KerML 8.3.3.3.6).
 	if len(all) == 0 {
 		if sym, ok := r.lookupContributedMember(cur, seg.Text); ok &&
 			visibleAsInheritedMember(cur, sym) && r.namedThroughNamespace(sym) {
-			all = []*symbols.Symbol{sym}
+			if sym, ok = r.inheritedAs(cur, sym); ok {
+				all = []*symbols.Symbol{sym}
+			}
 		}
 	}
 
@@ -148,9 +151,10 @@ func (r *Resolver) qualifiedSegment(scope *symbols.Scope, qn *ast.QualifiedName,
 	// declares: `engine::'4cylEngine'` reaches the variants of the type
 	// `engine` is typed by.
 	if len(all) == 0 {
-		if sym, ok := r.lookupMember(cur, seg.Text); ok &&
-			r.namedThroughNamespace(sym) {
-			all = []*symbols.Symbol{sym}
+		if sym, ok := r.lookupMember(cur, seg.Text); ok && r.namedThroughNamespace(sym) {
+			if sym, ok = r.inheritedAs(cur, sym); ok {
+				all = []*symbols.Symbol{sym}
+			}
 		}
 	}
 

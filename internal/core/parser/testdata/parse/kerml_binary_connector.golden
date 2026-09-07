@@ -8,7 +8,11 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="main" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
               (Relationship kind="typing" target=Engine
-                (*ast.QualifiedName))))))
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))))
+      (Membership visibility="default"
+        (Usage kind="class" name="Trigger" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
         (Usage kind="class" name="Vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
@@ -20,12 +24,31 @@
               (Relationship kind="typing" target=Tank
                 (*ast.QualifiedName))))
           (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Tank
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="trigger" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Trigger
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="transitionLink" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
             (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="eng"
                 (*ast.QualifiedName))
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="main"
                   (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="eng"
@@ -58,6 +81,41 @@
                 (FeatureChainExpr member="main"
                   (FeatureReference name="tanks")))))
           (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="a"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="x"
+                    (FeatureReference name="a"))))
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="bead"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=(expr)
+                  (FeatureChainExpr member="x"
+                    (FeatureReference name="tanks"))))
+              (ConnectorEnd target="b"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))))
+          (Membership visibility="private"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="transitionLink"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="trigger"
+                (Multiplicity range=true
+                  (LiteralInteger value="1")
+                  (LiteralInfinity))
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
             (Usage kind="connector" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="eng"
                 (*ast.QualifiedName))
@@ -72,4 +130,43 @@
                 (*ast.QualifiedName))
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="main"
-                  (FeatureReference name="tanks"))))))))))
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false all=true
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false all=true
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))
+              (ConnectorEnd target="trigger"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="nary" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))
+              (ConnectorEnd target="trigger"
+                (*ast.QualifiedName)))))))))

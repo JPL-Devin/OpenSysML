@@ -1,0 +1,57 @@
+# Maintainer: Open-MBEE <https://github.com/Open-MBEE/OpenSysML/issues>
+#
+# Template: rendered by scripts/render-msys2-pkgbuild.sh; __VERSION__, __TAGVER__
+# and __SHA256_SOURCE__ are placeholders. See packaging/msys2/README.md.
+
+_realname=opensysml
+pkgbase=mingw-w64-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+# Release tag without the v; pkgver is the same with the pre-release hyphen dropped (0.6.0-rc1 -> 0.6.0rc1).
+_tagver=__TAGVER__
+pkgver=__VERSION__
+pkgrel=1
+pkgdesc='SysML v2 and KerML toolchain: REPL/CLI (sysml) and language server (sysml-lsp) (mingw-w64)'
+arch=('any')
+mingw_arch=('mingw64' 'ucrt64' 'clang64' 'clangarm64')
+url='https://github.com/Open-MBEE/OpenSysML'
+msys2_repository_url='https://github.com/Open-MBEE/OpenSysML'
+msys2_references=(
+  'purl: pkg:golang/github.com/Open-MBEE/OpenSysML'
+)
+license=('spdx:Apache-2.0')
+# z3 is found on PATH at run time by the experimental %check/%explain commands.
+depends=("${MINGW_PACKAGE_PREFIX}-z3")
+makedepends=("${MINGW_PACKAGE_PREFIX}-go")
+options=('!strip')
+source=("https://github.com/Open-MBEE/OpenSysML/archive/v${_tagver}/${_realname}-${_tagver}.tar.gz")
+sha256sums=('__SHA256_SOURCE__')
+
+build() {
+  cd "OpenSysML-${_tagver}"
+  export GOOS=windows
+  export GOROOT=${MINGW_PREFIX}/lib/go
+  export CGO_ENABLED=0
+  export GOFLAGS="-trimpath -mod=readonly -modcacherw"
+
+  local ldflags="-s -w -X main.Version=v${_tagver} -X main.Commit=release -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.GoVersion=$(go version | awk '{print $3}')"
+  go build -ldflags "${ldflags}" -o sysml.exe ./cmd/sysml
+  go build -ldflags "${ldflags}" -o sysml-lsp.exe ./cmd/sysml-lsp
+}
+
+check() {
+  cd "OpenSysML-${_tagver}"
+  export GOOS=windows
+  export GOROOT=${MINGW_PREFIX}/lib/go
+  export CGO_ENABLED=0
+  export GOFLAGS="-trimpath -mod=readonly -modcacherw"
+  go test -short ./internal/core/lexer/... ./internal/core/parser/...
+}
+
+package() {
+  cd "OpenSysML-${_tagver}"
+  install -Dm755 sysml.exe "${pkgdir}${MINGW_PREFIX}/bin/sysml.exe"
+  install -Dm755 sysml-lsp.exe "${pkgdir}${MINGW_PREFIX}/bin/sysml-lsp.exe"
+  install -Dm644 LICENSE "${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}${MINGW_PREFIX}/share/doc/${_realname}/README.md"
+  install -Dm644 man/man1/sysml.1 man/man1/sysml-lsp.1 -t "${pkgdir}${MINGW_PREFIX}/share/man/man1/"
+}

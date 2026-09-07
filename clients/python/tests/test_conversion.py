@@ -126,10 +126,12 @@ def test_format_of_path_infers_and_refuses():
 
 
 def test_is_experimental_names_the_rdf_mapping():
-    """Either side being RDF is what makes a conversion experimental."""
+    """Either side being RDF, or v1 XMI input, makes a conversion experimental."""
     assert is_experimental(FORMAT_SYSML, FORMAT_TURTLE)
     assert is_experimental(FORMAT_TURTLE, FORMAT_SYSML)
     assert is_experimental("turtle", "rdf")
+    assert is_experimental("xmi", FORMAT_SYSML)
+    assert is_experimental("mdzip", FORMAT_TURTLE)
     assert not is_experimental(FORMAT_SYSML, FORMAT_SYSML)
 
 

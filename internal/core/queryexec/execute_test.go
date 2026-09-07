@@ -45,7 +45,8 @@ func loadExecutionSource(t *testing.T, content string) executionFixture {
 	t.Helper()
 	index := libs.NewModelIndex()
 	name := "query-execution.sysml"
-	p := parser.New(source.New(name, []byte(content)))
+	sf := source.New(name, []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
@@ -53,9 +54,16 @@ func loadExecutionSource(t *testing.T, content string) executionFixture {
 	index.AddDocument(name, root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
+	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != name {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	return executionFixture{
 		index:    index,
-		model:    semantics.NewModel(resolver),
+		model:    model,
 		resolver: resolver,
 	}
 }
@@ -1041,7 +1049,7 @@ calc def Composed :> Query {
 }
 `)
 	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
-	want := []string{"namedOne", "", "namedTwo"}
+	want := []string{"namedOne", "engine", "namedTwo"}
 	direct, err := fixture.execute(t, "Children", bindings, Options{})
 	if err != nil {
 		t.Fatalf("execute direct query: %v", err)
@@ -1756,7 +1764,7 @@ calc def Recursive :> Query {
 	Descendants(source = source, maxDepth = 1)
 }
 `)
-	want := []string{"namedOne", "", "namedTwo"}
+	want := []string{"namedOne", "engine", "namedTwo"}
 	for _, query := range []string{"Direct", "Recursive"} {
 		rows, err := fixture.execute(t, query, Bindings{
 			"source": {ElementValue(fixture.symbol(t, "root"))},

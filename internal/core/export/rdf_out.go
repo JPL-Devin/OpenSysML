@@ -62,6 +62,7 @@ const (
 	pIsImportAll               = "isImportAll"
 	pSourceFeature             = "sourceFeature"
 	pTargetFeature             = "targetFeature"
+	pPortionKind               = "portionKind"
 )
 
 // Property names in the OpenSysML extension namespace: declaration order,
@@ -84,10 +85,13 @@ const (
 	xRelatedFeature  = "relatedFeature"
 	xEndIndex        = "endIndex"
 	xEndRole         = "endRole"
-	xEndForm         = "endForm"
-	xEndVerb         = "endVerb"
-	xSourceMember    = "sourceMember"
-	xTargetMember    = "targetMember"
+	xEndName         = "endName"
+	// The ReferencesKeyword a named end spells, when it is not `::>`.
+	xEndReferencesKeyword = "endReferencesKeyword"
+	xEndForm              = "endForm"
+	xEndVerb              = "endVerb"
+	xSourceMember         = "sourceMember"
+	xTargetMember         = "targetMember"
 	// The identity properties: whether an element's id came from an explicit
 	// ElementId annotation, and the ProjectRef provenance of a scope root.
 	xDeclaredID = "declaredId"
@@ -107,6 +111,13 @@ const (
 	formFlowTo    = "flowTo"    // flow a to b
 	formThen      = "then"      // then b, whose source end is the member before it
 	formSatisfy   = "satisfy"   // satisfy R by v, whose requirement is written bare
+)
+
+// The two spellings of ReferencesKeyword between a connector end's name and the
+// feature it reference-subsets (KerML.xtext:856).
+const (
+	referencesSymbol = "::>"
+	referencesWord   = "references"
 )
 
 // dtExpression is the datatype of a relationship target that is not a name but
@@ -249,6 +260,7 @@ func newEncoder(file *source.SourceFile, root *ast.RootNamespace) (*encoder, err
 		fqn:            map[ast.Node]string{},
 		links:          map[*ast.QualifiedName]*symbols.Symbol{},
 		preceding:      map[ast.Node]ast.Node{},
+		introduced:     map[ast.Node]ast.Node{},
 		ids:            ids,
 		subjects:       map[string]string{},
 		regions:        map[rdf.Term]region{},
@@ -287,6 +299,9 @@ type encoder struct {
 	// preceding is the member a `then` after each member sequences from: the last
 	// member before it that is not itself an edge, as the parser reads it.
 	preceding map[ast.Node]ast.Node
+	// introduced is the member a member-attached `then` sequences to: the one
+	// written right after the keyword, whose edge follows it in the body.
+	introduced map[ast.Node]ast.Node
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
 	ids *identityFacts
@@ -322,10 +337,7 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 	if written == "" || written == canonical {
 		return nil
 	}
-	// The keyword introduces a declaration whose subject is its name. Without
-	// one the keyword takes an inline reference instead (`perform a`), a shape
-	// rebuilt from the relationship rather than the head.
-	if named == "" && !(referenced && referenceMemberKeyword(written)) {
+	if named == "" {
 		// A shorter spelling of a multi-word kind keyword (`verification` for
 		// `verification case`) states the same kind, so it needs no name.
 		for _, word := range strings.Fields(canonical) {
@@ -333,9 +345,13 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 				return nil
 			}
 		}
-		return &UnsupportedError{
-			What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
-			Note: fmt.Sprintf("it names no element of its own, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", canonical),
+		// `perform a` takes the feature it names in place of a name; with
+		// neither, the keyword has nothing the decoder could write it before.
+		if referenceMemberKeyword(written) && !referenced {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
+				Note: fmt.Sprintf("it neither declares a name nor names the feature it refers to, the two shapes `%s` is written in, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", written, canonical),
+			}
 		}
 	}
 	e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(written))
@@ -385,8 +401,43 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 		if err := e.collectPrefixes(node, fqn, len(e.kept(children))); err != nil {
 			return err
 		}
+		if err := e.collectCrossFeature(node, fqn); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// collectCrossFeature records the name of the cross feature an end declares
+// ahead of itself (`end x1 [m] feature x`), which it owns after its prefixes.
+func (e *encoder) collectCrossFeature(node ast.Node, owner string) error {
+	u, ok := node.(*ast.Usage)
+	if !ok || u.CrossFeature == nil {
+		return nil
+	}
+	cross := u.CrossFeature
+	fqn := qualify(owner, cross.Ident.Name, e.crossFeatureIndex(u))
+	if e.declared[fqn] {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the cross feature at %s", e.where(cross)),
+			Note: fmt.Sprintf("it is identified as %s, which a body member is named too, and merging two elements into one subject would be a different model", fqn),
+		}
+	}
+	e.fqn[cross] = fqn
+	e.declared[fqn] = true
+	return nil
+}
+
+// crossFeatureIndex is the position an end's cross feature takes among the
+// members it owns: after its kept body members and its prefix annotations.
+func (e *encoder) crossFeatureIndex(u *ast.Usage) int {
+	index := len(e.kept(bodyMembers(u)))
+	for _, prefix := range u.Prefixes {
+		if prefix != nil && !e.ids.skip(prefix) {
+			index++
+		}
+	}
+	return index
 }
 
 // collectPrefixes records the names of a declaration's `#M` prefix annotations,
@@ -451,27 +502,31 @@ func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.T
 
 func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
 	// last and beforeLast are the latest members a `then` sequences from; a
-	// member-attached `then` follows its target, so its source is beforeLast.
-	var last, beforeLast ast.Node
+	// member-attached `then` follows its target prev, so its source is the
+	// latest of them before prev.
+	var last, beforeLast, prev ast.Node
 	for i, member := range kept {
 		node, visibility := unwrapMember(member)
 		if node == nil {
 			continue
 		}
-		if preceding := last; preceding != nil {
-			if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied {
+		preceding := last
+		if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied && prev != nil {
+			e.introduced[node] = prev
+			if prev == last {
 				preceding = beforeLast
 			}
-			if preceding != nil {
-				e.preceding[node] = preceding
-			}
 		}
-		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
+		if preceding != nil {
+			e.preceding[node] = preceding
+		}
+		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i, isTypeFeatureMember(member)); err != nil {
 			return err
 		}
 		if ast.IsSuccessionSource(node) {
 			last, beforeLast = node, last
 		}
+		prev = node
 	}
 	return nil
 }
@@ -514,6 +569,9 @@ type memberHead struct {
 	metaclass  rdf.Term
 	lines      region
 	inline     bool
+	// typeFeature marks a KerML `member` (TypeFeatureMember): a feature its type
+	// owns through a plain OwningMembership rather than a FeatureMembership.
+	typeFeature bool
 }
 
 func (e *encoder) head(subject rdf.Term, h memberHead) {
@@ -543,7 +601,8 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 		if !isRelationship(e.metaclassOf(ownerTerm)) {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
 		}
-		membership = e.owningMembership(subject, ownerTerm, fqn, isExpressionMember(node), e.variantMember(node, ownerTerm))
+		_, crossing := node.(*ast.CrossFeatureMember)
+		membership = e.owningMembership(subject, ownerTerm, fqn, ast.IsExpression(node), e.variantMember(node, ownerTerm), crossing || h.typeFeature)
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {
 		// The membership states the visibility a member is declared with; a
@@ -557,8 +616,9 @@ func (e *encoder) head(subject rdf.Term, h memberHead) {
 }
 
 // encodeMember maps one member: node is the declaration inside its membership
-// wrapper, and lines the text of the member, wrapper and all, unless inline.
-func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int) error {
+// wrapper, and lines the text of the member, wrapper and all, unless inline;
+// typeFeature marks a wrapper declared `member` (KerML TypeFeatureMember).
+func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int, typeFeature bool) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject, err := e.mint(node, fqn)
@@ -566,10 +626,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		return err
 	}
 	// A bare expression among a body's members is the result the body computes.
-	result := isExpressionMember(node)
+	result := ast.IsExpression(node)
 	head := func(metaclass rdf.Term) {
 		e.head(subject, memberHead{node: node, visibility: visibility, fqn: fqn, owner: ownerTerm,
-			index: index, metaclass: metaclass, lines: lines, inline: inline})
+			index: index, metaclass: metaclass, lines: lines, inline: inline, typeFeature: typeFeature})
 	}
 
 	switch n := node.(type) {
@@ -647,9 +707,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 				return err
 			}
 		}
-		// The prefix a kind keyword was qualified with (`assert constraint c`)
-		// states what the usage is for, so it is part of the declaration.
-		if n.PrefixKeyword != "" {
+		// The prefix a kind keyword was qualified with (`assume constraint c`) is
+		// part of the declaration; `assert` is the AssertConstraintUsage metaclass.
+		if n.PrefixKeyword != "" && !assertedConstraint(n) && !prefixCarriedByGraph(n) {
 			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
 		}
 		e.flags(subject, []boolProperty{
@@ -662,11 +722,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isEnd", n.IsEnd},
 			{"isChain", n.IsChain},
 			{"isConstant", n.IsConstant},
-			{"isEvent", n.IsEvent},
+			{"isEvent", n.IsEvent && metaclass != mEventOccurrenceUsage},
 			{"isIndividual", n.IsIndividual},
-			{"isSnapshot", n.Portion == ast.PortionSnapshot},
-			{"isTimeslice", n.Portion == ast.PortionTimeslice},
 			{"isComposite", n.IsComposite},
+			// A snapshot or timeslice is a portion by its kind (OccurrenceUsage::portionKind).
+			{"isPortion", n.IsPortion || n.Portion != ast.PortionNone},
 			{"isDerived", n.IsDerived},
 			{"isOrdered", n.IsOrdered},
 			{"isNonunique", n.IsNonunique},
@@ -681,8 +741,14 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
+		if portion := portionKeyword(n.Portion); portion != "" {
+			e.graph.Add(subject, e.sysml(pPortionKind), rdf.String(portion))
+		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
+		if err := e.crossFeature(subject, fqn, n); err != nil {
+			return err
+		}
 		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage states its ends
@@ -877,8 +943,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 // membership stands between the two. The API's payloads reach a member through
 // its membership, so a compact owner triple alone leaves a client walking down
 // from a root with nothing to follow. result marks a body's result expression,
-// which a ResultExpressionMembership owns; variant a usage a VariantMembership owns.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant bool) rdf.Term {
+// which a ResultExpressionMembership owns; variant a usage a VariantMembership
+// owns; plain a feature its type owns through a plain OwningMembership rather
+// than a FeatureMembership: an end's cross feature, or a KerML `member` feature.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant, plain bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	// A metadata usage annotates its owner through an OwningMembership whatever
 	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
@@ -904,7 +972,7 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	// A type owns a feature through a FeatureMembership, which is the membership
 	// the API's payloads carry for it; anything else, a metadata usage included,
 	// through an OwningMembership.
-	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type") && !metadata
+	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && isType(ownerClass) && !metadata
 	membership := rdf.OwningMembershipIRIOf(member)
 	// The membership shares the element namespace, so its IRI is reserved too.
 	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
@@ -918,8 +986,10 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
 	// A variant is a member of its variation, not a feature of it: the metamodel
-	// owns it through a VariantMembership, which is an OwningMembership.
-	if variant {
+	// owns it through a VariantMembership, which is an OwningMembership. An end's
+	// cross feature (KerML.xtext OwnedCrossingFeatureMember) and a `member`
+	// feature (KerML.xtext TypeFeatureMember) are owned the same way.
+	if variant || plain {
 		feature = false
 	}
 	metaclass := mOwningMembership
@@ -1113,37 +1183,31 @@ func verbatimUsage(n *ast.Usage) bool {
 // bindingEnds states the features a binding head relates as structure beside the
 // text it is kept as, so a consumer reads the ends without reading notation.
 func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
+	// A named end (`connect bead ::> t.bead`) relates the feature it attaches
+	// to and carries its own name beside it.
 	for i, end := range n.ConnectorEnds {
 		if end == nil {
 			continue
 		}
-		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target, end.Multiplicity)
+		slot := fmt.Sprintf("end%d", i)
+		e.endNode(subject, owner, slot, i, "", end.AttachedTarget(), end.Multiplicity)
+		if id, named := end.DeclaredName(); named {
+			node := rdf.ExpressionIRI(subject, slot)
+			e.graph.Add(node, e.sysx(xEndName), rdf.String(id.Name))
+			if keyword := e.referencesKeyword(end); keyword != referencesSymbol {
+				e.graph.Add(node, e.sysx(xEndReferencesKeyword), rdf.String(keyword))
+			}
+		}
 	}
 	if n.FlowEnds != nil {
-		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
-		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
-		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
-	}
-	// `bind [m] a = [n] b` relates the features it references and its value node.
-	if n.Kind == ast.UsageBinding && len(n.ConnectorEnds) == 0 {
-		index := 0
-		for _, rel := range n.Relationships {
-			if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
-				continue
-			}
-			e.bindingEnd(subject, owner, fmt.Sprintf("end%d", index), index, "", rel.Target, rel.Multiplicity)
-			index++
-		}
-		if n.Value != nil {
-			value := rdf.ExpressionIRI(subject, pValue)
-			e.graph.Add(subject, e.sysx(xRelatedFeature), value)
-			e.endMarks(value, owner, index, "", n.ValueMultiplicity)
-		}
+		e.endNode(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
+		e.endNode(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
+		e.endNode(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
 	}
 }
 
-// bindingEnd emits one end as an expression node, tagged with its position.
-func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
+// endNode emits one end as an expression node, tagged with its position.
+func (e *encoder) endNode(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
 	if target == nil {
 		return
 	}
@@ -1241,6 +1305,47 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 		}
 		index++
 	}
+	return nil
+}
+
+// crossFeature maps the cross feature an end declares ahead of itself as a feature
+// it owns through an OwningMembership (KerML.xtext OwnedCrossingFeature).
+func (e *encoder) crossFeature(subject rdf.Term, fqn string, n *ast.Usage) error {
+	cross := n.CrossFeature
+	if cross == nil {
+		return nil
+	}
+	crossFQN := e.fqn[cross]
+	crossSubject, err := e.mint(cross, crossFQN)
+	if err != nil {
+		return err
+	}
+	metaclass := crossFeatureMetaclass(e.file.Kind() == source.KindKerML)
+	// The cross feature is written in the end's head, so its text is the end's.
+	e.head(crossSubject, memberHead{node: cross, visibility: ast.VisibilityDefault, fqn: crossFQN,
+		owner: subject, index: e.crossFeatureIndex(n), metaclass: rdf.SysMLTerm(metaclass), inline: true})
+	e.ident(crossSubject, cross.Ident)
+	// The prefix between `end` and the cross feature is the cross feature's own,
+	// stated as an end's would be (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix).
+	if cross.IsVariable {
+		e.graph.Add(crossSubject, e.sysx(xDeclaredPrefix), rdf.String("var"))
+	}
+	e.flags(crossSubject, []boolProperty{
+		{"isAbstract", cross.IsAbstract},
+		{"isVariation", cross.IsVariation},
+		{"isReference", cross.IsReference},
+		{"isConstant", cross.IsConstant},
+		{"isComposite", cross.IsComposite},
+		{"isPortion", cross.IsPortion},
+		{"isDerived", cross.IsDerived},
+		{"isOrdered", cross.IsOrdered},
+		{"isNonunique", cross.IsNonunique},
+	})
+	if keyword := directionKeyword(cross.Direction); keyword != "" {
+		e.graph.Add(crossSubject, e.sysml(pDirection), rdf.String(keyword))
+	}
+	e.relationships(crossSubject, fqn, cross.Relationships)
+	e.multiplicity(crossSubject, fqn, cross.Multiplicity)
 	return nil
 }
 
@@ -1428,7 +1533,7 @@ func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) 
 	if !declared {
 		return nil, "", false
 	}
-	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName {
+	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName() {
 		return nil, "", false
 	}
 	return sym.Decl, fqn, true
@@ -1476,9 +1581,6 @@ func headNodes(n *ast.Usage) []ast.Node {
 	add(n.Value)
 	if n.Multiplicity != nil {
 		add(n.Multiplicity)
-	}
-	if n.ValueMultiplicity != nil {
-		add(n.ValueMultiplicity)
 	}
 	if n.CrossFeature != nil {
 		add(n.CrossFeature)
@@ -1559,6 +1661,13 @@ func (e *encoder) where(node ast.Node) string {
 	return fmt.Sprintf("%s:%d:%d", e.file.Name(), pos.Line, pos.Col)
 }
 
+// isTypeFeatureMember reports whether a membership wrapper was declared
+// `member` (KerML.xtext TypeFeatureMember).
+func isTypeFeatureMember(member ast.Node) bool {
+	m, ok := member.(*ast.Membership)
+	return ok && m.IsTypeFeature
+}
+
 // unwrapMember returns the declaration inside a membership wrapper together
 // with the visibility the wrapper declared.
 func unwrapMember(member ast.Node) (ast.Node, ast.Visibility) {
@@ -1584,6 +1693,23 @@ func referencesFeature(n *ast.Usage) bool {
 	for _, rel := range n.Relationships {
 		if rel.Kind == ast.RelReferences && rel.Target != nil {
 			return true
+		}
+	}
+	return false
+}
+
+// prefixCarriedByGraph reports a prefix the graph already states structurally:
+// a state's `entry`/`do`/`exit` by the subaction membership that owns the
+// action, an `include` by the inclusion relationship.
+func prefixCarriedByGraph(n *ast.Usage) bool {
+	switch n.PrefixKeyword {
+	case "entry", "do", "exit":
+		return n.Kind == ast.UsageAction
+	case "include":
+		for _, rel := range n.Relationships {
+			if rel.Kind == ast.RelIncludes {
+				return true
+			}
 		}
 	}
 	return false

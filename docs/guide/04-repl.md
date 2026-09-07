@@ -38,7 +38,11 @@ Two things about the session model are worth understanding before you start a lo
   `%state` debugging session over an unaffected declaration keeps running. A surviving object
   keeps its identity but not its execution state: the behaviors its type exhibits or performs
   restart from their initial states. Everything dropped or restarted is reported on a `note:`
-  line.
+  line. A surviving object is the one object every command reads: what an action wrote on it
+  before the submission is what `%features` lists, what `%eval` answers for the feature or for
+  a member reached through it, and what a debugger session still running writes to afterwards.
+  A submission that *does* change the object's declaration drops it, and every command then
+  reports the loss rather than answering from a fresh object.
 
 `%list` shows the session's declarations, `%clear` resets the session, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)). `%clear` discards every declaration, so nothing it held is
@@ -331,6 +335,7 @@ completes them: `#` offers the ids there are, `car.` the objects `car` holds.
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
 | what an object holds for each feature | `%instantiate`, `%features`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
+| what an analysis case computes and whether its objective holds | `%analysis` | [6](06-behavior.md#running-an-analysis-case) |
 | whether a check *can* hold at all (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%check` | [reference](../reference/repl-commands.md) |
 | which conditions conflict when it cannot (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%explain` | [reference](../reference/repl-commands.md) |
 | what values satisfy it, keeping what is already fixed (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%solve` | [reference](../reference/repl-commands.md) |

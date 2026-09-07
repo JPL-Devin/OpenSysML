@@ -24,6 +24,16 @@ func (f *EffectiveFeature) Scalar() bool {
 	return !f.Multiplicity.Upper.Infinite && f.Multiplicity.Upper.Value <= 1
 }
 
+// DefaultIsFallback reports whether DefaultValue was written with `default`: a
+// value the feature holds only when nothing else populates it.
+func (f *EffectiveFeature) DefaultIsFallback() bool {
+	if f.DefaultDecl == nil {
+		return false
+	}
+	usage, ok := f.DefaultDecl.Decl.(*ast.Usage)
+	return ok && usage.ValueIsDefault
+}
+
 // DefaultScope returns the scope DefaultValue resolves its names in, which for
 // an inherited default is where the redefined declaration wrote it.
 func (f *EffectiveFeature) DefaultScope() *symbols.Scope {

@@ -22,59 +22,29 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr           // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
-	ValQuantity       // a magnitude and the measurement unit it is expressed in
-	ValVariant        // the variant selected for a variation, and the object it materializes
-	ValEnumLiteral    // one literal of an enumeration definition, identified by itself
-	ValComplex        // one complex number, its real and imaginary parts together
-	ValArray          // a Collections::Array: its dimensions and its row-major elements
-	ValVector         // a NumericalVectorValue: the numbers of its one dimension
-	ValVectorQuantity // a VectorQuantityValue: a vector with a measurement unit per axis
+	ValExpr                     // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValQuantity                 // a magnitude and the measurement unit it is expressed in
+	ValVariant                  // the variant selected for a variation, and the object it materializes
+	ValEnumLiteral              // one literal of an enumeration definition, identified by itself
+	ValComplex                  // one complex number, its real and imaginary parts together
+	ValArray                    // a Collections::Array: its dimensions and its row-major elements
+	ValVector                   // a NumericalVectorValue: the numbers of its one dimension
+	ValVectorQuantity           // a VectorQuantityValue: a vector with a measurement unit per axis
+	ValMeasurementRef           // a ScalarMeasurementReference: a unit by declaration and reduction
+	ValTensorQuantity           // a TensorQuantityValue: an array of numbers with a measurement unit per component
+	ValCoordinateFrame          // a VectorMeasurementReference: a frame's axes, or a measurement scale's one
+	ValCoordinateTransformation // a CoordinateTransformation: a placement of one frame in another
 
 	// valueKindCount bounds the kinds; TestEveryValueKindIsDispatched walks them.
 	valueKindCount
 )
-
-// FormatReal renders a Real as the shortest decimal that reads back as the same
-// float64, so no surface rounds a value away. A whole value keeps a ".0" so it
-// is not mistaken for an Integer.
-func FormatReal(f float64) string {
-	// An ordinary magnitude reads in full rather than in exponent notation, which
-	// 'g' would switch to well before a Real stops being readable as digits.
-	format := byte('f')
-	if abs := math.Abs(f); f != 0 && (abs < 1e-4 || abs >= 1e21) {
-		format = 'g'
-	}
-	text := strconv.FormatFloat(f, format, -1, 64)
-	if !strings.ContainsAny(text, ".eEnN") {
-		text += ".0"
-	}
-	return text
-}
-
-// FormatConst renders a scalar constant using the runtime's user-facing
-// numeric convention.
-func FormatConst(c semantics.Value) string {
-	switch c.Kind {
-	case semantics.ValInt:
-		return fmt.Sprintf("%d", c.Int)
-	case semantics.ValReal:
-		return FormatReal(c.Real)
-	case semantics.ValBool:
-		return fmt.Sprintf("%v", c.Bool)
-	case semantics.ValInfinity:
-		return "∞"
-	default:
-		return "<unknown const>"
-	}
-}
 
 // FormatValue renders a value with the notation used by user-facing runtime
 // results and diagnostics.
 func FormatValue(v Value) string {
 	switch v.Kind {
 	case ValConst:
-		return FormatConst(v.Const)
+		return semantics.FormatConst(v.Const)
 	case ValNull:
 		return "null"
 	case ValString:
@@ -110,15 +80,23 @@ func FormatValue(v Value) string {
 		if q == nil {
 			return "<unknown>"
 		}
-		return q.TextWithMagnitude(FormatConst(q.Num))
+		return q.TextWithMagnitude(semantics.FormatConst(q.Num))
 	case ValComplex:
 		return FormatComplex(v.Complex())
 	case ValArray:
 		return v.Array().Format(FormatValue)
 	case ValVector:
-		return v.Vector().format(FormatConst)
+		return v.Vector().format(semantics.FormatConst)
 	case ValVectorQuantity:
-		return v.VectorQuantity().format(FormatConst)
+		return v.VectorQuantity().format(semantics.FormatConst)
+	case ValMeasurementRef:
+		return v.MeasurementRef().String()
+	case ValTensorQuantity:
+		return v.TensorQuantity().format(semantics.FormatConst)
+	case ValCoordinateFrame:
+		return v.CoordinateFrame().String()
+	case ValCoordinateTransformation:
+		return v.CoordinateTransformation().String()
 	case ValExpr:
 		return "<expression>"
 	default:
@@ -134,7 +112,7 @@ func FormatComplex(z complex128) string {
 	if math.Signbit(im) {
 		sign, im = " - ", -im
 	}
-	return FormatReal(re) + sign + FormatReal(im) + "i"
+	return semantics.FormatReal(re) + sign + semantics.FormatReal(im) + "i"
 }
 
 func formatValueElements(elements []Value) []string {
@@ -176,6 +154,14 @@ func (k ValueKind) String() string {
 		return "vector"
 	case ValVectorQuantity:
 		return "vector quantity"
+	case ValMeasurementRef:
+		return "measurement reference"
+	case ValTensorQuantity:
+		return "tensor quantity"
+	case ValCoordinateFrame:
+		return "coordinate frame"
+	case ValCoordinateTransformation:
+		return "coordinate transformation"
 	default:
 		return "invalid"
 	}
@@ -190,8 +176,8 @@ type Value struct {
 	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
 	// ref holds the kind-specific payload of the remaining kinds: a string
 	// (ValString), *Sequence, *Set, *exprValue (ValExpr), *Quantity, a complex128
-	// (ValComplex), *Array, *Vector, *VectorQuantity, or the *symbols.Symbol of
-	// a variant (ValVariant) or enumeration literal (ValEnumLiteral).
+	// (ValComplex), *Array, *Vector, *VectorQuantity, *MeasurementRef, *TensorQuantity, or the
+	// *symbols.Symbol of a variant (ValVariant) or enumeration literal (ValEnumLiteral).
 	ref any
 }
 
@@ -337,6 +323,43 @@ func (v Value) VectorQuantity() *VectorQuantity {
 	return vq
 }
 
+// MeasurementRef is the payload of a ValMeasurementRef; nil for every other kind.
+func (v Value) MeasurementRef() *MeasurementRef {
+	if v.Kind != ValMeasurementRef {
+		return nil
+	}
+	ref, _ := v.ref.(*MeasurementRef)
+	return ref
+}
+
+// TensorQuantity is the payload of a ValTensorQuantity; nil for every other kind.
+func (v Value) TensorQuantity() *TensorQuantity {
+	if v.Kind != ValTensorQuantity {
+		return nil
+	}
+	tq, _ := v.ref.(*TensorQuantity)
+	return tq
+}
+
+// CoordinateFrame is the payload of a ValCoordinateFrame; nil for every other kind.
+func (v Value) CoordinateFrame() *CoordinateFrame {
+	if v.Kind != ValCoordinateFrame {
+		return nil
+	}
+	frame, _ := v.ref.(*CoordinateFrame)
+	return frame
+}
+
+// CoordinateTransformation is the payload of a ValCoordinateTransformation; nil
+// for every other kind.
+func (v Value) CoordinateTransformation() *CoordinateTransformation {
+	if v.Kind != ValCoordinateTransformation {
+		return nil
+	}
+	t, _ := v.ref.(*CoordinateTransformation)
+	return t
+}
+
 // Complex is the number a ValComplex is; 0 for every other kind.
 func (v Value) Complex() complex128 {
 	if v.Kind != ValComplex {
@@ -392,14 +415,31 @@ func (v Value) Object() (int64, bool) {
 	}
 }
 
-// Sequence is an ordered collection (slice-backed).
+// Sequence is an ordered collection (slice-backed). One read empty from a
+// quantity-typed declaration remembers the unit its elements would measure in.
 type Sequence struct {
-	elements []Value
+	elements    []Value
+	elementUnit *Unit
 }
 
 // NewSequence creates an empty Sequence.
 func NewSequence() *Sequence {
 	return &Sequence{elements: make([]Value, 0)}
+}
+
+// NewEmptySequenceOf is the empty sequence of quantities measured in unit, which
+// types the identity an aggregate of it yields.
+func NewEmptySequenceOf(unit Unit) Value {
+	return NewSequenceValue(&Sequence{elements: make([]Value, 0), elementUnit: &unit})
+}
+
+// ElementUnit is the unit an empty sequence's elements are declared in; false for
+// a sequence holding elements or read from no quantity-typed declaration.
+func (s *Sequence) ElementUnit() (Unit, bool) {
+	if s == nil || s.elementUnit == nil || len(s.elements) != 0 {
+		return Unit{}, false
+	}
+	return *s.elementUnit, true
 }
 
 // Append adds a value to the end of the sequence.

@@ -1,6 +1,7 @@
 // Package export saves a SysML v2 model to a file and converts between the
 // two representations OpenSysML can write: SysML textual notation and RDF
-// Turtle.
+// Turtle. It also reads a third, SysML v1 in XMI, which is migrated to v2
+// notation on the way in.
 //
 // # SysML output
 //
@@ -28,6 +29,11 @@
 // and RDF is not), hasBody, the end forms of heads that bind ends, and each
 // element's lines as written, comments included, as sourceText and sourceTail.
 //
+// # XMI input
+//
+// SysML v1 in Cameo/MagicDraw XMI or .mdzip is migrated to v2 notation by
+// internal/core/migrate, then takes the notation path. XMI is never written.
+//
 // # RDF back to notation
 //
 // The structural triples are authoritative. An element is written from its
@@ -46,6 +52,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/migrate"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -59,13 +66,24 @@ const (
 	FormatSysML Format = iota
 	// FormatTurtle is RDF in Turtle syntax.
 	FormatTurtle
+	// FormatXMI is SysML v1 as UML XMI 2.5.1, or a Cameo .mdzip archive holding
+	// it. It is an input format only.
+	FormatXMI
 )
 
 func (f Format) String() string {
-	if f == FormatTurtle {
+	switch f {
+	case FormatTurtle:
 		return "ttl"
+	case FormatXMI:
+		return "xmi"
 	}
 	return "sysml"
+}
+
+// Writable reports whether models can be written in the format.
+func (f Format) Writable() bool {
+	return f != FormatXMI
 }
 
 // formatNames are the names accepted on the command line for each format.
@@ -76,7 +94,12 @@ var formatNames = map[string]Format{
 	"ttl":    FormatTurtle,
 	"turtle": FormatTurtle,
 	"rdf":    FormatTurtle,
+	"xmi":    FormatXMI,
+	"mdzip":  FormatXMI,
 }
+
+// FormatList is the wording every surface lists the format names in.
+const FormatList = "sysml, kerml, ttl, turtle, rdf, or xmi/mdzip (input only)"
 
 // FormatNames returns every name ParseFormat accepts, sorted.
 func FormatNames() []string {
@@ -93,7 +116,14 @@ func ParseFormat(name string) (Format, error) {
 	if f, ok := formatNames[strings.ToLower(strings.TrimSpace(name))]; ok {
 		return f, nil
 	}
-	return 0, fmt.Errorf("unknown format %q: expected sysml, kerml, ttl, turtle or rdf", name)
+	return 0, fmt.Errorf("unknown format %q: expected %s", name, FormatList)
+}
+
+// NotWritableError reports a request to write a format that is only read.
+type NotWritableError struct{ Format Format }
+
+func (e *NotWritableError) Error() string {
+	return fmt.Sprintf("cannot write %s: SysML v1 XMI is read and migrated, never written; convert to sysml or ttl", e.Format)
 }
 
 // UnknownFormatError reports that a path does not say which format to write.
@@ -144,6 +174,8 @@ func FormatOfPath(path string) (Format, error) {
 		return FormatSysML, nil
 	case ".ttl", ".turtle":
 		return FormatTurtle, nil
+	case ".xmi", ".mdzip":
+		return FormatXMI, nil
 	case "":
 		return 0, &UnknownFormatError{Path: path, NoExtension: true}
 	default:
@@ -231,8 +263,32 @@ func trimTrailingTrivia(text string) string {
 	return strings.TrimSpace(text[:end])
 }
 
+// Migrate reads a SysML v1 model in XMI and writes it in the to format, with
+// the report of what each v1 element became.
+func Migrate(name string, data []byte, to Format) ([]byte, *migrate.Report, error) {
+	if !to.Writable() {
+		return nil, nil, &NotWritableError{Format: to}
+	}
+	result, err := migrate.Migrate(name, data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", name, err)
+	}
+	out, _, err := convert(name+".sysml", result.Notation, FormatSysML, to, false)
+	if err != nil {
+		return nil, nil, fmt.Errorf("the migrated notation could not be written: %w", err)
+	}
+	return out, result.Report, nil
+}
+
 func convert(name string, data []byte, from, to Format, tolerateSyntaxErrors bool) ([]byte, *SyntaxError, error) {
 	switch {
+	case !to.Writable():
+		return nil, nil, &NotWritableError{Format: to}
+
+	case from == FormatXMI:
+		out, _, err := Migrate(name, data, to)
+		return out, nil, err
+
 	case from == FormatSysML && to == FormatSysML:
 		// A save of textual notation: keep every lexeme, fix the indentation.
 		syntax := checkSyntax(name, data)

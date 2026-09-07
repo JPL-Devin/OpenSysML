@@ -39,7 +39,7 @@ func (SendActionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 	if rootScope == nil {
 		return nil
 	}
-	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()}
+	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind}
 	// A payload value may own body-expression members, typed as the type pass does.
 	bodies := &typeChecker{resolver: ctx.Resolver(), expr: expr, lang: ctx.Kind}
 	expr.walkMembers = bodies.walk

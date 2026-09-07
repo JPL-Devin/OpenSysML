@@ -17,11 +17,16 @@ var ErrRecursiveStateTyping = errors.New("recursive state typing")
 // cannot represent, rather than dropping it.
 var ErrUnsupportedStateContent = errors.New("unsupported state machine content")
 
-// StateTypeResolver resolves the declaration a type name reaches and the scope
-// of that declaration's body. The name-resolution tier implements it; lowering
-// falls back to the scope tree for a machine lowered without it.
+// StateTypeResolver resolves the declaration a type name reaches and its body scope.
+// Lowering falls back to the scope tree only without one or for a name it cannot resolve.
 type StateTypeResolver interface {
 	TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool)
+}
+
+// StateTypeWithholder names resolved declarations whose content lowering must not
+// take. A withheld type is settled: it is never looked up again through the scope tree.
+type StateTypeWithholder interface {
+	WithholdsStateType(decl ast.Node) bool
 }
 
 // inheritedMember is one member a state inherits, with the body that declares
@@ -117,14 +122,20 @@ func (g *StateGraph) putCompletion(owner ast.Node, vertex *ast.StateNode) {
 }
 
 // stateType resolves what a type name reaches: through the name-resolution tier
-// when lowering runs with it, else from the scope tree alone.
+// when lowering runs with it, else from the scope tree; a withheld type reaches nothing.
 func (g *StateGraph) stateType(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
-	if types, ok := g.endpoints.(StateTypeResolver); ok {
-		if decl, body, found := types.TypeDecl(scope, qn); found {
-			return decl, body, true
-		}
+	types, ok := g.endpoints.(StateTypeResolver)
+	if !ok {
+		return resolve.TypeDeclInScope(scope, qn)
 	}
-	return resolve.TypeDeclInScope(scope, qn)
+	decl, body, found := types.TypeDecl(scope, qn)
+	if !found {
+		return resolve.TypeDeclInScope(scope, qn)
+	}
+	if withholder, ok := g.endpoints.(StateTypeWithholder); ok && withholder.WithholdsStateType(decl) {
+		return nil, nil, false
+	}
+	return decl, body, true
 }
 
 // stateTypeNames are the names a state declaration takes content from: the

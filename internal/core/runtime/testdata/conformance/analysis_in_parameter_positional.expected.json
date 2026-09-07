@@ -1,0 +1,15 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::CostAnalysis",
+  "subject": "test::ship",
+  "inputs": [
+    {"type": "Real", "value": 2.0}
+  ],
+  "outputs": {
+    "total": {"type": "Real", "value": 24.0}
+  },
+  "verdicts": {
+    "affordable": "not satisfied"
+  }
+}

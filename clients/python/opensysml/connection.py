@@ -21,8 +21,10 @@ from opensysml.capabilities import (
     CAPABILITY_DOCUMENT_QUERY,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_FEATURE_VALUES,
+    CAPABILITY_MEASUREMENT_REFS,
     CAPABILITY_QUERY,
     CAPABILITY_RENDER_DOCUMENT,
+    CAPABILITY_STRUCTURED_VALUES,
     CAPABILITY_VERIFICATION,
     MissingCapabilityError,
     ServerInfo,
@@ -54,8 +56,15 @@ from opensysml.errors import (
     translate_rpc_errors,
 )
 from opensysml.query import build_query, elements_of
-from opensysml.values import Quantity, value_to_python
-from opensysml.verdict import CalcResult, Verdict
+from opensysml.values import (
+    Array,
+    MeasurementRef,
+    Quantity,
+    Vector,
+    VectorQuantity,
+    value_to_python,
+)
+from opensysml.verdict import AnalysisResult, CalcResult, Verdict
 
 
 #: Port the service listens on when a caller names none.
@@ -67,6 +76,12 @@ _UNRESOLVED = object()
 #: Address of an externally managed service to connect to, as ``host:port``.
 #: Naming one here is the opt-in for a caller who cannot pass host and port.
 SERVICE_ENV = 'OPENSYSML_SERVICE'
+
+#: Options of every channel this client opens: only identity, so no service
+#: compresses a response, which grpcio can hand to the parser still compressed.
+CHANNEL_OPTIONS = (
+    ('grpc.compression_enabled_algorithms_bitset', 1 << grpc.Compression.NoCompression),
+)
 
 #: Seconds a private child is given to report the address it bound.
 START_TIMEOUT = 2.5
@@ -89,6 +104,18 @@ _private_services: Dict[Optional[str], '_PrivateService'] = {}
 #: Held to start, join or release a private service, since connections of one
 #: interpreter share them and may be opened and closed by different threads.
 _private_services_lock = threading.RLock()
+
+
+def open_channel(address):
+    """Open an insecure channel to ``address`` with this client's options.
+
+    Args:
+        address (str): The service's ``host:port``
+
+    Returns:
+        grpc.Channel: The channel, to be closed by the caller
+    """
+    return grpc.insecure_channel(address, options=CHANNEL_OPTIONS)
 
 
 def split_target(host, port=None):
@@ -478,7 +505,7 @@ class Connection:
                 f"service at {self._address} (not started by this client)"
             )
 
-        self._channel = grpc.insecure_channel(self._address)
+        self._channel = open_channel(self._address)
         self._service = sysml_pb2_grpc.SysMLServiceStub(self._channel)
         try:
             if self._private is None:
@@ -1125,7 +1152,11 @@ class Connection:
             ExecutionError: If execution fails
             ModelNotFoundError: If the service no longer holds the model
             MissingCapabilityError: If an input holds a ``complex`` and the
-                service predates ``complex_values``; nothing is sent
+                service predates ``complex_values``, an :class:`~opensysml.values.Array`,
+                :class:`~opensysml.values.Vector` or :class:`~opensysml.values.VectorQuantity`
+                and the service predates ``structured_values``, or a
+                :class:`~opensysml.values.MeasurementRef` and the service predates
+                ``measurement_refs``; nothing is sent
         """
         # Convert Python inputs to protobuf Values
         pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
@@ -1314,7 +1345,10 @@ class Connection:
             ExecutionError: If the calculation could not be evaluated
             MissingCapabilityError: If the service cannot verify, or an
                 argument holds a ``complex`` and the service predates
-                ``complex_values``; nothing is sent
+                ``complex_values``, an array, vector or vector quantity and
+                the service predates ``structured_values``, or a measurement
+                reference and the service predates ``measurement_refs``; nothing
+                is sent
             ModelNotFoundError: If the service no longer holds the model
         """
         self._require_verification()
@@ -1324,9 +1358,12 @@ class Connection:
             arguments=[self._python_to_value(arg) for arg in (arguments or [])],
         )
         with translate_rpc_errors(
-            unimplemented=self._capability_refusal(
-                (CAPABILITY_VERIFICATION, CAPABILITY_COMPLEX_VALUES)
-            )
+            unimplemented=self._capability_refusal((
+                CAPABILITY_VERIFICATION,
+                CAPABILITY_COMPLEX_VALUES,
+                CAPABILITY_STRUCTURED_VALUES,
+                CAPABILITY_MEASUREMENT_REFS,
+            ))
         ):
             response = self._stub.EvaluateCalc(request)
 
@@ -1346,6 +1383,77 @@ class Connection:
         if not outputs and response.HasField('result'):
             value = self._value_to_python(response.result)
         return CalcResult(value, outputs, diagnostics=diagnostics)
+
+    def run_analysis(self, symbol_id, model_hash, subject=None, arguments=None,
+                     named_arguments=None):
+        """Run an analysis case, as the REPL's ``%analysis`` does.
+
+        The subject named is instantiated and bound as the case's subject; a
+        usage that binds its own subject needs none. Positional arguments bind
+        the case's ``in`` parameters in declaration order, the subject excluded;
+        named arguments bind them by name. Its objective and each ``assert
+        constraint`` in its body are then checked against what it computed
+        (SysML 7.22).
+
+        Args:
+            symbol_id (str): FQN of the analysis case definition or usage
+            model_hash (str): Hash from ParseFile response
+            subject (str, optional): FQN of a part/usage to instantiate and run
+                the case on
+            arguments (list, optional): Positional arguments, as Python values
+            named_arguments (dict, optional): Arguments by parameter name
+
+        Returns:
+            AnalysisResult: The outputs the case computed and the verdict of
+                its objective and assertions
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not an
+                analysis case
+            ExecutionError: If the case could not run — an unbound subject, an
+                input with no value, a failing step
+            MissingCapabilityError: If the service cannot verify, or an
+                argument holds a ``complex`` and the service predates
+                ``complex_values``, or an array, vector or vector quantity and
+                the service predates ``structured_values``; nothing is sent
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.RunAnalysisRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id,
+            subject_symbol_id=subject or "",
+            arguments=[self._python_to_value(arg) for arg in (arguments or [])],
+        )
+        for name, arg in (named_arguments or {}).items():
+            request.named_arguments[name].CopyFrom(self._python_to_value(arg))
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal(
+                (CAPABILITY_VERIFICATION, CAPABILITY_COMPLEX_VALUES, CAPABILITY_STRUCTURED_VALUES)
+            )
+        ):
+            response = self._stub.RunAnalysis(request)
+
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
+
+        outputs = {}
+        for output in response.outputs:
+            try:
+                outputs[output.name] = self._value_to_python(output.value)
+            except UnsupportedValueError as exc:
+                outputs[output.name] = exc
+        instances = self._instances_of(response)
+        verdicts = [
+            Verdict(pb_verdict, instances=instances, diagnostics=diagnostics)
+            for pb_verdict in response.verdicts
+        ]
+        return AnalysisResult(
+            outputs, verdicts, instances=instances, diagnostics=diagnostics
+        )
 
     def _require_verification(self):
         """Refuse a verification the connected service does not implement."""
@@ -1394,6 +1502,22 @@ class Connection:
             upgrade_remedy(CAPABILITY_COMPLEX_VALUES),
         )
 
+    def _require_structured_values(self):
+        """Refuse to send an array, vector or vector quantity a service without ``structured_values`` would read as null."""
+        require(
+            self.server_info(),
+            CAPABILITY_STRUCTURED_VALUES,
+            upgrade_remedy(CAPABILITY_STRUCTURED_VALUES),
+        )
+
+    def _require_measurement_refs(self):
+        """Refuse to send a measurement reference a service without ``measurement_refs`` would read as null."""
+        require(
+            self.server_info(),
+            CAPABILITY_MEASUREMENT_REFS,
+            upgrade_remedy(CAPABILITY_MEASUREMENT_REFS),
+        )
+
     def _require_feature_values(self):
         """Refuse instances from a service that populates only the removed `slots` field."""
         require(
@@ -1438,6 +1562,18 @@ class Connection:
             return sysml_pb2.Value(instance_id=py_value.id)
         elif isinstance(py_value, Quantity):
             return sysml_pb2.Value(quantity=py_value.to_pb())
+        elif isinstance(py_value, MeasurementRef):
+            self._require_measurement_refs()
+            return sysml_pb2.Value(measurement_ref=py_value.to_pb())
+        elif isinstance(py_value, Array):
+            self._require_structured_values()
+            return sysml_pb2.Value(array=py_value.to_pb(self._python_to_value))
+        elif isinstance(py_value, Vector):
+            self._require_structured_values()
+            return sysml_pb2.Value(vector=py_value.to_pb())
+        elif isinstance(py_value, VectorQuantity):
+            self._require_structured_values()
+            return sysml_pb2.Value(vector_quantity=py_value.to_pb())
         elif isinstance(py_value, EnumLiteral):
             return sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
                 literal_id=py_value.literal_id,
@@ -1483,7 +1619,7 @@ class Connection:
                 predates the handshake, which is itself an answer, and None when
                 the call failed, so nothing was learned
         """
-        channel = grpc.insecure_channel(self._address)
+        channel = open_channel(self._address)
         try:
             stub = sysml_pb2_grpc.SysMLServiceStub(channel)
             response = stub.GetServerInfo(

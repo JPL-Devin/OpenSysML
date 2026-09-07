@@ -29,8 +29,10 @@ export {
   CAPABILITY_EVALUATE_SUBJECT,
   CAPABILITY_FEATURE_VALUES,
   CAPABILITY_INLINE_LANGUAGE,
+  CAPABILITY_MEASUREMENT_REFS,
   CAPABILITY_QUERY,
   CAPABILITY_STRICT_CONFORMANCE,
+  CAPABILITY_STRUCTURED_VALUES,
   CAPABILITY_SYMBOL_ATTRIBUTES,
   CAPABILITY_TYPE_FACTS,
   CAPABILITY_UNSET_VALUE,
@@ -46,6 +48,7 @@ export {
   DownloadError,
   EvaluationError,
   InvalidRequestError,
+  MalformedValueError,
   ManifestSignatureError,
   ModelFileNotFoundError,
   ModelNotFoundError,
@@ -62,11 +65,14 @@ export {
 export type { FailureCause, ModelDiagnostic } from "./errors.js";
 export { fromHandshakeError, fromRpcError, statusName } from "./status.js";
 export type { NotFoundSubject } from "./status.js";
-export { decodeValue, decodeVerdict, formatValue } from "./values.js";
+export { decodeValue, decodeVerdict, encodeValue, formatValue } from "./values.js";
 export type {
+  ArrayValue,
   ComplexValue,
   EnumValue,
   Magnitude,
+  MeasurementRefValue,
+  QuantityValue,
   SysMLValue,
   SysMLVerdict,
   UnitFactor,

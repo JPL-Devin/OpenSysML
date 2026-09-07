@@ -1,6 +1,8 @@
 package ast
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+)
 
 // DefinitionKind discriminates the concrete definition taxonomy element.
 type DefinitionKind int
@@ -280,6 +282,12 @@ const (
 	RelDifferences // 'differences'
 )
 
+// ReferenceSubsets reports whether k is a ReferenceSubsetting: `::>` or a use
+// case inclusion, an OwnedReferenceSubsetting in SysML.xtext IncludeUseCaseUsage.
+func (k RelationshipKind) ReferenceSubsets() bool {
+	return k == RelReferences || k == RelIncludes
+}
+
 func (k RelationshipKind) String() string {
 	switch k {
 	case RelTyping:
@@ -459,9 +467,6 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
-	// ValueMultiplicity is the end multiplicity written ahead of the value when
-	// the value is a connector end: the `[0..1]` of `bind a = [0..1] b`.
-	ValueMultiplicity *Multiplicity
 	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
 	// part (KerML FeatureValue::isDefault, isInitial).
 	ValueIsDefault bool
@@ -485,6 +490,129 @@ func (u *Usage) IsSuccessionFlow() bool {
 // `perform a;`: an action the owner performs (SysML v2 PerformActionUsage).
 func (u *Usage) IsPerformedAction() bool {
 	return u.Kind == UsageAction && (u.Keyword == "perform" || u.PrefixKeyword == "perform")
+}
+
+// IsVariantReference reports a bare `variant x;` (SysML.xtext VariantReference),
+// a reference to an existing feature rather than a declaration of a new one.
+func (u *Usage) IsVariantReference() bool {
+	return u.IsVariant && u.Keyword == "variant"
+}
+
+// IsStateAction reports whether the usage is a state's `entry a;`, `do a;` or
+// `exit a;`, or the `entry action ...` form of one, each a performed action
+// (SysML v2 StateSubactionMembership).
+func (u *Usage) IsStateAction() bool {
+	if u.Kind != UsageAction {
+		return false
+	}
+	switch u.Keyword {
+	case "entry", "do", "exit":
+		return true
+	}
+	switch u.PrefixKeyword {
+	case "entry", "do", "exit":
+		return true
+	}
+	return false
+}
+
+// IsExhibitedState reports whether the usage is an `exhibit state s : S;` or an
+// `exhibit s;`: a state the owner exhibits (SysML v2 ExhibitStateUsage).
+func (u *Usage) IsExhibitedState() bool {
+	return u.Kind == UsageState && (u.Keyword == "exhibit" || u.Keyword == "exhibit state")
+}
+
+// IsIncludedUseCase reports whether the usage is an `include use case u : U;` or
+// an `include u;`: a use case the owner includes (SysML v2 IncludeUseCaseUsage).
+func (u *Usage) IsIncludedUseCase() bool {
+	if u.Kind != UsageUseCase {
+		return false
+	}
+	if u.PrefixKeyword == "include" {
+		return true
+	}
+	for _, rel := range u.Relationships {
+		if rel != nil && rel.Kind == RelIncludes {
+			return true
+		}
+	}
+	return false
+}
+
+// IsVerifiedRequirement reports whether the usage is an objective's `verify r;`
+// (SysML v2 RequirementVerificationMembership).
+func (u *Usage) IsVerifiedRequirement() bool {
+	return u.Kind == UsageSatisfy && u.Keyword == "verify"
+}
+
+// IsRequirementConstraint reports whether the usage is a requirement's
+// `assume`/`require` constraint (SysML v2 RequirementConstraintMembership).
+func (u *Usage) IsRequirementConstraint() bool {
+	if u.Kind != UsageConstraint {
+		return false
+	}
+	switch u.Keyword {
+	case "require", "assume":
+		return true
+	}
+	return u.PrefixKeyword == "require" || u.PrefixKeyword == "assume"
+}
+
+// ReferenceSubsetting returns the usage's OwnedReferenceSubsetting clause, or
+// nil. The reference form of satisfy/verify (`satisfy r;`) is parsed as a plain
+// subsetting of the requirement it names (SysML.xtext:2119, 2272).
+func (u *Usage) ReferenceSubsetting() *Relationship {
+	if u == nil {
+		return nil
+	}
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		if rel.Kind.ReferenceSubsets() || (rel.Kind == RelSubsets && u.Kind == UsageSatisfy && !u.DeclaresRequirement) {
+			return rel
+		}
+	}
+	return nil
+}
+
+// IsReferenceSubsetting reports whether rel is decl's OwnedReferenceSubsetting,
+// whatever kind the parser recorded it under.
+func IsReferenceSubsetting(decl Node, rel *Relationship) bool {
+	if rel == nil || rel.Target == nil {
+		return false
+	}
+	if rel.Kind.ReferenceSubsets() {
+		return true
+	}
+	u, ok := decl.(*Usage)
+	return ok && u.ReferenceSubsetting() == rel
+}
+
+// NamedByReference reports whether an unnamed usage takes its name from the
+// feature it references: the members whose membership kind makes the reference
+// their naming feature in SysML v2 (perform, exhibit, include, assume/require,
+// verify, frame, render, variant), never a plain reference subsetting like
+// `assert q;` or `satisfy r;`.
+func (u *Usage) NamedByReference() bool {
+	if u.IsVariant {
+		return true
+	}
+	switch u.Kind {
+	case UsageAction:
+		return u.IsPerformedAction() || u.IsStateAction()
+	case UsageState:
+		return u.IsExhibitedState()
+	case UsageUseCase:
+		return u.IsIncludedUseCase()
+	case UsageConstraint:
+		return u.IsRequirementConstraint()
+	case UsageSatisfy:
+		return u.IsVerifiedRequirement()
+	case UsageFramedConcern, UsageViewRendering:
+		return true
+	}
+	return false
 }
 
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
@@ -537,8 +665,20 @@ type FlowEnds struct {
 // the `x1 [0..1]` of `end x1 [0..1] feature x : C1` (KerML 8.3.4.5).
 type CrossFeatureMember struct {
 	NodeBase
+	// The prefix after `end` is the cross feature's (KerML.xtext BasicFeaturePrefix).
+	Direction     FeatureDirection
+	IsDerived     bool
+	IsAbstract    bool
+	IsVariation   bool
+	IsComposite   bool
+	IsPortion     bool
+	IsVariable    bool
+	IsConstant    bool
+	IsReference   bool
 	Ident         Identification
 	Multiplicity  *Multiplicity
+	IsOrdered     bool
+	IsNonunique   bool
 	Relationships []*Relationship
 }
 

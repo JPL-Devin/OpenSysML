@@ -14,7 +14,7 @@
             (Usage kind="state" name="active" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (EntryMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="increment" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Usage kind="action" name="increment" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="entry"
                     (*ast.AssignmentActionNode))))))))
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="ConfiguredCounter"

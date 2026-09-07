@@ -13,12 +13,21 @@ import (
 // where a lookup enumerates the candidates an import surfaced, since only the
 // semantic model can judge a condition (docs/project/spec-compliance.md).
 
-// importAdmits returns the test an element an import surfaces has to pass: the
-// import's own filter clause (`import P::*[@Safety]`) and the `filter` members
-// of the namespace declaring the import, which restrict every membership it
-// imports — including a `filter` beside the `expose` lines of a view.
-func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
+// importAdmitsInto returns the test an element an import surfaces has to pass:
+// the import's own filter clause (`import P::*[@Safety]`) and the `filter`
+// members of the namespace declaring the import, which restrict every
+// membership it imports — including a `filter` beside the `expose` lines of a
+// view. When the import is inherited into the view owning into, what it exposes
+// has to satisfy the conditions of that view and its supertypes as well.
+func (r *Resolver) importAdmitsInto(into, scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
 	filters := r.namespaceFilters(scope)
+	if imp.IsExpose {
+		filters = appendConditions(filters, r.inheritedViewConditions(scope))
+		if into != scope && isViewSymbol(into.Owner()) {
+			filters = appendConditions(filters, r.namespaceFilters(into))
+			filters = appendConditions(filters, r.inheritedViewConditions(into))
+		}
+	}
 	if imp.FilterExpr != nil {
 		filters = append(append([]symbols.ElementFilter{}, filters...), symbols.ElementFilter{
 			Expr:  imp.FilterExpr,
@@ -30,6 +39,17 @@ func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*sym
 		return func(*symbols.Symbol) bool { return true }
 	}
 	return func(sym *symbols.Symbol) bool { return r.admits(filters, sym) }
+}
+
+// appendConditions adds the conditions of more that filters do not state yet,
+// copying filters before the first addition since callers memoize it.
+func appendConditions(filters, more []symbols.ElementFilter) []symbols.ElementFilter {
+	for _, f := range more {
+		if !statesCondition(filters, f) {
+			filters = append(append([]symbols.ElementFilter{}, filters...), f)
+		}
+	}
+	return filters
 }
 
 // namespaceFilters are the conditions the namespace owning scope declares,
@@ -54,6 +74,78 @@ func (r *Resolver) namespaceFilters(scope *symbols.Scope) []symbols.ElementFilte
 	}
 	r.nsFilters[scope] = filters
 	return filters
+}
+
+// inheritedViewConditions are the `filter` members of the views the view owning
+// scope specializes or is typed by: what a view exposes has to satisfy the
+// conditions of its definition too (SysML v2 7.24.2).
+func (r *Resolver) inheritedViewConditions(scope *symbols.Scope) []symbols.ElementFilter {
+	if scope == nil || !isViewSymbol(scope.Owner()) {
+		return nil
+	}
+	if filters, ok := r.viewFilters[scope]; ok {
+		return filters
+	}
+	supers, ok := r.model.(supertypeProvider)
+	if !ok || r.viewFiltersInProgress[scope] {
+		return nil
+	}
+	// Resolving the view's type looks through its own exposes, which asks again.
+	r.viewFiltersInProgress[scope] = true
+	defer delete(r.viewFiltersInProgress, scope)
+
+	var filters []symbols.ElementFilter
+	seen := map[*symbols.Symbol]bool{scope.Owner(): true}
+	queue := supers.DirectSupertypes(scope.Owner())
+	for len(queue) > 0 {
+		super := queue[0]
+		queue = queue[1:]
+		if super == nil || seen[super] || !isViewSymbol(super) {
+			continue
+		}
+		seen[super] = true
+		for _, f := range r.viewOwnConditions(super) {
+			if !statesCondition(filters, f) {
+				filters = append(filters, f)
+			}
+		}
+		queue = append(queue, supers.DirectSupertypes(super)...)
+	}
+	r.viewFilters[scope] = filters
+	return filters
+}
+
+// viewOwnConditions are the `filter` members view declares: read from its scope
+// when it has one, else from the index a restored library populates.
+func (r *Resolver) viewOwnConditions(view *symbols.Symbol) []symbols.ElementFilter {
+	if view.Scope != nil {
+		return r.namespaceFilters(view.Scope)
+	}
+	if r.idx == nil {
+		return nil
+	}
+	if fqn := r.idx.GetFQN(view); fqn != "" {
+		return r.idx.NamespaceFiltersOf(fqn)
+	}
+	return nil
+}
+
+// isViewSymbol reports whether sym declares a view definition or usage.
+func isViewSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolViewUsage, symbols.SymbolViewDef:
+		return true
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		return decl.Kind == ast.DefView
+	case *ast.Usage:
+		return decl.Kind == ast.UsageView
+	}
+	return false
 }
 
 // namespaceFQNOf is the indexed name of the namespace owning scope, or "" for a
@@ -168,16 +260,26 @@ func (r *Resolver) AdmittedTopLevel(doc string, bindings []symbols.RootBinding) 
 
 // ImportedElements enumerates the elements imp surfaces into scope, with the
 // same admission a lookup through imp makes: the import's filter clause and the
-// `filter` members of the declaring namespace (see importAdmits).
+// `filter` members of the declaring namespace (see importAdmitsInto).
 func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
+	return r.ImportedElementsInto(scope, scope, imp)
+}
+
+// ImportedElementsInto enumerates the elements imp, declared in scope, surfaces
+// into the namespace owning into, which inherits it: an inherited `expose` is
+// admitted against the inheriting view's conditions too (see importAdmitsInto).
+func (r *Resolver) ImportedElementsInto(into, scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
 	if scope == nil || imp == nil || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil
+	}
+	if into == nil {
+		into = scope
 	}
 	target, ok := r.resolveImportTarget(scope, imp)
 	if !ok || target == nil {
 		return nil
 	}
-	admit := r.importAdmits(scope, imp)
+	admit := r.importAdmitsInto(into, scope, imp)
 	out := newElementList()
 	if imp.Kind == ast.ImportMembership {
 		// `import P::x` surfaces x itself; the recursive form adds its subtree.

@@ -78,20 +78,15 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 	if c.idx.Library(sym) {
 		return
 	}
-	bases := c.libraryBases(sym)
-	if len(bases) == 0 {
+	reach := c.libraryBases(sym)
+	if len(reach.bases) == 0 {
 		return
 	}
-	c.checkOwnedNames(sym, bases)
-	if len(bases) < 2 {
+	byName := c.candidates(reach)
+	c.checkOwnedNames(sym, byName)
+	if len(reach.bases) < 2 && len(reach.through) == 0 {
 		// One base contributes each name once, so no name is reached twice.
 		return
-	}
-	byName := map[string][]w9cCandidate{}
-	for _, base := range bases {
-		for name, cand := range c.baseMembers(base) {
-			byName[name] = append(byName[name], cand)
-		}
 	}
 	names := make([]string, 0, len(byName))
 	for name := range byName {
@@ -110,53 +105,128 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 	}
 }
 
-// checkOwnedNames reports each member sym declares whose name a library base
-// already contributes (KerML 8.4.3.2): the two are indistinguishable unless the
-// declaration redefines or subsets the inherited feature.
-func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, bases []*symbols.Symbol) {
-	if sym.Scope == nil || resolve.ParameterizedByName(sym) {
-		return
-	}
-	owned, aliases := resolve.DistinguishableMembers(sym.Scope)
-	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
-		for _, mem := range mems {
-			cands := c.contributionsOf(bases, mem.Name)
-			if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
-				c.hasUnresolvedRedefinition(mem) {
-				continue
-			}
-			if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
-				c.report(nameSpanOf(mem), mem.Name, from)
-			}
+// candidates is every inherited member by name: each library base's members
+// plus the own members of the types and features passed on the way there.
+func (c *w9cConflictChecker) candidates(reach w9cReach) map[string][]w9cCandidate {
+	byName := map[string][]w9cCandidate{}
+	for _, base := range reach.bases {
+		for name, cand := range c.baseMembers(base) {
+			byName[name] = append(byName[name], cand)
 		}
 	}
+	for _, via := range reach.through {
+		for name, member := range c.ownMembers(via) {
+			byName[name] = append(byName[name], w9cCandidate{declaredBy: via, member: member})
+		}
+	}
+	return byName
 }
 
-// contributionsOf is each base's member of the given name, in base order.
-func (c *w9cConflictChecker) contributionsOf(bases []*symbols.Symbol, name string) []w9cCandidate {
-	var out []w9cCandidate
-	for _, base := range bases {
-		if cand, ok := c.baseMembers(base)[name]; ok {
-			out = append(out, cand)
+// ownMembers is the visible member sym declares under each name, its short
+// name included (KerML 7.2.2). A document that re-declares a library file
+// shares its names, so only sym's copy counts.
+func (c *w9cConflictChecker) ownMembers(sym *symbols.Symbol) map[string]*symbols.Symbol {
+	out := map[string]*symbols.Symbol{}
+	// The index carries a library type's nested names in both cache states;
+	// its scope exists only when the library was parsed.
+	for _, member := range c.idx.LookupDirectChildren(symbols.FQNOf(sym)) {
+		name := leafOf(member.Name)
+		if name == "" || member.Visibility == ast.VisibilityPrivate ||
+			c.idx.Library(member) != c.idx.Library(sym) {
+			continue
+		}
+		out[name] = member
+		if short := shortNameOf(member); short != "" && short != name {
+			out[short] = member
 		}
 	}
 	return out
 }
 
-// notSpecializedBy drops the inherited features mem redefines or subsets, which
-// it is then free to reuse the name of.
+// shortNameOf is a symbol's short name, read from its declaration when the
+// index did not record one.
+func shortNameOf(sym *symbols.Symbol) string {
+	if sym.ShortName != "" {
+		return sym.ShortName
+	}
+	id, _ := symbols.DeclIdent(sym.Decl)
+	return id.ShortName
+}
+
+// checkOwnedNames reports each member sym declares whose name a library base
+// already contributes (KerML 8.4.3.2): the two are indistinguishable unless the
+// declaration redefines or subsets the inherited feature.
+func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[string][]w9cCandidate) {
+	if sym.Scope == nil || resolve.ParameterizedByName(sym) {
+		return
+	}
+	owned, aliases := c.resolver.DistinguishableMembers(sym.Scope)
+	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
+		for _, mem := range mems {
+			if resolve.ImplicitlyRedefined(mem) || c.hasUnresolvedRedefinition(mem) {
+				continue
+			}
+			for _, key := range ownedKeysOf(mem) {
+				cands := byName[key.name]
+				if len(cands) == 0 {
+					continue
+				}
+				if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
+					c.report(key.span, key.name, from)
+				}
+			}
+		}
+	}
+}
+
+// ownedKeysOf is each identifier a member or alias binds, short name included,
+// at the span it was written; a member naming itself another way binds its own name.
+func ownedKeysOf(mem *symbols.Symbol) []w9cKey {
+	id, ok := symbols.DeclIdent(mem.Decl)
+	if !ok || (id.Name == "" && id.ShortName == "") {
+		return []w9cKey{{name: mem.Name, span: nameSpanOf(mem)}}
+	}
+	var keys []w9cKey
+	if id.ShortName != "" {
+		keys = append(keys, w9cKey{name: id.ShortName, span: id.ShortNameSpan})
+	}
+	if id.Name != "" && id.Name != id.ShortName {
+		keys = append(keys, w9cKey{name: id.Name, span: id.NameSpan})
+	}
+	for i := range keys {
+		if keys[i].span == (source.Span{}) {
+			keys[i].span = nameSpanOf(mem)
+		}
+	}
+	return keys
+}
+
+// notSpecializedBy drops the inherited features mem redefines, subsets or is an
+// alias for, which it is then free to reuse the name of.
 func (c *w9cConflictChecker) notSpecializedBy(
 	mem *symbols.Symbol,
 	cands []w9cCandidate,
 ) []w9cCandidate {
+	target := c.aliasTarget(mem)
 	out := make([]w9cCandidate, 0, len(cands))
 	for _, cand := range cands {
-		if cand.member == mem || c.specializes(mem, cand.member) {
+		if cand.member == mem || cand.member == target || c.specializes(mem, cand.member) {
 			continue
 		}
 		out = append(out, cand)
 	}
 	return out
+}
+
+// aliasTarget is the element an alias names, or nil for any other member.
+func (c *w9cConflictChecker) aliasTarget(mem *symbols.Symbol) *symbols.Symbol {
+	if c.resolver == nil {
+		return nil
+	}
+	if target, ok := c.resolver.ResolveAliasTarget(mem); ok {
+		return target
+	}
+	return nil
 }
 
 // hasUnresolvedRedefinition reports whether sym declares a redefinition whose
@@ -212,13 +282,23 @@ func (c *w9cConflictChecker) chainSpans(sym *symbols.Symbol) []source.Span {
 	return out
 }
 
+// w9cReach is the nearest library definitions a symbol conforms to and the
+// types and features passed through on the way to them.
+type w9cReach struct {
+	bases   []*symbols.Symbol
+	through []*symbols.Symbol
+}
+
 // libraryBases are the nearest library definitions sym conforms to, reached
-// through the document's own types where those intervene.
-func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) []*symbols.Symbol {
-	var out []*symbols.Symbol
+// through the document's own types and through features where those intervene.
+func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) w9cReach {
+	var out w9cReach
 	seen := map[*symbols.Symbol]bool{sym: true}
 	var walk func(*symbols.Symbol)
 	walk = func(cur *symbols.Symbol) {
+		if cur != sym {
+			out.through = append(out.through, cur)
+		}
 		sups := c.model.DirectSupertypes(cur)
 		for _, sup := range sups {
 			if sup == nil || seen[sup] {
@@ -235,7 +315,7 @@ func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) []*symbols.Symbol
 			seen[sup] = true
 			// A feature contributes through the type that types it, not as a base.
 			if c.idx.Library(sup) && (isDefKind(sup.Kind) || sup.Kind == symbols.SymbolKerMLType) {
-				out = append(out, sup)
+				out.bases = append(out.bases, sup)
 				continue
 			}
 			walk(sup)
@@ -277,16 +357,22 @@ func (c *w9cConflictChecker) referenceSubsettings(sym *symbols.Symbol) []*symbol
 // conflictingBases names the types declaring the features one name reaches
 // that survive: a feature another candidate redefines is not inherited, and
 // two candidates naming the same feature are one member reached twice.
+// Conflicts among the document's own members alone are the resolver's.
 func (c *w9cConflictChecker) conflictingBases(cands []w9cCandidate) []string {
 	seen := map[*symbols.Symbol]bool{}
 	names := map[string]bool{}
+	library := false
 	for _, cand := range cands {
 		if seen[cand.member] || c.redefinedByOther(cand.member, cands) ||
 			c.declaredBySubtype(cand, cands) {
 			continue
 		}
 		seen[cand.member] = true
+		library = library || c.idx.Library(cand.member)
 		names[leafOf(symbols.FQNOf(cand.declaredBy))] = true
+	}
+	if !library {
+		return nil
 	}
 	out := make([]string, 0, len(names))
 	for name := range names {
@@ -355,13 +441,7 @@ func (c *w9cConflictChecker) baseMembers(base *symbols.Symbol) map[string]w9cCan
 			continue
 		}
 		seen[cur] = true
-		// The index carries a library type's nested names in both cache states;
-		// its scope exists only when the library was parsed.
-		for _, member := range c.idx.LookupDirectChildren(symbols.FQNOf(cur)) {
-			name := leafOf(member.Name)
-			if name == "" || member.Visibility == ast.VisibilityPrivate {
-				continue
-			}
+		for name, member := range c.ownMembers(cur) {
 			if _, taken := out[name]; taken {
 				continue
 			}

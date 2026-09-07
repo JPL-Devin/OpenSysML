@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::overweight",
+  "outputs": {
+    "r": {"type": "Real", "value": 5000.0}
+  },
+  "verdicts": {
+    "obj": "not satisfied"
+  }
+}

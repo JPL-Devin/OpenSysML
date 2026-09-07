@@ -1,0 +1,96 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Portions
+    a sysml:Package ;
+    sysml:qualifiedName "Portions" ;
+    sysml:elementId "Portions" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "Portions" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Portions__base, elmt:Portions__atStart, elmt:Portions__during ;
+    sysml:ownedMembership elmt:Portions__base_om, elmt:Portions__atStart_om, elmt:Portions__during_om ;
+    sysml:ownedRelationship elmt:Portions__base_om, elmt:Portions__atStart_om, elmt:Portions__during_om ;
+    sysx:sourceText "package Portions {\n" ;
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Portions__base\"},{\"@id\":\"Portions__atStart\"},{\"@id\":\"Portions__during\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Portions__base_om\"},{\"@id\":\"Portions__atStart_om\"},{\"@id\":\"Portions__during_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Portions__base_om\"},{\"@id\":\"Portions__atStart_om\"},{\"@id\":\"Portions__during_om\"}]" .
+
+elmt:Portions__base
+    a sysml:OccurrenceUsage ;
+    sysml:qualifiedName "Portions::base" ;
+    sysml:elementId "Portions__base" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Portions ;
+    sysml:owner elmt:Portions ;
+    sysml:owningRelationship elmt:Portions__base_om ;
+    sysml:owningMembership elmt:Portions__base_om ;
+    sysml:declaredName "base" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    occurrence base;\n" .
+
+elmt:Portions__base_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Portions__base_om" ;
+    sysml:owner elmt:Portions ;
+    sysml:memberElement elmt:Portions__base ;
+    sysml:ownedMemberElement elmt:Portions__base ;
+    sysml:ownedRelatedElement elmt:Portions__base ;
+    sysml:owningRelatedElement elmt:Portions ;
+    sysml:membershipOwningNamespace elmt:Portions .
+
+elmt:Portions__atStart
+    a sysml:OccurrenceUsage ;
+    sysml:qualifiedName "Portions::atStart" ;
+    sysml:elementId "Portions__atStart" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Portions ;
+    sysml:owner elmt:Portions ;
+    sysml:owningRelationship elmt:Portions__atStart_om ;
+    sysml:owningMembership elmt:Portions__atStart_om ;
+    sysml:declaredName "atStart" ;
+    sysx:declaredKeyword "snapshot" ;
+    sysml:isSnapshot "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    snapshot atStart;\n" .
+
+elmt:Portions__atStart_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Portions__atStart_om" ;
+    sysml:owner elmt:Portions ;
+    sysml:memberElement elmt:Portions__atStart ;
+    sysml:ownedMemberElement elmt:Portions__atStart ;
+    sysml:ownedRelatedElement elmt:Portions__atStart ;
+    sysml:owningRelatedElement elmt:Portions ;
+    sysml:membershipOwningNamespace elmt:Portions .
+
+elmt:Portions__during
+    a sysml:OccurrenceUsage ;
+    sysml:qualifiedName "Portions::during" ;
+    sysml:elementId "Portions__during" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Portions ;
+    sysml:owner elmt:Portions ;
+    sysml:owningRelationship elmt:Portions__during_om ;
+    sysml:owningMembership elmt:Portions__during_om ;
+    sysml:declaredName "during" ;
+    sysx:declaredKeyword "timeslice" ;
+    sysml:isTimeslice "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    timeslice during;\n" .
+
+elmt:Portions__during_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Portions__during_om" ;
+    sysml:owner elmt:Portions ;
+    sysml:memberElement elmt:Portions__during ;
+    sysml:ownedMemberElement elmt:Portions__during ;
+    sysml:ownedRelatedElement elmt:Portions__during ;
+    sysml:owningRelatedElement elmt:Portions ;
+    sysml:membershipOwningNamespace elmt:Portions .

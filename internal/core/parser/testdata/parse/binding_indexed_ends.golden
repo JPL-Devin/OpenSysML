@@ -17,27 +17,29 @@
                 (LiteralInfinity))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
-              (Relationship kind="references" target=(expr)
-                (FeatureChainExpr member="edges"
-                  (FeatureReference name="base"))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (Multiplicity range=true
                   (LiteralInteger value="0")
-                  (LiteralInfinity)))
-              (FeatureReference name="be")
-              (Multiplicity range=true
-                (LiteralInteger value="0")
-                (LiteralInfinity))))
+                  (LiteralInfinity))
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (ConnectorEnd target="be"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInfinity))
+                (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=(expr)
-                (FeatureChainExpr member="edges"
-                  (FeatureReference name="base"))
-                (Multiplicity range=true
-                  (LiteralInteger value="0")
-                  (LiteralInfinity)))
               (Multiplicity range=false
                 (LiteralInteger value="1"))
-              (FeatureReference name="be")
-              (Multiplicity range=true
-                (LiteralInteger value="0")
-                (LiteralInfinity)))))))))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInfinity))
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (ConnectorEnd target="be"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInfinity))
+                (*ast.QualifiedName)))))))))

@@ -171,7 +171,7 @@ func PreferDeclared(syms []*Symbol) []*Symbol {
 // declaresName reports whether sym bears a name of its own rather than one
 // borrowed from another member.
 func declaresName(sym *Symbol) bool {
-	if sym.EffectiveName {
+	if sym.EffectiveName() {
 		return false
 	}
 	_, label := sym.Decl.(*ast.InitialNode)

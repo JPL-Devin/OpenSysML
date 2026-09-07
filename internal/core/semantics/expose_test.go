@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -126,6 +127,53 @@ func TestExposedElementsInheritedFromAViewDefinition(t *testing.T) {
 		view v : V { expose More::*; }
 	`)
 	wantNames(t, "exposed set of v", exposedNames(t, m, sym(t, root, "v")), []string{"A", "C"})
+}
+
+// A view usage's exposes satisfy the view conditions of its definition, and of
+// what that definition specializes in turn (SysML v2 7.24.2); the definition's
+// own exposes are filtered the same way.
+func TestExposedElementsSatisfyInheritedViewConditions(t *testing.T) {
+	m, root := buildModel(t, `
+		metadata def Safety;
+		metadata def Reviewed;
+		package Lib { #Safety part def A; part def B; #Safety #Reviewed part def C; }
+		package More { #Safety #Reviewed part def D; part def E; }
+		view def Safe { filter @Safety; }
+		view def SafeReviewed :> Safe { filter @Reviewed; expose More::*; }
+		view s : Safe { expose Lib::*; }
+		view sr : SafeReviewed { expose Lib::*; }
+		view again :> sr;
+	`)
+	wantNames(t, "exposed set of s", exposedNames(t, m, sym(t, root, "s")), []string{"A", "C"})
+	wantNames(t, "exposed set of sr", exposedNames(t, m, sym(t, root, "sr")), []string{"C", "D"})
+	wantNames(t, "exposed set of again", exposedNames(t, m, sym(t, root, "again")), []string{"C", "D"})
+}
+
+// An expose a view inherits is admitted against the inheriting view's own
+// conditions: the definition's set stays its own, the narrower usage's shrinks.
+func TestExposedElementsInheritedExposeSatisfiesDerivedConditions(t *testing.T) {
+	m, root := buildModel(t, `
+		metadata def Safety;
+		metadata def Reviewed;
+		package Lib { #Safety part def A; part def B; #Safety #Reviewed part def C; }
+		view def Safe { filter @Safety; expose Lib::*; }
+		view sr : Safe { filter @Reviewed; }
+		view srr :> sr;
+	`)
+	wantNames(t, "exposed set of Safe", exposedNames(t, m, sym(t, root, "Safe")), []string{"A", "C"})
+	wantNames(t, "exposed set of sr", exposedNames(t, m, sym(t, root, "sr")), []string{"C"})
+	wantNames(t, "exposed set of srr", exposedNames(t, m, sym(t, root, "srr")), []string{"C"})
+
+	// Name lookup in the narrower view agrees with its exposed set.
+	sr := sym(t, root, "sr")
+	for _, name := range []string{"A", "B"} {
+		if _, ok := m.resolver.ResolveName(sr.Scope, name, &ast.QualifiedName{Parts: []ast.NameSegment{{Text: name}}}); ok {
+			t.Errorf("%s resolves in sr, which its filter rejects", name)
+		}
+	}
+	if _, ok := m.resolver.ResolveName(sr.Scope, "C", &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "C"}}}); !ok {
+		t.Error("C does not resolve in sr, which its inherited expose admits")
+	}
 }
 
 // A view exposing nothing has an empty exposed set, which is no error.

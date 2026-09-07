@@ -47,17 +47,18 @@ func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 			}
 		}
 	}
-	if len(bindings) != 5 {
-		t.Fatalf("lowered %d bindings, want 5", len(bindings))
+	if len(bindings) != 6 {
+		t.Fatalf("lowered %d bindings, want 6", len(bindings))
 	}
 	wants := map[[2]string]int{
 		{"x", "y"}:                       4,
+		{"namedOnly", "x"}:               1,
 		{"config.host", "serverAddress"}: 1,
 	}
 	for _, binding := range bindings {
 		paths := [2]string{binding.Ends[0].Path, binding.Ends[1].Path}
 		if wants[paths] == 0 {
-			t.Errorf("binding paths = %q, want one of [x, y] or [config.host, serverAddress]", paths)
+			t.Errorf("binding paths = %q, want one of [x, y], [namedOnly, x] or [config.host, serverAddress]", paths)
 			continue
 		}
 		wants[paths]--

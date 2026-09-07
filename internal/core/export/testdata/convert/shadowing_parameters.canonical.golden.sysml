@@ -12,7 +12,7 @@ package Shadows {
         attribute w : Speed;
         state idle;
         state fast;
-        transition idle accept setSpeed(value) if (value > 0) then fast;
-        transition fast accept w : Speed if (w > 0) then idle;
+        transition idle accept setSpeed(value) if value > 0 then fast;
+        transition fast accept w : Speed if w > 0 then idle;
     }
 }

@@ -38,6 +38,12 @@ public final class Capabilities {
   /** A complex number travels as itself rather than as an unsupported null. */
   public static final String COMPLEX_VALUES = "complex_values";
 
+  /** An array, a vector and a vector quantity travel as themselves rather than as unsupported nulls. */
+  public static final String STRUCTURED_VALUES = "structured_values";
+
+  /** A bare measurement unit ({@code SI::m}, {@code m / s}) travels as itself rather than as an unsupported null. */
+  public static final String MEASUREMENT_REFS = "measurement_refs";
+
   /** The {@code ApplyEdits} RPC edits a parsed model's own source. */
   public static final String APPLY_EDITS = "apply_edits";
 

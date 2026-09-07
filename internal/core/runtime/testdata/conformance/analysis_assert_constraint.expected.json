@@ -1,0 +1,12 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::asserted",
+  "outputs": {
+    "c": {"type": "Real", "value": 5.0}
+  },
+  "verdicts": {
+    "cheap": "not satisfied",
+    "positive": "satisfied"
+  }
+}

@@ -33,7 +33,7 @@ func TestTypeCheckIndividualDefSpecializesDataTypeError(t *testing.T) {
 		if len(diags) != 1 {
 			t.Fatalf("%s: expected exactly one type diagnostic, got %v", src, diags)
 		}
-		if !strings.Contains(diags[0].Message, "individual cannot specialize") {
+		if diags[0].Message != "Cannot specialize attribute definition" {
 			t.Errorf("%s: unexpected message %q", src, diags[0].Message)
 		}
 	}

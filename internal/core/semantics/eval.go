@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var (
@@ -124,8 +125,8 @@ func (v Value) WholeNumber() (int64, bool) {
 	return 0, false
 }
 
-// asReal returns the value as a float64 (int and real only).
-func (v Value) asReal() float64 {
+// AsReal returns the value as a float64 (int and real only).
+func (v Value) AsReal() float64 {
 	if v.Kind == ValInt {
 		return float64(v.Int)
 	}
@@ -138,6 +139,95 @@ func (v Value) asReal() float64 {
 // check, matching the pilot's model-level-evaluable gating.
 func (m *Model) Eval(n ast.Node) (Value, bool) {
 	return evalConst(n)
+}
+
+// EvalIn is Eval reading through the features n names, in scope, to the values
+// they are bound to (`attribute one = 1;` then `[one]`).
+func (m *Model) EvalIn(scope *symbols.Scope, n ast.Node) (Value, bool) {
+	return m.evalIn(scope, n, nil)
+}
+
+func (m *Model) evalIn(scope *symbols.Scope, n ast.Node, seen map[*symbols.Symbol]bool) (Value, bool) {
+	if m == nil || n == nil {
+		return Value{}, false
+	}
+	switch e := n.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return m.evalFeatureIn(scope, n, seen)
+	case *ast.OperatorExpr:
+		return m.evalOperatorIn(scope, e, seen)
+	default:
+		return evalConst(n)
+	}
+}
+
+// evalFeatureIn evaluates the value the feature ref names is bound to. seen
+// guards a value that names itself.
+func (m *Model) evalFeatureIn(scope *symbols.Scope, ref ast.Node, seen map[*symbols.Symbol]bool) (Value, bool) {
+	if m.resolver == nil {
+		return Value{}, false
+	}
+	sym, ok := m.resolver.ResolveTarget(scope, ref)
+	if !ok || sym == nil || seen[sym] {
+		return Value{}, false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		return Value{}, false
+	}
+	next := make(map[*symbols.Symbol]bool, len(seen)+1)
+	for s := range seen {
+		next[s] = true
+	}
+	next[sym] = true
+	return m.evalIn(declScope(sym), usage.Value, next)
+}
+
+func (m *Model) evalOperatorIn(scope *symbols.Scope, e *ast.OperatorExpr, seen map[*symbols.Symbol]bool) (Value, bool) {
+	switch e.Operator {
+	case ast.OpNeg, ast.OpPos, ast.OpNot:
+		if len(e.Operands) != 1 {
+			return Value{}, false
+		}
+		v, ok := m.evalIn(scope, e.Operands[0], seen)
+		if !ok {
+			return Value{}, false
+		}
+		return EvalUnary(e.Operator, v)
+	case ast.OpConditional:
+		if len(e.Operands) != 3 {
+			return Value{}, false
+		}
+		cond, ok := m.evalIn(scope, e.Operands[0], seen)
+		if !ok || cond.Kind != ValBool {
+			return Value{}, false
+		}
+		if cond.Bool {
+			return m.evalIn(scope, e.Operands[1], seen)
+		}
+		return m.evalIn(scope, e.Operands[2], seen)
+	default:
+		if len(e.Operands) != 2 {
+			return Value{}, false
+		}
+		l, lok := m.evalIn(scope, e.Operands[0], seen)
+		r, rok := m.evalIn(scope, e.Operands[1], seen)
+		if !lok || !rok {
+			return Value{}, false
+		}
+		return EvalBinary(e.Operator, l, r)
+	}
+}
+
+// declScope is the scope a declaration's own references resolve in.
+func declScope(sym *symbols.Symbol) *symbols.Scope {
+	if sym == nil {
+		return nil
+	}
+	if sym.OwnerScope != nil {
+		return sym.OwnerScope
+	}
+	return sym.Scope
 }
 
 func evalConst(n ast.Node) (Value, bool) {
@@ -293,7 +383,7 @@ func evalEquality(op ast.OperatorKind, l, r Value) (Value, bool) {
 	case l.Kind == ValBool && r.Kind == ValBool:
 		eq = l.Bool == r.Bool
 	case l.IsNumeric() && r.IsNumeric():
-		eq = l.asReal() == r.asReal()
+		eq = l.AsReal() == r.AsReal()
 	default:
 		return Value{}, false
 	}
@@ -307,7 +397,7 @@ func evalComparison(op ast.OperatorKind, l, r Value) (Value, bool) {
 	if !l.IsNumeric() || !r.IsNumeric() {
 		return Value{}, false
 	}
-	lf, rf := l.asReal(), r.asReal()
+	lf, rf := l.AsReal(), r.AsReal()
 	var res bool
 	switch op {
 	case ast.OpLt:
@@ -345,7 +435,7 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 		}
 		return evalIntArith(op, l.Int, r.Int)
 	}
-	return evalRealArith(op, l.asReal(), r.asReal())
+	return evalRealArith(op, l.AsReal(), r.AsReal())
 }
 
 // evalIntArith folds Integer arithmetic, declining a result outside the
@@ -428,7 +518,7 @@ func Pow(l, r Value) (Value, error) {
 		return Value{Kind: ValInt, Int: res}, nil
 	}
 
-	base, exp := l.asReal(), r.asReal()
+	base, exp := l.AsReal(), r.AsReal()
 	switch {
 	case base == 0 && exp < 0:
 		return Value{}, fmt.Errorf("%w: 0 ** %v is undefined (negative exponent)", ErrArithmeticDomain, exp)

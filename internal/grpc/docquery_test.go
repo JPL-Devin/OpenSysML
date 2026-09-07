@@ -22,6 +22,9 @@ const telescopeGolden = "../core/docrender/testdata/telescope_report.golden.md"
 // defaultedFixture declares queries whose parameters carry defaults.
 const defaultedFixture = "../core/docrender/testdata/defaulted_queries.sysml"
 
+// quantityFixture declares quantity-valued attributes and queries over them.
+const quantityFixture = "../core/docrender/testdata/quantity_report.sysml"
+
 // parseTelescope loads the telescope fixture into a fresh service.
 func parseTelescope(t *testing.T, srv *Service) string {
 	t.Helper()
@@ -52,6 +55,14 @@ func element(fqn string) *pb.DocumentValue {
 // binding binds one parameter to values.
 func binding(parameter string, values ...*pb.DocumentValue) *pb.DocumentQueryBinding {
 	return &pb.DocumentQueryBinding{Parameter: parameter, Values: values}
+}
+
+// protoMagnitude reads a quantity's magnitude whichever arm carries it.
+func protoMagnitude(q *pb.Quantity) float64 {
+	if real, ok := q.GetMagnitude().(*pb.Quantity_RealMagnitude); ok {
+		return real.RealMagnitude
+	}
+	return float64(q.GetIntMagnitude())
 }
 
 // stringCell reads a cell expected to hold one string value.
@@ -112,6 +123,113 @@ func TestRunDocumentQueryAnswersTypedRows(t *testing.T) {
 		if len(massValues) != 1 || massValues[0].GetRealValue() != wantMasses[i] {
 			t.Errorf("row %d mass = %v, want %v", i, massValues, wantMasses[i])
 		}
+	}
+}
+
+// TestRunDocumentQueryAnswersQuantities: a quantity-valued attribute is answered
+// as a quantity value keeping its magnitude and the unit the model spelt.
+func TestRunDocumentQueryAnswersQuantities(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := parseFixture(t, srv, quantityFixture)
+
+	resp, err := srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+		ModelHash: hash,
+		QueryId:   "Launcher::Masses",
+		Bindings:  []*pb.DocumentQueryBinding{binding("root", element("Launcher::rocket"))},
+	})
+	if err != nil {
+		t.Fatalf("RunDocumentQuery failed: %v", err)
+	}
+	want := []struct {
+		name      string
+		magnitude int64
+		unit      string
+		tonnes    float64
+	}{
+		{"s1", 2290000, "kg", 2290},
+		{"s2", 119000, "kg", 119},
+		{"probe", 500000, "g", 500},
+	}
+	if len(resp.Rows) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(resp.Rows), len(want))
+	}
+	for i, row := range resp.Rows {
+		if got := stringCell(t, row.Cells[0]); got != want[i].name {
+			t.Errorf("row %d name = %q, want %q", i, got, want[i].name)
+		}
+		mass := row.Cells[1].Values
+		if len(mass) != 1 || mass[0].GetQuantity() == nil {
+			t.Fatalf("row %d mass = %v, want one quantity", i, mass)
+		}
+		got := mass[0].GetQuantity()
+		if got.GetIntMagnitude() != want[i].magnitude || got.GetUnit() != want[i].unit {
+			t.Errorf("row %d mass = %v, want %d [%s]", i, got, want[i].magnitude, want[i].unit)
+		}
+		if len(got.GetUnitTerm().GetFactors()) == 0 {
+			t.Errorf("row %d mass carries no unit term: %v", i, got)
+		}
+		tonnes := row.Cells[2].Values
+		if len(tonnes) != 1 || tonnes[0].GetQuantity() == nil {
+			t.Fatalf("row %d tonnes = %v, want one quantity", i, tonnes)
+		}
+		if got := tonnes[0].GetQuantity(); got.GetRealMagnitude() != want[i].tonnes || got.GetUnit() != want[i].unit {
+			t.Errorf("row %d tonnes = %v, want %v [%s]", i, got, want[i].tonnes, want[i].unit)
+		}
+	}
+}
+
+// TestRunDocumentQueryBindsQuantities: a quantity a query answered binds back
+// into a parameter of its dimension; bound to a String parameter it is refused.
+func TestRunDocumentQueryBindsQuantities(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := parseFixture(t, srv, quantityFixture)
+	root := binding("root", element("Launcher::rocket"))
+
+	answered, err := srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+		ModelHash: hash, QueryId: "Launcher::Masses", Bindings: []*pb.DocumentQueryBinding{root},
+	})
+	if err != nil {
+		t.Fatalf("RunDocumentQuery Masses failed: %v", err)
+	}
+	budget := answered.Rows[0].Cells[1].Values[0]
+	if budget.GetQuantity() == nil {
+		t.Fatalf("answered mass = %v, want a quantity", budget)
+	}
+
+	resp, err := srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+		ModelHash: hash, QueryId: "Launcher::Margin",
+		Bindings: []*pb.DocumentQueryBinding{root, binding("budget", budget)},
+	})
+	if err != nil {
+		t.Fatalf("RunDocumentQuery Margin failed: %v", err)
+	}
+	want := []struct {
+		name   string
+		margin float64
+		unit   string
+	}{{"s1", 0, "kg"}, {"s2", 2171000, "kg"}, {"probe", 2289500, "kg"}}
+	if len(resp.Rows) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(resp.Rows), len(want))
+	}
+	for i, row := range resp.Rows {
+		if got := stringCell(t, row.Cells[0]); got != want[i].name {
+			t.Errorf("row %d name = %q, want %q", i, got, want[i].name)
+		}
+		margin := row.Cells[1].Values
+		if len(margin) != 1 || margin[0].GetQuantity() == nil {
+			t.Fatalf("row %d margin = %v, want one quantity", i, margin)
+		}
+		if got := margin[0].GetQuantity(); protoMagnitude(got) != want[i].margin || got.GetUnit() != want[i].unit {
+			t.Errorf("row %d margin = %v, want %v [%s]", i, got, want[i].margin, want[i].unit)
+		}
+	}
+
+	_, err = srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+		ModelHash: hash, QueryId: "Launcher::Named",
+		Bindings: []*pb.DocumentQueryBinding{root, binding("label", budget)},
+	})
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("quantity bound to a String parameter: err = %v, want %s", err, connect.CodeInvalidArgument)
 	}
 }
 

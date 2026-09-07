@@ -4,14 +4,17 @@
 /// it did not, which condition the model answered false about.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Verdict {
-    /// What was verified: "constraint", "requirement" or "satisfy".
+    /// What was verified: "constraint", "requirement" or "satisfy"; for a check
+    /// an analysis case run made, "objective" or "assertion".
     #[prost(string, tag="1")]
     pub kind: ::prost::alloc::string::String,
-    /// FQN of the element verified; empty for an anonymous satisfy assertion.
+    /// FQN of the element verified; empty for an anonymous satisfy assertion or
+    /// an anonymous assertion in a case body.
     #[prost(string, tag="2")]
     pub element_id: ::prost::alloc::string::String,
     /// The element as a reader names it: its FQN, or, for an anonymous satisfy
-    /// assertion, the assertion as written ("satisfy Range by cruise").
+    /// assertion, the assertion as written ("satisfy Range by cruise"); for an
+    /// objective or assertion of a case, its name or its condition as written.
     #[prost(string, tag="3")]
     pub element: ::prost::alloc::string::String,
     /// Whether the condition holds. False with an empty `error` is the model's own
@@ -165,6 +168,56 @@ pub struct CalcOutput {
     pub name: ::prost::alloc::string::String,
     #[prost(message, optional, tag="2")]
     pub value: ::core::option::Option<Value>,
+}
+/// RunAnalysisRequest runs an analysis case, as %analysis does: its subject and
+/// input parameters are bound from the request and from the case's own
+/// declarations, its body runs, and every output it declares is reported with
+/// the verdict of its objective and of each assertion in its body (SysML 7.22).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalysisRequest {
+    #[prost(string, tag="1")]
+    pub model_hash: ::prost::alloc::string::String,
+    /// FQN of the analysis case definition or usage.
+    #[prost(string, tag="2")]
+    pub symbol_id: ::prost::alloc::string::String,
+    /// Optional FQN of a part/usage to instantiate as the case's subject. Empty
+    /// leaves the case's own `subject s = ...` binding to supply it; a case that
+    /// binds none and is given none fails to run.
+    #[prost(string, tag="3")]
+    pub subject_symbol_id: ::prost::alloc::string::String,
+    /// Positional arguments for the case's input parameters, in declaration order;
+    /// the subject is never among them.
+    #[prost(message, repeated, tag="4")]
+    pub arguments: ::prost::alloc::vec::Vec<Value>,
+    /// Arguments bound to input parameters by name.
+    #[prost(map="string, message", tag="5")]
+    pub named_arguments: ::std::collections::HashMap<::prost::alloc::string::String, Value>,
+}
+/// RunAnalysisResponse carries what the case computed and decided.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalysisResponse {
+    /// The case's out and return parameters in declaration order; a value the
+    /// body returned into an unnamed result is named "result".
+    #[prost(message, repeated, tag="1")]
+    pub outputs: ::prost::alloc::vec::Vec<CalcOutput>,
+    /// What the case's objective and each assertion in its body decided, the
+    /// objective first: kind "objective" or "assertion", holds for satisfied, the
+    /// violated condition for not satisfied, and an error for undecided.
+    #[prost(message, repeated, tag="2")]
+    pub verdicts: ::prost::alloc::vec::Vec<Verdict>,
+    /// Instances reachable from the subject the case ran on, including it, so its
+    /// feature values need no follow-up RPC. Empty when the run named no object.
+    #[prost(message, repeated, tag="3")]
+    pub instances: ::prost::alloc::vec::Vec<Instance>,
+    /// Set when the case could not be run — an unknown symbol, a subject that
+    /// could not be built or bound, an input with no value, a failed step.
+    #[prost(string, tag="4")]
+    pub error: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag="5")]
+    pub diagnostics: ::prost::alloc::vec::Vec<Diagnostic>,
+    /// What kind of failure `error` reports.
+    #[prost(enumeration="FailureReason", tag="6")]
+    pub failure_reason: i32,
 }
 /// ParseFileRequest specifies the source to parse
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -728,7 +781,7 @@ pub struct AttributeInfo {
 /// Value represents a runtime-evaluable value
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Value {
-    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
+    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15")]
     pub kind: ::core::option::Option<value::Kind>,
 }
 /// Nested message and enum types in `Value`.
@@ -763,7 +816,49 @@ pub mod value {
         /// one complex number, never two Reals
         #[prost(message, tag="11")]
         Complex(super::Complex),
+        /// shape and elements, never a flat sequence
+        #[prost(message, tag="12")]
+        Array(super::Array),
+        /// numeric components, never a sequence
+        #[prost(message, tag="13")]
+        Vector(super::Vector),
+        /// components each with their unit
+        #[prost(message, tag="14")]
+        VectorQuantity(super::VectorQuantity),
+        /// a unit by itself, no magnitude
+        #[prost(message, tag="15")]
+        MeasurementRef(super::MeasurementRef),
     }
+}
+/// Array is a Collections::Array: its elements flattened in row-major order
+/// under its dimensions, compared by content rather than by the object read.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Array {
+    /// Positive extents, one per rank; their product (one for rank 0) is how many
+    /// elements there are, and an array not filling them is rejected.
+    #[prost(int64, repeated, tag="1")]
+    pub dimensions: ::prost::alloc::vec::Vec<i64>,
+    /// Any Value each, so an array of quantities or of arrays crosses as such.
+    #[prost(message, repeated, tag="2")]
+    pub elements: ::prost::alloc::vec::Vec<Value>,
+}
+/// Vector is a VectorValues::NumericalVectorValue: its components in order,
+/// its dimension their number.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Vector {
+    /// Each an int_value or a real_value, kept apart as the rest of Value does;
+    /// a component of any other arm is rejected rather than read as a number.
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Value>,
+}
+/// VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
+/// unit and reduction included, since the axes need not share a unit.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VectorQuantity {
+    /// At least one (num is Number\[1..*\]); a named unit sent without its
+    /// unit_term is rejected as a Quantity's is.
+    #[prost(message, repeated, tag="1")]
+    pub components: ::prost::alloc::vec::Vec<Quantity>,
 }
 /// Complex is one complex number in rectangular form. It crosses as one value
 /// so `1.0 + 2.0i` cannot be mistaken for a sequence of two Reals.
@@ -821,6 +916,32 @@ pub mod quantity {
         #[prost(double, tag="2")]
         RealMagnitude(f64),
     }
+}
+/// MeasurementRef is a MeasurementReferences::ScalarMeasurementReference held as
+/// a value: a unit by itself — `SI::m`, `km`, or `m / s` as an operation composed
+/// it — as distinct from a Quantity expressed in one. It carries what the runtime
+/// value carries: the unit as written and what it reduces to, plus the one
+/// declaration it names when it names one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MeasurementRef {
+    /// Unit as written ("km") or as an operation composed it ("m/s"); empty for
+    /// one never written down, described by unit_term alone.
+    #[prost(string, tag="1")]
+    pub unit: ::prost::alloc::string::String,
+    /// What the unit reduces to. Required wherever `unit` names one, as a
+    /// Quantity's is: a named unit sent without its reduction is rejected rather
+    /// than read as dimension one.
+    #[prost(message, optional, tag="2")]
+    pub unit_term: ::core::option::Option<UnitTerm>,
+    /// FQN of the one unit declaration the reference names ("SI::kilometre"), which
+    /// is what tells the declared unit `km` from any other spelling of 1000 metres;
+    /// empty for a unit composed of several ("m/s"), which names no declaration.
+    /// The service always sends it for a named unit. A client may omit it, in
+    /// which case `unit` is read as a Quantity's is; sent, it must name a
+    /// measurement unit of the model that reduces to unit_term and that `unit`
+    /// spells, or the value is rejected.
+    #[prost(string, tag="3")]
+    pub unit_id: ::prost::alloc::string::String,
 }
 /// UnitTerm is a unit reduced to a scale factor over base units: `km/h` reduces
 /// to 1000/3600 over `SI::m` and `SI::s^-1`.
@@ -906,6 +1027,21 @@ pub struct ServerInfoResponse {
     ///                   action input or calc argument is accepted; without it,
     ///                   one is refused with UNIMPLEMENTED rather than read as
     ///                   another value.
+    ///    "structured_values" - a Value carries a Collections::Array, a numerical
+    ///                   vector and a vector quantity as array, vector and
+    ///                   vector_quantity, shape and units intact, rather than
+    ///                   reporting them as unsupported nulls, and one is accepted
+    ///                   as an action input or calc argument; without it, one is
+    ///                   refused with UNIMPLEMENTED rather than read as another
+    ///                   value.
+    ///    "measurement_refs" - a Value carries a bare measurement reference (a
+    ///                   unit by itself, `SI::m` or `m / s`) as measurement_ref,
+    ///                   unit text, reduction and declaration intact, rather than
+    ///                   reporting it as an unsupported null, and one is accepted
+    ///                   as an action input or calc argument; without it, one is
+    ///                   refused with UNIMPLEMENTED rather than read as another
+    ///                   value. Separate from structured_values, which a client
+    ///                   built before this arm existed may already claim.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
     ///    "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -1048,7 +1184,7 @@ pub struct DocumentValue {
     /// Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
     #[prost(string, tag="7")]
     pub element_type: ::prost::alloc::string::String,
-    #[prost(oneof="document_value::Kind", tags="1, 2, 3, 4, 5, 6")]
+    #[prost(oneof="document_value::Kind", tags="1, 2, 3, 4, 5, 6, 8")]
     pub kind: ::core::option::Option<document_value::Kind>,
 }
 /// Nested message and enum types in `DocumentValue`.
@@ -1068,6 +1204,9 @@ pub mod document_value {
         BoolValue(bool),
         #[prost(bool, tag="6")]
         Infinity(bool),
+        /// magnitude in a unit, `2290000 \[kg\]`
+        #[prost(message, tag="8")]
+        Quantity(super::Quantity),
     }
 }
 /// DocumentQueryColumn is one projected property, in projection order.

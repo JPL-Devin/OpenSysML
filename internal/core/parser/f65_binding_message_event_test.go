@@ -23,7 +23,7 @@ func TestF65BindingMessageEventParse(t *testing.T) {
 		{
 			"binding_declaration_with_typing",
 			"package P { connection def AB { end a; end b; } part def D { part a; part b; binding ab1 : AB bind a = b; } }",
-			[]string{`(Usage kind="binding" name="ab1"`, `(Relationship kind="typing" target=AB`, `(Relationship kind="references" target=a`},
+			[]string{`(Usage kind="binding" name="ab1"`, `(Relationship kind="typing" target=AB`, `(ConnectorEnd target="a"`},
 		},
 		{
 			"binding_typing_without_name",

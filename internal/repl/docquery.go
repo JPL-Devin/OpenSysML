@@ -271,6 +271,25 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 			elements[i] = runtime.Value{Kind: runtime.ValConst, Const: c}
 		}
 		return queryValueList(elements)
+	case runtime.ValMeasurementRef:
+		// A reference to one declared unit is that element; a composed unit names none.
+		if decl := value.MeasurementRef().Declaration(); decl != nil {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the measurement reference %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
+	case runtime.ValTensorQuantity:
+		return nil, fmt.Errorf("a tensor quantity %s cannot be bound to a query parameter: its components are measured, and a query takes bare scalars or elements", runtime.FormatValue(value))
+	case runtime.ValCoordinateFrame:
+		// A declared frame or scale is that element; one composed by arithmetic names none.
+		if decl := value.CoordinateFrame().Decl; decl != nil && value.CoordinateFrame().Object != 0 {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the coordinate frame %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
+	case runtime.ValCoordinateTransformation:
+		if decl := value.CoordinateTransformation().Decl; decl != nil {
+			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
+		}
+		return nil, fmt.Errorf("the coordinate transformation %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}
@@ -351,13 +370,16 @@ func formatQueryValue(value queryexec.Value) string {
 		return strconv.FormatInt(integer, 10)
 	}
 	if real, ok := value.Real(); ok {
-		return runtime.FormatReal(real)
+		return semantics.FormatReal(real)
 	}
 	if boolean, ok := value.Boolean(); ok {
 		return strconv.FormatBool(boolean)
 	}
 	if value.Kind() == queryexec.ValueInfinity {
 		return "∞"
+	}
+	if quantity, ok := value.Quantity(); ok {
+		return quantity.String()
 	}
 	return string(value.Kind())
 }

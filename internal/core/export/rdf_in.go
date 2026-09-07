@@ -191,14 +191,16 @@ func legacyNamespaceError(iri string) error {
 }
 
 // supersededPredicates are properties an earlier version wrote for metadata
-// annotations, each with the term that carries the same fact now.
+// annotations and portions, each with the term that carries the same fact now.
 var supersededPredicates = map[string]string{
 	rdf.OpenSysML + "prefixMetadata": "an owned sysml:MetadataUsage with sysx:declaredKeyword \"#\"",
 	rdf.SysML + "annotates":          "sysml:" + pAnnotatedElement,
+	rdf.SysML + "isSnapshot":         "sysml:" + pPortionKind + " \"snapshot\"",
+	rdf.SysML + "isTimeslice":        "sysml:" + pPortionKind + " \"timeslice\"",
 }
 
-// checkSupersededPredicates refuses a graph stating a metadata annotation with
-// a predicate this version no longer reads, which would otherwise be dropped.
+// checkSupersededPredicates refuses a graph stating a fact with a predicate
+// this version no longer reads, which would otherwise be dropped.
 func checkSupersededPredicates(graph *rdf.Graph) error {
 	for _, triple := range graph.Triples() {
 		now, superseded := supersededPredicates[triple.Predicate.Value]
@@ -207,7 +209,7 @@ func checkSupersededPredicates(graph *rdf.Graph) error {
 		}
 		return &UnsupportedError{
 			What: fmt.Sprintf("the property <%s> of <%s>", triple.Predicate.Value, triple.Subject.Value),
-			Note: fmt.Sprintf("an earlier version wrote a metadata annotation this way; it is now %s, which this version reads, so convert the model from source again", now),
+			Note: fmt.Sprintf("an earlier version wrote this fact this way; it is now %s, which this version reads, so convert the model from source again", now),
 		}
 	}
 	return nil
@@ -333,14 +335,14 @@ var multiValuedProperties = map[string]bool{
 }
 
 // singleValued reports a property the decoder reads one value of: every sysx:
-// property not listed above, and the ontology's boolean `is…` flags.
+// property not listed above, the ontology's boolean `is…` flags and its portion kind.
 func singleValued(predicate string) bool {
 	name := rdf.LocalName(predicate)
 	switch {
 	case strings.HasPrefix(predicate, rdf.OpenSysML):
 		return !multiValuedProperties[name]
 	case strings.HasPrefix(predicate, rdf.SysML):
-		return strings.HasPrefix(name, "is")
+		return strings.HasPrefix(name, "is") || name == pPortionKind
 	}
 	return false
 }
@@ -1021,6 +1023,10 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 		if err != nil {
 			return err
 		}
+		// The behavioral writer prints a whole declaration with no place for `member`.
+		if d.typeFeatureMember(el) {
+			return d.typeFeatureUnwritable(el, "its notation is written whole by the behavioral mapping")
+		}
 		return d.unwrittenPrefix(el)
 	}
 	head, err := d.head(el)
@@ -1102,8 +1108,60 @@ func identityAnnotations(el *element) []string {
 	return out
 }
 
-// head builds the declaration text up to the body or terminator.
+// head builds the declaration text up to the body or terminator, with the
+// `member` of a KerML TypeFeatureMember ahead of it where the membership states one.
 func (d *decoder) head(el *element) (string, error) {
+	head, err := d.declarationHead(el)
+	if err != nil || !d.typeFeatureMember(el) {
+		return head, err
+	}
+	return d.memberPrefixed(el, head)
+}
+
+// typeFeatureMember reports whether a type owns el, a feature, through a plain
+// OwningMembership rather than a FeatureMembership (KerML.xtext TypeFeatureMember).
+func (d *decoder) typeFeatureMember(el *element) bool {
+	if el.owner == nil || el.metaclass == usageMetaclass[ast.UsageMetadata] ||
+		!ontology.IsAncestorOrSelf(el.metaclass, "Feature") || !isType(el.owner.metaclass) {
+		return false
+	}
+	// A variant is flagged as one whatever its membership is typed; an end's
+	// cross feature is written in the end's head (ownedCrossFeature).
+	if d.boolOf(el, rdf.SysML+"isVariant") || d.enumeratedValue(el) || d.ownedCrossFeature(el.owner) == el {
+		return false
+	}
+	m, owned := d.owningMembership[el.iri]
+	return owned && d.metaclass(rdf.IRI(m.iri)) == mOwningMembership
+}
+
+// memberPrefixed writes `member` between a head's visibility and its declaration
+// (KerML.xtext TypeFeatureMember); SysML has no such keyword, so a SysML root refuses.
+func (d *decoder) memberPrefixed(el *element, head string) (string, error) {
+	if !d.kerml(el) {
+		return "", d.typeFeatureUnwritable(el, "SysML has no `member` keyword, and writing it as a feature of the type would be a different model")
+	}
+	visibility := d.visibility(el)
+	if visibility == "" {
+		return "member " + head, nil
+	}
+	rest, ok := strings.CutPrefix(head, visibility+" ")
+	if !ok {
+		return "", d.typeFeatureUnwritable(el, "its head does not open with the visibility `member` follows")
+	}
+	return visibility + " member " + rest, nil
+}
+
+// typeFeatureUnwritable refuses a feature its type owns through a plain
+// OwningMembership that the notation cannot state as such.
+func (d *decoder) typeFeatureUnwritable(el *element, why string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the feature <%s>", el.iri),
+		Note: fmt.Sprintf("its type owns it through a plain sysml:OwningMembership, which KerML writes `member`, but %s", why),
+	}
+}
+
+// declarationHead builds the declaration text up to the body or terminator.
+func (d *decoder) declarationHead(el *element) (string, error) {
 	if d.isResultExpression(el) {
 		return d.expressionNodeText(rdf.IRI(el.iri), el)
 	}
@@ -1117,7 +1175,7 @@ func (d *decoder) head(el *element) (string, error) {
 	case "Dependency":
 		return d.dependencyHead(el)
 	case "Specialization", "FeatureTyping", "Subsetting", "Redefinition",
-		"FeatureInverting", "TypeFeaturing", "Conjugation":
+		"FeatureInverting", "TypeFeaturing", "Conjugation", "Disjoining":
 		return d.relationshipElementHead(el)
 	case "Comment":
 		return d.commentHead(el)
@@ -1230,7 +1288,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 		words = append(words, "variation")
 	}
 	if d.boolOf(el, rdf.SysML+"isConstant") {
-		words = append(words, "constant")
+		words = append(words, constantKeyword(d.kerml(el)))
 	}
 	if d.boolOf(el, rdf.SysML+"isEvent") {
 		words = append(words, "event")
@@ -1301,34 +1359,65 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if keyword == "accept" {
 		keyword = ""
 	}
+	identWords := d.identWords(el)
+	references, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	if err != nil {
+		return "", err
+	}
+	portion, err := d.portionKind(el)
+	if err != nil {
+		return "", err
+	}
+	event := d.boolOf(el, rdf.SysML+"isEvent") || el.metaclass == mEventOccurrenceUsage
+	// A `snapshot`, `timeslice`, `event` or `assert` keyword states a typed
+	// fact; a spelling the typing contradicts is refused, not respelled.
+	if err := d.keywordTyped(el, keyword, portion, event); err != nil {
+		return "", err
+	}
+	kerml := d.kerml(el)
+	isPortion, err := d.portionPrefix(el, kerml, portion)
+	if err != nil {
+		return "", err
+	}
 	for _, flag := range []struct {
-		property string
-		keyword  string
+		keyword string
+		set     bool
 	}{
-		{"isVariation", "variation"},
-		{"isVariant", "variant"},
-		{"isComposite", "composite"},
-		{"isDerived", "derived"},
-		{"isConstant", "constant"},
-		{"isIndividual", "individual"},
-		{"isSnapshot", "snapshot"},
-		{"isTimeslice", "timeslice"},
-		{"isEvent", "event"},
-		{"isEnd", "end"},
-		{"isReference", "ref"},
+		{"variation", d.boolOf(el, rdf.SysML+"isVariation")},
+		// An enumerated value is a variant by what it is, not by a keyword
+		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
+		{"variant", d.boolOf(el, rdf.SysML+"isVariant") && !d.enumeratedValue(el)},
+		// `portion` is composite and stands in for `composite`
+		// (KerML.xtext BasicFeaturePrefix `isComposite ?= 'composite' | isPortion ?= 'portion'`).
+		{"portion", isPortion},
+		{"composite", d.boolOf(el, rdf.SysML+"isComposite") && !isPortion},
+		{"derived", d.boolOf(el, rdf.SysML+"isDerived")},
+		{constantKeyword(kerml), d.boolOf(el, rdf.SysML+"isConstant")},
+		{"individual", d.boolOf(el, rdf.SysML+"isIndividual")},
+		{"snapshot", portion == "snapshot"},
+		{"timeslice", portion == "timeslice"},
+		{"event", event},
+		{"end", d.boolOf(el, rdf.SysML+"isEnd")},
+		{"ref", d.boolOf(el, rdf.SysML+"isReference")},
 	} {
 		// A keyword such as `snapshot` is both a modifier and a kind keyword;
 		// writing it here as well as below would declare it twice.
 		if flag.keyword == keyword {
 			continue
 		}
-		// An enumerated value is a variant by what it is, not by a keyword
-		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
-		if flag.property == "isVariant" && d.enumeratedValue(el) {
-			continue
-		}
-		if d.boolOf(el, rdf.SysML+flag.property) {
+		if flag.set {
 			words = append(words, flag.keyword)
+		}
+		// The cross feature an end owns is written right after `end`
+		// (SysML.xtext EndUsagePrefix `'end' OwnedCrossFeatureMember?`).
+		if flag.keyword == "end" {
+			if cross := d.ownedCrossFeature(el); cross != nil {
+				crossWords, err := d.crossFeatureWords(cross)
+				if err != nil {
+					return "", err
+				}
+				words = append(words, crossWords...)
+			}
 		}
 	}
 	// Prefix metadata ends the usage prefix, ahead of the kind keyword
@@ -1344,6 +1433,21 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// Negation on its own has no notation, so it is reported rather than dropped.
 	prefix, hasPrefix := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix)
 	negated := d.boolOf(el, rdf.SysML+"isNegated")
+	// An asserted constraint's metaclass is its `assert`, which prefixes
+	// `constraint` or, written as the keyword itself, stands in for it.
+	asserted := false
+	if el.metaclass == mAssertConstraintUsage {
+		if hasPrefix && prefix != "assert" {
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the asserted constraint <%s>", el.iri),
+				Note: fmt.Sprintf("its sysx:%s %q is not the `assert` its metaclass states", xDeclaredPrefix, prefix),
+			}
+		}
+		prefix, hasPrefix = "assert", true
+		if keyword == "assert" {
+			keyword, asserted = "", true
+		}
+	}
 	switch {
 	case hasPrefix:
 		// `#M assert not constraint c` ends the occurrence prefix ahead of the
@@ -1440,22 +1544,38 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		}
 	}
 	// A `perform` or a state's `entry`/`do`/`exit` names the action it performs,
-	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration).
-	identWords := d.identWords(el)
-	if len(identWords) == 0 && referenceMemberKeyword(keyword) {
-		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
-		if err != nil {
-			return "", err
+	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration),
+	// as `event m.start` and `assert c` name an occurrence or a constraint.
+	referencing := referenceMemberKeyword(keyword) || keyword == "event" || asserted
+	if referencing && len(identWords) > 0 && !asserted {
+		// `event e;` names the `e` it refers to; a declared `e` spells its kind
+		// keyword out (`event occurrence e;`), which the graph does not state.
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `%s` declaration <%s>", keyword, el.iri),
+			Note: fmt.Sprintf("it declares a name (sysml:declaredName), which `%s` written as the kind keyword cannot: `%s <name>` names the feature it refers to, and a declaration is written `%s %s <name>`, so the notation would come back as a reference to a different element", keyword, keyword, keyword, usageKeyword(kind)),
 		}
-		if len(targets) > 0 {
-			words = append(words, strings.Join(targets, ", "))
-			skip = append(skip, ast.RelReferences)
+	}
+	if referencing && len(identWords) == 0 && len(references) == 0 {
+		// With neither, `perform;` would come back as a feature named `perform`.
+		written := keyword
+		if asserted {
+			written = "assert"
 		}
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `%s` declaration <%s>", written, el.iri),
+			Note: fmt.Sprintf("it neither declares a name nor names the feature it refers to (sysml:references), the two shapes `%s` is written in, so the notation cannot be rebuilt from the graph", written),
+		}
+	}
+	referenced := referencing && len(identWords) == 0
+	if referenced {
+		words = append(words, strings.Join(references, ", "))
+		skip = append(skip, ast.RelReferences)
 	}
 	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
 	// follows, so it goes with the typing clause and ahead of any further
-	// specialization; with no type it follows the name (`x[2] redefines y`),
-	// and with neither it closes the head (`:>> y[2]`).
+	// specialization; with no type it follows the name (`x[2] redefines y`) or
+	// the reference (`event m.start[1] redefines e`), and with neither it closes
+	// the head (`:>> y[2]`).
 	multPart := d.multiplicityText(el)
 	if d.boolOf(el, rdf.SysML+"isOrdered") {
 		multPart += " ordered"
@@ -1468,11 +1588,15 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", err
 	}
 	typedPart := ""
+	namedMult := false
 	switch {
 	case len(typed) > 0:
 		typedPart, multPart = multPart, ""
 	case len(identWords) > 0 && multPart != "":
 		identWords[len(identWords)-1] += multPart
+		namedMult, multPart = true, ""
+	case referenced && multPart != "":
+		words[len(words)-1] += multPart
 		multPart = ""
 	}
 	words = append(words, identWords...)
@@ -1504,18 +1628,40 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	words = append(words, relationships...)
 	if hasEnds {
-		ends, err := d.endWords(el, endForm)
+		// A connector's own multiplicity is its declaration, written ahead of
+		// the ends; after them it would read as the last end's.
+		declared := multPart != "" || len(words) > keywordAt+1
+		if declared && keywordAt < len(words) && words[keywordAt] == "bind" {
+			// SysML's `bind` shorthand declares nothing; `bind [1] a = b` gives the
+			// first end the `[1]`, so the declaration takes the `binding … bind` form.
+			words[keywordAt] = "binding"
+		}
+		ends, err := d.endWords(el, endForm, declared)
 		if err != nil {
 			return "", err
+		}
+		if multPart != "" {
+			words = append(words, strings.TrimSpace(multPart))
+			multPart = ""
 		}
 		words = append(words, ends)
 		// The `= value` of a binding is one of its ends, already written above.
 		if endForm == formEquals {
-			return strings.Join(words, " ") + multPart, nil
+			return strings.Join(words, " "), nil
 		}
 	}
 	head := strings.Join(words, " ") + multPart
-	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+	value, hasValue := d.stringOf(el, rdf.SysML+pValue)
+	// `assert c;`, `assert c[1]` and `assert c { … }` name the `c` they refer to;
+	// a declared `c` is read only where a typing, specialization or value follows.
+	if asserted && len(identWords) > 0 && !strings.HasPrefix(identWords[0], "<") &&
+		(namedMult || (len(relationships) == 0 && !hasValue)) {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the `assert` declaration <%s>", el.iri),
+			Note: "it declares a name (sysml:declaredName) that nothing but a body or a multiplicity follows, the shape in which `assert <name>` names the constraint it refers to, so the notation would come back as a reference to a different element; a declaration is written `assert constraint <name>`",
+		}
+	}
+	if hasValue {
 		head += " " + d.valueOperator(el) + " " + value
 	}
 	return head, nil
@@ -1916,6 +2062,98 @@ func (d *decoder) keywordOr(el *element, canonical string) string {
 	return canonical
 }
 
+// keywordTyped checks that a keyword the graph types agrees with its typing:
+// the portion kind, the event typing or the AssertConstraintUsage metaclass.
+func (d *decoder) keywordTyped(el *element, keyword, portion string, event bool) error {
+	var stated, expected string
+	switch keyword {
+	case "snapshot", "timeslice":
+		if portion == keyword {
+			return nil
+		}
+		stated, expected = "sysml:"+pPortionKind+" "+strconv.Quote(portion), "the "+strconv.Quote(keyword)+" its keyword states"
+		if portion == "" {
+			stated = "no sysml:" + pPortionKind
+		}
+	case "event":
+		if event {
+			return nil
+		}
+		stated, expected = "the metaclass "+el.metaclass, "the "+mEventOccurrenceUsage+" its keyword states"
+	case "assert":
+		if el.metaclass == mAssertConstraintUsage {
+			return nil
+		}
+		stated, expected = "the metaclass "+el.metaclass, "the "+mAssertConstraintUsage+" its keyword states"
+	default:
+		return nil
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the `%s` declaration <%s>", keyword, el.iri),
+		Note: fmt.Sprintf("it has %s, not %s, so the notation cannot be rebuilt without declaring something else", stated, expected),
+	}
+}
+
+// kerml reports whether el is written under KerML's grammar: the one its root
+// records, or SysML for a root recording none, which is how candidateName reads it.
+func (d *decoder) kerml(el *element) bool {
+	root := el
+	for root.owner != nil {
+		root = root.owner
+	}
+	language, _ := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+	return language == "kerml"
+}
+
+// constantKeyword spells isConstant for the grammar: KerML.xtext FeaturePrefix
+// `isConstant ?= 'const'`, SysML.xtext RefPrefix `isConstant ?= 'constant'`.
+func constantKeyword(kerml bool) string {
+	if kerml {
+		return "const"
+	}
+	return "constant"
+}
+
+// portionPrefix reports whether isPortion is written as KerML's `portion`; SysML has no
+// such prefix, so there the flag is carried by a portion kind and refused without one.
+func (d *decoder) portionPrefix(el *element, kerml bool, portion string) (bool, error) {
+	if !d.boolOf(el, rdf.SysML+"isPortion") {
+		return false, nil
+	}
+	switch {
+	case kerml && !d.boolOf(el, rdf.SysML+"isComposite"):
+		return false, &UnsupportedError{
+			What: fmt.Sprintf("the portion <%s>", el.iri),
+			Note: "it has sysml:isPortion without sysml:isComposite, and a portion is composite (KerML Feature::isPortion), so `portion` would declare more than the graph states",
+		}
+	case kerml:
+		return true, nil
+	case portion != "":
+		return false, nil
+	}
+	return false, &UnsupportedError{
+		What: fmt.Sprintf("the portion <%s>", el.iri),
+		Note: "it has sysml:isPortion and no sysml:" + pPortionKind + ", and SysML declares a portion only as `snapshot` or `timeslice`, so no valid declaration can be written for it",
+	}
+}
+
+// portionKind reads the portion a usage is declared as, `snapshot` or
+// `timeslice`; any other value has no notation and is refused.
+func (d *decoder) portionKind(el *element) (string, error) {
+	portion, ok := d.stringOf(el, rdf.SysML+pPortionKind)
+	if !ok {
+		return "", nil
+	}
+	switch portion {
+	case "snapshot", "timeslice":
+		return portion, nil
+	}
+	return "", &UnsupportedError{
+		What: fmt.Sprintf("the portion kind %q of <%s>", portion, el.iri),
+		Note: "sysml:" + pPortionKind + " is `snapshot` or `timeslice`, the two portions the notation declares",
+	}
+}
+
 func (d *decoder) identWords(el *element) []string {
 	var words []string
 	if short, ok := d.stringOf(el, rdf.SysML+pDeclaredShortName); ok {
@@ -2079,15 +2317,127 @@ func (d *decoder) unwrittenPrefix(el *element) error {
 }
 
 // bodyChildren returns the members written in an element's body: every child
-// but the prefix annotations its head writes.
+// but the prefix annotations and the cross feature its head writes.
 func (d *decoder) bodyChildren(el *element) []*element {
+	cross := d.ownedCrossFeature(el)
 	var out []*element
 	for _, child := range el.children {
-		if d.metadataSigil(child) != "#" {
+		if child != cross && d.metadataSigil(child) != "#" {
 			out = append(out, child)
 		}
 	}
 	return out
+}
+
+// ownedCrossFeature is the kindless feature an end owns through a plain OwningMembership,
+// written in its head (KerML.xtext OwnedCrossingFeature); a keyworded one is a body `member`.
+func (d *decoder) ownedCrossFeature(el *element) *element {
+	if !d.boolOf(el, rdf.SysML+"isEnd") || !ontology.IsAncestorOrSelf(el.metaclass, "Feature") {
+		return nil
+	}
+	for _, child := range el.children {
+		if child.metaclass != crossFeatureMetaclass(d.kerml(el)) {
+			continue
+		}
+		if m, owned := d.owningMembership[child.iri]; owned && d.metaclass(rdf.IRI(m.iri)) == mOwningMembership {
+			return child
+		}
+	}
+	return nil
+}
+
+// crossFeatureWords writes an end's cross feature after `end`: name, multiplicity
+// and specializations, typing spelled `typed by` since `:` there is the end's own.
+func (d *decoder) crossFeatureWords(cross *element) ([]string, error) {
+	if len(cross.children) > 0 || d.boolOf(cross, rdf.OpenSysML+xHasBody) || len(identityAnnotations(cross)) > 0 {
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
+			Note: "it is written in the head of the end that owns it, which has no place for a body or an identity annotation",
+		}
+	}
+	words := d.identWords(cross)
+	mult := d.multiplicityText(cross)
+	switch {
+	case len(words) > 0:
+		words[len(words)-1] += mult
+	case mult != "":
+		words = append(words, mult)
+	}
+	for _, flag := range []struct {
+		property string
+		keyword  string
+	}{{"isOrdered", "ordered"}, {"isNonunique", "nonunique"}} {
+		if d.boolOf(cross, rdf.SysML+flag.property) {
+			words = append(words, flag.keyword)
+		}
+	}
+	if len(words) == 0 {
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the cross feature <%s>", cross.iri),
+			Note: "it declares neither a name nor a multiplicity part, and one or the other introduces a cross feature ahead of its end",
+		}
+	}
+	prefix, err := d.crossFeaturePrefixWords(cross)
+	if err != nil {
+		return nil, err
+	}
+	words = append(prefix, words...)
+	typed, err := d.referenceList(cross, rdf.SysML+relationshipProperty[ast.RelTyping])
+	if err != nil {
+		return nil, err
+	}
+	if len(typed) > 0 {
+		words = append(words, "typed by", strings.Join(typed, ", "))
+	}
+	relationships, err := d.relationshipWords(cross, "", ast.RelTyping)
+	if err != nil {
+		return nil, err
+	}
+	return append(words, relationships...), nil
+}
+
+// crossFeaturePrefixWords writes the prefix a cross feature owns ahead of its name
+// (KerML.xtext OwnedCrossingFeature BasicFeaturePrefix, SysML.xtext BasicUsagePrefix),
+// its flags spelled in the grammar of its root as a usage head's are.
+func (d *decoder) crossFeaturePrefixWords(cross *element) ([]string, error) {
+	kerml := d.kerml(cross)
+	isPortion, err := d.portionPrefix(cross, kerml, "")
+	if err != nil {
+		return nil, err
+	}
+	var words []string
+	if direction, ok := d.stringOf(cross, rdf.SysML+pDirection); ok {
+		words = append(words, direction)
+	}
+	for _, flag := range []struct {
+		keyword string
+		set     bool
+	}{
+		{"derived", d.boolOf(cross, rdf.SysML+"isDerived")},
+		{"abstract", d.boolOf(cross, rdf.SysML+"isAbstract")},
+		{"variation", d.boolOf(cross, rdf.SysML+"isVariation")},
+		{"portion", isPortion},
+		{"composite", d.boolOf(cross, rdf.SysML+"isComposite") && !isPortion},
+	} {
+		if flag.set {
+			words = append(words, flag.keyword)
+		}
+	}
+	if prefix, ok := d.stringOf(cross, rdf.OpenSysML+xDeclaredPrefix); ok {
+		words = append(words, prefix)
+	}
+	for _, flag := range []struct {
+		keyword string
+		set     bool
+	}{
+		{constantKeyword(kerml), d.boolOf(cross, rdf.SysML+"isConstant")},
+		{"ref", d.boolOf(cross, rdf.SysML+"isReference")},
+	} {
+		if flag.set {
+			words = append(words, flag.keyword)
+		}
+	}
+	return words, nil
 }
 
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the
@@ -2374,20 +2724,21 @@ func (d *decoder) effectiveName(el *element) (string, bool) {
 	return "", false
 }
 
-// namingFeature is the feature an unnamed usage takes its name from, the one
-// it references, else the one it alone redefines (KerML 7.3.4.5).
+// namingFeature is the feature an unnamed usage takes its name from: the one it
+// references, else the first it redefines unless that is a chain (ast.NamingFeature).
 func (d *decoder) namingFeature(el *element) (rdf.Term, bool) {
 	if _, usage := metaclassUsage[el.metaclass]; !usage {
 		return rdf.Term{}, false
 	}
 	subject := rdf.IRI(el.iri)
-	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
+	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) > 0 {
 		return refs[0], true
 	}
-	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
-		return redefs[0], true
+	redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines])
+	if len(redefs) == 0 || ast.IsFeatureChain(literalTarget(redefs[0])) {
+		return rdf.Term{}, false
 	}
-	return rdf.Term{}, false
+	return redefs[0], true
 }
 
 // relativeName strips from qname the longest prefix of scope it is declared
@@ -2435,8 +2786,16 @@ func literalTargetName(term rdf.Term) (string, bool) {
 	if term.Datatype != rdf.OpenSysML+dtExpression {
 		return lastSegment(term.Value), true
 	}
-	name, _ := ast.TargetName(parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression())
+	name, _ := ast.TargetName(literalTarget(term))
 	return name, name != ""
+}
+
+// literalTarget parses a relationship target the graph keeps as expression text.
+func literalTarget(term rdf.Term) ast.Node {
+	if !term.IsLiteral() || term.Datatype != rdf.OpenSysML+dtExpression {
+		return nil
+	}
+	return parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression()
 }
 
 func lastSegment(qname string) string {

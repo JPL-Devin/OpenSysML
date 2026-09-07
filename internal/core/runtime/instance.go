@@ -82,6 +82,15 @@ type FeatureValue struct {
 	Materialized   bool  // lazy flag: has this feature value been instantiated?
 	Written        bool  // a run assigned this value, so no default derives it again
 	BindingDerived bool  // value came from binding propagation rather than a write
+	// dependents are the derived values that read this one, to unmaterialize when
+	// it changes; nil until one does (see dependents.go).
+	dependents []*FeatureValue
+	// reads are the feature values a `=` value listed itself on, to delist from when
+	// derived again; nil until it is derived.
+	reads []*FeatureValue
+	// changing is set while a write to this value is under way, so a write nested
+	// in it counts as part of it (see beforeWrite).
+	changing bool
 }
 
 // HeldValue is the value the feature value reads as: its collection when the feature is
@@ -120,7 +129,40 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 		return false
 	}
 	inst, ok := ctx.instances[val.Instance]
-	return ok && len(inst.FeatureValues) == 0 && semantics.IsValueType(inst.Type)
+	return ok && semantics.IsValueType(inst.Type) && !ctx.shapeHoldsValue(inst.Type)
+}
+
+// shapeHoldsValue reports whether an object of typ carries a value of its own: a record's
+// features, or a field the model adds to a value-held type (`:>> mRefs = (m, m)`, `label`).
+func (ctx *Context) shapeHoldsValue(typ *symbols.Symbol) bool {
+	features := ctx.FeaturesOf(typ)
+	if len(features) == 0 {
+		return false
+	}
+	if !ctx.model.ValueHeld(typ) {
+		return true
+	}
+	for _, feat := range features {
+		if !ctx.libraryDeclared(feat.Symbol) && holdsRecordField(feat.Symbol) {
+			return true
+		}
+	}
+	return false
+}
+
+// noValueError reports the read of node, which found the unset value val, naming
+// the feature that holds it.
+func (ctx *Context) noValueError(val Value, node ast.Node) *NoValueError {
+	err := &NoValueError{Feature: conditionText(node)}
+	if ref, ok := node.(*ast.FeatureReference); ok {
+		err.Ref = ref.Name
+	}
+	if inst, ok := ctx.instances[val.Instance]; ok && inst.owner != nil {
+		if fv, ok := inst.owner.FeatureValues[inst.ownerFeature]; ok && fv.Feature != nil {
+			err.Symbol = fv.Feature.Symbol
+		}
+	}
+	return err
 }
 
 // Instantiate materializes an instance of the given usage/definition symbol.
@@ -142,7 +184,7 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	// reaches this object; a failed start abandons the occurrence with it.
 	inst.explicit = true
 	prior, hadPrior := ctx.occurrences[sym]
-	if ctx.namesOneObject(sym) {
+	if ctx.registersOccurrence(sym) {
 		ctx.occurrences[sym] = inst.ID
 	}
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
@@ -191,13 +233,46 @@ func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *Fea
 func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature) {
 	*fv = FeatureValue{Feature: feat}
 	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
-		ctx.restatedInValuedBody(feat) == "" {
+		ctx.restatedInValuedBody(feat) == "" && !ctx.defaultYieldsToSubsetters(inst, feat) {
 		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 			val := Value{Kind: ValConst, Const: semVal}
 			if ctx.checkDefault(inst, fv, feat.Name, val, admitDeclared) == nil {
 				fv.Value = val
 				fv.Materialized = true
 			}
+		}
+	}
+}
+
+// defaultYieldsToSubsetters reports whether feat's `default` may be superseded by a
+// feature of one of inst's types subsetting it, so it must wait to be read rather than be folded.
+func (ctx *Context) defaultYieldsToSubsetters(inst *Instance, feat *EffectiveFeature) bool {
+	if !feat.DefaultIsFallback() {
+		return false
+	}
+	for _, typ := range inst.types() {
+		if len(ctx.SubsettingFeatures(nil, typ, feat.Name)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// unfoldSubsettedDefaults reopens the folded fallback defaults of inst that the
+// features of classifier typ subset, so the next read takes their contributions.
+func (ctx *Context) unfoldSubsettedDefaults(inst *Instance, typ *symbols.Symbol, features []EffectiveFeature) {
+	for i := range features {
+		if features[i].Symbol == nil {
+			continue
+		}
+		for _, name := range ctx.subsettedNames(features[i].Symbol, typ) {
+			fv, ok := inst.FeatureValues[name]
+			if !ok || !fv.Materialized || fv.Written || !ctx.valueBinds(fv.Feature) || !fv.Feature.DefaultIsFallback() {
+				continue
+			}
+			ctx.noteProbeWrite(fv)
+			fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
+			ctx.invalidateDependents(fv)
 		}
 	}
 }
@@ -316,6 +391,15 @@ func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
 	return isOccurrenceUsage(sym) || ctx.namesStructuredValue(sym)
 }
 
+// registersOccurrence reports whether an object materialized for a usage is the one a
+// later read reaches: the object it denotes, or a unit's, read through the unit's reference.
+func (ctx *Context) registersOccurrence(sym *symbols.Symbol) bool {
+	if ctx.namesOneObject(sym) {
+		return true
+	}
+	return ctx.declaresUnit(sym) && ctx.occursOnce(sym)
+}
+
 // namesStructuredValue reports whether a usage carrying no value of its own is
 // typed by a structured value — a non-scalar `attribute def` with features — so
 // it holds those features rather than one scalar value.
@@ -328,7 +412,7 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 	if typ == nil || ctx.model.PrimTypeOf(typ) != semantics.PrimUnknown {
 		return false
 	}
-	return len(ctx.FeaturesOf(sym)) > 0
+	return ctx.shapeHoldsValue(sym)
 }
 
 // occursOnce reports whether a usage names at most one occurrence; several
@@ -398,6 +482,7 @@ func (ctx *Context) admitted(feat *EffectiveFeature, val Value, how admission) (
 		if err := ctx.classifyHeld(feat.heldBy(), val); err != nil {
 			return Value{}, err
 		}
+		val = ctx.classifiedFrame(feat.Symbol, val)
 	}
 	return val, nil
 }
@@ -444,6 +529,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 		return err
 	}
 	ctx.noteProbeWrite(fv)
+	before := ctx.beforeWrite(fv)
 	if fv.Feature.Scalar() {
 		fv.Value = value
 		fv.Values = Value{}
@@ -453,6 +539,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	}
 	fv.Materialized, fv.Written = true, true
 	fv.BindingDerived = false
+	ctx.afterWrite(fv, before)
 	return nil
 }
 
@@ -462,28 +549,46 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 	defer ctx.beginRun()()
 
 	fv := inst.FeatureValues[name]
-
-	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+	before := ctx.beforeWrite(fv)
+	err := inst.materializeBoundOrIntrinsic(ctx, fv, name)
+	ctx.afterWrite(fv, before)
+	if err != nil {
 		return nil, err
+	}
+	ctx.noteRead(fv)
+	return fv, nil
+}
+
+// materializeBoundOrIntrinsic gives fv the value a binding determines, else the one
+// its feature states, once.
+func (inst *Instance) materializeBoundOrIntrinsic(ctx *Context, fv *FeatureValue, name string) error {
+	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+		return err
 	} else if found {
-		if err := ctx.assignBindingValue(inst, fv, name, val); err != nil {
-			return nil, err
-		}
-		return fv, nil
+		return ctx.assignBindingValue(inst, fv, name, val)
+	} else if !fv.Materialized {
+		_, err := inst.materializeFeatureValueIntrinsic(ctx, name)
+		return err
 	}
-
-	// If already materialized, return
-	if fv.Materialized {
-		return fv, nil
-	}
-
-	return inst.materializeFeatureValueIntrinsic(ctx, name)
+	return nil
 }
 
 // materializeFeatureValueIntrinsic evaluates a feature without following
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
+	before := ctx.beforeWrite(fv)
+	_, err := inst.materializeIntrinsic(ctx, fv, name)
+	ctx.afterWrite(fv, before)
+	if err != nil {
+		return nil, err
+	}
+	return fv, nil
+}
+
+// materializeIntrinsic evaluates fv from what the model states of its feature: a
+// variation, a default, the members subsetting it, or the objects it holds.
+func (inst *Instance) materializeIntrinsic(ctx *Context, fv *FeatureValue, name string) (*FeatureValue, error) {
 	ctx.noteProbeWrite(fv)
 
 	// A feature listing this one as a value, on this object or an owner reaching it by a
@@ -518,12 +623,24 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
 	}
 
+	// A `default` applies only where nothing else populates the feature: the
+	// members subsetting it do (KerML 1.0 §7.3.4.5).
+	if ctx.valueBinds(fv.Feature) && fv.Feature.DefaultIsFallback() {
+		contributed, err := ctx.subsettingContributions(inst, name)
+		if err != nil {
+			return nil, err
+		}
+		if len(contributed) > 0 {
+			return inst.holdContributed(ctx, fv, name, contributed)
+		}
+	}
+
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling feature values it refers to.
 	// The feature holds what the default states, once that conforms to the
 	// feature's multiplicity and type.
 	if ctx.valueBinds(fv.Feature) {
-		val, err := ctx.evalFeatureValueDefault(inst, fv, name)
+		val, err := ctx.deriveFeatureValue(inst, fv, name)
 		if err != nil {
 			return nil, err
 		}
@@ -552,8 +669,9 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	}
 
 	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
-	// optional one demands none: each, a connector included, holds only contributions.
-	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+	// optional one demands none: each, a connector included, holds only contributions —
+	// unless the declaration's body binds a feature of the one object it then holds.
+	if fv.Feature.HoldsOnlyContributions() && !ctx.bodyBindsAFeature(fv.Feature) && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
 		return inst.holdContributions(ctx, fv, name)
 	}
 
@@ -655,7 +773,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 
 // HoldsOnlyContributions reports whether a feature of known multiplicity
 // materializes no object of its own: it is abstract, or a scalar whose lower
-// bound demands none.
+// bound demands none and whose own body describes none.
 func (f *EffectiveFeature) HoldsOnlyContributions() bool {
 	mult := f.Multiplicity
 	if !mult.Lower.Known || !mult.Upper.Known {
@@ -671,15 +789,26 @@ func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name str
 	if err != nil {
 		return nil, err
 	}
-	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
-		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
+	return inst.holdContributed(ctx, fv, name, contributed)
+}
+
+// holdContributed makes fv hold the values the features subsetting it contribute,
+// once they conform to its multiplicity and type and are classified as its values.
+func (inst *Instance) holdContributed(ctx *Context, fv *FeatureValue, name string, contributed []Value) (*FeatureValue, error) {
+	val := sequenceOf(contributed)
+	if err := ctx.checkDefault(inst, fv, name, val, admitDeclared); err != nil {
+		return nil, err
+	}
+	val, err := ctx.admitted(fv.Feature, val, admitDeclared)
+	if err != nil {
+		return nil, fmt.Errorf("feature value %s.%s: %w", inst.Type.Name, name, err)
 	}
 	if fv.Feature.Scalar() {
 		if len(contributed) == 1 {
-			fv.Value = contributed[0]
+			fv.Value = val
 		}
 	} else {
-		fv.Values = sequenceOf(contributed)
+		fv.Values = val
 	}
 	fv.Materialized = true
 	return fv, nil
@@ -818,6 +947,56 @@ func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 		}
 	}
 	return ""
+}
+
+// bodyBindsAFeature reports whether feat's declaration, or one it redefines, binds a
+// feature of what it holds (`:>> unitConversion { :>> prefix = kilo; }`): one object, not none.
+func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
+		return false
+	}
+	if ctx.bindsAFeature(feat.Symbol) {
+		return true
+	}
+	for _, redefined := range ctx.redefinedFeatures(feat.Symbol, feat.OwnerType) {
+		if ctx.bindsAFeature(redefined) {
+			return true
+		}
+	}
+	return false
+}
+
+// bindsAFeature reports whether a declaration's body binds a value to a feature of its object,
+// directly or under a nested one that exists whenever it does (not an optional or abstract one).
+// A framing member (`transformation { :>> target = that; }`) binds no field of it.
+func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Scope == nil {
+		return false
+	}
+	for _, member := range sym.Scope.AllMembers() {
+		usage, ok := member.Decl.(*ast.Usage)
+		if !ok || !holdsRecordField(member) || ctx.model.FrameFeature(member) {
+			continue
+		}
+		if usage.Value != nil {
+			return true
+		}
+		if !symbols.IsAbstract(member) && !ctx.optionalValueless(member) && ctx.bindsAFeature(member) {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsRecordField reports a member whose value is its object's own: a structural shape
+// feature, not a behavior, a constraint or a parameter, whose values bind no field.
+func holdsRecordField(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolActionUsage, symbols.SymbolStateUsage,
+		symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage:
+		return false
+	}
+	return semantics.IsShapeFeature(sym) && !semantics.IsParameter(sym)
 }
 
 // valuesAFeature reports whether a usage states a value: its own, or one its

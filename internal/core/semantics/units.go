@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -34,6 +35,7 @@ var (
 // Quantities and Units domain library).
 const (
 	fqnMeasurementUnit    = "MeasurementReferences::MeasurementUnit"
+	fqnDerivedUnit        = "MeasurementReferences::DerivedUnit"
 	fqnDimensionOneUnit   = "MeasurementReferences::DimensionOneUnit"
 	fqnAngularMeasureUnit = "ISQSpaceTime::AngularMeasureUnit"
 
@@ -194,6 +196,11 @@ func (t UnitTerm) String() string {
 	return out
 }
 
+// Clone returns a term sharing no storage with t.
+func (t UnitTerm) Clone() UnitTerm {
+	return UnitTerm{Scale: t.Scale, Factors: slices.Clone(t.Factors)}
+}
+
 // Times returns the product of two terms.
 func (t UnitTerm) Times(other UnitTerm) UnitTerm {
 	return combine(t, other, 1)
@@ -283,6 +290,16 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 		return sym.Facts != nil && sym.Facts.Unit != nil
 	}
 	return m.Conforms(sym, unitDef)
+}
+
+// IsMeasurementScale reports whether sym is a feature typed by a measurement
+// scale (`Time::UTC`, `SI::'°C_abs'`): a scalar reference that is not a unit.
+func (m *Model) IsMeasurementScale(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	scale := m.libSymbol(fqnMeasurementScale)
+	return scale != nil && m.Conforms(sym, scale)
 }
 
 // MeasurementUnitOf is the measurement unit sym names: sym itself, or the unit
@@ -443,15 +460,15 @@ func (m *Model) numericMember(sym *symbols.Symbol, name string) (Scale, bool) {
 	if op, ok := expr.(*ast.OperatorExpr); ok && op.Operator == ast.OpDiv && len(op.Operands) == 2 {
 		num, numOK := m.Eval(op.Operands[0])
 		den, denOK := m.Eval(op.Operands[1])
-		if numOK && denOK && num.IsNumeric() && den.IsNumeric() && den.asReal() != 0 {
-			return reduceScale(Scale{Num: num.asReal(), Den: den.asReal()}), true
+		if numOK && denOK && num.IsNumeric() && den.IsNumeric() && den.AsReal() != 0 {
+			return reduceScale(Scale{Num: num.AsReal(), Den: den.AsReal()}), true
 		}
 	}
 	val, ok := m.Eval(expr)
 	if !ok || !val.IsNumeric() {
 		return Scale{}, false
 	}
-	return UnitScale(val.asReal()), true
+	return UnitScale(val.AsReal()), true
 }
 
 // referencedUnitSymbol resolves the feature a member's value names, for a value
@@ -659,7 +676,7 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 		if !ok || !exp.IsNumeric() {
 			return UnitTerm{}, fmt.Errorf("%w: unit exponent is not a constant number", ErrUnitExpr)
 		}
-		return base.Pow(exp.asReal()), nil
+		return base.Pow(exp.AsReal()), nil
 	default:
 		return UnitTerm{}, fmt.Errorf("%w: operator %v", ErrUnitExpr, n.Operator)
 	}

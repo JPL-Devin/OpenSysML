@@ -17,16 +17,17 @@ import (
 )
 
 const (
-	documentBaseFQN  = "DocumentQueries::Document"
-	sectionBaseFQN   = "DocumentQueries::Section"
-	paragraphBaseFQN = "DocumentQueries::Paragraph"
-	tableBaseFQN     = "DocumentQueries::Table"
-	listBaseFQN      = "DocumentQueries::List"
-	diagramBaseFQN   = "DocumentQueries::Diagram"
-	runBaseFQN       = "DocumentQueries::Run"
-	spanBaseFQN      = "DocumentQueries::Span"
-	linkBaseFQN      = "DocumentQueries::Link"
-	refBaseFQN       = "DocumentQueries::Ref"
+	documentBaseFQN    = "DocumentQueries::Document"
+	sectionBaseFQN     = "DocumentQueries::Section"
+	paragraphBaseFQN   = "DocumentQueries::Paragraph"
+	tableBaseFQN       = "DocumentQueries::Table"
+	listBaseFQN        = "DocumentQueries::List"
+	definitionsBaseFQN = "DocumentQueries::Definitions"
+	diagramBaseFQN     = "DocumentQueries::Diagram"
+	runBaseFQN         = "DocumentQueries::Run"
+	spanBaseFQN        = "DocumentQueries::Span"
+	linkBaseFQN        = "DocumentQueries::Link"
+	refBaseFQN         = "DocumentQueries::Ref"
 
 	columnRunBaseFQN  = "DocumentQueries::ColumnRun"
 	spanColumnBaseFQN = "DocumentQueries::SpanColumn"
@@ -49,16 +50,17 @@ type compiler struct {
 }
 
 type bases struct {
-	document  *symbols.Symbol
-	section   *symbols.Symbol
-	paragraph *symbols.Symbol
-	table     *symbols.Symbol
-	list      *symbols.Symbol
-	diagram   *symbols.Symbol
-	run       *symbols.Symbol
-	span      *symbols.Symbol
-	link      *symbols.Symbol
-	ref       *symbols.Symbol
+	document    *symbols.Symbol
+	section     *symbols.Symbol
+	paragraph   *symbols.Symbol
+	table       *symbols.Symbol
+	list        *symbols.Symbol
+	definitions *symbols.Symbol
+	diagram     *symbols.Symbol
+	run         *symbols.Symbol
+	span        *symbols.Symbol
+	link        *symbols.Symbol
+	ref         *symbols.Symbol
 
 	columnRun  *symbols.Symbol
 	spanColumn *symbols.Symbol
@@ -101,23 +103,24 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		return nil, &Error{Kind: ErrorInvalidContext}
 	}
 	all := bases{
-		document:  libraryBase(index, documentBaseFQN),
-		section:   libraryBase(index, sectionBaseFQN),
-		paragraph: libraryBase(index, paragraphBaseFQN),
-		table:     libraryBase(index, tableBaseFQN),
-		list:      libraryBase(index, listBaseFQN),
-		diagram:   libraryBase(index, diagramBaseFQN),
-		run:       libraryBase(index, runBaseFQN),
-		span:      libraryBase(index, spanBaseFQN),
-		link:      libraryBase(index, linkBaseFQN),
-		ref:       libraryBase(index, refBaseFQN),
+		document:    libraryBase(index, documentBaseFQN),
+		section:     libraryBase(index, sectionBaseFQN),
+		paragraph:   libraryBase(index, paragraphBaseFQN),
+		table:       libraryBase(index, tableBaseFQN),
+		list:        libraryBase(index, listBaseFQN),
+		definitions: libraryBase(index, definitionsBaseFQN),
+		diagram:     libraryBase(index, diagramBaseFQN),
+		run:         libraryBase(index, runBaseFQN),
+		span:        libraryBase(index, spanBaseFQN),
+		link:        libraryBase(index, linkBaseFQN),
+		ref:         libraryBase(index, refBaseFQN),
 
 		columnRun:  libraryBase(index, columnRunBaseFQN),
 		spanColumn: libraryBase(index, spanColumnBaseFQN),
 		linkColumn: libraryBase(index, linkColumnBaseFQN),
 	}
 	if all.document == nil || all.section == nil || all.paragraph == nil ||
-		all.table == nil || all.list == nil || all.diagram == nil ||
+		all.table == nil || all.list == nil || all.definitions == nil || all.diagram == nil ||
 		all.run == nil || all.span == nil || all.link == nil || all.ref == nil ||
 		all.columnRun == nil || all.spanColumn == nil || all.linkColumn == nil {
 		return nil, &Error{Kind: ErrorLibraryUnavailable}
@@ -232,6 +235,7 @@ func (c *compiler) isContent(member *symbols.Symbol) bool {
 		c.model.Conforms(member, c.bases.paragraph) ||
 		c.model.Conforms(member, c.bases.table) ||
 		c.model.Conforms(member, c.bases.list) ||
+		c.model.Conforms(member, c.bases.definitions) ||
 		c.model.Conforms(member, c.bases.diagram)
 }
 
@@ -252,6 +256,8 @@ func (c *compiler) compileContent(member *symbols.Symbol) (Content, error) {
 		return c.compileTable(member)
 	case c.model.Conforms(member, c.bases.list):
 		return c.compileList(member)
+	case c.model.Conforms(member, c.bases.definitions):
+		return c.compileDefinitions(member)
 	case c.model.Conforms(member, c.bases.diagram):
 		return c.compileDiagram(member)
 	default:
@@ -1170,6 +1176,67 @@ func (c *compiler) compileList(member *symbols.Symbol) (Content, error) {
 	}, nil
 }
 
+// compileDefinitions compiles a definitions block: the query it renders one
+// entry per row of, and the projected columns naming and describing entries.
+func (c *compiler) compileDefinitions(member *symbols.Symbol) (Content, error) {
+	term, err := c.definitionColumn(member, "term")
+	if err != nil {
+		return Content{}, err
+	}
+	description, err := c.definitionColumn(member, "description")
+	if err != nil {
+		return Content{}, err
+	}
+	query, err := c.requiredQueryRef(member)
+	if err != nil {
+		return Content{}, err
+	}
+	if columns, known := staticColumns(query.program, query.entry); known {
+		for _, column := range []struct{ attribute, name string }{{"term", term}, {"description", description}} {
+			if !containsColumn(columns, column.name) {
+				return Content{}, &Error{
+					Kind:      ErrorUnknownDefinitionColumn,
+					Document:  c.document,
+					Content:   c.contentName(member),
+					Query:     query.entry,
+					Parameter: column.attribute,
+					Actual:    column.name,
+					Origin:    provenance.Symbol(member),
+				}
+			}
+		}
+	}
+	if err := c.rejectNestedContent(member); err != nil {
+		return Content{}, err
+	}
+	return Content{
+		kind:        ContentDefinitions,
+		name:        c.effectiveName(member),
+		term:        term,
+		description: description,
+		query:       query,
+		origin:      provenance.Symbol(member),
+	}, nil
+}
+
+// definitionColumn reads a definitions block's required column-name attribute.
+func (c *compiler) definitionColumn(member *symbols.Symbol, attribute string) (string, error) {
+	name, stated, err := c.optionalText(member, attribute)
+	if err != nil {
+		return "", err
+	}
+	if !stated || name == "" {
+		return "", &Error{
+			Kind:      ErrorMissingDefinitionColumn,
+			Document:  c.document,
+			Content:   c.contentName(member),
+			Parameter: attribute,
+			Origin:    provenance.Symbol(member),
+		}
+	}
+	return name, nil
+}
+
 // compileDiagram compiles a diagram content block: the view or element its
 // source names, the resolved rendering kind, and the stated presentation.
 func (c *compiler) compileDiagram(member *symbols.Symbol) (Content, error) {
@@ -1426,7 +1493,8 @@ func (c *compiler) rejectNestedContent(owner *symbols.Symbol) error {
 	return nil
 }
 
-// requiredQueryRef compiles the single query reference a table or list needs.
+// requiredQueryRef compiles the single query reference a table, list or
+// definitions block needs.
 func (c *compiler) requiredQueryRef(member *symbols.Symbol) (*QueryRef, error) {
 	query, err := c.compileQueryRef(member)
 	if err != nil {

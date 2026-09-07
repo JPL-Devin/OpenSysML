@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::outer",
+  "outputs": {
+    "total": {"type": "Real", "value": 10000.0}
+  },
+  "verdicts": {
+    "obj": "not satisfied"
+  }
+}

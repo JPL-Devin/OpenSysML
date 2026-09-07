@@ -449,3 +449,53 @@ func TestW8CVariableFeatureRulesSurviveAnOwnerValueFailure(t *testing.T) {
 		t.Errorf("unexpected owner messages in %v", got)
 	}
 }
+
+// A `var`/`const` cross feature has no owning type (pilot: `Must be owned by an
+// occurrence type`), and a SysML `constant` one never may time-vary.
+func TestW8CCrossFeaturePrefixIsTheCrossFeatures(t *testing.T) {
+	kerml := `package P {
+	class C1; class C2;
+	assoc A {
+		end var x1 : C1 [1] feature x : C1;
+		end const x2 : C2 [1] feature y : C2;
+	}
+	assoc B {
+		end portion var x1 : C1 [1] feature x : C1;
+		end var [1] feature y : C2;
+	}
+	assoc D {
+		end in x1 : C1 [1] feature x : C1;
+		end derived abstract composite x2 : C2 [1] feature y : C2;
+	}
+}`
+	got := w8cVariableFeatureMessages(t, "<t>.kerml", kerml)
+	if got[msgVariableFeatureOwner] != 4 {
+		t.Errorf("want four %q (A::x::x1, A::y::x2, B::x::x1, B::y's), got %v", msgVariableFeatureOwner, got)
+	}
+	if got[msgPortionFeatureVariable] != 1 {
+		t.Errorf("want one %q (B::x::x1), got %v", msgPortionFeatureVariable, got)
+	}
+	if got[msgConstantNotVariable] != 0 || got[msgInitialValueNotVariable] != 0 {
+		t.Errorf("unexpected constant or initial messages in %v", got)
+	}
+
+	sysml := `package P {
+	part def C;
+	attribute def D;
+	connection def K {
+		end constant x1 : C [1] item x : C;
+		end in derived ref x2 : C [1] item y : C;
+	}
+	connection def L {
+		end constant x1 : D [1] attribute x : D;
+		end attribute y : D;
+	}
+}`
+	got = w8cVariableFeatureMessages(t, "<t>.sysml", sysml)
+	if got[msgConstantNotVariable] != 2 {
+		t.Errorf("want two %q (K::x::x1, L::x::x1), got %v", msgConstantNotVariable, got)
+	}
+	if got[msgVariableFeatureOwner] != 0 || got[msgPortionFeatureVariable] != 0 || got[msgInitialValueNotVariable] != 0 {
+		t.Errorf("unexpected owner, portion or initial messages in %v", got)
+	}
+}

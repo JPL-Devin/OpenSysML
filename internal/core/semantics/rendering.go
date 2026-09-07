@@ -70,7 +70,7 @@ func (m *Model) RenderingTarget(member *symbols.Symbol) (*symbols.Symbol, string
 		default:
 			continue
 		}
-		return m.resolveRelTarget(member, rel), refName(rel.Target)
+		return m.relationshipTarget(member, rel), refName(rel.Target)
 	}
 	return nil, ""
 }

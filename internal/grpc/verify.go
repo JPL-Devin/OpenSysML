@@ -31,7 +31,8 @@ func failureReason(err error) pb.FailureReason {
 	case errors.Is(err, runtime.ErrNotAConstraint),
 		errors.Is(err, runtime.ErrNotARequirement),
 		errors.Is(err, runtime.ErrNotASatisfaction),
-		errors.Is(err, runtime.ErrNotACalc):
+		errors.Is(err, runtime.ErrNotACalc),
+		errors.Is(err, runtime.ErrNotAnAnalysis):
 		return pb.FailureReason_FAILURE_REASON_WRONG_KIND
 	default:
 		return pb.FailureReason_FAILURE_REASON_EVALUATION

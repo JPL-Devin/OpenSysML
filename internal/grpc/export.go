@@ -32,13 +32,16 @@ func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.Conv
 	if err != nil {
 		return nil, statusError(connect.CodeInvalidArgument, err.Error())
 	}
+	if !to.Writable() {
+		return nil, statusError(connect.CodeInvalidArgument, (&export.NotWritableError{Format: to}).Error())
+	}
 
 	resp := &pb.ConvertResponse{FromFormat: from.String(), ToFormat: to.String()}
 	// Marked on the response rather than left to the client to infer, so a caller
 	// that let a format be inferred learns the mapping it got is experimental.
 	if export.IsExperimental(from, to) {
 		resp.Experimental = true
-		resp.ExperimentalNotice = export.ExperimentalNotice
+		resp.ExperimentalNotice = export.Notice(from, to)
 	}
 	out, syntax, err := convertModel(name, data, from, to, req.TolerateSyntaxErrors)
 	if err != nil {
@@ -114,7 +117,7 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 		return export.FormatSysML, nil
 	}
 	if req.GetFilePath() == "" {
-		return 0, statusError(connect.CodeInvalidArgument, "from_format is required for inline content: expected sysml, kerml, ttl, turtle or rdf")
+		return 0, statusError(connect.CodeInvalidArgument, "from_format is required for inline content: expected "+export.FormatList)
 	}
 	from, err := export.FormatOfPath(name)
 	if err != nil {

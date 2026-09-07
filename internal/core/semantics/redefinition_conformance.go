@@ -39,7 +39,7 @@ type ConformanceViolation struct {
 // sym breaks against the features it subsets and redefines, explicitly or as a
 // parameter of its owning behavior.
 func (m *Model) ConformanceViolations(sym *symbols.Symbol) []ConformanceViolation {
-	usage, ok := usageOf(sym)
+	traits, ok := featureTraitsOf(sym)
 	if !ok {
 		return nil
 	}
@@ -57,14 +57,14 @@ func (m *Model) ConformanceViolations(sym *symbols.Symbol) []ConformanceViolatio
 		}
 		ref := ast.Node(rel.Target)
 		if rel.Kind == ast.RelRedefines {
-			out = append(out, m.directionViolations(sym, usage, target, ref)...)
+			out = append(out, m.directionViolations(sym, traits, target, ref)...)
 		}
-		out = append(out, m.restrictionViolations(sym, usage, target, ref)...)
+		out = append(out, m.restrictionViolations(sym, traits, target, ref)...)
 	}
 	// A parameter redefines the parameter at its position implicitly, and the
 	// direction it declares must be the redefined one's (KerML 7.4.7.2).
 	for _, target := range m.implicitParameterCounterparts(sym) {
-		out = append(out, m.directionViolations(sym, usage, target, sym.Decl)...)
+		out = append(out, m.directionViolations(sym, traits, target, sym.Decl)...)
 	}
 	return out
 }
@@ -93,13 +93,13 @@ func (m *Model) conformanceTarget(sym *symbols.Symbol, rel *ast.Relationship) *s
 // directionViolations reports a redefinition whose declared direction differs
 // from the redefined feature's. An undeclared direction takes the redefined
 // one's, and a redefined `inout` admits any direction.
-func (m *Model) directionViolations(sym *symbols.Symbol, usage *ast.Usage,
+func (m *Model) directionViolations(sym *symbols.Symbol, traits featureTraits,
 	target *symbols.Symbol, ref ast.Node) []ConformanceViolation {
-	if usage.Direction == ast.DirNone {
+	if traits.Direction == ast.DirNone {
 		return nil
 	}
 	targetDir := m.directionThrough(owningTypeOf(sym), target)
-	if targetDir == ast.DirNone || targetDir == ast.DirInOut || targetDir == usage.Direction {
+	if targetDir == ast.DirNone || targetDir == ast.DirInOut || targetDir == traits.Direction {
 		return nil
 	}
 	return []ConformanceViolation{{
@@ -110,19 +110,19 @@ func (m *Model) directionViolations(sym *symbols.Symbol, usage *ast.Usage,
 // restrictionViolations reports the uniqueness and constancy rules: a subsetting
 // or redefining feature may not be nonunique where the target is unique, nor
 // variable where the target is constant (KerML 8.3.3.3).
-func (m *Model) restrictionViolations(sym *symbols.Symbol, usage *ast.Usage,
+func (m *Model) restrictionViolations(sym *symbols.Symbol, traits featureTraits,
 	target *symbols.Symbol, ref ast.Node) []ConformanceViolation {
-	targetUsage, ok := usageOf(target)
+	targetTraits, ok := featureTraitsOf(target)
 	if !ok {
 		return nil
 	}
 	var out []ConformanceViolation
-	if usage.IsNonunique && !targetUsage.IsNonunique {
+	if traits.IsNonunique && !targetTraits.IsNonunique {
 		out = append(out, ConformanceViolation{
 			Kind: ViolationUniqueness, Feature: sym, Target: target, Ref: ref,
 		})
 	}
-	if usage.IsVariable && m.isConstantFeature(target, targetUsage, map[*symbols.Symbol]bool{}) {
+	if traits.IsVariable && m.isConstantFeature(target, targetTraits, map[*symbols.Symbol]bool{}) {
 		out = append(out, ConformanceViolation{
 			Kind: ViolationConstancy, Feature: sym, Target: target, Ref: ref,
 		})
@@ -133,12 +133,12 @@ func (m *Model) restrictionViolations(sym *symbols.Symbol, usage *ast.Usage,
 // isConstantFeature reports whether target is constant, declared so or through a
 // feature it subsets or redefines: constancy is inherited by restriction.
 // seen guards against cyclic subsetting.
-func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage,
+func (m *Model) isConstantFeature(target *symbols.Symbol, traits featureTraits,
 	seen map[*symbols.Symbol]bool) bool {
-	if usage.IsConstant {
+	if traits.IsConstant {
 		return true
 	}
-	if usage.IsVariable || seen[target] {
+	if traits.IsVariable || seen[target] {
 		return false
 	}
 	seen[target] = true
@@ -153,8 +153,8 @@ func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage,
 		if next == nil || next == target {
 			continue
 		}
-		nextUsage, ok := usageOf(next)
-		if ok && m.isConstantFeature(next, nextUsage, seen) {
+		nextTraits, ok := featureTraitsOf(next)
+		if ok && m.isConstantFeature(next, nextTraits, seen) {
 			return true
 		}
 	}
@@ -165,11 +165,11 @@ func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage,
 // reversed when owner reaches the feature's owning type by a conjugation
 // (SysML v2 7.12.2).
 func (m *Model) directionThrough(owner, feature *symbols.Symbol) ast.FeatureDirection {
-	usage, ok := usageOf(feature)
+	traits, ok := featureTraitsOf(feature)
 	if !ok {
 		return ast.DirNone
 	}
-	dir := usage.Direction
+	dir := traits.Direction
 	source := owningTypeOf(feature)
 	if owner == nil || source == nil {
 		return dir
@@ -190,11 +190,27 @@ func owningTypeOf(sym *symbols.Symbol) *symbols.Symbol {
 	return sym.OwnerScope.Owner()
 }
 
-// usageOf returns the usage declaring sym, if sym is declared by one.
-func usageOf(sym *symbols.Symbol) (*ast.Usage, bool) {
+// featureTraits are the declared properties conformance compares, read off a
+// usage or an inline cross feature alike.
+type featureTraits struct {
+	Direction   ast.FeatureDirection
+	IsNonunique bool
+	IsVariable  bool
+	IsConstant  bool
+}
+
+// featureTraitsOf returns the traits sym's declaration states, if it is a feature.
+func featureTraitsOf(sym *symbols.Symbol) (featureTraits, bool) {
 	if sym == nil {
-		return nil, false
+		return featureTraits{}, false
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	return usage, ok
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		return featureTraits{Direction: d.Direction, IsNonunique: d.IsNonunique,
+			IsVariable: d.IsVariable, IsConstant: d.IsConstant}, true
+	case *ast.CrossFeatureMember:
+		return featureTraits{Direction: d.Direction, IsNonunique: d.IsNonunique,
+			IsVariable: d.IsVariable, IsConstant: d.IsConstant}, true
+	}
+	return featureTraits{}, false
 }

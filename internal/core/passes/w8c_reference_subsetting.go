@@ -27,11 +27,6 @@ func (ReferenceSubsettingPass) Run(ctx *Context, name string, root *ast.RootName
 	var diags []Diagnostic
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
-		// A binding's two ends are encoded as reference subsettings, so its
-		// second one is an end rather than a second reference of one feature.
-		if u, ok := w8cUsageOf(sym); ok && u.Kind == ast.UsageBinding {
-			return
-		}
 		var refs []*ast.Relationship
 		for _, rel := range semantics.RelationshipsOf(sym) {
 			if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {

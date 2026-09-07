@@ -299,14 +299,14 @@ func TestFormatConstRealRoundTrips(t *testing.T) {
 		{-15.200531548598184, "-15.200531548598184"},
 	}
 	for _, tc := range cases {
-		got := FormatConst(semantics.Value{Kind: semantics.ValReal, Real: tc.real})
+		got := semantics.FormatConst(semantics.Value{Kind: semantics.ValReal, Real: tc.real})
 		if got != tc.want {
-			t.Errorf("FormatConst(%v) = %q, want %q", tc.real, got, tc.want)
+			t.Errorf("semantics.FormatConst(%v) = %q, want %q", tc.real, got, tc.want)
 		}
 		// A rendered Real reads back as the value it was rendered from.
 		var back float64
 		if _, err := fmt.Sscanf(got, "%g", &back); err != nil || back != tc.real {
-			t.Errorf("FormatConst(%v) = %q, which reads back as %v (%v)", tc.real, got, back, err)
+			t.Errorf("semantics.FormatConst(%v) = %q, which reads back as %v (%v)", tc.real, got, back, err)
 		}
 	}
 }

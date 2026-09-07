@@ -73,6 +73,14 @@ func TestNegative(t *testing.T) {
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// Prefix metadata belongs after these keywords, not ahead of them.
+		{"subject_prefix_metadata_before_keyword", "requirement r { #goal subject s : T; }"},
+		{"subject_prefix_metadata_before_keyword_eof", "requirement r { #goal subject"},
+		{"actor_prefix_metadata_before_keyword", "requirement r { #goal actor a; }"},
+		{"variant_prefix_metadata_before_keyword", "variation part def V { #goal variant part v; }"},
+		{"assume_prefix_metadata_before_keyword", "requirement r { #goal assume constraint a : C; }"},
+		{"require_prefix_metadata_before_keyword", "requirement r { #goal require constraint r : C; }"},
+		{"require_prefix_metadata_before_keyword_bare", "requirement r { #goal require ; }"},
 		// An assertion's prefix metadata comes ahead of `assert`, not after it or
 		// its `not` (SysML.xtext AssertConstraintUsage `OccurrenceUsagePrefix 'assert'`).
 		{"assert_prefix_metadata_after_keyword", "package P { part def D { assert #B constraint c; } }"},
@@ -319,6 +327,18 @@ func TestNegative(t *testing.T) {
 		// An expression is not a ConnectorEndMember, so a binding whose right
 		// side is one is rejected (see TestBindingEndFailuresAreDistinguishable).
 		{"binding_end_expression", "package P { part def D { attribute a; attribute b; bind a = b * 2; } }"},
+		// A named binding end references a feature after its `::>` (SysML.xtext
+		// ConnectorEnd), and a binding joins exactly two ends with '=', never a
+		// succession's `then`.
+		{"binding_named_end_no_target", "package P { part def D { attribute a; attribute b; bind e1 ::> = b; } }"},
+		{"binding_named_second_end_no_target", "package P { part def D { attribute a; attribute b; bind a = e2 references ; } }"},
+		{"binding_named_end_no_eq", "package P { part def D { attribute a; attribute b; bind e1 ::> a b; } }"},
+		{"binding_ends_then", "package P { part def D { attribute a; attribute b; attribute c; bind a = b then c; } }"},
+		{"binding_named_end_expression", "package P { part def D { attribute a; attribute b; bind e1 ::> a = b + 1; } }"},
+		{"binding_declaration_bind_no_ends", "package P { part def D { attribute a; binding x : AB bind ; } }"},
+		// A SysML UsageDeclaration puts its multiplicity after the name; a bracket
+		// before the name is a connector end's (pilot: `no viable alternative at input 'ab2'`).
+		{"binding_multiplicity_before_name", "package P { part def D { attribute a; attribute b; binding [1] ab2 : AB bind a = b; } }"},
 
 		// A connection, interface or flow usage stating its ends where its name
 		// would go still states both ends and closes the body it opens.
@@ -366,6 +386,21 @@ func TestNegative(t *testing.T) {
 		{"frame_no_concern", "viewpoint def V { frame; }"},
 		{"frame_concern_no_declaration", "viewpoint def V { frame concern }"},
 		{"render_no_rendering", "view def V { render; }"},
+		// A name follows its kind keyword, never precedes it (SysML.xtext
+		// DefinitionDeclaration, UsageDeclaration).
+		{"name_before_usage_keyword", "part def B { foo attribute bar : A; }"},
+		{"name_before_definition_keyword", "package P { x part def Q; }"},
+
+		// A specialization following a parameter's multiplicity still names its
+		// target and closes its multiplicity (KerML.xtext:574).
+		{"parameter_multiplicity_redefines_no_target", "action def A { in x : Integer[1] redefines ; }"},
+		{"parameter_multiplicity_redefines_symbol_no_target", "action def A { in x : Integer[1] :>> ; }"},
+		{"parameter_multiplicity_ordered_subsets_no_target", "action def A { in xs : Integer[*] ordered :> ; }"},
+		{"parameter_multiplicity_unclosed_before_redefines", "action def A { in x : Integer[1 redefines A::x; }"},
+		{"parameter_multiplicity_redefines_no_terminator", "action def A { in x : Integer[1] redefines A::x }"},
+		{"out_parameter_multiplicity_redefines_no_target", "action def A { out x : Integer[1] redefines ; }"},
+		{"inout_parameter_multiplicity_redefines_no_target", "action def A { inout x : Integer[1] :>> ; }"},
+		{"return_multiplicity_redefines_no_target", "calc def C { return : Integer[1] ordered :>> ; }"},
 	}
 
 	for _, tt := range tests {
@@ -414,6 +449,60 @@ func TestRemovedSuccessionFormsProduceDiagnosticsAndErrorNodes(t *testing.T) {
 			}
 			if strings.Contains(dump, tt.forbiddenNode) {
 				t.Fatalf("unexpected %s for removed spelling:\n%s", tt.forbiddenNode, dump)
+			}
+		})
+	}
+}
+
+// A name written ahead of a kind keyword is no declaration: the stray name is
+// reported and skipped without naming anything, and the members after it parse.
+func TestNameBeforeKeywordIsNotADeclaration(t *testing.T) {
+	tests := []struct {
+		name       string
+		ext        string
+		src        string
+		stray      string
+		message    string
+		wantMember string
+	}{
+		{"body_usage", ".sysml", "package P { attribute def A; part def B { foo attribute bar : A; attribute ok : A; } }", "foo", msgExpectedBodyMember, `name="ok"`},
+		{"body_definition", ".sysml", "package P { part def B { foo part def Q; part def R; } }", "foo", msgExpectedBodyMember, `name="R"`},
+		{"body_usage_with_body", ".sysml", "package P { part def B { myConstraint constraint { 1 > 0 } part q; } }", "myConstraint", msgExpectedBodyMember, `name="q"`},
+		{"namespace_definition", ".sysml", "package P { x part def Q; part def R; }", "x", "expected a namespace member", `name="R"`},
+		{"kerml_body_feature", ".kerml", "package P { class A; class B { foo feature bar : A; feature ok : A; } }", "foo", msgExpectedBodyMember, `name="ok"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			sf := source.New(tt.name+tt.ext, []byte(tt.src))
+			p := New(sf)
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 1 {
+				t.Fatalf("want one diagnostic, got %v", p.Diagnostics)
+			}
+			d := p.Diagnostics[0]
+			if d.Message != tt.message {
+				t.Errorf("message = %q, want %q", d.Message, tt.message)
+			}
+			if got := sf.Text(d.Span); got != tt.stray {
+				t.Errorf("diagnostic points at %q, want the stray name %q", got, tt.stray)
+			}
+			dump := ast.Dump(root)
+			if !strings.Contains(dump, "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", dump)
+			}
+			if strings.Contains(dump, `name="`+tt.stray+`"`) {
+				t.Errorf("stray name %q became a declaration:\n%s", tt.stray, dump)
+			}
+			if !strings.Contains(dump, tt.wantMember) {
+				t.Errorf("member after the error was not parsed (want %s):\n%s", tt.wantMember, dump)
 			}
 		})
 	}
@@ -591,6 +680,9 @@ func TestNegativeKerML(t *testing.T) {
 
 		// A binary connector states both ends around `to` (KerML.xtext:836).
 		{"binary_connector_no_second_end", "package P { feature a; connector a to ; }"},
+		{"binary_connector_no_first_end", "package P { feature t; connector to t; }"},
+		{"binary_connector_no_to", "package P { feature eng; feature t; connector eng t; }"},
+		{"binary_connector_end_multiplicity_no_target", "package P { feature a; feature b; connector [1] to b; }"},
 		{"binary_connector_named_end_no_target", "package P { feature a; feature b; connector e ::> to b; }"},
 		{"binary_connector_name_without_from", "package P { feature a; feature b; connector c : L a to b; }"},
 
@@ -598,6 +690,27 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
 		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
+
+		// An end's crossing multiplicity is followed by its end (KerML.xtext:854), so
+		// one followed by nothing or the other end's keyword, or left unclosed, is reported.
+		{"binding_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] = b; }"},
+		{"binding_end_multiplicity_unclosed", "package P { feature a; feature b; binding [1 a = b; }"},
+		{"binding_second_end_multiplicity_no_end", "package P { feature a; feature b; binding [1] a = [1] ; }"},
+		{"binding_end_multiplicity_no_terminator", "package P { feature a; feature b; binding [1] a = [1] b }"},
+		// A named binding end references a feature after its `::>` or `references`
+		// (KerML.xtext ConnectorEnd), and `of` is followed by two ends around '='.
+		{"binding_named_end_no_target", "package P { feature a; feature b; binding e1 ::> = b; }"},
+		{"binding_of_named_end_no_target", "package P { feature a; feature b; binding of e1 references = b; }"},
+		{"binding_of_no_ends", "package P { feature a; feature b; binding x of ; }"},
+		{"binding_of_no_second_end", "package P { feature a; feature b; binding of a = ; }"},
+		{"binding_ends_then", "package P { feature a; feature b; feature c; binding a = b then c; }"},
+		{"binding_named_end_expression", "package P { feature a; feature b; binding of e1 ::> a = b + 1; }"},
+		{"succession_end_multiplicity_no_end", "package P { behavior B { step a; step b; succession [1] then b; } }"},
+		{"succession_end_multiplicity_unclosed", "package P { behavior B { step a; step b; succession [1 a then b; } }"},
+		{"succession_second_end_multiplicity_no_end", "package P { behavior B { step a; step b; succession [1] a then [1] ; } }"},
+		{"succession_end_multiplicity_no_terminator", "package P { behavior B { step a; step b; succession [1] a then [1] b } }"},
+		{"succession_named_end_no_target", "package P { behavior B { step a; step b; succession [1] e ::> then b; } }"},
+		{"succession_global_end_no_name", "package P { behavior B { step a; step b; succession [1] $:: then b; } }"},
 
 		// A named multiplicity states bounds or a subsetting, and the
 		// subsetting names one multiplicity (KerML.xtext:754).

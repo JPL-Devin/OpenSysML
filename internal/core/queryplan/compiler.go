@@ -512,7 +512,7 @@ func (c *compiler) mostSpecificResults(results []effectiveResult) []effectiveRes
 func declaredResult(sym *symbols.Symbol) (effectiveResult, bool, error) {
 	name := symbols.FQNOf(sym)
 	members := declarationMembers(sym)
-	statements := lower.CalcBody(members, sym.Scope)
+	statements := lower.CalcBody(sym.Decl, members, sym.Scope)
 	if len(statements) == 1 {
 		if result, ok := statements[0].(lower.Return); ok && result.Value != nil {
 			return effectiveResult{node: result.Value, owner: sym}, true, nil

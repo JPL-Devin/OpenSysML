@@ -324,7 +324,7 @@ func (d *declaredValues) root(v *Var, fqn string) (runtime.Value, error) {
 	if feat, ok := d.features[fqn]; ok && feat.DefaultValue != nil {
 		val, err := d.ctx.EvalWithScope(feat.DefaultValue, feat.DefaultScope())
 		if err != nil {
-			return runtime.Value{}, fmt.Errorf("%s declares a value that does not evaluate: %w", fqn, err)
+			return runtime.Value{}, declaredValueError(fqn, err)
 		}
 		return val, nil
 	}
@@ -334,11 +334,21 @@ func (d *declaredValues) root(v *Var, fqn string) (runtime.Value, error) {
 	if usage, declared := declaredUsage(v, fqn); declared && usage.Value != nil {
 		val, err := d.ctx.EvalWithScope(usage.Value, v.Symbol.OwnerScope)
 		if err != nil {
-			return runtime.Value{}, fmt.Errorf("%s declares a value that does not evaluate: %w", fqn, err)
+			return runtime.Value{}, declaredValueError(fqn, err)
 		}
 		return val, nil
 	}
 	return runtime.Value{}, fmt.Errorf("%w: nothing declares one for %s", errNoConcreteValue, fqn)
+}
+
+// declaredValueError reports a declared value that does not evaluate. One that
+// reads a feature holding no value — a case's subject the run supplies — is a
+// concrete value nothing declares, not a disagreement.
+func declaredValueError(fqn string, err error) error {
+	if errors.Is(err, runtime.ErrNoValue) {
+		return fmt.Errorf("%w: %s declares a value reading one that is unbound: %v", errNoConcreteValue, fqn, err)
+	}
+	return fmt.Errorf("%s declares a value that does not evaluate: %w", fqn, err)
 }
 
 // declaredUsage is the declaration a variable reads directly, which is the

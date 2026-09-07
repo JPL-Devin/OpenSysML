@@ -25,12 +25,12 @@ package test {
 
     action def BaseResult {
         in x : Integer = 3;
-        return r : Integer;
+        out result : Integer;
     }
 
     action def DerivedResult :> BaseResult {
         first start;
-        then assign r := x * 10;
+        then assign result := x * 10;
         then done;
     }
 
@@ -48,7 +48,7 @@ package test {
             assign typed := d.y;
             assign redefined := rd.y;
             assign invoked := c;
-            assign performed := p.r;
+            assign performed := p.result;
         }
         then done;
     }

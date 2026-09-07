@@ -26,8 +26,8 @@ const requirementMemberShortNameModel = `package P {
 		subject <s2> y :>> R::s;
 	}
 	requirement def R4 :> R {
-		subject <alias> :>> x;
-		require constraint { alias.v == x.v }
+		subject <al> :>> x;
+		require constraint { al.v == al.v }
 	}
 }`
 
@@ -76,30 +76,41 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 		t.Errorf("references seen = %v, want s:4 a:2 r:2", seen)
 	}
 
-	// A redefining constraint is registered under the short name it redefines,
-	// as a `part :>> wheel` is; a redefining subject with a short name of its
-	// own is one symbol under both its names.
+	// A redefining subject takes both names of the subject it redefines (KerML
+	// 7.3.4.5), so `R2::s` and `R2::x` reach it; a requirement constraint is
+	// named only by a constraint it references, so a redefining one has no name.
 	r2 := local(t, pkg.Scope, "R2")
-	for _, name := range []string{"a", "r"} {
-		local(t, r2.Scope, name)
+	subject := local(t, r2.Scope, "s")
+	if got, ok := r.ResolveQualified(rootScope, qualified("P", "R2", "x")); !ok || got != subject {
+		t.Errorf("P::R2::x = %v, %v; want R2's subject", got, ok)
+	}
+	for _, name := range []string{"a", "r", "ac", "rc"} {
+		if _, ok := r2.Scope.LookupLocal(name); ok {
+			t.Errorf("R2 answers to %q; a redefining requirement constraint derives no name", name)
+		}
+		if _, ok := r.ResolveQualified(rootScope, qualified("P", "R2", name)); ok {
+			t.Errorf("P::R2::%s resolves; want unresolved", name)
+		}
+	}
+	if anon := r2.Scope.AnonymousMembers(); len(anon) != 2 {
+		t.Errorf("R2 anonymous members = %d, want the two constraints", len(anon))
 	}
 	r3 := local(t, pkg.Scope, "R3")
 	if local(t, r3.Scope, "s2") != local(t, r3.Scope, "y") {
 		t.Error("R3's subject is not one symbol under both its names")
 	}
 
-	// A redefining subject with a short name but no name of its own takes the
-	// redefined feature's name (KerML 7.3.4.5), as `part <p> :>> x` does: R4's
-	// subject is one symbol under `alias` and `x`, its `:>> x` names R's subject
-	// and its condition reads its own subject by either name.
+	// A redefining subject with a short name of its own declares a name (KerML
+	// 7.3.4.5), so it takes none from the redefined feature: R4's subject is a
+	// member by `al` alone and its `:>> x` names R's subject.
 	r4 := local(t, pkg.Scope, "R4")
-	aliased := local(t, r4.Scope, "alias")
-	if aliased != local(t, r4.Scope, "x") {
-		t.Error("R4's subject is not one symbol under `alias` and `x`")
+	aliased := local(t, r4.Scope, "al")
+	if _, ok := r4.Scope.LookupLocal("x"); ok {
+		t.Error("R4 answers to `x`; a short-named redefinition derives no name")
 	}
-	if !aliased.EffectiveName || aliased.NamingTarget == nil || aliased.Name != "x" || aliased.ShortName != "alias" {
-		t.Errorf("R4's subject = %q <%s> effective=%v target=%v; want x <alias> named by its redefinition",
-			aliased.Name, aliased.ShortName, aliased.EffectiveName, aliased.NamingTarget)
+	if aliased.EffectiveName() || aliased.NamingTarget != nil || aliased.Name != "al" || aliased.ShortName != "al" {
+		t.Errorf("R4's subject = %q <%s> effective=%v target=%v; want a member by <al> alone",
+			aliased.Name, aliased.ShortName, aliased.EffectiveName(), aliased.NamingTarget)
 	}
 	inherited := local(t, req.Scope, "x")
 	var redefines, reads int
@@ -114,7 +125,7 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 			if !ok || got != inherited {
 				t.Errorf("R4 :>> %s = %v, %v; want R::x", last, got, ok)
 			}
-		case last == "alias" || last == "x":
+		case last == "al":
 			reads++
 			if !ok || got != aliased {
 				t.Errorf("R4 condition %s = %v, %v; want R4's own subject", last, got, ok)

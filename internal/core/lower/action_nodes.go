@@ -79,9 +79,13 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 			graph.Nodes = append(graph.Nodes, n)
 			lowerNodeBody(graph, n, ast.NodeBodyMembers(n), scope)
 		case *ast.Usage:
-			if n.Kind == ast.UsageAction {
+			switch {
+			case n.Kind == ast.UsageAction:
 				graph.Nodes = append(graph.Nodes, n)
 				lowerActionNode(graph, n, childScope(scope, n))
+			case IsCaseNode(n):
+				graph.Nodes = append(graph.Nodes, n)
+				recordNodeScope(graph, n, childScope(scope, n))
 			}
 		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
 			*ast.SendStatement, *ast.TerminateStatement:

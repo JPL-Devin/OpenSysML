@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +44,79 @@ func TestManualCookbookModelAnalysesCleanly(t *testing.T) {
 		cmd := exec.Command(binary, source, "-run-query", query)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("cookbook query %s: %v\n%s", query, err, output)
+		}
+	}
+}
+
+// TestManualRequirementsExample runs the manual's requirements example end to
+// end: the query projects each requirement's short name, name and doc text,
+// and the report renders them as table cells and as prose in Markdown and HTML,
+// the Markdown matching its committed output.
+func TestManualRequirementsExample(t *testing.T) {
+	binary := buildCLI(t)
+	examples := filepath.Join("..", "..", "docs", "manual", "examples")
+	source := filepath.Join(examples, "requirements.sysml")
+
+	query := exec.Command(binary, source, "-run-query", "Requirements::Reqs root=Requirements::spec")
+	output, err := query.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run query: %v\n%s", err, output)
+	}
+	for _, want := range []string{
+		"returned 2 rows",
+		"Columns: shortName, name, documentation",
+		`shortName = "HLR-R001"`, `name = "CrewSafety"`,
+		`documentation = "The mission shall safely return all three crew members to Earth."`,
+		`shortName = "HLR-R002"`, `name = "SoftLanding"`,
+		`documentation = "The mission shall achieve a soft landing\non the lunar surface."`,
+	} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("query output is missing %q:\n%s", want, output)
+		}
+	}
+
+	committed, err := os.ReadFile(filepath.Join(examples, "requirements.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "requirements.md")
+	render := exec.Command(binary, source, "-render-document", "Requirements::RequirementsReport", "-o", out)
+	if output, err := render.CombinedOutput(); err != nil {
+		t.Fatalf("render: %v\n%s", err, output)
+	}
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(written) != string(committed) {
+		t.Errorf("rendered example differs from docs/manual/examples/requirements.md:\n%s", written)
+	}
+	for _, want := range []string{
+		"| HLR-R001 | CrewSafety | The mission shall safely return all three crew members to Earth. |",
+		"**HLR-R001** — The mission shall safely return all three crew members to Earth.",
+		"**HLR-R002** — The mission shall achieve a soft landing on the lunar surface.",
+	} {
+		if !strings.Contains(string(written), want) {
+			t.Errorf("Markdown is missing %q:\n%s", want, written)
+		}
+	}
+
+	page := exec.Command(binary, source, "-render-document", "Requirements::RequirementsReport", "-doc-form", "html")
+	html, err := page.Output()
+	if err != nil {
+		t.Fatalf("render HTML: %v", err)
+	}
+	for _, want := range []string{
+		`<td class="sysml-cell" data-column="shortName" data-value-kind="string"><span class="sysml-value" data-value-kind="string">HLR-R001</span></td>`,
+		`<dl class="sysml-definitions" data-content="definitions" data-name="prose" data-query="Requirements::Reqs">`,
+		`<div class="sysml-entry" data-element="Requirements::CrewSafety" data-element-kind="requirementDef">` + "\n" +
+			`<dt class="sysml-term">HLR-R001</dt>` + "\n" +
+			`<dd class="sysml-description">The mission shall safely return all three crew members to Earth.</dd>`,
+		`<dt class="sysml-term">HLR-R002</dt>` + "\n" +
+			`<dd class="sysml-description">The mission shall achieve a soft landing on the lunar surface.</dd>`,
+	} {
+		if !strings.Contains(string(html), want) {
+			t.Errorf("HTML is missing %q:\n%s", want, html)
 		}
 	}
 }

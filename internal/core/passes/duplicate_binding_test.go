@@ -131,9 +131,8 @@ func TestInvocationDuplicateParameterBindingSysML(t *testing.T) {
 }
 
 // An invocation heading a feature chain is argument-checked as a bare one is, under
-// one segment or several: duplicates, excess and unknown parameters alike. Only a
-// required parameter left unbound passes there, as the reference's own suite declares
-// for `A().y`.
+// one segment or several: duplicates, excess and unknown parameters alike, and a
+// default-less parameter left unbound is the same advisory in either position.
 func TestInvocationHeadingFeatureChain(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
@@ -150,8 +149,6 @@ func TestInvocationHeadingFeatureChain(t *testing.T) {
 		"attribute v = K(a = 1, b = 2).r;",
 		"item s = M(n = 1).r.inner.inner;",
 		"send M(n = 1).r.inner to rcv;",
-		"attribute v = K().r;",
-		"attribute v = K(b = 2).r;",
 	} {
 		wantLibraryClean(t, fmt.Sprintf(model, member))
 	}
@@ -160,8 +157,15 @@ func TestInvocationHeadingFeatureChain(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, "send M(n = 1, M::n = 2).r.inner to rcv;"), "type.expr", `M binds parameter "n" twice`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(c = 1).r;"), "type.expr", `K has no parameter named "c"`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "item s = M(1, 2).r.inner;"), "type.expr", `M takes 1 argument(s), found 2`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K();"), "type.expr", `K requires 1 argument(s), found 0`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "attribute v = K(b = 2);"), "type.expr", `K requires an argument for parameter alpha`)
+	for _, member := range []string{
+		"attribute v = K();",
+		"attribute v = K(b = 2);",
+		"attribute v = K().r;",
+		"attribute v = K(b = 2).r;",
+	} {
+		wantLibraryWarning(t, fmt.Sprintf(model, member), CodeUnboundParameter,
+			"K leaves parameter alpha unbound, so the call cannot be evaluated")
+	}
 }
 
 // A constructor binds each feature of the instantiated type once, whatever name
@@ -238,4 +242,52 @@ func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, "send (1, 2).{in i : Integer; new Sig(q = i, q = i)} to rcv;"), "type.expr", `q of Sig is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2);"), "type.expr", `x of Sub is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "item a : Sig = new Sig(p = 1, Sig::p = 2);"), "type.expr", `p of Sig is already bound by an earlier argument`)
+}
+
+// An argument binding no `in` parameter of the invoked type — a name that is no
+// parameter, an `out` or `return` parameter, a positional argument past the last
+// parameter — is reported at the argument with the pilot's wording
+// (validateInvocationExpressionParameterRedefinition); inherited, redefined and
+// receiver-typed parameters bind.
+func TestInvocationParameterRedefinitionKerML(t *testing.T) {
+	const model = `package P {
+		datatype T;
+		function F { in x : T; in y : T; return r : T; }
+		function G :> F { in redefines x; }
+		function H :> F { in z : T; }
+		step S { in a : T; out b : T; }
+		feature t : T;
+		feature f : F;
+		feature v = %s;
+	}`
+	for _, call := range []string{
+		"F(t, t)", "F(x = t, y = t)", "G(x = t, y = t)", "H(z = t, y = t)", "f(x = t, y = t)", "S(a = t)", "S(t)",
+	} {
+		if diags := kermlLibraryDiags(t, fmt.Sprintf(model, call)); len(diags) != 0 {
+			t.Errorf("%s: expected no diagnostics, got %v", call, diags)
+		}
+	}
+	for call, want := range map[string]struct{ at, msg string }{
+		"F(w = t)":        {"w", `F has no parameter named "w"`},
+		"F(r = t)":        {"r", `F has no parameter named "r"`},
+		"S(b = t)":        {"b", `S has no parameter named "b"`},
+		"f(x = t, w = t)": {"w", `f has no parameter named "w"`},
+		"H(x = t, z = t)": {"x", `H has no parameter named "x"`},
+		"F(t, t, t)":      {"t", "F takes 2 argument(s), found 3"},
+		"S(t, t)":         {"t", "S takes 1 argument(s), found 2"},
+	} {
+		src := fmt.Sprintf(model, call)
+		diags := kermlLibraryDiags(t, src)
+		if len(diags) != 1 {
+			t.Errorf("%s: expected one diagnostic, got %v", call, diags)
+			continue
+		}
+		d := diags[0]
+		if d.Code != "type.expr" || !strings.HasPrefix(d.Message, msgInvocationParameterRedefinition+": "+want.msg) {
+			t.Errorf("%s: expected %q, got %s %q", call, want.msg, d.Code, d.Message)
+		}
+		if spanned := strings.TrimSpace(src[d.Span.Offset:d.Span.End()]); spanned != want.at {
+			t.Errorf("%s: expected the report at %q, got %q", call, want.at, spanned)
+		}
+	}
 }

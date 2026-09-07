@@ -8,7 +8,7 @@ any roadmap item except the census figures under Track V, which are quoted from 
 Read `AGENTS.md` first; it governs everything below.
 
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
-> `D3.4`, `D7`, `D8`, `D9`) that other records, the known-violations inventory and the ontology
+> `D3.4`, `D7`, `D8`, `D9`, `D10`) that other records, the known-violations inventory and the ontology
 > package's README cross-reference; `L` names the library items, `N` the native compilation
 > track, `R` the release follow-through, `E` the behavior-execution semantics the runtime does
 > not yet have, `X` the expression forms it parses but does not evaluate, `Q` the runtime query
@@ -102,8 +102,8 @@ before re-recording anything.
 | gRPC conformance fixtures / robustness cases | 15 / 10 |
 | Golden AST fixtures | 183 (`TestGolden`) |
 | Negative parser subtests | 225 first-level subtests of `TestNegative` (346 across every `*Negative*` parser test) |
-| Rejection oracle | 236 self-authored invalid models: 228 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
-| Validation census | 148 of 217 named constraints reported (137 faithful, 11 approximate), 6 not implemented, 63 unknown — with #900 |
+| Rejection oracle | 243 self-authored invalid models: 235 both reject, 0 the pilot alone, 8 ours alone (the control-node rules the pilot leaves unimplemented) |
+| Validation census | 156 of 217 named constraints reported (143 faithful, 13 approximate), 7 not implemented, 1 deliberate, 53 unknown — with the KerML unknown-row adjudications |
 | RDF corpus round trip | 305 of 345 models stable, 40 refused, no other verdict |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
@@ -213,6 +213,16 @@ maintainer's application at <https://signpath.org/apply>, the SignPath project a
 setup, the `SIGNPATH_*` secret and variables in GitHub, and one manual approval per release;
 until then the workflow builds and stops. Procedure: `docs/project/releasing.md`, "Windows
 Authenticode signing".
+
+Windows packaging is in place on the same workflow: a WiX v5 MSI (`packaging/msi`,
+`scripts/build-msi.sh`) installing the three executables to `Program Files\OpenSysML` on `PATH`,
+with the Z3 solver as an optional feature pinned by hash, published unsigned as
+`opensysml-<x.y.z>-windows-amd64.msi` and, once SignPath is configured, rebuilt from the signed
+executables and itself signed as `*-signed.msi` (Z3 stays unsigned by SignPath's terms). Scoop,
+winget and MSYS2 manifests that depend on Z3 rather than bundle it are maintained as templates
+under `packaging/` with render scripts; what remains there is a maintainer submitting each to
+its external repository (and, for winget, confirming the `OpenMBEE.OpenSysML` identifier and a
+Z3 package to depend on). Procedure: `docs/project/releasing.md`, "The Windows installer".
 
 ## R5 — the VS Code extension is not released
 
@@ -654,6 +664,49 @@ now that D3.4 is in:
 
 Nothing here is a new subsystem; the order is D9.1 → D9.2, and D9.3 is the RDF track's existing
 order applied to this use.
+
+## D10 — write-through from a view-only project to the projects it shows
+
+A project under configuration management that consists entirely of views — `view` usages with
+`expose` and `filter` over one or more imported projects, each bound by its own
+`@ProjectRef` — owns no element worth editing: everything it shows is some other project's, and
+with `@ElementId` on the materialized elements that ownership is explicit
+([element-identity-annotations.md](element-identity-annotations.md), nested scopes). Today the
+sync tooling stops at the document: `reposync.Diff` produces one `ChangeSet` for one project
+scope, `GraphScope` refuses a graph carrying two, and an edit made to an element as it appears in
+the view project has nowhere to go but the view project's own branch, which is the wrong owner.
+The rendered artefacts (`-render`, `-doc`) stay one-way; the round trip in question is
+notation-to-repository by id, and it needs three things:
+
+1. **Per-scope fan-out.** A diff over a multi-scope document splits the local graph by enclosing
+   `@ProjectRef`, diffs each part against its own branch (`Options.Base` per scope), and applies
+   each as a commit to the owning project under its own `flexo.StaleBranchError` guard. No
+   partial success across scopes: a set that is not appliable in one scope refuses the run before
+   the first write, as `Appliable` does today within one. `-sync-state` records one last-seen
+   commit per scope.
+2. **Refusing the edit that would leave the view.** If a write-back would take an element outside
+   the `filter` of every view that exposed it — dropping the `#systemRequirement` tag on a
+   requirement shown only by `RequirementsView` — the element vanishes from the project the edit
+   was made in. That is the classical view-update problem, and the answer is a typed refusal in
+   the change set (the same tier as the existing *conflict* verdict), overridable only by an
+   explicit confirmation like `ConfirmDeletes`. The resolver's inherited view conditions
+   (`Resolver.inheritedViewConditions`) already compute the exposing filters, so the check is a
+   re-admission test of the edited element against them.
+3. **Variant-tagged edits under conditional configuration.** A view project whose exposure
+   depends on a variant selection shows one variant's element at a time; an id says *which*
+   element, not *under which selection it was shown*, so a write-back must carry the selection
+   that was active and refuse when the target branch's selection differs. Elements with derived
+   (name-keyed) identity are excluded from write-through altogether: a rename through a view
+   would be a delete plus a create in the owner, which is the failure identity exists to prevent,
+   so the path requires `@ElementId` and offers `-sync-mint-ids -sync-annotate` to get there.
+
+The gate is the live-stack harness (`TestFlexoInterop`) with a two-project fixture: a view-only
+project over two owned projects, an edit through the view lands as one commit in each owner and
+nothing in the view project, the filter-violating edit and the variant mismatch are refused before
+any write, and a re-run finds nothing to change. Depends on D9.1 (reading a branch as notation,
+which is how the view project materializes what it exposes) and sits after D9.2 in the track
+order; independent of D1/D2, since it moves whole elements by id and never inspects their
+vocabulary.
 
 ---
 
@@ -1149,6 +1202,28 @@ the case is to compile; the dependency is on *expression and library semantics b
 which is why the approved order puts A1 first and X2 immediately after it rather than the reverse —
 A1's lowering can land against calcs that already evaluate, and X2 widens what those calcs can be.
 
+**Open:** [PR #979](https://github.com/JPL-Devin/OpenSysML/pull/979). An analysis definition or
+usage runs as the calculation it is: the `subject` is an `in` parameter (bound by the usage, by the
+object the run is asked on, or from the enclosing case), the body's `action`/`perform`/nested
+`analysis` steps are one `lower.Block` over the action graph they state (`then`, `first`, forks,
+joins, decisions, merges; declaration order where none is stated) run by the action executor, `out`
+and `return` are evaluated in the case's frame with their units, and the `objective` and every
+`assert constraint` are checked afterwards by the requirement engine as satisfied / not satisfied /
+undecided. `-analysis`/`%analysis`, the `RunAnalysis` RPC with Connect, Go and Python clients, and
+reads of an analysis usage's outputs as features (`An::shipCost.total`, `holder.inner.total`,
+`attribute :>> x = a.result;`) with memoization and invalidation are in. Left for A6: a verification
+case body lowers through the same code but is not run, and its verdict is still what `-requirement`
+computes. What the corpora answer: the pilot's `10d-Dynamics Analysis.sysml` runs on a supplied
+subject and inputs (`accelerationProfile = [0.01, 0.01998…]`); `10a-Analysis.sysml` binds an
+untyped `part vehicle` to a `Vehicle` subject and states no mass values, so it is refused at the
+binding (typed) and a copy with typed, valued parts answers `200 [kg]`; the training corpus's
+`33. Analysis` fuel-economy cases and the `Analysis Examples` corpus state their step outputs only
+through `assert constraint` (`solveForPower.power` has no computation to run), so they end in the
+typed `no value for feature` refusal — the solver's territory, not the executor's — and
+`10c-Fuel Economy Analysis.sysml` passes a bodiless `calc cityScenario` as the value of
+`in calc scenario`, which X6 (a function as a value) has to admit before its steps can run. Left
+for A2: the training trade study's multi-valued `subject` is refused by multiplicity.
+
 ## A2 — a trade study iterates, evaluates and selects
 
 `TradeStudies::TradeStudy` is recognised (its `objective` metadata is read) but `selectedAlternative`
@@ -1201,10 +1276,13 @@ reports it on the same surfaces beside the satisfaction verdicts. Small once A1 
 The denominator is the pilot's 217 named `validate*` constraints, read from the pinned jar by the
 census [validation-constraints.md](validation-constraints.md) (#822) and re-audited row by row
 against the code and the corpus (#900, whose gate now also checks that the function each row cites
-exists and that each cited case belongs to its row). With #900 the census reads **148 of 217
+exists and that each cited case belongs to its row). With #900 the census read **148 of 217
 reported — 137 faithful, 11 approximate — 6 not implemented, 0 deliberate, 0 known failure and 63
-unknown**, against 143 / 133 / 10 / 68 at the tag. The oracle at the other end agrees: of 236
-self-authored invalid models, the pinned pilot and we both reject 228, the pilot alone rejects 0,
+unknown**, against 143 / 133 / 10 / 68 at the tag; the adjudication of the unknown KerML rows then
+moved it to **156 reported — 143 faithful, 13 approximate — 7 not implemented, 1 deliberate and
+53 unknown**, each remaining unknown row now citing why the pilot never reports it.
+The oracle at the other end agrees: of 243
+self-authored invalid models, the pinned pilot and we both reject 235, the pilot alone rejects 0,
 and the 8 only we reject are control-node succession rules the pinned pilot leaves unimplemented
 ([pilot-rejection.md](pilot-rejection.md)). Everything the previous baseline listed as open here has
 landed:
@@ -1432,7 +1510,8 @@ ontology modules, in conflict) — and they land or are closed before either ord
 - **Track D.** The open RDF work (#815, #835, #824, #827) has landed and the ratchet is 305/345
   with one refusal class left; step 6 above is next; **D7** is mechanical now that identity is
   stable and fits anywhere; rebase and land #774, then **D8**'s profile after it, since it only
-  becomes conformant behind D1 and D2.
+  becomes conformant behind D1 and D2; **D10** (write-through from a view-only project) after
+  D9.1 and D9.2, which it reads and writes through.
 - **Track E.** The in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845) have
   all landed.
   The track itself is not scheduled; each item states what would prioritize it. If one is picked

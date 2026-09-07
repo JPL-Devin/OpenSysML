@@ -234,7 +234,7 @@ func TestApplyEditsLeavesOtherModelsAndTheSharedBaseAlone(t *testing.T) {
 	edited, editedModelCached := parseContent(t, svc, editedModel)
 	_, otherCached := parseContent(t, svc, other)
 
-	baseBefore := lookupLines(svc.libIndexes.get())
+	baseBefore := lookupLines(sharedBase(svc))
 	editedBefore := lookupLines(editedModelCached.Index)
 	otherBefore := lookupLines(otherCached.Index)
 
@@ -246,7 +246,7 @@ func TestApplyEditsLeavesOtherModelsAndTheSharedBaseAlone(t *testing.T) {
 		t.Fatalf("the edit was refused: %s", resp.Error)
 	}
 
-	if got := lookupLines(svc.libIndexes.get()); !reflect.DeepEqual(got, baseBefore) {
+	if got := lookupLines(sharedBase(svc)); !reflect.DeepEqual(got, baseBefore) {
 		t.Fatalf("the shared base changed: %d names, was %d", len(got), len(baseBefore))
 	}
 	if got := lookupLines(editedModelCached.Index); !reflect.DeepEqual(got, editedBefore) {
@@ -260,7 +260,7 @@ func TestApplyEditsLeavesOtherModelsAndTheSharedBaseAlone(t *testing.T) {
 			t.Fatalf("the edited model is visible in another model: %s", line)
 		}
 	}
-	for _, line := range lookupLines(svc.libIndexes.get()) {
+	for _, line := range lookupLines(sharedBase(svc)) {
 		if strings.HasPrefix(line, "Rig") || strings.HasPrefix(line, "Other") {
 			t.Fatalf("a model is visible in the shared base: %s", line)
 		}

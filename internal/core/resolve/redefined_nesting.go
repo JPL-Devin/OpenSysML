@@ -73,7 +73,7 @@ func (r *Resolver) explicitRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 	for _, rel := range redefinesRelationships(sym.Decl) {
 		// Redefinitions search features of the owner's generals; hide only the
 		// declaration's own binding so a same-named target reaches that feature.
-		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true}
+		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true, redefining: true}
 		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, hide); ok && found != sym {
 			out = append(out, found)
 		}
@@ -124,6 +124,8 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 			rels = d.Relationships
 		case *ast.Definition:
 			rels = d.Relationships
+		case *ast.CrossFeatureMember:
+			rels = d.Relationships
 		case *ast.SubjectMember:
 			rels = d.Relationships
 		default:
@@ -145,7 +147,7 @@ func isFeatureDecl(decl ast.Node) bool {
 		return true
 	}
 	switch decl.(type) {
-	case *ast.Usage, *ast.SubjectMember:
+	case *ast.Usage, *ast.SubjectMember, *ast.CrossFeatureMember:
 		return true
 	}
 	return false

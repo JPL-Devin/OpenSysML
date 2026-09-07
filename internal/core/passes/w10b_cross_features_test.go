@@ -494,3 +494,71 @@ func TestW10BCrossSubsettingSysMLInheritedEndClean(t *testing.T) {
 	}`
 	expectNoCrossDiags(t, constraintDiags(t, src))
 }
+
+// A cross feature declared ahead of its end's kind keyword is compared by its
+// own types: typing it more narrowly than the end is an error at the cross
+// feature, while the same type plus its own subsetting is well-formed
+// (pilot-confirmed with validate-kerml and validate-sysml-batch).
+func TestW10BNamedCrossFeatureTypeAheadOfKind(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"kerml operators", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end x1 : Sub1 [0..1] :> g feature x : C1;
+				end y1 [0..1] feature y : C2;
+			}
+		}`, "x1 : Sub1 [0..1] :> g"},
+		{"kerml keywords", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end x1 [0..1] typed by Sub1 subsets g feature x : C1;
+				end y1 [0..1] feature y : C2;
+			}
+		}`, "x1 [0..1] typed by Sub1 subsets g"},
+		{"kerml same type", `package P {
+			class C1; class C2;
+			class Sub1 :> C1;
+			feature g : C1;
+			assoc A {
+				end x1 : C1 [0..1] :> g feature x : C1;
+				end y1 [0..1] feature y : C2;
+			}
+		}`, ""},
+		{"sysml operators", `package P {
+			part def C1; part def C2;
+			part def Sub1 :> C1;
+			item g : C1;
+			connection def A {
+				end x1 : Sub1 [0..1] :> g item x : C1;
+				end y1 [0..1] item y : C2;
+			}
+		}`, "x1 : Sub1 [0..1] :> g"},
+		{"sysml same type", `package P {
+			part def C1; part def C2;
+			part def Sub1 :> C1;
+			item g : C1;
+			connection def A {
+				end x1 : C1 [0..1] :> g item x : C1;
+				end y1 [0..1] item y : C2;
+			}
+		}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var diags []Diagnostic
+			if strings.HasPrefix(tc.name, "kerml") {
+				diags = constraintDiagsKerML(t, tc.src)
+			} else {
+				diags = constraintDiags(t, tc.src)
+			}
+			if tc.want == "" {
+				expectNoCrossDiags(t, diags)
+				return
+			}
+			expectCrossDiag(t, tc.src, diags, codeCrossFeatureType, msgCrossFeatureType, tc.want)
+		})
+	}
+}

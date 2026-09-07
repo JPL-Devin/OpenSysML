@@ -11,7 +11,7 @@ func TestBindingMultNameMultDebug(t *testing.T) {
 	//        0123456789012345678901234567890123456789
 	//        0         1         2         3
 
-	p := New(source.New("test.kerml", []byte(code)))
+	p := New(source.New("test.sysml", []byte(code)))
 	_ = p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {

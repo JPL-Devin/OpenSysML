@@ -1,7 +1,7 @@
 package StateAcceptPayload {
     private import ScalarValues::*;
 
-    item def Warning;
+    attribute def Warning :> Integer;
 
     state Monitor {
         attribute level : Integer = 0;

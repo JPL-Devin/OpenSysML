@@ -46,6 +46,13 @@ type Context struct {
 	// by name; see arrayFeatureSymbols.
 	arrayFeatures map[*symbols.Symbol]string
 
+	// frameFeatures memoizes the declarations of the MeasurementReferences features
+	// a coordinate frame, scale or transformation is read by; see frameFeatureSymbols.
+	frameFeatures map[*symbols.Symbol]string
+	// framesReading holds the frame each object being read is (nil for a
+	// transformation), so `target = that` finds it and a cycle is reported.
+	framesReading map[int64]*CoordinateFrame
+
 	// denotedFeatures memoizes, per type, the name of its feature each declared
 	// feature symbol denotes on an object of that type: itself or a redefinition.
 	denotedFeatures map[*symbols.Symbol]map[*symbols.Symbol]string
@@ -90,6 +97,9 @@ type Context struct {
 	// under way, so reading several outputs of one usage answers from one
 	// execution of its body. An activation's evaluations end with it.
 	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
+	// calcUsageRunning holds the calc usages whose bodies are running, so a body
+	// reading its own usage is a recursion rather than a nested evaluation.
+	calcUsageRunning map[calcUsageKey]*calcShape
 
 	// activations numbers the body activations begun in this context: a calc
 	// invocation, a block entry, a loop iteration, a body application.
@@ -142,6 +152,10 @@ type Context struct {
 
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
+
+	// declarative makes the context read declared values only: no classifier
+	// behavior starts when an object is materialized (see DeclaredReader).
+	declarative bool
 
 	// heldBehaviors are the behaviors already holding work when the outermost
 	// start under way began: a driver put it in flight, and dispatches it.
@@ -197,6 +211,9 @@ type Context struct {
 	// the identities it keeps for connectors not yet materialized — run in reverse
 	// as each is undone; see noteProbeUndo.
 	journalUndos []func()
+	// deriving are the `=` values being derived, innermost last; every feature
+	// value read while one is records it as a dependent (see dependents.go).
+	deriving []derivation
 	// runBoundaries mark, innermost last, where in objectBehaviors and in
 	// pendingBehaviors the behaviors a change still to be kept or undone attached
 	// begin: the only ones a drain under it may run (see nextRunnableBehavior).
@@ -224,6 +241,11 @@ type Context struct {
 	// error about a declaration can say where it was written. A file no caller
 	// registered is reported by name and byte offset instead.
 	sources map[string]*source.SourceFile
+
+	// scopes holds the scope trees the caller resolves references in; declared
+	// maps each declaration node to the symbol they declare for it, built on first use.
+	scopes   []*symbols.Scope
+	declared map[ast.Node]*symbols.Symbol
 }
 
 // featureValueRef identifies one feature value of one instance.
@@ -285,7 +307,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		realLiterals:      make(map[*ast.LiteralReal]float64),
 		compileCalcs:      CalcCompileFromEnv(),
 
-		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRuns:    make(map[int64]map[calcUsageKey]*calcRun),
+		calcUsageRunning: make(map[calcUsageKey]*calcShape),
 
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
@@ -322,6 +345,49 @@ func (ctx *Context) RegisterSource(sf *source.SourceFile) {
 		return
 	}
 	ctx.sources[sf.Name()] = sf
+}
+
+// RegisterScope gives the context a scope tree the caller resolves references
+// in, so a declaration carried over by Adopt is rebound to the symbol that tree
+// declares for it rather than to the index's own.
+func (ctx *Context) RegisterScope(scope *symbols.Scope) {
+	if scope == nil {
+		return
+	}
+	ctx.scopes = append(ctx.scopes, scope)
+	ctx.declared = nil
+}
+
+// declaredSymbol is the symbol a registered scope tree declares for the
+// declaration sym stands for, or sym itself when none does (a library declaration,
+// or a context resolving in the index's tree alone).
+func (ctx *Context) declaredSymbol(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.Decl == nil || len(ctx.scopes) == 0 {
+		return sym
+	}
+	if ctx.declared == nil {
+		ctx.declared = make(map[ast.Node]*symbols.Symbol)
+		for _, scope := range ctx.scopes {
+			collectDeclared(scope, ctx.declared)
+		}
+	}
+	if local, ok := ctx.declared[sym.Decl]; ok {
+		return local
+	}
+	return sym
+}
+
+// collectDeclared records the symbol declared by each node under scope.
+func collectDeclared(scope *symbols.Scope, into map[ast.Node]*symbols.Symbol) {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
+		if sym.Decl != nil {
+			into[sym.Decl] = sym
+		}
+		return true
+	})
+	for _, child := range scope.Children() {
+		collectDeclared(child, into)
+	}
 }
 
 // sourceLocation renders where a span in a file was written, as
@@ -662,6 +728,9 @@ func RequireConstraint(sym *symbols.Symbol) error {
 	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
 		return nil
 	}
+	if ast.ConstraintReferenceOf(sym.Decl) != nil {
+		return nil
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind == ast.DefConstraint {
@@ -753,11 +822,14 @@ func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 
 // memberBindings evaluates the values members bind by name — a subject or actor
 // supplied by an expression (`actor operator = limit;`) — so a condition naming
-// one reads it. element names the requirement in messages. A non-nil subject is
-// the object supplied from outside (the `by` of a satisfaction assertion): it
-// binds every subject the members declare, whose own binding is then neither
-// evaluated nor used.
-func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
+// one reads it. kind and element name the checked element in messages. A non-nil
+// subject is the object supplied from outside (the `by` of a satisfaction
+// assertion): it binds every subject the members declare, whose own binding is
+// then neither evaluated nor used. Values are held to their member's effective
+// declaration (holdBound) in one transaction, so a refused binding leaves nothing
+// behind. enclosing are the values bound around the element (a case run's, for its
+// objective), which the binding expressions read.
+func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing frame) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
 	// The bindings are evaluated as one, so a calc usage two of them read answers
@@ -768,10 +840,21 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		ec := NewEvalContextIn(ctx, memberScope, self)
 		ec.activation = activation
 		ec.features = features
+		if enclosing.vars != nil {
+			ec.pushFrame(enclosing)
+		}
 		ec.Push(bindings)
 		return ec
 	}
+	superseded := ctx.redefinedAmong(sym, members)
+	hold := func(member scopedMember, what string, value Value) error {
+		if memberSym := memberSymbol(member.scope, member.node); memberSym == nil || superseded[memberSym] {
+			return nil
+		}
+		return ctx.holdBound(sym, member, fmt.Sprintf("%s %s: %s", kind, element, what), value)
+	}
 
+	commit, rollback := ctx.beginJournal()
 	for _, member := range members {
 		var what string
 		var names []string
@@ -783,7 +866,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				names, isSubject = ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
+				what, names, expr, isSubject = "subject", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value, true
 			case ast.UsageActor:
 				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
@@ -791,8 +874,13 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 			continue
 		}
 		if isSubject && subject != nil {
+			value := Value{Kind: ValInstance, Instance: subject.ID}
+			if err := hold(member, what, value); err != nil {
+				rollback()
+				return nil, err
+			}
 			for _, name := range names {
-				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
+				bindings[name] = value
 			}
 			continue
 		}
@@ -800,6 +888,10 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 			// A redeclaration valuing nothing reads the value the feature it
 			// redefines binds, under its own names too.
 			if value, ok := boundUnder(bindings, names); ok {
+				if err := hold(member, what+" binding", value); err != nil {
+					rollback()
+					return nil, err
+				}
 				for _, name := range names {
 					bindings[name] = value
 				}
@@ -808,13 +900,63 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		}
 		value, err := evalIn(member.scope).Eval(expr)
 		if err != nil {
-			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
+			rollback()
+			return nil, fmt.Errorf("%s %s: %s binding evaluation failed: %w", kind, element, what, err)
+		}
+		if err := hold(member, what+" binding", value); err != nil {
+			rollback()
+			return nil, err
 		}
 		for _, name := range names {
 			bindings[name] = value
 		}
 	}
+	commit()
 	return bindings, nil
+}
+
+// redefinedAmong is the set of members of owner another of members redefines: their
+// declarations are superseded by the redefining member's, which holds the value.
+func (ctx *Context) redefinedAmong(owner *symbols.Symbol, members []scopedMember) map[*symbols.Symbol]bool {
+	superseded := make(map[*symbols.Symbol]bool)
+	for _, member := range members {
+		memberSym := memberSymbol(member.scope, member.node)
+		if memberSym == nil {
+			continue
+		}
+		for _, redefined := range ctx.redefinedFeatures(memberSym, owner) {
+			superseded[redefined] = true
+		}
+	}
+	return superseded
+}
+
+// holdBound holds val as the value of a bound member of owner: itself and the features it
+// redefines, checked against their declaration folded together (see holdAs).
+func (ctx *Context) holdBound(owner *symbols.Symbol, member scopedMember, what string, val Value) error {
+	memberSym := memberSymbol(member.scope, member.node)
+	if memberSym == nil {
+		return nil
+	}
+	features := append([]*symbols.Symbol{memberSym}, ctx.redefinedFeatures(memberSym, owner)...)
+	return ctx.holdAs(member.scope, what, ctx.boundMemberDecl(owner, features), val, features...)
+}
+
+// holdAs checks val against decl's multiplicity and type, then classifies its objects by each of
+// features as one transaction, as a declared feature value is held (KerML §7.3.4.1); what names the binding.
+func (ctx *Context) holdAs(scope *symbols.Scope, what string, decl calcMemberDecl, val Value, features ...*symbols.Symbol) error {
+	if err := decl.admits(ctx, scope, what, val); err != nil {
+		return err
+	}
+	commit, rollback := ctx.beginJournal()
+	for _, feature := range features {
+		if err := ctx.classifyHeld(feature, val); err != nil {
+			rollback()
+			return fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	commit()
+	return nil
 }
 
 // memberNames are the names a condition may read a bound member of owner by: its
@@ -884,25 +1026,18 @@ type scopedMember struct {
 	scope *symbols.Scope
 }
 
-// chainMembers returns the members declared by sym's supertypes, most general
-// first, followed by sym's own. A usage that takes its conditions from a
-// definition (constraint limit : MassLimit) carries no members itself. A library
-// supertype states the metamodel frame every element specializes rather than the
-// model's own objectives, conditions or parameters, so it contributes none.
-// A supertype whose result expression a redefinition replaces keeps its other members.
+// chainMembers returns the members of the types sym takes members from (its
+// supertypes and the feature it references), most general first, then sym's own.
+// A library supertype states the metamodel frame, not model conditions, and contributes none.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
-	supers := ctx.model.AllSupertypes(sym)
-	replaced := ctx.replacedResultExpressions(sym, supers)
+	supers := ctx.model.MemberSources(sym)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
 		if link == nil || ctx.libraryDeclared(link) {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
-			if replaced[link] && isResultExpression(node) {
-				continue
-			}
 			out = append(out, scopedMember{node: node, scope: bodyScope(link, link.OwnerScope)})
 		}
 	}
@@ -910,62 +1045,6 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 		out = append(out, scopedMember{node: node, scope: bodyScope(sym, scope)})
 	}
 	return out
-}
-
-// replacedResultExpressions returns the supertypes a redefinition owning a result
-// expression replaces (and those only they reach); a body owning none inherits it.
-func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
-	if !isConstraintSymbol(sym) {
-		return nil
-	}
-	replaced := map[*symbols.Symbol]bool{}
-	for _, link := range append([]*symbols.Symbol{sym}, supers...) {
-		if link == nil || !isConstraintSymbol(link) || !ownsResultExpression(declMembers(link.Decl)) {
-			continue
-		}
-		for _, redefined := range ctx.model.AllRedefinedFeatures(link) {
-			replaced[redefined] = true
-		}
-	}
-	if len(replaced) == 0 {
-		return nil
-	}
-	kept := map[*symbols.Symbol]bool{}
-	var keep func(*symbols.Symbol)
-	keep = func(s *symbols.Symbol) {
-		for _, direct := range ctx.model.DirectSupertypes(s) {
-			if direct == nil || direct == sym || replaced[direct] || kept[direct] {
-				continue
-			}
-			kept[direct] = true
-			keep(direct)
-		}
-	}
-	keep(sym)
-	skipped := map[*symbols.Symbol]bool{}
-	for _, link := range supers {
-		if link != nil && !kept[link] {
-			skipped[link] = true
-		}
-	}
-	return skipped
-}
-
-// ownsResultExpression reports whether one of a body's members is its result expression.
-func ownsResultExpression(members []ast.Node) bool {
-	for _, member := range members {
-		if isResultExpression(member) {
-			return true
-		}
-	}
-	return false
-}
-
-// isResultExpression reports whether node is a bare condition (`x > 0`), the body's
-// result expression; a nested `assert constraint { … }` or reference is a feature instead.
-func isResultExpression(node ast.Node) bool {
-	c, ok := node.(*ast.ConstraintMember)
-	return ok && c.Keyword == "" && c.Expression != nil
 }
 
 // bodyScope is the scope a member of sym's body was written in: sym's own body,
@@ -1013,7 +1092,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	members := ctx.chainMembers(sym, scope)
 
 	// First pass: process subject/actor bindings
-	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, subject.instance, nil)
+	reqBindings, err := ctx.memberBindings(sym, "requirement", sym.Name, members, subject.instance, nil, frame{})
 
 	if err != nil {
 		return ctx.checkResultOf(false, subject), err
@@ -1026,7 +1105,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		kind:     "requirement",
 		what:     "require condition",
 		self:     subject.instance,
-		bindings: reqBindings,
+		bindings: mapFrame(reqBindings),
 		negated:  NegatedDecl(sym),
 	}, conds)
 	if err != nil {
@@ -1099,9 +1178,26 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 // performAction runs action to completion, performed by self, and returns the
 // executor that ran it, whose root performance holds what it produced.
 func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
+	return ctx.performActionFrom(action, self, inputs, (*ActionExecutor).initialize)
+}
+
+// performActionStep runs action as a step of an enclosing behavior. A step
+// stating no flow performs none: it takes its inputs, binds its computed
+// outputs and ends at once, as an object performing such an action does.
+func (ctx *Context) performActionStep(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
+	return ctx.performActionFrom(action, self, inputs, func(exec *ActionExecutor) error {
+		if !exec.hasFlow() {
+			return exec.completeWithoutFlow()
+		}
+		return exec.initialize()
+	})
+}
+
+// performActionFrom creates the executor for action, seeds its inputs, starts
+// it with start, and runs it to completion.
+func (ctx *Context) performActionFrom(action *symbols.Symbol, self *Instance, inputs map[string]Value, start func(*ActionExecutor) error) (*ActionExecutor, error) {
 	defer ctx.beginRun()()
 
-	// Create executor
 	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
@@ -1112,12 +1208,13 @@ func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs
 		exec.SetInputs(inputs)
 	}
 
-	// Initialize execution (spawns initial token)
-	if err := exec.initialize(); err != nil {
+	if err := start(exec); err != nil {
 		return nil, fmt.Errorf("initialize action: %w", err)
 	}
+	if exec.state == StateCompleted {
+		return exec, nil
+	}
 
-	// Run to completion
 	if err := exec.RunToCompletion(); err != nil {
 		return nil, fmt.Errorf("execute action: %w", err)
 	}

@@ -29,7 +29,7 @@ func indexOf(t *testing.T, name, src string) *symbols.Index {
 // recordOf is recordFromIndex with a resolver over idx, as the loader builds it.
 func recordOf(name string, idx *symbols.Index) *IndexRecord {
 	r := resolve.New(idx)
-	rec, _ := recordFromIndex(name, idx, r, semantics.NewModel(r))
+	rec, _ := recordFromIndex(name, idx, semantics.NewModel(r))
 	return rec
 }
 

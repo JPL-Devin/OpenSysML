@@ -273,7 +273,7 @@ func (e *snapshotEncoder) writeSymbols() {
 			e.w.Uint(e.facts[s.Facts])
 		}
 		e.w.String(s.ShortName)
-		e.w.Bool(s.EffectiveName)
+		e.w.Uint(uint64(s.Naming))
 		e.node(s.NamingTarget)
 	}
 }
@@ -730,7 +730,12 @@ func (d *sectionReader) readSymbols() {
 			s.Facts = &d.facts[id-1]
 		}
 		s.ShortName = d.r.String()
-		s.EffectiveName = d.r.Bool()
+		naming := d.r.Uint()
+		if naming > uint64(NamedByRedefinition) {
+			d.r.Fail("naming kind")
+			return
+		}
+		s.Naming = Naming(naming)
 		s.NamingTarget = d.node()
 		if d.r.Err() != nil {
 			return

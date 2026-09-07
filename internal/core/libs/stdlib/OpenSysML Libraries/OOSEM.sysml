@@ -5,6 +5,8 @@ library package OOSEM {
 	 * Each OOSEM artefact gets a definition specialising its native SysML type, a base usage, and a
 	 * semantic-metadata keyword applying both at once: `#system part sat : Satellite;`.
 	 * MOE/MOP, trade studies, derivation and causation reuse the standard domain libraries, re-exported here.
+	 * The method's standard products are view definitions on the standard view definitions, each
+	 * satisfying an OOSEM viewpoint; a view typed by one exposes a model and shows only that product.
 	 */
 
 	private import ScalarValues::String;
@@ -21,6 +23,10 @@ library package OOSEM {
 	private import UseCases::useCases;
 	private import AnalysisCases::AnalysisCase;
 	private import AnalysisCases::analysisCases;
+	private import StandardViewDefinitions::*;
+	private import Views::asTreeDiagram;
+	private import Views::asInterconnectionDiagram;
+	private import Views::asElementTable;
 
 	public import ParametersOfInterestMetadata::*;
 	public import TradeStudies::*;
@@ -274,6 +280,109 @@ library package OOSEM {
 	package 'OOSEM Measures' {
 		alias MOE for ParametersOfInterestMetadata::measuresOfEffectiveness;
 		alias MoP for ParametersOfInterestMetadata::measuresOfPerformance;
+	}
+
+	/* Viewpoints and views: the method's standard products, as view conditions over its keywords */
+
+	concern def StakeholderNeedsConcern {
+		doc /* Whose needs the enterprise serves, and what in the as-is enterprise keeps them unmet. */
+	}
+
+	concern def SystemBoundaryConcern {
+		doc /* Where the boundary of the system of interest lies, and what crosses it. */
+	}
+
+	concern def RequirementsTraceabilityConcern {
+		doc /* Whether every requirement derives from a need and is measured, satisfied and verified. */
+	}
+
+	concern def LogicalDecompositionConcern {
+		doc /* How the system's functions and interfaces partition into technology-independent components. */
+	}
+
+	concern def PhysicalRealizationConcern {
+		doc /* Which hardware, software, data and procedures realise the logical components, at which nodes. */
+	}
+
+	viewpoint def EnterpriseViewpoint {
+		doc /* The enterprise and stakeholder needs analysis, as the stakeholders and mission planners see it. */
+		frame concern : StakeholderNeedsConcern;
+	}
+
+	viewpoint def SystemContextViewpoint {
+		doc /* The black-box system in its context, as the system requirements analysis sees it. */
+		frame concern : SystemBoundaryConcern;
+	}
+
+	viewpoint def RequirementsViewpoint {
+		doc /* The requirement chain from stakeholder need to component requirement. */
+		frame concern : RequirementsTraceabilityConcern;
+	}
+
+	viewpoint def LogicalArchitectureViewpoint {
+		doc /* The logical decomposition and its distribution over nodes. */
+		frame concern : LogicalDecompositionConcern;
+	}
+
+	viewpoint def PhysicalArchitectureViewpoint {
+		doc /* The physical realisation of the logical architecture. */
+		frame concern : PhysicalRealizationConcern;
+	}
+
+	view def EnterpriseModelView :> BrowserView {
+		doc /* Tree of the enterprise, its stakeholders, enterprise use cases and causal analyses. */
+		satisfy EnterpriseViewpoint;
+		filter @EnterpriseMetadata or @StakeholderMetadata or @EnterpriseUseCaseMetadata or @CausalAnalysisMetadata;
+		render asTreeDiagram;
+	}
+
+	view def SystemContextView :> InterconnectionView {
+		doc /* Interconnection diagram of the system context: the system of interest, external systems,
+		 * users and environment, with the connections between them. */
+		satisfy SystemContextViewpoint;
+		filter @SystemContextMetadata or @SystemOfInterestMetadata or @ExternalSystemMetadata or @UserMetadata or @EnvironmentMetadata;
+		render asInterconnectionDiagram;
+	}
+
+	view def SystemUseCaseView :> BrowserView {
+		doc /* Tree of the system use cases and the entities that cross the system boundary. */
+		satisfy SystemContextViewpoint;
+		filter @SystemUseCaseMetadata or @IOEntityMetadata or @StoreMetadata;
+		render asTreeDiagram;
+	}
+
+	view def RequirementsView :> GridView {
+		doc /* Table of the stakeholder needs and mission, system and component requirements. */
+		satisfy RequirementsViewpoint;
+		filter @StakeholderNeedMetadata or @MissionRequirementMetadata or @SystemRequirementMetadata or @ComponentRequirementMetadata;
+		render asElementTable;
+	}
+
+	view def MeasuresView :> GridView {
+		doc /* Table of the measures of effectiveness and performance. */
+		satisfy RequirementsViewpoint;
+		filter @MeasureOfEffectiveness or @MeasureOfPerformance;
+		render asElementTable;
+	}
+
+	view def LogicalArchitectureView :> BrowserView {
+		doc /* Tree of the logical components and the nodes they are distributed to. */
+		satisfy LogicalArchitectureViewpoint;
+		filter @LogicalComponentMetadata or @NodeMetadata;
+		render asTreeDiagram;
+	}
+
+	view def LogicalScenarioView :> ActionFlowView {
+		doc /* Action flow diagram of the logical scenarios. */
+		satisfy LogicalArchitectureViewpoint;
+		filter @LogicalScenarioMetadata;
+	}
+
+	view def PhysicalArchitectureView :> BrowserView {
+		doc /* Tree of the nodes and the hardware, software, data and procedures they hold. */
+		satisfy PhysicalArchitectureViewpoint;
+		filter @NodeMetadata or @PhysicalComponentMetadata or @HardwareComponentMetadata or @SoftwareComponentMetadata or @OperationalProcedureMetadata or @DataComponentMetadata;
+		render asTreeDiagram;
 	}
 
 	/* Semantic metadata: the user-defined keywords of the method */

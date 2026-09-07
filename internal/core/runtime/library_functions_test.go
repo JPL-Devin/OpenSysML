@@ -1254,7 +1254,7 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 func checkLibrarySignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol, fn *libraryFunction) {
 	t.Helper()
 	var declared []declaredParam
-	for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
+	for _, param := range ctx.calcParameters(ctx.calcChain(sym), new(map[string]string)) {
 		declared = append(declared, declaredParam{
 			name:     param.Name,
 			optional: param.Default != nil || param.optional(),
@@ -1529,7 +1529,7 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
 		}
 	}
-	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorCalculations::transform", "ComplexFunctions::ToString"} {
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "TensorCalculations::transform", "ComplexFunctions::ToString"} {
 		if b, ok := listed[absent]; ok {
 			t.Errorf("%s is listed as %+v, want it left out", absent, b)
 		}

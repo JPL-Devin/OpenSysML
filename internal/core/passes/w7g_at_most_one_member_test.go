@@ -211,6 +211,26 @@ func TestW7GCaseReportsInheritedObjectiveConflictOnOwner(t *testing.T) {
 	}
 }
 
+func TestW7GInheritedSubjectsCompeteUnlessAnOwnedOneRedefinesThem(t *testing.T) {
+	const src = `package R {
+		requirement def A { subject a; }
+		requirement def B { subject b; }
+		requirement def Both :> A, B;
+		requirement def Mine :> A, B { subject m; }
+		requirement def Clause :> A, B { subject c :>> a; }
+		requirement def Extra :> A { subject e1; subject e2; }
+	}`
+	diags := only(constraintDiags(t, src), "only-one-subject")
+	if len(diags) != 2 {
+		t.Fatalf("expected the inherited pair and the second owned subject, got %v", diags)
+	}
+	for i, want := range []string{"requirement def Both :> A, B;", "subject e2;"} {
+		if got := src[diags[i].Span.Offset:]; len(got) < len(want) || got[:len(want)] != want {
+			t.Fatalf("diagnostic %d is at %q, want %q", i, got, want)
+		}
+	}
+}
+
 func TestW7GSubjectAfterAnotherParameterIsReported(t *testing.T) {
 	const src = `package R {
 		part def V;
@@ -288,5 +308,48 @@ func TestW7GRequirementWithNoParameterIsSilent(t *testing.T) {
 	}`
 	if diags := constraintDiags(t, src); len(diags) != 0 {
 		t.Fatalf("a requirement with no parameter has an implicit subject, got %v", diags)
+	}
+}
+
+// An owned objective beside an inherited one it does not redefine is reported
+// on the owned objective (pilot checkAtMostOneRelationship, mixed ownership),
+// wherever the inherited one comes from.
+func TestW7GOwnedObjectiveBesideAnUnredefinedInheritedOne(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want []string
+	}{
+		{`package P {
+			case def C { objective o1; objective o2; }
+			case c : C { objective o3; objective o4; }
+		}`, []string{"objective o2;", "objective o3;", "objective o4;"}},
+		{`package P {
+			case def C { objective o1; objective o2; }
+			case def C1 :> C { objective o5; }
+		}`, []string{"objective o2;", "objective o5;"}},
+		{`package P {
+			case def C { objective o1; objective o2; }
+			case def C4 :> C { objective o7 :>> o1; }
+		}`, []string{"objective o2;", "objective o7 :>> o1;"}},
+		{`package P {
+			case def C { objective o1; objective o2; }
+			case def C3 :> C { objective o6 :>> o2; }
+		}`, []string{"objective o2;"}},
+		{`package P {
+			case def B1 { objective b1; }
+			case def B2 { objective b2; }
+			case def D :> B1, B2;
+			case def D2 :> B1, B2 { objective d; }
+		}`, []string{"case def D :> B1, B2;"}},
+	} {
+		diags := only(constraintDiags(t, tc.src), "only-one-objective")
+		if len(diags) != len(tc.want) {
+			t.Fatalf("expected %d objective diagnostic(s) for %q, got %v", len(tc.want), tc.src, diags)
+		}
+		for i, want := range tc.want {
+			if got := tc.src[diags[i].Span.Offset:]; len(got) < len(want) || got[:len(want)] != want {
+				t.Fatalf("diagnostic %d is not on %q: %q", i, want, got)
+			}
+		}
 	}
 }

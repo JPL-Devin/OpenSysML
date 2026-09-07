@@ -617,7 +617,7 @@ func (e *ActionExecutor) NodeNames() []string {
 func (e *ActionExecutor) initializeAttributes() error {
 	if e.occurrence != nil {
 		for _, attr := range e.features {
-			if _, held := e.root.data[attr.Name]; held {
+			if _, held := e.root.data[e.root.key(attr.Name)]; held {
 				continue
 			}
 			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
@@ -626,7 +626,7 @@ func (e *ActionExecutor) initializeAttributes() error {
 					ErrActionPerformanceOccurrence, attr.Name, e.occurrence.ID, err)
 			}
 			if value := fv.HeldValue(); value.Kind != ValInvalid {
-				e.root.data[attr.Name] = value
+				e.root.data[e.root.key(attr.Name)] = value
 			}
 		}
 		return nil
@@ -638,14 +638,14 @@ func (e *ActionExecutor) initializeAttributes() error {
 		if attr.Value == nil {
 			continue
 		}
-		if _, held := e.root.data[attr.Name]; held {
+		if _, held := e.root.data[e.root.key(attr.Name)]; held {
 			continue
 		}
 		value, err := ec.evalIn(attr.Scope).Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-		e.root.data[attr.Name] = value
+		e.root.data[e.root.key(attr.Name)] = value
 	}
 
 	return nil
@@ -692,7 +692,7 @@ func (e *ActionExecutor) setFeature(name string, value Value) error {
 		// rather than by the write to that occurrence.
 		return err
 	}
-	e.root.data[name] = value
+	e.root.data[e.root.key(name)] = value
 	return nil
 }
 
@@ -721,6 +721,9 @@ func (e *ActionExecutor) hasFlow() bool {
 // completeWithoutFlow completes an action stating no flow: it performs no step,
 // so its performance begins, takes its inputs, and ends at once.
 func (e *ActionExecutor) completeWithoutFlow() error {
+	if err := e.checkResultParameters(); err != nil {
+		return err
+	}
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 	if err := e.bindInputs(); err != nil {
 		return err
@@ -801,6 +804,9 @@ func (e *ActionExecutor) initialize() error {
 	if err := e.validateSubflows(e.graph); err != nil {
 		return err
 	}
+	if err := e.checkResultParameters(); err != nil {
+		return err
+	}
 
 	initialNode := e.graph.Initial
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
@@ -848,8 +854,8 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 	case *ast.ActionExecutionNode:
 		return e.stepActionExecutionNode(tokenIdx)
 	case *ast.Usage:
-		// Nested action invocation
-		if node.Kind == ast.UsageAction {
+		// Nested action invocation, or a nested case performed as a step
+		if node.Kind == ast.UsageAction || lower.IsCaseNode(node) {
 			return e.stepNestedAction(tokenIdx)
 		}
 		return fmt.Errorf("unsupported usage kind in action: %v", node.Kind)
@@ -946,10 +952,11 @@ func (e *ActionExecutor) removeToken(tokenIdx int) {
 // retireToken ends a token's flow. Its effects live in the action's features, so
 // retiring it carries nothing out; the action completes once no token is left.
 // The last token of a nested flow instead leaves it, completing its node — unless
-// a body statement runs that flow, which completes the node once the run ends.
+// a body statement runs that flow (the root's included), which completes the
+// node once the run ends.
 func (e *ActionExecutor) retireToken(tokenIdx int) error {
 	frame := e.tokens[tokenIdx].frame
-	if frame == e.root {
+	if frame == e.root && !frame.inBody {
 		e.removeToken(tokenIdx)
 		if len(e.tokens) == 0 {
 			e.state = StateCompleted
@@ -1337,6 +1344,18 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	perf, err := e.beginPerformance(token.frame, graph, usage, nil)
 	if err != nil {
 		return err
+	}
+
+	// A nested case is a step of its own kind: the analysis it is runs to completion.
+	if isCaseStep(usage) {
+		return e.runPausable(tokenIdx, func() error {
+			if err := e.performCase(perf); err != nil {
+				return err
+			}
+			return e.endPerformance(perf)
+		}, func(tokenIdx int) error {
+			return e.completeNode(tokenIdx, perf)
+		})
 	}
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))

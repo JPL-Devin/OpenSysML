@@ -13,8 +13,8 @@
 		"rd.z": {"type": "Integer", "value": 10},
 		"rd.y": {"type": "Integer", "value": 15},
 		"c.x": {"type": "Integer", "value": 3},
-		"c.r": {"type": "Integer", "value": 30},
+		"c.result": {"type": "Integer", "value": 30},
 		"p.x": {"type": "Integer", "value": 3},
-		"p.r": {"type": "Integer", "value": 30}
+		"p.result": {"type": "Integer", "value": 30}
 	}
 }

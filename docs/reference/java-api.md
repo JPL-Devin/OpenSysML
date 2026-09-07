@@ -100,6 +100,10 @@ else if (value instanceof Value.RealValue v)            rendered = Double.toStri
 else if (value instanceof Value.BooleanValue v)         rendered = Boolean.toString(v.value());
 else if (value instanceof Value.StringValue v)          rendered = v.value();
 else if (value instanceof Value.QuantityValue v)        rendered = v.quantity().toString();
+else if (value instanceof Value.ArrayValue v)           rendered = v.dimensions() + v.elements().toString();
+else if (value instanceof Value.VectorValue v)          rendered = v.components().toString();   // IntegerValue | RealValue
+else if (value instanceof Value.VectorQuantityValue v)  rendered = v.components().toString();   // one Quantity each
+else if (value instanceof Value.MeasurementRefValue v)  rendered = v.unit();                    // a bare unit and its reduction
 else if (value instanceof Value.EnumerationValue v)     rendered = v.literal().name();
 else if (value instanceof Value.InstanceReference v)    rendered = "instance " + v.instanceId();
 else if (value instanceof Value.Sequence v)             rendered = v.elements().toString();
@@ -174,7 +178,7 @@ opt-out and its limitations in full.
 Deliberately out of scope, rather than half-implemented: the edit API
 (`ApplyEdits`), RDF conversion (`Convert`), the verification helpers
 (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`), behaviour
-execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `Query`/OSLC, and
+execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `RunAnalysis`, `Query`/OSLC, and
 generated model-ergonomics types. The service still serves all of them, but the
 public API offers no generic call: `org.openmbee.opensysml.proto` carries the request and
 response messages, and the transport that would send one is

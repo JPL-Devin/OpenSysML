@@ -12,11 +12,16 @@ import (
 // validateAssociationRelatedTypes; checkConnector, validateConnectorRelatedFeatures).
 const msgRelatedElements = "Must have at least two related elements"
 
+// msgBindingBinary is the reference's message for a binding connector whose ends
+// reference other than two features (pilot validateBindingConnectorIsBinary).
+const msgBindingBinary = "Binding connector must be binary"
+
 // W10BRelatedElementsPass reports a concrete association with fewer than two
 // ends, or a concrete connector whose ends reference fewer than two features: a
 // link needs two participants (KerML 1.1 §8.3.3.5, §8.3.4.7). An abstract
 // declaration is exempt, as it is in the reference — its ends are the
-// specialization's to supply.
+// specialization's to supply. A binding connector, abstract or not, must bind
+// exactly two features (§8.3.4.7.2 validateBindingConnectorIsBinary).
 type W10BRelatedElementsPass struct{}
 
 func (W10BRelatedElementsPass) Level() PassLevel { return LevelConstraint }
@@ -33,6 +38,15 @@ func (W10BRelatedElementsPass) Run(ctx *Context, name string, root *ast.RootName
 	isKerML := ctx.Kind == source.KindKerML
 	var diags []Diagnostic
 	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
+		if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageBinding && model.RelatedFeatureCount(sym) != 2 {
+			diags = append(diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     u.Span(),
+				Message:  msgBindingBinary,
+				Code:     "binding-binary",
+				Source:   "constraint",
+			})
+		}
 		switch w10bClassify(sym, isKerML) {
 		case w10bAssociation:
 			if w10bEndCount(model, sym, make(map[*symbols.Symbol]bool)) >= 2 {

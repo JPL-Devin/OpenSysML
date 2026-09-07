@@ -1,0 +1,66 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="MemberPrefixMetadataPlacement" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="M"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="B"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="T"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="A"))
+      (Membership visibility="default"
+        (Definition kind="constraint" abstract=false variation=false name="C"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="Req"
+          (SubjectMember name="s" type="T"
+            (PrefixMetadata type="M"))
+          (Usage kind="actor" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=A
+              (*ast.QualifiedName)))
+          (Usage kind="stakeholder" name="k" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (PrefixMetadata type="M"))
+          (AssumeMember constraint="a"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember constraint="r"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember constraint="<r2> rc"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="ReqShort"
+          (SubjectMember name="<s> x" type="T"
+            (PrefixMetadata type="M"))
+          (AssumeMember constraint="<a> ac"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember constraint="<r> rc"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="use case" abstract=false variation=false name="U"
+          (Membership visibility="default"
+            (Usage kind="objective" name="o" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (PrefixMetadata type="M")
+              (Relationship kind="typing" target=R
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=true name="V"
+          (Membership visibility="default"
+            (Usage kind="part" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+              (PrefixMetadata type="M")))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="D"
+          (Membership visibility="default"
+            (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert" negated=true
+              (PrefixMetadata type="B"))))))))

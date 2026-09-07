@@ -56,6 +56,10 @@ switch (value.kind) {
   case "boolean":  value.value;
   case "string":   value.value;
   case "quantity": value.magnitude; value.unit;       // 1500.0 [kg]
+  case "measurementRef": value.unit; value.unitTerm; value.unitId;  // a bare unit: km, reduced to 1000·metre
+  case "array":    value.dimensions; value.elements;  // row-major, an element is any SysMLValue
+  case "vector":   value.components;                   // { kind: "int" | "real" }[]
+  case "vectorQuantity": value.components;             // QuantityValue[], a unit per component
   case "enum":     value.value.name;                   // and its literal/enumeration ids
   case "instance": value.id;                          // an object in the same tree
   case "sequence": value.elements;                    // SysMLValue[]
@@ -181,7 +185,9 @@ The client checks the advertised list **before** making such a call so it can
 raise a `MissingCapabilityError` naming the service, its version and the way to
 get one that has it. A direct capability-gated request to a service without the
 capability is refused with `UNIMPLEMENTED`; response-population capabilities
-instead omit the fields they name.
+instead omit the fields they name. A service without `structured_values` or
+`measurement_refs` sends the value kinds those name (`array`, `vector`,
+`vectorQuantity`; `measurementRef`) as `null` with an `unsupported: …` reason.
 
 ## Failures are typed
 
@@ -329,7 +335,7 @@ above. Deliberately **not** in v1, rather than half-implemented:
 - RDF conversion (`Convert`);
 - verification helpers (`VerifyConstraint`, `VerifyRequirement`,
   `VerifySatisfaction`);
-- `Query`, `GetDiagnostics`, `EvaluateCalc`, `ExecuteAction`, `ExecuteState`.
+- `Query`, `GetDiagnostics`, `EvaluateCalc`, `RunAnalysis`, `ExecuteAction`, `ExecuteState`.
 
 `connection.rpc` is the escape hatch: it is the generated Connect client, so any
 RPC not covered here can still be called, without the ergonomic layer.

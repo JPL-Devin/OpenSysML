@@ -51,14 +51,19 @@ func (e *ActionExecutor) enterSubflow(tokenIdx int, perf *actionFrame) error {
 func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 	node := perf.node
 	if perf.graph == nil || perf.graph.Initial == nil {
-		return fmt.Errorf("%w: action node %s owns a flow that cannot be built",
-			ErrInvalidActionFlow, ActionNodeName(node))
+		return fmt.Errorf("%w: %s owns a flow that cannot be built",
+			ErrInvalidActionFlow, perf.describe())
 	}
 	perf.inBody = true
 	e.tokens = append(e.tokens, Token{ID: e.nextTokenID, Location: perf.graph.Initial, frame: perf})
 	e.nextTokenID++
+	// The root performance, a case body's own flow, has no node and is traced by name.
+	name := ActionNodeName(node)
+	if node == nil {
+		name = perf.describe()
+	}
 	if tr := e.trace(); tr != nil {
-		tr.RecordActionNodeEnter(ActionNodeName(node))
+		tr.RecordActionNodeEnter(name)
 	}
 	for perf.live > 0 {
 		if name := e.breakpointHit(); name != "" {
@@ -83,7 +88,7 @@ func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 			ErrActionDeadlock, len(e.tokensIn(perf)), perf.describe())
 	}
 	if tr := e.trace(); tr != nil {
-		tr.RecordActionNodeExit(ActionNodeName(node))
+		tr.RecordActionNodeExit(name)
 	}
 	return nil
 }
@@ -184,6 +189,43 @@ func (e *ActionExecutor) validateSubflows(graph *lower.ActionGraph) error {
 		}
 		for _, block := range lower.BlockFlows(graph.Bodies[node]) {
 			if err := e.validateSubflows(block); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// checkResultParameters refuses an action, or a node of its flow, declaring a
+// `return` parameter — only a function or expression owns one.
+func (e *ActionExecutor) checkResultParameters() error {
+	for _, param := range e.ctx.model.BehaviorParametersOf(e.action) {
+		if param.IsResult {
+			return fmt.Errorf("%w: action %s declares `return %s`; write `out %s`",
+				ErrActionResultParameter, symbolText(e.action), param.Symbol.Name, param.Symbol.Name)
+		}
+	}
+	return e.checkNodeResultParameters(e.graph)
+}
+
+func (e *ActionExecutor) checkNodeResultParameters(graph *lower.ActionGraph) error {
+	if graph == nil {
+		return nil
+	}
+	for _, node := range graph.Nodes {
+		for _, f := range graph.Features[node] {
+			if f.IsResult {
+				return fmt.Errorf("%w: action node %s declares `return %s`; write `out %s`",
+					ErrActionResultParameter, ActionNodeName(node), f.Name, f.Name)
+			}
+		}
+		if sub, owns := e.subflowOf(graph, node); owns && sub.Graph != nil {
+			if err := e.checkNodeResultParameters(sub.Graph); err != nil {
+				return err
+			}
+		}
+		for _, block := range lower.BlockFlows(graph.Bodies[node]) {
+			if err := e.checkNodeResultParameters(block); err != nil {
 				return err
 			}
 		}

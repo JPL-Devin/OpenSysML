@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::unitful",
+  "outputs": {
+    "doubled": {"type": "Quantity", "value": 20.0, "unit": "kg"}
+  }
+}

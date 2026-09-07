@@ -46,7 +46,7 @@
     {
       "name": "validateAnnotationAnnotatedElementOwnership",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateAnnotationAnnotatingElement",
@@ -133,7 +133,7 @@
     {
       "name": "validateBindingConnectorIsBinary",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateBindingConnectorTypeConformance",
@@ -185,18 +185,18 @@
     {
       "name": "validateClassSpecialization",
       "source": "both",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateClassifierDefaultSupertype",
       "raw": "validateClassifierDefaultSupertype_",
       "source": "kerml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateClassifierMultiplicityDomain",
       "source": "kerml",
-      "status": "unknown"
+      "status": "deliberate"
     },
     {
       "name": "validateCollectExpressionOperator",
@@ -237,7 +237,7 @@
     {
       "name": "validateConstructorExpressionOwnedFeatures",
       "source": "kerml",
-      "status": "approximate"
+      "status": "unknown"
     },
     {
       "name": "validateControlNodeIncomingSuccessions",
@@ -267,7 +267,7 @@
     {
       "name": "validateDataTypeSpecialization",
       "source": "both",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateDecisionNodeIncomingSuccessions",
@@ -373,7 +373,7 @@
     {
       "name": "validateFeatureChainingFeatureConformance",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureChainingFeatureNotOne",
@@ -403,7 +403,7 @@
     {
       "name": "validateFeatureEndFeatureMultiplicity",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureEndIsConstant",
@@ -413,18 +413,18 @@
     {
       "name": "validateFeatureEndNoDirection",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureEndNotDerivedAbstractCompositeOrPortion",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureHasType",
       "raw": "validateFeatureHasType_",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureIsVariable",
@@ -434,7 +434,7 @@
     {
       "name": "validateFeatureMultiplicityDomain",
       "source": "kerml",
-      "status": "unknown"
+      "status": "not-implemented"
     },
     {
       "name": "validateFeatureOwnedCrossSubsetting",
@@ -479,7 +479,7 @@
     {
       "name": "validateFlowEndImplicitSubsetting",
       "source": "kerml",
-      "status": "unknown"
+      "status": "approximate"
     },
     {
       "name": "validateFlowEndIsEnd",
@@ -608,7 +608,7 @@
     {
       "name": "validateInvocationExpressionParameterRedefinition",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateItemUsageType",
@@ -714,17 +714,17 @@
       "name": "validateOperatorExpressionBracketOperator",
       "raw": "validateOperatorExpressionBracketOperator_",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionCastConformance",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOperatorExpressionQuantity",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOwnedDifferencingNotOne",
@@ -780,7 +780,7 @@
     {
       "name": "validatePortUsageIsReference",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validatePortUsageNestedUsagesNotComposite",
@@ -878,12 +878,12 @@
     {
       "name": "validateReturnParameterMembershipOwningType",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSatisfyRequirementUsageReference",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateSelectExpressionOperator",
@@ -904,7 +904,7 @@
     {
       "name": "validateSpecializationSpecificNotConjugated",
       "source": "kerml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateStakeholderMembershipOwningType",
@@ -985,7 +985,7 @@
     {
       "name": "validateTransitionFeatureMembershipGuardExpression",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateTransitionFeatureMembershipOwningType",
@@ -1030,7 +1030,7 @@
     {
       "name": "validateTypeAtMostOneConjugator",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeDifferencingTypesNotSelf",

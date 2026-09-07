@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::shipCost",
+  "bindings": {
+    "factor": {"type": "Real", "value": 3.0}
+  },
+  "outputs": {
+    "total": {"type": "Real", "value": 36.0}
+  }
+}

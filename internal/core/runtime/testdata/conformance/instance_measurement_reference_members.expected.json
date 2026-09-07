@@ -1,0 +1,33 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Survey",
+  "slots": {
+    "side": {"type": "Quantity", "value": 3, "unit": "km"},
+    "factor": {"type": "Real", "value": 1000.0},
+    "reference": {"type": "MeasurementRef", "unit": "m"},
+    "exact": {"type": "Boolean", "value": true},
+    "prefixName": {"type": "String", "value": "kilo"},
+    "fromSide": {"type": "Real", "value": 1000.0},
+    "inReference": {"type": "Quantity", "value": 3000.0, "unit": "m"},
+    "exponent": {"type": "Integer", "value": 1},
+    "derivedExponent": {"type": "Integer", "value": -1},
+    "factorUnit": {"type": "MeasurementRef", "unit": "m"},
+    "factorExponent": {"type": "Integer", "value": 1},
+    "triplePoint": {"type": "Real", "value": 273.16},
+    "bound": {"type": "Boolean", "value": false},
+    "orthogonal": {"type": "Boolean", "value": true},
+    "axes": {"type": "Sequence", "elements": [
+      {"type": "MeasurementRef", "unit": "m"}
+    ]},
+    "noConversion": {"type": "Sequence", "elements": []},
+    "stressBound": {"type": "Boolean", "value": false},
+    "deepPrefixFactor": {"type": "Real", "value": 1000.0},
+    "deepFactor": {"type": "Real", "value": 1000.0},
+    "hollowConv": {"type": "Sequence", "elements": []},
+    "computingConv": {"type": "Sequence", "elements": []},
+    "label": {"type": "String", "value": "stress"},
+    "labeledBound": {"type": "Boolean", "value": false},
+    "checked": {"type": "Unset"}
+  }
+}

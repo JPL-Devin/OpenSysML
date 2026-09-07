@@ -44,11 +44,20 @@ func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
 			return
 		}
 	}
-	if _, isDef := sym.Decl.(*ast.Definition); isDef || sym.Kind == symbols.SymbolKerMLType {
+	if c.declaresType(sym) {
 		c.checkDefaultSupertype(sym)
 		return
 	}
 	c.checkFeatureHasType(sym)
+}
+
+// declaresType reports whether sym declares a classifier rather than a feature;
+// a KerML `datatype` or `function` is recorded as a usage but is one.
+func (c *implicitBaseChecker) declaresType(sym *symbols.Symbol) bool {
+	if _, isDef := sym.Decl.(*ast.Definition); isDef || sym.Kind == symbols.SymbolKerMLType {
+		return true
+	}
+	return c.isKerML && c.model.DeclaresKerMLClassifier(sym)
 }
 
 // checkDefaultSupertype reports a type whose supertypes do not reach the base
@@ -81,33 +90,47 @@ func (c *implicitBaseChecker) checkFeatureHasType(sym *symbols.Symbol) {
 			return
 		}
 	}
-	// A feature with no declared type takes the one its implicit base feature
-	// carries, so it lacks a type only when conjugation stands in for the
-	// implicit subsetting that would supply it.
+	// Conjugation replaces the implicit subsetting that would type the feature,
+	// so a conjugated feature is typed only through the feature it conjugates.
+	if target := c.conjugationTarget(sym); target != nil {
+		if !c.conjugatedFeatureTyped(target, map[*symbols.Symbol]bool{sym: true}) {
+			c.report(sym.Decl.Span(), msgFeatureNoType, "feature-has-type")
+		}
+		return
+	}
 	fqn, ok := c.model.FeatureBaseFQN(sym)
 	if !ok {
 		return
 	}
-	if base := c.libraryType(fqn); base != nil && !c.selfConjugating(sym) {
+	if base := c.libraryType(fqn); base != nil {
 		return
 	}
 	c.report(sym.Decl.Span(), msgFeatureNoType, "feature-has-type")
 }
 
-// selfConjugating reports whether sym's conjugation chain returns to sym, which
-// leaves it with neither a conjugated type nor the implicit specialization that
-// conjugation replaces.
-func (c *implicitBaseChecker) selfConjugating(sym *symbols.Symbol) bool {
-	seen := map[*symbols.Symbol]bool{}
-	for cur := sym; cur != nil && !seen[cur]; {
-		seen[cur] = true
-		next := c.conjugationTarget(cur)
-		if next == sym {
+// conjugatedFeatureTyped reports whether the conjugated original sym is a
+// feature with a type: declared, inherited, implicit, or through its own conjugation.
+func (c *implicitBaseChecker) conjugatedFeatureTyped(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) bool {
+	if sym == nil || seen[sym] || c.declaresType(sym) {
+		return false
+	}
+	seen[sym] = true
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return false
+	}
+	if c.hasType(sym) {
+		return true
+	}
+	for _, sup := range c.model.AllSupertypes(sym) {
+		if c.hasType(sup) {
 			return true
 		}
-		cur = next
 	}
-	return false
+	if next := c.conjugationTarget(sym); next != nil {
+		return c.conjugatedFeatureTyped(next, seen)
+	}
+	fqn, ok := c.model.FeatureBaseFQN(sym)
+	return ok && c.libraryType(fqn) != nil
 }
 
 // conjugationTarget returns the type sym conjugates, or nil.

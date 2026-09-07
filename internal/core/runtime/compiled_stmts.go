@@ -24,10 +24,16 @@ type frameBinding struct {
 
 // newFrameLayout lays out a frame holding every parameter, of which the first n
 // are bound: a default sees the parameters bound before it, a body all of them.
-func newFrameLayout(params []string, n int) *frameLayout {
+// A bound parameter answers to each alias of its name as well.
+func newFrameLayout(params []string, aliases map[string]string, n int) *frameLayout {
 	layout := &frameLayout{next: len(params), size: len(params)}
 	for i := 0; i < n && i < len(params); i++ {
 		layout.bindings = append(layout.bindings, frameBinding{name: params[i], slot: i})
+		for alias, name := range aliases {
+			if name == params[i] {
+				layout.bindings = append(layout.bindings, frameBinding{name: alias, slot: i})
+			}
+		}
 	}
 	return layout
 }

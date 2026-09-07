@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -168,10 +169,10 @@ func TestGRPCRobustness(t *testing.T) {
 		// must still answer, reporting unresolved names as diagnostics.
 		svc := mustNewService(t, 10)
 		defer svc.Close()
-		svc.libIndexes = newLibraryBase(func() *symbols.Index {
+		svc.libIndexes = newLibraryBase(func() (*symbols.Index, libs.Source) {
 			idx := symbols.NewIndex()
 			idx.Freeze()
-			return idx
+			return idx, nil
 		})
 
 		resp, err := svc.ParseFile(context.Background(), &pb.ParseFileRequest{

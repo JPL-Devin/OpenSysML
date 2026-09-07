@@ -33,14 +33,22 @@ func (ElementFilterPass) Run(ctx *Context, name string, root *ast.RootNamespace)
 	if rootScope == nil {
 		return nil
 	}
-	fc := &filterChecker{ctx: ctx, model: ctx.Model(), seen: make(map[*symbols.Scope]bool)}
+	fc := &filterChecker{
+		ctx:   ctx,
+		model: ctx.Model(),
+		expr:  &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind},
+		seen:  make(map[*symbols.Scope]bool),
+	}
+	fc.expr.walkMembers = fc.expr.checkMemberOperators
 	fc.walk(rootScope)
-	return fc.diags
+	return append(fc.diags, fc.expr.diags...)
 }
 
 type filterChecker struct {
 	ctx   *Context
 	model *semantics.Model
+	// expr applies the operator-expression rules to the condition's operators.
+	expr  *exprChecker
 	seen  map[*symbols.Scope]bool
 	diags []Diagnostic
 }
@@ -75,6 +83,7 @@ func (fc *filterChecker) check(f symbols.ElementFilter) {
 	for _, p := range fc.model.CheckElementFilter(f) {
 		fc.diags = append(fc.diags, filterDiagnostic(p))
 	}
+	fc.expr.checkOperatorRules(f.Scope, f.Expr)
 }
 
 // gated reports whether the condition rests on something a lower tier could not

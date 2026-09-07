@@ -238,6 +238,94 @@ func TestDefinitionConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
 	}
 }
 
+// The first end of `connector eng to t;` and the `eng` a named end references
+// both go to the featuring type's feature (KerML.xtext:836).
+func TestDefinitionKerMLBinaryConnectorFirstEnd(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_kerml_first_end.kerml").Filename()
+	src := `package P {
+	class V {
+		feature eng;
+		feature t;
+		connector eng to t;
+		connector a ::> eng to t;
+		connector [0..1] eng to [1..*] t;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	for _, probe := range []string{"connector eng to", "::> eng to", "[0..1] eng to"} {
+		off := strings.Index(src, probe) + strings.Index(probe, "eng")
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", probe, len(locs))
+		}
+		// `feature eng;` is on line 2.
+		if locs[0].Range.Start.Line != 2 {
+			t.Errorf("%s: decl line = %d, want 2 (the feature, not the connector)", probe, locs[0].Range.Start.Line)
+		}
+	}
+}
+
+// Both ends of a keyword-first Disjoining go to the element each names, the
+// disjoined end and the disjoining type alike (KerML.xtext:426).
+func TestDefinitionKerMLDisjoiningEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_kerml_disjoining.kerml").Filename()
+	src := `package P {
+	classifier A;
+	classifier B { feature next : B; }
+	feature b : B;
+	disjoining D disjoint A from B;
+	disjoint b.next from A;
+}
+`
+	ws.Open(name, []byte(src), 1)
+	for _, d := range ws.Diagnostics(name) {
+		t.Fatalf("the source reports %q", d.Message)
+	}
+
+	// Each probe is a unique snippet of src; the cursor lands on its last word.
+	for _, tc := range []struct {
+		probe string
+		decl  uint32
+	}{
+		{"disjoint A", 1},
+		{"A from B", 2},
+		{"disjoint b", 3},
+		{"b.next", 2},
+		{"next from A", 1},
+	} {
+		off := strings.Index(src, tc.probe) + strings.LastIndexAny(tc.probe, " .") + 1
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", tc.probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", tc.probe, len(locs))
+		}
+		if locs[0].Range.Start.Line != tc.decl {
+			t.Errorf("%s: decl line = %d, want %d", tc.probe, locs[0].Range.Start.Line, tc.decl)
+		}
+	}
+}
+
 // A name in a filter condition resolves through the imports of its own
 // namespace, which the namespace's filters must not restrict — the diagnostics
 // pass resolves it that way, and the editor has to agree or rename skips it.
@@ -277,5 +365,58 @@ package P {
 		if len(locs) != 1 || locs[0].Range.Start.Line != tc.decl {
 			t.Errorf("Definition(%s) = %+v, want its declaration on line %d", tc.name, locs, tc.decl)
 		}
+	}
+}
+
+// The feature a binding end references (`bind e1 ::> a = b;`) is defined by the
+// owner's feature, whether the end is named or bare; the end name itself is
+// the end's own declaration.
+func TestDefinitionBindingConnectorEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_binding_ends.sysml").Filename()
+	src := `package P {
+	part def V {
+		attribute a;
+		attribute b;
+		bind a = b;
+		bind e1 ::> a = e2 references b;
+		binding bb bind [1] e3 ::> a = b;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	for _, probe := range []string{"bind a = b", "e1 ::> a", "[1] e3 ::> a"} {
+		off := strings.Index(src, probe) + strings.LastIndex(probe, "a")
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", probe, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", probe, len(locs))
+		}
+		// `attribute a;` is on line 2.
+		if locs[0].Range.Start.Line != 2 {
+			t.Errorf("%s: decl line = %d, want 2 (the attribute, not the binding)", probe, locs[0].Range.Start.Line)
+		}
+	}
+	off := strings.Index(src, "e2 references b") + len("e2 references ")
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("references b: Definition err = %v", err)
+	}
+	if len(locs) != 1 || locs[0].Range.Start.Line != 3 {
+		t.Errorf("references b: locations = %v, want the attribute b on line 3", locs)
 	}
 }

@@ -47,6 +47,22 @@ Reading order: *em\*ph\*asis* **bold\_move** `` mass >= `limit` `` [the \[spec\]
 | optics | subsystem: optics | 1.5 |
 | segmentControl | subsystem: segmentControl | 5.5 |
 
+<!-- caption -->
+*Subsystem notes*
+
+| shortName | name | documentation |
+| --- | --- | --- |
+|  | baffle\|shroud \*tricky\* |  |
+| M3\|\* | mount |  |
+| M1 | optics | The primary mirror assembly., Collects light \| not \*heat\*<br>from the target. |
+|  | segmentControl | Actuators that phase the mirror segments. |
+
+**M3\|\***
+
+**M1** — The primary mirror assembly. Collects light \| not \*heat\* from the target.
+
+Actuators that phase the mirror segments.
+
 ### Heavy Subsystems
 
 mount segmentControl

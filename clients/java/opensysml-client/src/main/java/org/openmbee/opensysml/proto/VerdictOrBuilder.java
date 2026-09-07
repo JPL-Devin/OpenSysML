@@ -12,7 +12,8 @@ public interface VerdictOrBuilder extends
 
   /**
    * <pre>
-   * What was verified: "constraint", "requirement" or "satisfy".
+   * What was verified: "constraint", "requirement" or "satisfy"; for a check
+   * an analysis case run made, "objective" or "assertion".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -21,7 +22,8 @@ public interface VerdictOrBuilder extends
   java.lang.String getKind();
   /**
    * <pre>
-   * What was verified: "constraint", "requirement" or "satisfy".
+   * What was verified: "constraint", "requirement" or "satisfy"; for a check
+   * an analysis case run made, "objective" or "assertion".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -32,7 +34,8 @@ public interface VerdictOrBuilder extends
 
   /**
    * <pre>
-   * FQN of the element verified; empty for an anonymous satisfy assertion.
+   * FQN of the element verified; empty for an anonymous satisfy assertion or
+   * an anonymous assertion in a case body.
    * </pre>
    *
    * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -41,7 +44,8 @@ public interface VerdictOrBuilder extends
   java.lang.String getElementId();
   /**
    * <pre>
-   * FQN of the element verified; empty for an anonymous satisfy assertion.
+   * FQN of the element verified; empty for an anonymous satisfy assertion or
+   * an anonymous assertion in a case body.
    * </pre>
    *
    * <code>string element_id = 2 [json_name = "elementId"];</code>
@@ -53,7 +57,8 @@ public interface VerdictOrBuilder extends
   /**
    * <pre>
    * The element as a reader names it: its FQN, or, for an anonymous satisfy
-   * assertion, the assertion as written ("satisfy Range by cruise").
+   * assertion, the assertion as written ("satisfy Range by cruise"); for an
+   * objective or assertion of a case, its name or its condition as written.
    * </pre>
    *
    * <code>string element = 3 [json_name = "element"];</code>
@@ -63,7 +68,8 @@ public interface VerdictOrBuilder extends
   /**
    * <pre>
    * The element as a reader names it: its FQN, or, for an anonymous satisfy
-   * assertion, the assertion as written ("satisfy Range by cruise").
+   * assertion, the assertion as written ("satisfy Range by cruise"); for an
+   * objective or assertion of a case, its name or its condition as written.
    * </pre>
    *
    * <code>string element = 3 [json_name = "element"];</code>

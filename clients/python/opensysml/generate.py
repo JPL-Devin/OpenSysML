@@ -636,25 +636,29 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 2
 
     try:
-        model = opensysml.load(args.source, host=args.host, port=args.port)
+        connection = opensysml.connect(args.host, args.port)
     except ValueError as exc:
         # A misread --host/--port is the caller's mistake, not a crash.
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    try:
-        require_type_facts(model.connection)
-    except MissingCapabilityError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+    # A connection of this run's own, closed when the run ends.
+    with connection:
+        model = connection.load(args.source)
 
-    errors = [diag for diag in model.diagnostics if diag.severity == "error"]
-    if errors:
-        for diag in errors:
-            print(f"error: {diag.message}", file=sys.stderr)
-        return 1
+        try:
+            require_type_facts(connection)
+        except MissingCapabilityError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
 
-    source = generate_source(model, source_text)
+        errors = [diag for diag in model.diagnostics if diag.severity == "error"]
+        if errors:
+            for diag in errors:
+                print(f"error: {diag.message}", file=sys.stderr)
+            return 1
+
+        source = generate_source(model, source_text)
 
     if args.check:
         existing = None

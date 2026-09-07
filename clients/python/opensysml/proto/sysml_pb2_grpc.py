@@ -110,6 +110,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.EvaluateCalcRequest.SerializeToString,
                 response_deserializer=sysml__pb2.EvaluateCalcResponse.FromString,
                 _registered_method=True)
+        self.RunAnalysis = channel.unary_unary(
+                '/sysml.SysMLService/RunAnalysis',
+                request_serializer=sysml__pb2.RunAnalysisRequest.SerializeToString,
+                response_deserializer=sysml__pb2.RunAnalysisResponse.FromString,
+                _registered_method=True)
         self.Query = channel.unary_unary(
                 '/sysml.SysMLService/Query',
                 request_serializer=sysml__pb2.QueryRequest.SerializeToString,
@@ -216,10 +221,10 @@ class SysMLServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def VerifyConstraint(self, request, context):
-        """Verification: the answers the REPL's %constraint, %requirement, %satisfy
-        and %calc give, so "does this model satisfy its requirements?" can be asked
-        by a script. Each evaluates the same runtime paths the prompt does and
-        returns a verdict rather than formatted lines. Reported as the
+        """Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+        %calc and %analysis give, so "does this model satisfy its requirements?"
+        can be asked by a script. Each evaluates the same runtime paths the prompt
+        does and returns a verdict rather than formatted lines. Reported as the
         "verification" capability.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -239,6 +244,12 @@ class SysMLServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def EvaluateCalc(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RunAnalysis(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -347,6 +358,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.EvaluateCalc,
                     request_deserializer=sysml__pb2.EvaluateCalcRequest.FromString,
                     response_serializer=sysml__pb2.EvaluateCalcResponse.SerializeToString,
+            ),
+            'RunAnalysis': grpc.unary_unary_rpc_method_handler(
+                    servicer.RunAnalysis,
+                    request_deserializer=sysml__pb2.RunAnalysisRequest.FromString,
+                    response_serializer=sysml__pb2.RunAnalysisResponse.SerializeToString,
             ),
             'Query': grpc.unary_unary_rpc_method_handler(
                     servicer.Query,
@@ -770,6 +786,33 @@ class SysMLService:
             '/sysml.SysMLService/EvaluateCalc',
             sysml__pb2.EvaluateCalcRequest.SerializeToString,
             sysml__pb2.EvaluateCalcResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RunAnalysis(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/RunAnalysis',
+            sysml__pb2.RunAnalysisRequest.SerializeToString,
+            sysml__pb2.RunAnalysisResponse.FromString,
             options,
             channel_credentials,
             insecure,

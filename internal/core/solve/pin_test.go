@@ -239,6 +239,27 @@ func TestPinRefusesAValueWithNoLiteral(t *testing.T) {
 	}
 }
 
+// TestPinRefusesATensorQuantity: the term language has scalar variables only, so
+// a tensor is refused by name rather than flattened or silently dropped.
+func TestPinRefusesATensorQuantity(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	metre := quantityValue(t, ctx, idx, "test::Panel::clearance").Quantity().Unit
+	num := []semantics.Value{{Kind: semantics.ValReal, Real: 1}, {Kind: semantics.ValReal, Real: 0}, {Kind: semantics.ValReal, Real: 0}, {Kind: semantics.ValReal, Real: 1}}
+	tensor := runtime.NewTensorQuantityValue([]int64{2, 2}, num, []runtime.Unit{metre, metre, metre, metre})
+	sym := symbolNamed(t, idx, "test::Panel::speedIsBounded")
+	speed := symbolNamed(t, idx, "test::Panel::maxSpeed")
+	_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{
+		Feature: speed, Name: "maxSpeed", Value: tensor, Source: PinChosen,
+	}})
+	var refusal *PinError
+	if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+		t.Fatalf("error %v, want a typed refusal to fix a tensor", err)
+	}
+	if !strings.Contains(refusal.Reason, "is not a scalar") || !strings.Contains(refusal.Value, "Tensor(2, 2)") {
+		t.Errorf("refusal %+v does not name the tensor and why", refusal)
+	}
+}
+
 // TestPinRefusesAValueOfTheWrongType: a string does not fix a number, whatever
 // the model states.
 func TestPinRefusesAValueOfTheWrongType(t *testing.T) {
@@ -283,4 +304,49 @@ func quantityValue(t *testing.T, ctx *runtime.Context, idx *symbols.Index, fqn s
 	}
 	t.Fatalf("%s declares no value to read", fqn)
 	return runtime.Value{}
+}
+
+// TestPinRefusesAMeasurementReference: a unit is not a number, so the reference
+// its quantity was measured in fixes nothing; the refusal is typed and names it.
+func TestPinRefusesAMeasurementReference(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	length := quantityValue(t, ctx, idx, "test::Panel::clearance")
+	sym := symbolNamed(t, idx, "test::Panel::fits")
+	width := symbolNamed(t, idx, "test::Panel::width")
+	_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{
+		Feature: width, Name: "width", Value: runtime.NewMeasurementRefValue(length.Quantity().Unit), Source: PinChosen,
+	}})
+	var refusal *PinError
+	if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+		t.Fatalf("error %v, want a typed refusal to fix a measurement reference", err)
+	}
+	if !strings.Contains(refusal.Reason, "is a measurement reference") {
+		t.Errorf("refusal %+v does not say the value is a measurement reference", refusal)
+	}
+}
+
+// TestPinRefusesACoordinateFrame: a frame and the transformation placing it are
+// not numbers either; each refusal is typed and says what the value is.
+func TestPinRefusesACoordinateFrame(t *testing.T) {
+	ctx, idx := fixtureFile(t, "panel_pins.sysml")
+	length := quantityValue(t, ctx, idx, "test::Panel::clearance")
+	sym := symbolNamed(t, idx, "test::Panel::fits")
+	width := symbolNamed(t, idx, "test::Panel::width")
+	frame := &runtime.CoordinateFrame{Dimensions: []int64{2}, Axes: []runtime.Unit{length.Quantity().Unit, length.Quantity().Unit}, Text: "panelCF"}
+	for _, tc := range []struct {
+		value runtime.Value
+		what  string
+	}{
+		{runtime.NewCoordinateFrameValue(frame), "is a coordinate frame"},
+		{runtime.NewCoordinateTransformationValue(&runtime.CoordinateTransformation{Source: frame, Target: frame}), "is a coordinate transformation"},
+	} {
+		_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{Feature: width, Name: "width", Value: tc.value, Source: PinChosen}})
+		var refusal *PinError
+		if !errors.As(err, &refusal) || !errors.Is(err, ErrNotPinnable) {
+			t.Fatalf("error %v, want a typed refusal to fix %s", err, runtime.FormatValue(tc.value))
+		}
+		if !strings.Contains(refusal.Reason, tc.what) {
+			t.Errorf("refusal %+v does not say the value %s", refusal, tc.what)
+		}
+	}
 }

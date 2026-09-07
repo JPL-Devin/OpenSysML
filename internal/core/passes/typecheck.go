@@ -31,7 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	model := ctx.Model()
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
-		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
+		expr:     &exprChecker{resolver: ctx.Resolver(), model: model, lang: ctx.Kind},
 		lang:     ctx.Kind,
 	}
 	tc.expr.walkMembers = tc.walk
@@ -58,6 +58,8 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			tc.checkRelationships(scope, d.Relationships, declKind{
 				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword, span: d.Span(),
 			})
+			tc.expr.checkBoundOperators(scope, d.Multiplicity)
+			tc.expr.checkRelationshipBounds(scope, d.Relationships)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -74,10 +76,22 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				hasType:      hasTypingRelationship(d.Relationships),
 				span:         d.Span(),
 			})
+			tc.expr.checkUsageBounds(scope, d)
 			if tc.sendPayloads[d] {
 				tc.checkOneType(scope, usageDecl(d))
 			} else {
 				tc.checkFeatureDecl(scope, usageDecl(d))
+			}
+			if cross := d.CrossFeature; cross != nil {
+				// A cross feature is a reference usage of its own (SysML.xtext
+				// OwnedCrossFeatureMember), typed by any definition.
+				tc.checkRelationships(scope, cross.Relationships, declKind{
+					lang:        tc.lang,
+					useKind:     ast.UsageAttribute,
+					isReference: true,
+					hasType:     hasTypingRelationship(cross.Relationships),
+					span:        cross.Span(),
+				})
 			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -85,6 +99,16 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 		case *ast.AssumeMember, *ast.RequireMember:
 			tc.checkOwnedConstraint(scope, d)
 			tc.checkBehaviorMember(scope, d)
+		case *ast.MultiplicityDecl:
+			tc.expr.checkBoundOperators(scope, d.Range)
+			if child := childScopeOf(scope, d); child != nil {
+				tc.walk(child, d.Members)
+			}
+		case *ast.RelationshipMember:
+			tc.checkRelationshipMember(scope, d)
+			if child := childScopeOf(scope, d); child != nil {
+				tc.walk(child, d.Members)
+			}
 		case *ast.Package:
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -140,9 +164,11 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		}
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.AssumeMember:
+		tc.expr.checkBoundOperators(scope, m.Multiplicity)
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.RequireMember:
+		tc.expr.checkBoundOperators(scope, m.Multiplicity)
 		tc.expr.checkBoolean(scope, m.Expression, "require expression")
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.IfActionNode:
@@ -228,6 +254,7 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	}
 	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
+	tc.expr.checkBoundOperators(scope, m.Multiplicity)
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}
@@ -368,6 +395,9 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		tc.owningEnumerationConformsTo(scope, targetSym) {
 		return
 	}
+	if relKind == ast.RelSpecializes && w11aFamilyRuleFires(decl, targetSym) {
+		return // a supertype of the wrong classifier family is the family rules' finding
+	}
 	kind := targetSym.Kind
 	if relKind == ast.RelReferences || relKind == ast.RelSubsets {
 		kind = referentKind(targetSym)
@@ -414,7 +444,8 @@ func (tc *typeChecker) checkChainSegments(scope *symbols.Scope, target ast.Node)
 			sym = resolved
 		}
 	}
-	if sym.Kind == symbols.SymbolUnknown || isUsageKind(sym.Kind) {
+	// An alias that resolves to nothing is the name-resolution tier's finding.
+	if sym.Kind == symbols.SymbolAlias || endFeature.admits(sym.Kind) {
 		return
 	}
 	tc.appendUnique(Diagnostic{
@@ -628,7 +659,7 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 			}
 			// Every KerML declaration is a Type and specializes a Type; the
 			// definition/usage taxonomy does not apply (KerML 1.0 §8.3.3).
-			if !isTypeKind(target) {
+			if !endType.admits(target) {
 				return fmt.Sprintf("a KerML type may specialize only a type, found %s", target)
 			}
 			return ""
@@ -686,7 +717,7 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// A KerML FeatureTyping's type is any Type, a Feature among them (KerML
 		// 1.0 §8.3.4.4); KerML has no usage-kind taxonomy to check further.
 		if decl.isKerML() {
-			if !isTypeKind(target) {
+			if !endType.admits(target) {
 				return fmt.Sprintf("type must be a type, found %s", target)
 			}
 			return ""
@@ -975,10 +1006,13 @@ func isUsageKind(k symbols.SymbolKind) bool {
 }
 
 // typeSymbolKinds is the set of SymbolKinds that classify a Type: every
-// definition and usage kind, plus a KerML type declaration. Enumerated rather
-// than derived by negation so a kind added later is rejected until classified.
+// definition and usage kind, a KerML type declaration, and a named multiplicity,
+// which is a Feature. Enumerated so a kind added later is rejected until classified.
 var typeSymbolKinds = func() map[symbols.SymbolKind]bool {
-	m := map[symbols.SymbolKind]bool{symbols.SymbolKerMLType: true}
+	m := map[symbols.SymbolKind]bool{
+		symbols.SymbolKerMLType:    true,
+		symbols.SymbolMultiplicity: true,
+	}
 	for k := range defSymbolKinds {
 		m[k] = true
 	}

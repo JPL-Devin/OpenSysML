@@ -145,6 +145,90 @@ class ApiIntegrationTest {
     }
   }
 
+  private static final String STRUCTURED =
+      """
+      package S {
+        private import ScalarValues::*;
+        private import Collections::*;
+        private import VectorValues::*;
+        private import VectorFunctions::*;
+        private import Quantities::*;
+        private import SI::*;
+        attribute grid : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+        attribute v : CartesianVectorValue = VectorOf((3.0, 4.0));
+        attribute d : VectorQuantityValue = VectorOf((3.0, 4.0)) [m];
+      }
+      """;
+
+  @Test
+  void anArrayAVectorAndAVectorQuantityArriveWholeOverProtobufAndJson() {
+    assertTrue(connection.capabilities().has(Capabilities.STRUCTURED_VALUES));
+    try (Connection json =
+        Connection.open(ServiceBinary.options().encoding(Encoding.JSON).build())) {
+      for (Connection each : List.of(connection, json)) {
+        Model model = each.parse(STRUCTURED);
+        assertEquals(
+            new Value.ArrayValue(
+                List.of(2L, 3L),
+                List.of(
+                    new Value.IntegerValue(1), new Value.IntegerValue(2), new Value.IntegerValue(3),
+                    new Value.IntegerValue(4), new Value.IntegerValue(5), new Value.IntegerValue(6))),
+            model.eval("S::grid"));
+        assertEquals(
+            new Value.VectorValue(List.of(new Value.RealValue(3.0), new Value.RealValue(4.0))),
+            model.eval("S::v"));
+        Value.VectorQuantityValue d = (Value.VectorQuantityValue) model.eval("S::d");
+        assertEquals(Optional.of("m"), d.unit());
+        assertEquals(List.of(3.0, 4.0), d.components().stream().map(Quantity::magnitude).toList());
+        assertEquals(
+            List.of(new Quantity.UnitFactor("SI::metre", 1.0)),
+            d.components().get(0).reduction().orElseThrow().factors());
+      }
+    }
+  }
+
+  private static final String MEASUREMENT_REFS =
+      """
+      package M {
+        private import ScalarValues::*;
+        private import Quantities::*;
+        private import MeasurementReferences::*;
+        private import SI::*;
+        attribute q : ISQ::LengthValue = 3 [km];
+        attribute u : MeasurementUnit = m;
+        attribute speed = m / s;
+      }
+      """;
+
+  @Test
+  void aBareMeasurementReferenceArrivesWithItsReductionAndDeclarationOverProtobufAndJson() {
+    assertTrue(connection.capabilities().has(Capabilities.MEASUREMENT_REFS));
+    try (Connection json =
+        Connection.open(ServiceBinary.options().encoding(Encoding.JSON).build())) {
+      for (Connection each : List.of(connection, json)) {
+        Model model = each.parse(MEASUREMENT_REFS);
+        assertEquals(
+            new Value.MeasurementRefValue(
+                "m",
+                new Quantity.UnitTerm(
+                    1.0, 1.0, List.of(new Quantity.UnitFactor("SI::metre", 1.0))),
+                Optional.of("SI::metre")),
+            model.eval("M::u"));
+        Value.MeasurementRefValue km = (Value.MeasurementRefValue) model.eval("M::q.mRef");
+        assertEquals("km", km.unit());
+        assertEquals(Optional.of("SI::kilometre"), km.unitId());
+        assertEquals(1000.0, km.reduction().scaleNumerator());
+        Value.MeasurementRefValue speed = (Value.MeasurementRefValue) model.eval("M::speed");
+        assertEquals(Optional.empty(), speed.unitId());
+        assertEquals(
+            List.of(
+                new Quantity.UnitFactor("SI::metre", 1.0),
+                new Quantity.UnitFactor("SI::second", -1.0)),
+            speed.reduction().factors());
+      }
+    }
+  }
+
   @Test
   void aModelTheServiceDoesNotHoldIsRefused() {
     Model absent = connection.model("sha256:0000000000000000");

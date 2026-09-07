@@ -63,6 +63,7 @@ private static final long serialVersionUID = 0L;
     REAL_VALUE(4),
     BOOL_VALUE(5),
     INFINITY(6),
+    QUANTITY(8),
     KIND_NOT_SET(0);
     private final int value;
     private KindCase(int value) {
@@ -86,6 +87,7 @@ private static final long serialVersionUID = 0L;
         case 4: return REAL_VALUE;
         case 5: return BOOL_VALUE;
         case 6: return INFINITY;
+        case 8: return QUANTITY;
         case 0: return KIND_NOT_SET;
         default: return null;
       }
@@ -301,6 +303,49 @@ private static final long serialVersionUID = 0L;
     return false;
   }
 
+  public static final int QUANTITY_FIELD_NUMBER = 8;
+  /**
+   * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   * @return Whether the quantity field is set.
+   */
+  @java.lang.Override
+  public boolean hasQuantity() {
+    return kindCase_ == 8;
+  }
+  /**
+   * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   * @return The quantity.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.Quantity getQuantity() {
+    if (kindCase_ == 8) {
+       return (org.openmbee.opensysml.proto.Quantity) kind_;
+    }
+    return org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.QuantityOrBuilder getQuantityOrBuilder() {
+    if (kindCase_ == 8) {
+       return (org.openmbee.opensysml.proto.Quantity) kind_;
+    }
+    return org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+  }
+
   public static final int ELEMENT_TYPE_FIELD_NUMBER = 7;
   @SuppressWarnings("serial")
   private volatile java.lang.Object elementType_ = "";
@@ -387,6 +432,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(elementType_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, elementType_);
     }
+    if (kindCase_ == 8) {
+      output.writeMessage(8, (org.openmbee.opensysml.proto.Quantity) kind_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -424,6 +472,10 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(elementType_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, elementType_);
+    }
+    if (kindCase_ == 8) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(8, (org.openmbee.opensysml.proto.Quantity) kind_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -469,6 +521,10 @@ private static final long serialVersionUID = 0L;
         if (getInfinity()
             != other.getInfinity()) return false;
         break;
+      case 8:
+        if (!getQuantity()
+            .equals(other.getQuantity())) return false;
+        break;
       case 0:
       default:
     }
@@ -513,6 +569,10 @@ private static final long serialVersionUID = 0L;
         hash = (37 * hash) + INFINITY_FIELD_NUMBER;
         hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
             getInfinity());
+        break;
+      case 8:
+        hash = (37 * hash) + QUANTITY_FIELD_NUMBER;
+        hash = (53 * hash) + getQuantity().hashCode();
         break;
       case 0:
       default:
@@ -655,6 +715,9 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
+      if (quantityBuilder_ != null) {
+        quantityBuilder_.clear();
+      }
       elementType_ = "";
       kindCase_ = 0;
       kind_ = null;
@@ -692,7 +755,7 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartial0(org.openmbee.opensysml.proto.DocumentValue result) {
       int from_bitField0_ = bitField0_;
-      if (((from_bitField0_ & 0x00000040) != 0)) {
+      if (((from_bitField0_ & 0x00000080) != 0)) {
         result.elementType_ = elementType_;
       }
     }
@@ -700,6 +763,10 @@ private static final long serialVersionUID = 0L;
     private void buildPartialOneofs(org.openmbee.opensysml.proto.DocumentValue result) {
       result.kindCase_ = kindCase_;
       result.kind_ = this.kind_;
+      if (kindCase_ == 8 &&
+          quantityBuilder_ != null) {
+        result.kind_ = quantityBuilder_.build();
+      }
     }
 
     @java.lang.Override
@@ -716,7 +783,7 @@ private static final long serialVersionUID = 0L;
       if (other == org.openmbee.opensysml.proto.DocumentValue.getDefaultInstance()) return this;
       if (!other.getElementType().isEmpty()) {
         elementType_ = other.elementType_;
-        bitField0_ |= 0x00000040;
+        bitField0_ |= 0x00000080;
         onChanged();
       }
       switch (other.getKindCase()) {
@@ -746,6 +813,10 @@ private static final long serialVersionUID = 0L;
         }
         case INFINITY: {
           setInfinity(other.getInfinity());
+          break;
+        }
+        case QUANTITY: {
+          mergeQuantity(other.getQuantity());
           break;
         }
         case KIND_NOT_SET: {
@@ -812,9 +883,16 @@ private static final long serialVersionUID = 0L;
             } // case 48
             case 58: {
               elementType_ = input.readStringRequireUtf8();
-              bitField0_ |= 0x00000040;
+              bitField0_ |= 0x00000080;
               break;
             } // case 58
+            case 66: {
+              input.readMessage(
+                  internalGetQuantityFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 8;
+              break;
+            } // case 66
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1225,6 +1303,184 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Quantity, org.openmbee.opensysml.proto.Quantity.Builder, org.openmbee.opensysml.proto.QuantityOrBuilder> quantityBuilder_;
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     * @return Whether the quantity field is set.
+     */
+    @java.lang.Override
+    public boolean hasQuantity() {
+      return kindCase_ == 8;
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     * @return The quantity.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.Quantity getQuantity() {
+      if (quantityBuilder_ == null) {
+        if (kindCase_ == 8) {
+          return (org.openmbee.opensysml.proto.Quantity) kind_;
+        }
+        return org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+      } else {
+        if (kindCase_ == 8) {
+          return quantityBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    public Builder setQuantity(org.openmbee.opensysml.proto.Quantity value) {
+      if (quantityBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        quantityBuilder_.setMessage(value);
+      }
+      kindCase_ = 8;
+      return this;
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    public Builder setQuantity(
+        org.openmbee.opensysml.proto.Quantity.Builder builderForValue) {
+      if (quantityBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        quantityBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 8;
+      return this;
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    public Builder mergeQuantity(org.openmbee.opensysml.proto.Quantity value) {
+      if (quantityBuilder_ == null) {
+        if (kindCase_ == 8 &&
+            kind_ != org.openmbee.opensysml.proto.Quantity.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.Quantity.newBuilder((org.openmbee.opensysml.proto.Quantity) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 8) {
+          quantityBuilder_.mergeFrom(value);
+        } else {
+          quantityBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 8;
+      return this;
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    public Builder clearQuantity() {
+      if (quantityBuilder_ == null) {
+        if (kindCase_ == 8) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 8) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        quantityBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    public org.openmbee.opensysml.proto.Quantity.Builder getQuantityBuilder() {
+      return internalGetQuantityFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.QuantityOrBuilder getQuantityOrBuilder() {
+      if ((kindCase_ == 8) && (quantityBuilder_ != null)) {
+        return quantityBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 8) {
+          return (org.openmbee.opensysml.proto.Quantity) kind_;
+        }
+        return org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * magnitude in a unit, `2290000 [kg]`
+     * </pre>
+     *
+     * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Quantity, org.openmbee.opensysml.proto.Quantity.Builder, org.openmbee.opensysml.proto.QuantityOrBuilder> 
+        internalGetQuantityFieldBuilder() {
+      if (quantityBuilder_ == null) {
+        if (!(kindCase_ == 8)) {
+          kind_ = org.openmbee.opensysml.proto.Quantity.getDefaultInstance();
+        }
+        quantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.Quantity, org.openmbee.opensysml.proto.Quantity.Builder, org.openmbee.opensysml.proto.QuantityOrBuilder>(
+                (org.openmbee.opensysml.proto.Quantity) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 8;
+      onChanged();
+      return quantityBuilder_;
+    }
+
     private java.lang.Object elementType_ = "";
     /**
      * <pre>
@@ -1280,7 +1536,7 @@ private static final long serialVersionUID = 0L;
         java.lang.String value) {
       if (value == null) { throw new NullPointerException(); }
       elementType_ = value;
-      bitField0_ |= 0x00000040;
+      bitField0_ |= 0x00000080;
       onChanged();
       return this;
     }
@@ -1294,7 +1550,7 @@ private static final long serialVersionUID = 0L;
      */
     public Builder clearElementType() {
       elementType_ = getDefaultInstance().getElementType();
-      bitField0_ = (bitField0_ & ~0x00000040);
+      bitField0_ = (bitField0_ & ~0x00000080);
       onChanged();
       return this;
     }
@@ -1312,7 +1568,7 @@ private static final long serialVersionUID = 0L;
       if (value == null) { throw new NullPointerException(); }
       checkByteStringIsUtf8(value);
       elementType_ = value;
-      bitField0_ |= 0x00000040;
+      bitField0_ |= 0x00000080;
       onChanged();
       return this;
     }

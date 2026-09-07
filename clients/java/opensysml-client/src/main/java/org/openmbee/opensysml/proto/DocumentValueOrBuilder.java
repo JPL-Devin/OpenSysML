@@ -102,6 +102,33 @@ public interface DocumentValueOrBuilder extends
 
   /**
    * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   * @return Whether the quantity field is set.
+   */
+  boolean hasQuantity();
+  /**
+   * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   * @return The quantity.
+   */
+  org.openmbee.opensysml.proto.Quantity getQuantity();
+  /**
+   * <pre>
+   * magnitude in a unit, `2290000 [kg]`
+   * </pre>
+   *
+   * <code>.sysml.Quantity quantity = 8 [json_name = "quantity"];</code>
+   */
+  org.openmbee.opensysml.proto.QuantityOrBuilder getQuantityOrBuilder();
+
+  /**
+   * <pre>
    * Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
    * </pre>
    *

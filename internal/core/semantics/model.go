@@ -15,6 +15,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -43,6 +44,7 @@ type Model struct {
 	params        map[*symbols.Symbol]behaviorParameters
 	invocations   map[invocationKey]*InvocationSelection
 	arguments     ArgumentTyper // the checker's argument typing, nil when no checker runs
+	sourceText    source.Lookup // notation of the loaded documents, nil when unavailable
 	// typingArgs holds the calls whose arguments are being typed, so an argument
 	// whose type leads back to its own call is not typed again.
 	typingArgs map[*ast.InvocationExpr]bool
@@ -58,6 +60,7 @@ type Model struct {
 	dimensions   map[*symbols.Symbol]dimensionResult // units to the dimension they measure in
 	dimensioning map[*symbols.Symbol]bool            // units whose dimension is being derived, to detect a cycle
 	libSymbols   map[string]*symbols.Symbol          // library elements resolved by qualified name
+	baseUnits    map[*symbols.Symbol]*symbols.Symbol // base quantities to SI::si's base units, nil until read
 
 	// Element-filter evaluation: conditions compiled once per expression, their
 	// verdicts memoized per candidate, and the metadata annotating each candidate
@@ -76,9 +79,7 @@ type Model struct {
 	redefined map[*symbols.Symbol][]*symbols.Symbol
 	redefMask map[*symbols.Symbol]map[*symbols.Symbol]bool
 	// redefMaskInherited is the same mask counting inherited redefinitions only.
-	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
-	// declMask is redefMaskInherited as a declaration of a given name sees it.
-	declMask                   map[declMaskKey]map[*symbols.Symbol]bool
+	redefMaskInherited         map[*symbols.Symbol]map[*symbols.Symbol]bool
 	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
 	computingRedefClosure      map[*symbols.Symbol]bool
 	computingRedefinedFeatures int
@@ -88,13 +89,6 @@ type Model struct {
 	// sources they read are complete (see members.go).
 	members map[memberKey][]*symbols.Symbol
 	shapes  map[*symbols.Symbol][]ShapeFeature
-}
-
-// declMaskKey keys the mask a declaration written in a type sees, by the type
-// and the declaration's name.
-type declMaskKey struct {
-	owner *symbols.Symbol
-	name  string
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -138,7 +132,6 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		redefined:             make(map[*symbols.Symbol][]*symbols.Symbol),
 		redefMask:             make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		redefMaskInherited:    make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
-		declMask:              make(map[declMaskKey]map[*symbols.Symbol]bool),
 		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		computingRedefClosure: make(map[*symbols.Symbol]bool),
 		ctorSlots:             make(map[*symbols.Symbol]constructorSlots),
@@ -277,7 +270,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 			continue
 		}
-		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, qn)
+		target, ok := m.generalizationTarget(sym, rel.Kind, qn)
 		if !ok || target == nil {
 			continue
 		}
@@ -413,9 +406,9 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, general)
 	}
 
-	// The subject or objective of a case, requirement or their usages implicitly
-	// redefines the same role of each general, so it takes that role's type when
-	// it declares none (see roles.go).
+	// The subject, objective, actor or stakeholder of a case, requirement or their usages
+	// implicitly redefines the same role of each general, so it takes that role's type
+	// when it declares none (see roles.go).
 	for _, redefined := range m.ImplicitRoleRedefinitions(sym) {
 		if redefined == nil || redefined == sym || seen[redefined] {
 			continue
@@ -485,6 +478,56 @@ func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 // is answering nil for it.
 func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym] || m.computingSupers[sym] != 0
+}
+
+// generalizationTarget resolves a relationship target as the document walk
+// reads it: a redefinition or subsetting names what its owner inherits, past
+// the masks the owner's own redefinitions cause and the name sym borrows.
+func (m *Model) generalizationTarget(sym *symbols.Symbol, kind ast.RelationshipKind, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	ref := resolve.Reference{Scope: sym.OwnerScope, QN: qn}
+	switch {
+	case kind == ast.RelRedefines:
+		ref.Referrer, ref.Redefines = sym.Decl, true
+	case kind == ast.RelSubsets:
+		ref = resolve.Reference{Scope: sym.OwnerScope, Subsetting: sym.Decl}.Spelled(qn)
+	case kind.ReferenceSubsets():
+		ref.Referrer = sym.Decl
+	}
+	return m.resolver.ResolveReference(ref)
+}
+
+// relationshipTarget resolves the element rel names, as generalizationTarget
+// reads it, following an alias to what it names; a chain target (`subsets
+// b.f`) is its final feature.
+func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	if m.resolver == nil || rel == nil {
+		return nil
+	}
+	node := rel.Target
+	if fr, ok := node.(*ast.FeatureReference); ok {
+		node = fr.Name
+	}
+	var (
+		target *symbols.Symbol
+		ok     bool
+	)
+	switch node := node.(type) {
+	case *ast.FeatureChainExpr:
+		if rel.Kind.ReferenceSubsets() {
+			target, ok = m.resolver.ResolveReferenceTarget(sym.OwnerScope, sym.Decl, node)
+		} else {
+			target, ok = m.resolver.ResolveTarget(sym.OwnerScope, node)
+		}
+	case *ast.QualifiedName:
+		target, ok = m.generalizationTarget(sym, rel.Kind, node)
+	}
+	if !ok || target == nil {
+		return nil
+	}
+	if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+		return resolved
+	}
+	return nil
 }
 
 // subsetsSibling reports whether sym's subsetting resolved to another member of

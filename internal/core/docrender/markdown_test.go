@@ -40,15 +40,22 @@ func fixtureDocument(t *testing.T, path, name string) *docir.Document {
 		t.Fatalf("read fixture: %v", err)
 	}
 	index := libs.NewModelIndex()
-	p := parser.New(source.New(filepath.Base(path), []byte(content)))
+	sf := source.New(filepath.Base(path), []byte(content))
+	p := parser.New(sf)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse fixture: %v", p.Diagnostics)
 	}
-	index.AddDocument(filepath.Base(path), root)
+	index.AddDocument(sf.Name(), root)
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
 	model := semantics.NewModel(resolver)
+	model.SetSourceText(func(doc string, span source.Span) string {
+		if doc != sf.Name() {
+			return ""
+		}
+		return sf.Text(span)
+	})
 	matches := symbols.PreferDeclared(index.LookupQualified(name))
 	if len(matches) != 1 {
 		t.Fatalf("lookup %s: got %d symbols", name, len(matches))
@@ -119,6 +126,77 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 		if strings.HasPrefix(line, "| ") && strings.Contains(line, "\\|") && !strings.HasSuffix(line, " |") {
 			t.Errorf("table row not terminated: %q", line)
 		}
+	}
+}
+
+// TestMarkdownQuantityReportGolden locks the rendering of tables over
+// quantity-valued attributes: projected, ordered across commensurable units,
+// filtered by bare magnitude, and computed, each cell keeping its unit.
+func TestMarkdownQuantityReportGolden(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "quantity_report.sysml"),
+		"Launcher::MassReport")
+	golden := filepath.Join("testdata", "quantity_report.golden.md")
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create): %v", err)
+	}
+	if got != string(want) {
+		t.Errorf("rendered Markdown differs from %s (run with -update after intentional changes)\ngot:\n%s", golden, got)
+	}
+	for _, want := range []string{
+		"| name | mass | tonnes |\n| --- | --- | --- |\n",
+		"| s1 | 2290000 \\[kg\\] | 2290 \\[kg\\] |\n| s2 | 119000 \\[kg\\] | 119 \\[kg\\] |\n| probe | 500000 \\[g\\] | 500 \\[g\\] |\n",
+		"| name | mass |\n| --- | --- |\n| s1 | 2290000 \\[kg\\] |\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+}
+
+// TestMarkdownDerivedReportGolden locks a document whose table, list and
+// definitions read attributes derived from other features: sums of sibling
+// masses through type- and usage-level redefinitions, chains into owned parts,
+// a conditional and a computed column, each cell keeping its unit.
+func TestMarkdownDerivedReportGolden(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "derived_report.sysml"),
+		"Derived::MassReport")
+	golden := filepath.Join("testdata", "derived_report.golden.md")
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create): %v", err)
+	}
+	if got != string(want) {
+		t.Errorf("rendered Markdown differs from %s (run with -update after intentional changes)\ngot:\n%s", golden, got)
+	}
+	for _, want := range []string{
+		"| name | dryMass | mass | engines | class | perEngine |\n| --- | --- | --- | --- | --- | --- |\n",
+		"| s1 | 130000 \\[kg\\] | 2290000 \\[kg\\] | 5 | heavy | 458000 \\[kg\\] |\n",
+		"| s2 | 120000 \\[kg\\] | 2280000 \\[kg\\] | 3 | heavy | 760000 \\[kg\\] |\n",
+		"| s3 | 15000 \\[kg\\] | 119000 \\[kg\\] | 1 | light | 119000 \\[kg\\] |\n",
+		"- s1 2290000 \\[kg\\]\n",
+		"**rocket** — 4689000 \\[kg\\]\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "- s2") {
+		t.Errorf("list holds s2, whose derived mass is not above the threshold\n%s", got)
 	}
 }
 
@@ -193,5 +271,26 @@ func TestMarkdownNilDocument(t *testing.T) {
 	var typed *Error
 	if !errors.As(err, &typed) || typed.Kind != ErrorNilDocument {
 		t.Fatalf("Markdown(nil) error = %v, want %s", err, ErrorNilDocument)
+	}
+}
+
+// TestMarkdownRollupReport renders `mass + sum(subcomponents.totalMass)` as a
+// library writes it: a leaf whose empty subcomponents sum to a zero mass, and
+// stacks whose `default null` subcomponents are the parts subsetting them.
+func TestMarkdownRollupReport(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "rollup_report.sysml"),
+		"Rollup::MassReport")
+	want := "# Rolled-Up Masses\n\n" +
+		"<!-- caption -->\n*Own mass and total mass*\n\n" +
+		"| name | mass | totalMass |\n| --- | --- | --- |\n" +
+		"| leaf | 100 \\[kg\\] | 100 \\[kg\\] |\n" +
+		"| stack | 10 \\[kg\\] | 210 \\[kg\\] |\n" +
+		"| tower | 1 \\[kg\\] | 311 \\[kg\\] |\n\n" +
+		"**leaf** — 100 \\[kg\\]\n\n" +
+		"**stack** — 210 \\[kg\\]\n\n" +
+		"**tower** — 311 \\[kg\\]\n"
+	if got != want {
+		t.Errorf("rendered Markdown = \n%s\nwant:\n%s", got, want)
 	}
 }

@@ -108,6 +108,33 @@ func TestSameNamedRedefinitionReachesInheritedFeature(t *testing.T) {
 	}
 }
 
+// A member named by the feature it performs is `a` for its owner and for every
+// chain reaching the owner, and duplicates the inherited `a` it does not
+// redefine; a plain assertion derives no name at all — matched runs.
+func TestReferenceDerivedNameIsAMemberInsideAndOut(t *testing.T) {
+	r, _, docRoot := resolvedDoc(t, `package P {
+		part def H { action a { attribute i; } part q; }
+		part h : H { perform a; ref x = a.i; assert q; }
+		part ctx { ref y = h.a.i; ref z = h.q; }
+	}`)
+	pkg := local(t, docRoot, "P")
+	h := local(t, pkg.Scope, "h")
+	a := local(t, h.Scope, "a")
+	if a.Naming != symbols.NamedByReference {
+		t.Errorf("a naming = %v, want the performed action's", a.Naming)
+	}
+	if _, ok := h.Scope.LookupLocal("q"); ok {
+		t.Errorf("h members = %v; assert q must not be a member q", h.Scope.MemberNames())
+	}
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 || conflicts[0].Message != "Duplicate of inherited member name 'a' from H" {
+		t.Errorf("conflicts = %v, want the one performed a draws", r.Diagnostics)
+	}
+	if len(r.Diagnostics) != len(conflicts) {
+		t.Errorf("diagnostics = %v, want the chains through h to resolve", r.Diagnostics)
+	}
+}
+
 // A same-named subsetting target is the inherited feature: a feature cannot
 // specialize itself. The fix belongs in resolveSpecialization ("Found, not fixed").
 func TestSubsettingTargetIsTheInheritedFeature(t *testing.T) {
@@ -189,6 +216,58 @@ func TestNameInheritedFromTwoSupertypesIsReportedOnTheSubtype(t *testing.T) {
 	}
 }
 
+// Two inherited redefinitions of one ancestor feature are still two features
+// under one name: neither redefines the other, so the subtype and a usage
+// typed by one while subsetting the other both conflict — matched against the
+// pinned validate-sysml, which reports the same two warnings.
+func TestInheritedRedefinitionsOfACommonAncestorConflict(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def S { attribute d; }
+		part def A :> S { attribute :>> d = 1; }
+		part def B :> S { attribute :>> d = 2; }
+		part def C {
+			part b : B;
+			part x : A :> b;
+		}
+		part def D :> A, B;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 2 {
+		t.Fatalf("conflicts = %v, want two", r.Diagnostics)
+	}
+	for _, c := range conflicts {
+		if want := "Duplicate of inherited member name 'd' from A, B"; c.Message != want {
+			t.Errorf("message = %q, want %q", c.Message, want)
+		}
+	}
+}
+
+// An owned member redefining every colliding inherited namesake owns the name;
+// one redefining only some leaves the rest in conflict — matched against the
+// pinned validate-sysml.
+func TestOwnedRedefinitionOfCollidingInheritedNames(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def S { attribute d; }
+		part def A :> S { attribute :>> d = 1; }
+		part def B :> S { attribute :>> d = 2; }
+		part def L1 { attribute p; }
+		part def R1 { attribute p; }
+		part def C {
+			part b : B;
+			part x : A :> b { attribute :>> A::d, b::d; }
+		}
+		part def D :> L1, R1 { attribute :>> L1::p, R1::p; }
+		part def E :> L1, R1 { attribute :>> L1::p; }
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 || len(r.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %v, want one conflict for E's unredefined p", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from R1"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
 // A supertype's non-private imports are memberships it has, so a subtype
 // inherits the imported names too (KerML §8.4.3.2) — Xpect
 // ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.
@@ -239,6 +318,40 @@ func TestNameRedefinedByAnIntermediateSupertypeStillConflicts(t *testing.T) {
 	}
 }
 
+// Redefining one side of a diamond drops only what that side redefines: the
+// other side's redefinition of the shared feature is still inherited under its
+// name, while the shared feature itself is not — Xpect Redefinition_Diamond1.
+func TestRedefiningOneSideOfADiamondKeepsTheOtherSidesName(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def A { part p[*]; }
+		part def A1 :> A { part p1 :>> p; }
+		part def A2 :> A { part p :>> p; }
+		part def B :> A1, A2 { part p2 :>> p1; part p; }
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the p A2 still contributes", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from A2"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
+// A redefinition of one inherited feature also stops what that feature redefines
+// from being inherited, so a subtype redefining the nearer of two inherited
+// namesakes owns the name alone — matched run.
+func TestRedefiningTheNearerOfTwoInheritedNamesakesOwnsTheName(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def A { part f { part a; } }
+		part def B :> A { part redefines f { part g; } }
+		part def C :> A, B { part redefines f { part redefines g; part redefines a; } }
+		part def D :> A, B { ref x :> f.g; ref y :> f.a; }
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Errorf("diagnostics = %v, want none", r.Diagnostics)
+	}
+}
+
 // A parameter inherited twice under one name is one feature when the owner of
 // one specializes the owner of the other, which implicitly redefines it —
 // matched run, w6c.
@@ -279,6 +392,66 @@ func TestRequirementParametersAreNotNameConflicts(t *testing.T) {
 	}`)
 	if conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict); len(conflicts) != 0 {
 		t.Errorf("name conflicts reported for a requirement's subject: %v", conflicts)
+	}
+}
+
+// A redefinition removes what its owner inherits, never a feature declared
+// beside it: a chain through a feature typed by the owner still reaches the
+// sibling (KerML 8.3.3.3.6) — pilot-refereed, both cases.
+func TestRedefiningASiblingMasksNothingThroughAChain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		src      string
+		resolves bool
+	}{
+		{
+			name: "sibling",
+			src: `package K {
+				classifier C {
+					feature xs;
+					feature sub : C[0..1];
+					feature slice redefines xs;
+					inv { sub.xs }
+				}
+			}`,
+			resolves: true,
+		},
+		{
+			name: "inherited",
+			src: `package K {
+				classifier G { feature xs; }
+				classifier C specializes G {
+					feature sub : C[0..1];
+					feature slice redefines xs;
+					inv { sub.xs }
+				}
+			}`,
+			resolves: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, root, docRoot := resolvedDocNamed(t, "k.kerml", tc.src)
+			var chains []resolve.Reference
+			for _, ref := range resolve.References(root, docRoot) {
+				if ref.Chain != nil && nameText(ref.QN) == "xs" {
+					chains = append(chains, ref)
+				}
+			}
+			if len(chains) != 1 {
+				t.Fatalf("chain references = %d, want the one sub.xs", len(chains))
+			}
+			got, ok := r.ResolveReference(chains[0])
+			if ok != tc.resolves {
+				t.Fatalf("sub.xs resolved = %v, want %v", ok, tc.resolves)
+			}
+			if !ok {
+				return
+			}
+			want := local(t, local(t, local(t, docRoot, "K").Scope, "C").Scope, "xs")
+			if got != want {
+				t.Errorf("sub.xs = %s, want the xs C declares", got.Name)
+			}
+		})
 	}
 }
 

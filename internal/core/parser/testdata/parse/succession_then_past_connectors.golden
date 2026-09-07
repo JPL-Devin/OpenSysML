@@ -160,9 +160,10 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
-              (Relationship kind="references" target=p
+              (ConnectorEnd target="p"
                 (*ast.QualifiedName))
-              (FeatureReference name="q")))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Step

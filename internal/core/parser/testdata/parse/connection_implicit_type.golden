@@ -46,11 +46,12 @@
             (*ast.QualifiedName))))
       (Membership visibility="default"
         (Usage kind="binding" name="bnd" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="references" target=(expr)
+          (ConnectorEnd target="*ast.FeatureChainExpr"
             (FeatureChainExpr member="p"
               (FeatureReference name="a")))
-          (FeatureChainExpr member="p"
-            (FeatureReference name="b"))))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b")))))
       (Membership visibility="default"
         (Usage kind="flow" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (FlowEnds from="a.p" to="b.p" payload="nil" declared=false)))

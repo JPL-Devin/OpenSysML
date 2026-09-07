@@ -216,11 +216,15 @@
 //   - Direction comes from the trade-study definition the objective is typed by:
 //     TradeStudies::MinimizeObjective or MaximizeObjective, specializations
 //     included. An objective typed by neither refuses with ErrNotOptimizable.
-//   - The value to improve is the expression the objective states for the
-//     library's `best` feature — `objective o : MinimizeObjective { attribute
-//     :>> best = expression; }` — since an objective is a requirement usage and
-//     carries no scalar value of its own. A value bound directly to the objective
-//     is read too, where a model can write one.
+//   - The value to improve is the expression the objective's redefinition of
+//     the library's `eval` calculation returns — `objective o :
+//     MinimizeObjective { subject :>> selectedAlternative; in calc :>> eval {
+//     expression } }` — which is the library's own extension point: it derives
+//     `best` as `eval` over the alternatives. An objective giving the bound
+//     `best` a value of its own instead (`attribute :>> best = expression;`) is
+//     a validation error, and refuses here with ErrNotOptimizable pointing at
+//     the `eval` spelling rather than being read. A value bound directly to the
+//     objective is read too, where a model can write one.
 //   - What is feasible is the case's own conditions (CaseConditionsOf: `require`,
 //     `assume`, `assert`, `inv`, inherited ones included) together with the
 //     conditions each objective states: its own body's, and the ones it inherits
@@ -228,7 +232,8 @@
 //     Only the trade-study library's own conditions are left out, being about
 //     choosing among alternatives rather than about which values are feasible. A
 //     condition an inherited definition states over `best` bounds the value
-//     improved, since the objective's `best` is asserted equal to it (RoleDefined).
+//     improved, since the objective's `best` is asserted equal to what its `eval`
+//     returns, as the library derives it (RoleDefined).
 //     A case stating no condition is legitimately unbounded, not refused.
 //   - Objectives, values and conditions are read through the runtime's own
 //     surfaces (runtime.Context.ObjectivesOf), so what is optimized is what the

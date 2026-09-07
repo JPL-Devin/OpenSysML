@@ -235,7 +235,7 @@ func (l *Loader) installFacts(idx *symbols.Index, store bool) {
 	}
 	records := make([]built, 0, len(missing))
 	for _, doc := range missing {
-		rec, resolved := recordFromIndex(doc.name, idx, r, model)
+		rec, resolved := recordFromIndex(doc.name, idx, model)
 		if rec == nil {
 			continue
 		}

@@ -60,18 +60,44 @@ func TestMaskedInheritedFeatureIsNotResolvableInSubtype(t *testing.T) {
 }
 
 // A declaration redefining an inherited namesake still names what that namesake
-// redefines (KerML 7.3.4.5), one level of nesting included.
+// redefines when another general still inherits it (KerML 7.3.4.5): the port
+// redefines one typed by the general port definition, so `pwrCmd` reaches it.
 func TestRedefiningNamesakeStillNamesItsTarget(t *testing.T) {
 	r := resolveWithModel(t, "t.sysml", `package p {
 		port def PwrCmdPort { in item pwrCmd; }
 		port def FuelCmdPort :> PwrCmdPort { in item fuelCmd redefines pwrCmd; }
-		part def V {
-			port fuelCmdPort : FuelCmdPort {
+		part def V0 { port pwrCmdPort : PwrCmdPort; }
+		part def V :> V0 {
+			port fuelCmdPort : FuelCmdPort redefines pwrCmdPort {
 				in item fuelCmd redefines pwrCmd;
 			}
 		}
 	}`)
 	if got := unresolvedNames(r); len(got) != 0 {
 		t.Fatalf("unresolved = %v, want none", got)
+	}
+}
+
+// Without that other general, an inherited redefinition masks the feature from
+// every reference in the subtype, its own redefinitions included; the pinned
+// pilot rejects all three references here.
+func TestInheritedRedefinitionMasksEveryReference(t *testing.T) {
+	r := resolveWithModel(t, "t.sysml", `package p {
+		port def PwrCmdPort { in item pwrCmd; }
+		port def FuelCmdPort :> PwrCmdPort { in item fuelCmd redefines pwrCmd; }
+		part def V {
+			port fuelCmdPort : FuelCmdPort { in item fuelCmd redefines pwrCmd; }
+			port p2 : FuelCmdPort { in item other redefines pwrCmd; }
+			port p3 : FuelCmdPort { in item other :> pwrCmd; }
+		}
+	}`)
+	got := unresolvedNames(r)
+	if len(got) != 3 {
+		t.Fatalf("unresolved = %v, want pwrCmd three times", got)
+	}
+	for _, name := range got {
+		if name != "pwrCmd" {
+			t.Fatalf("unresolved = %v, want pwrCmd three times", got)
+		}
 	}
 }

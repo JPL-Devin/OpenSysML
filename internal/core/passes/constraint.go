@@ -92,6 +92,9 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
 	cc.checkAtMostOneMember(sym)
+	cc.checkReturnParameterOwner(sym)
+	cc.checkAtMostOneConjugator(sym)
+	cc.checkFeatureEndFeatureMultiplicity(sym)
 }
 
 // checkFlowEndSubsetting requires each declared flow end to name a payload
@@ -415,8 +418,8 @@ func (cc *constraintChecker) addConnectorEndsDiag(sym *symbols.Symbol, u *ast.Us
 }
 
 // checkUnnamedRedefinitionValue warns about a value on a member that redefines
-// more than one feature: it derives no name (KerML 7.3.4.5), so the value
-// reaches none of them.
+// more than one feature: it takes the first one's name, or none when it declares
+// a short name (KerML 7.3.4.5), so the value is unreachable by the other names.
 func (cc *constraintChecker) checkUnnamedRedefinitionValue(sym *symbols.Symbol) {
 	u, ok := sym.Decl.(*ast.Usage)
 	if !ok || u.Value == nil || u.Ident.Name != "" {
@@ -431,21 +434,28 @@ func (cc *constraintChecker) checkUnnamedRedefinitionValue(sym *symbols.Symbol) 
 			targets = append(targets, name)
 		}
 	}
-	if len(targets) < 2 || ast.NamingFeature(u) != nil {
+	if len(targets) < 2 {
 		return
 	}
-	binding := "is not reachable by name"
+	if naming := ast.NamingFeature(u); naming != nil && naming.Kind != ast.RelRedefines {
+		return
+	}
+	var message string
 	if u.Ident.ShortName != "" {
-		binding = fmt.Sprintf("is bound to the short name <%s> only", u.Ident.ShortName)
+		message = fmt.Sprintf(
+			"a member redefining %s derives no name, so this value is bound to the short name <%s> only; declare a name or redefine one feature",
+			strings.Join(targets, " and "), u.Ident.ShortName)
+	} else {
+		message = fmt.Sprintf(
+			"a member redefining %s takes the name %s only, so this value is not reachable by name as %s; declare a name or redefine one feature",
+			strings.Join(targets, " and "), targets[0], strings.Join(targets[1:], " or "))
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityWarning,
 		Span:     u.Value.Span(),
-		Message: fmt.Sprintf(
-			"a member redefining %s derives no name, so this value %s; declare a name or redefine one feature",
-			strings.Join(targets, " and "), binding),
-		Code:   "redefinition-no-derived-name",
-		Source: "constraint",
+		Message:  message,
+		Code:     "redefinition-no-derived-name",
+		Source:   "constraint",
 	})
 }
 
@@ -536,14 +546,15 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// Check type conformance
+		// A redefining feature's declared type is added to the redefined one's,
+		// not checked against it (KerML 8.3.3.3.4), so an unrelated type is advisory.
 		usageType := extractUsageType(cc, sym)
 		redefinedType := extractUsageType(cc, redefined)
 
 		if usageType != nil && redefinedType != nil {
 			if !cc.model.Conforms(usageType, redefinedType) {
 				cc.diags = append(cc.diags, Diagnostic{
-					Severity: SeverityError,
+					Severity: SeverityWarning,
 					Span:     rel.Target.Span(),
 					Message: fmt.Sprintf(
 						"%s (typed by %s) redefines %s (typed by %s): types do not conform",
@@ -681,16 +692,8 @@ func (cc *constraintChecker) collectRedefined(sym *symbols.Symbol, into map[*sym
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, ok := targetNode.(*ast.QualifiedName)
-		if !ok {
-			continue
-		}
-		target, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || target == nil || into[target] {
+		target := cc.model.RelationshipTarget(sym, rel)
+		if target == nil || into[target] {
 			continue
 		}
 		into[target] = true

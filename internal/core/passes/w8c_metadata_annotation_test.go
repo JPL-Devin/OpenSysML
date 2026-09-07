@@ -575,6 +575,8 @@ func TestMetadataAnnotationsNestedInAnnotationBodies(t *testing.T) {
 
 // A metadata usage nested in an annotation body has its own body checked like
 // one written at the top level, in either spelling of the enclosing annotation.
+// `:>> i` and `i = 1` both redefine `i`, so they are duplicate owned members too;
+// the one named only by its redefinition is reported at the whole member.
 func TestMetadataUsagesNestedInAnnotationBodies(t *testing.T) {
 	kerml := `package P {
 	metaclass Outer;
@@ -600,6 +602,8 @@ func TestMetadataUsagesNestedInAnnotationBodies(t *testing.T) {
 		"metadata-body-feature on zz;",
 		"metadata-value-not-evaluable on = ~3",
 		"metadata-value-not-evaluable on = ~4",
+		"name-conflict on :>> i = ~4;",
+		"name-conflict on i",
 	}
 	for name, src := range map[string]string{"nested.kerml": kerml, "nested.sysml": sysml} {
 		var got []string

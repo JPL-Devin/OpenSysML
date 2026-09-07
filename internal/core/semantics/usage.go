@@ -27,18 +27,21 @@ func (m *Model) UsageMayTimeVary(sym *symbols.Symbol) bool {
 
 // FeatureIsVariable derives KerML Feature::isVariable (KerML 1.1 §8.3.3.1): declared by
 // `var` or `const` in KerML, and redefined as Usage::mayTimeVary for a SysML usage.
+// A cross feature's membership is no FeatureMembership, so it has no owningType.
 func (m *Model) FeatureIsVariable(sym *symbols.Symbol) bool {
-	if sym == nil {
+	if sym == nil || isKerMLTypeDecl(sym) {
 		return false
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || isKerMLTypeDecl(sym) {
-		return false
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		if m.isKerMLDoc(sym) {
+			return d.IsVariable || d.IsConstant
+		}
+		return m.UsageMayTimeVary(sym)
+	case *ast.CrossFeatureMember:
+		return m.isKerMLDoc(sym) && (d.IsVariable || d.IsConstant)
 	}
-	if m.isKerMLDoc(sym) {
-		return usage.IsVariable || usage.IsConstant
-	}
-	return m.UsageMayTimeVary(sym)
+	return false
 }
 
 // usageIsReferential derives SysML Usage::isReference: attribute usages are
@@ -55,7 +58,7 @@ func usageIsReferential(usage *ast.Usage) bool {
 
 func usageIsComposite(usage *ast.Usage) bool {
 	if usage == nil || usage.IsReference || usage.Direction != ast.DirNone ||
-		usage.IsEnd || usage.IsEvent {
+		usage.IsEnd || usage.IsEvent || usage.IsVariantReference() {
 		return false
 	}
 	for _, rel := range usage.Relationships {

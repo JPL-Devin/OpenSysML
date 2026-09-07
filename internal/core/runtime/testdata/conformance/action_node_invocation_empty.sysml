@@ -5,9 +5,9 @@ package test {
     // while the bare typed usage reads the enclosing `times`.
     action def Greet {
         in times : Integer = 1;
-        return count : Integer;
+        out result : Integer;
         first start;
-        then action go { assign count := times * 10; }
+        then action go { assign result := times * 10; }
         then done;
     }
 
@@ -20,7 +20,7 @@ package test {
         then action bare : Greet;
         then action fin {
             assign fromDefault := explicit;
-            assign fromCaller := bare.count;
+            assign fromCaller := bare.result;
         }
         then done;
     }

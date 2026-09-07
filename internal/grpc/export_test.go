@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // The REPL imports this package for its feature-value serialization, so a test
@@ -256,8 +257,9 @@ func TestConvertRejectsBadArguments(t *testing.T) {
 	cases := map[string]*pb.ConvertRequest{
 		"no source":        {ToFormat: "sysml", FromFormat: "sysml"},
 		"no to_format":     {Source: content, FromFormat: "sysml"},
-		"unknown to":       {Source: content, FromFormat: "sysml", ToFormat: "xmi"},
-		"unknown from":     {Source: content, FromFormat: "xmi", ToFormat: "sysml"},
+		"unknown to":       {Source: content, FromFormat: "sysml", ToFormat: "docx"},
+		"unknown from":     {Source: content, FromFormat: "docx", ToFormat: "sysml"},
+		"xmi as target":    {Source: content, FromFormat: "sysml", ToFormat: "xmi"},
 		"missing file":     {Source: &pb.ConvertRequest_FilePath{FilePath: "/nonexistent/model.sysml"}, ToFormat: "ttl"},
 		"unknown ext":      {Source: &pb.ConvertRequest_FilePath{FilePath: "model.json"}, ToFormat: "ttl"},
 		"no format at all": {Source: content},
@@ -331,5 +333,36 @@ func TestConvertTolerantWritesNotationAnyway(t *testing.T) {
 	}
 	if graph.Error == "" {
 		t.Error("tolerated syntax errors into RDF, which would drop declarations")
+	}
+}
+
+// TestConvertMigratesXMI checks the service reads SysML v1 XMI: inline content
+// with from_format xmi, and a .xmi file whose format is inferred.
+func TestConvertMigratesXMI(t *testing.T) {
+	srv := mustNewService(t, 10)
+	path := filepath.Join("..", "core", "migrate", "testdata", "cameo", "vehicle.xmi")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, req := range map[string]*pb.ConvertRequest{
+		"content": {Source: &pb.ConvertRequest_Content{Content: string(data)}, FromFormat: "xmi", ToFormat: "sysml"},
+		"file":    {Source: &pb.ConvertRequest_FilePath{FilePath: path}, ToFormat: "sysml"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp, err := srv.Convert(context.Background(), req)
+			if err != nil {
+				t.Fatalf("Convert: %v", err)
+			}
+			if resp.Error != "" {
+				t.Fatalf("conversion refused: %s", resp.Error)
+			}
+			if resp.FromFormat != "xmi" || !resp.Experimental || resp.ExperimentalNotice != export.MigrationNotice {
+				t.Errorf("from_format %q, experimental %v, notice %q; want xmi, true, the migration notice", resp.FromFormat, resp.Experimental, resp.ExperimentalNotice)
+			}
+			if !strings.Contains(resp.Content, "part def Vehicle") {
+				t.Errorf("no migrated notation:\n%s", resp.Content)
+			}
+		})
 	}
 }

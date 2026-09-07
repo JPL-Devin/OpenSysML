@@ -112,11 +112,11 @@ class TestModuleHelpersReadAnAddress:
         source.write_text("package Demo;\n")
         recorded = {}
 
-        def record(file_path, host='localhost', port=None, strict=False):
+        def record(host='localhost', port=None):
             recorded['target'] = (host, port)
             raise KeyboardInterrupt
 
-        with patch('opensysml.load', record):
+        with patch('opensysml.connect', record):
             with pytest.raises(KeyboardInterrupt):
                 generate_main([str(source), "--host", "localhost:50123"])
         assert recorded['target'] == ("localhost:50123", None)

@@ -17,17 +17,18 @@ var ErrNotAView = errors.New("not a view")
 
 // ExposedElements returns what view exposes, in declaration order and once each:
 // its own `expose` relationships followed by those of the views it specializes,
-// since an Expose is protected. An empty set is no error, a non-view is
+// since an Expose is protected; an inherited expose is admitted against this
+// view's own conditions too. An empty set is no error, a non-view is
 // ErrNotAView, and a nested view's own set is asked of it directly.
 func (m *Model) ExposedElements(view *symbols.Symbol) ([]*symbols.Symbol, error) {
 	if view == nil || !IsView(view) {
 		return nil, ErrNotAView
 	}
 	out := &exposedSet{seen: map[symbols.ElementKey]bool{}}
-	m.addExposed(view, out)
+	m.addExposed(view, view, out)
 	for _, super := range m.AllSupertypes(view) {
 		if IsView(super) {
-			m.addExposed(super, out)
+			m.addExposed(view, super, out)
 		}
 	}
 	return out.elems, nil
@@ -51,10 +52,11 @@ func (m *Model) NestedViews(view *symbols.Symbol) ([]*symbols.Symbol, error) {
 	return out, nil
 }
 
-// addExposed adds what the `expose` relationships of one view import.
-func (m *Model) addExposed(view *symbols.Symbol, out *exposedSet) {
+// addExposed adds what the `expose` relationships declared by one view import
+// into the view asked about.
+func (m *Model) addExposed(into, view *symbols.Symbol, out *exposedSet) {
 	for _, imp := range exposesIn(view.Decl) {
-		for _, elem := range m.resolver.ImportedElements(view.Scope, imp) {
+		for _, elem := range m.resolver.ImportedElementsInto(into.Scope, view.Scope, imp) {
 			out.add(elem)
 		}
 	}

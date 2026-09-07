@@ -196,7 +196,7 @@ func TestAbandonedVectorObjectIsForgottenByItsHolders(t *testing.T) {
 }
 
 // A vector object answers `dimension` as the one Integer its type declares (none
-// for rank 0), `dimensions` as Array's sequence, a fixed dimension unrestated.
+// for rank 0) and no longer `dimensions`, which VectorValue's `dimension` redefines.
 func TestVectorObjectMemberReadsFollowTheDeclaration(t *testing.T) {
 	src := `
 		package test {
@@ -215,7 +215,6 @@ func TestVectorObjectMemberReadsFollowTheDeclaration(t *testing.T) {
 	for _, tc := range []struct{ expr, want string }{
 		{"two", "⟨1, 2⟩"},
 		{"two.dimension", "2"},
-		{"two.dimensions", "[2]"},
 		{"two.rank", "1"},
 		{"scalar", "Array()[7]"},
 		{"scalar.dimension", "null"},
@@ -238,6 +237,7 @@ func TestVectorObjectMemberReadsFollowTheDeclaration(t *testing.T) {
 	}{
 		{"short", ErrMultiplicityViolation},
 		{"grid", ErrMultiplicityViolation},
+		{"two.dimensions", ErrNoSuchFeature},
 	} {
 		if _, err := evalIn(t, ctx, pkg.Scope, tc.expr); !errors.Is(err, tc.want) {
 			t.Errorf("%s: err = %v, want %v", tc.expr, err, tc.want)

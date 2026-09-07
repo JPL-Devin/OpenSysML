@@ -1,0 +1,18 @@
+enter analysis test::reordered
+materialize: ship #1
+  eval feature ship -> instance#1
+  bind s = instance#1 [default]
+  stmt action body
+enter action node: analysis test::reordered
+    stmt assign p
+        eval feature s -> instance#1
+      eval chain cost -> 5.0
+    eval chain p -> 5.0
+    stmt assign w
+        eval feature q -> 5.0
+        eval literal 10.0 -> 10.0
+      eval operator * -> 50.0
+leave action node: analysis test::reordered
+  stmt return
+    eval chain w -> 50.0
+exit analysis test::reordered -> 50.0

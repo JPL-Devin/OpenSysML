@@ -29,10 +29,11 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
-              (Relationship kind="references" target=(expr)
+              (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="a"
                   (FeatureReference name="add")))
-              (FeatureReference name="x")))
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))))
           (InitialNode name="start" successor="")
           (Membership visibility="default"
             (Usage kind="action" name="add" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

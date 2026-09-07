@@ -5,9 +5,42 @@ package runtime
 type frame struct {
 	slots *slotFrame
 	vars  map[string]Value
+	// aliases map the name of a redefined feature to the name of the feature
+	// redefining it, which the frame binds it under (`in g :>> x` holds x as g).
+	aliases map[string]string
 	// perf is the action performance vars belongs to, if any, whose flow's nodes
 	// the frame also answers for (action_frame.go).
 	perf *actionFrame
+	// owner is the calc whose parameters, locals and outputs the frame binds, so a
+	// qualified name of one of its members (`MassCase::result`) reads the binding.
+	owner *calcShape
+}
+
+// canonical is the name aliases bind name under: its redefinition's, else its own.
+func canonical(aliases map[string]string, name string) string {
+	if alias, ok := aliases[name]; ok {
+		return alias
+	}
+	return name
+}
+
+// aliasRedefined records that name now binds the feature redefined was known by.
+// Aliases already pointing at redefined follow it to name.
+func aliasRedefined(aliases map[string]string, redefined, name string) map[string]string {
+	if redefined == "" || name == "" || redefined == name {
+		return aliases
+	}
+	if aliases == nil {
+		aliases = make(map[string]string)
+	}
+	for alias, target := range aliases {
+		if target == redefined {
+			aliases[alias] = name
+		}
+	}
+	aliases[redefined] = name
+	delete(aliases, name)
+	return aliases
 }
 
 // mapFrame is a frame holding vars alone.
@@ -15,8 +48,20 @@ func mapFrame(vars map[string]Value) frame {
 	return frame{vars: vars}
 }
 
+// ownedFrame is a frame holding the values a run of owner bound, by name.
+func ownedFrame(owner *calcShape, vars map[string]Value) frame {
+	return frame{vars: vars, owner: owner}
+}
+
+// withVars is the frame holding vars in place of its own, still answering for
+// the same run and performance.
+func (f frame) withVars(vars map[string]Value) frame {
+	return frame{vars: vars, aliases: f.aliases, perf: f.perf, owner: f.owner}
+}
+
 // lookup finds name in the frame: a slot binding it, else the map.
 func (f frame) lookup(name string) (Value, bool) {
+	name = canonical(f.aliases, name)
 	if f.slots != nil {
 		if value, ok := f.slots.lookup(name); ok {
 			return value, true
@@ -34,6 +79,7 @@ func (f frame) has(name string) bool {
 
 // set binds name: in its slot when the frame has one for it, else in the map.
 func (f frame) set(name string, value Value) {
+	name = canonical(f.aliases, name)
 	if f.slots != nil && f.slots.set(name, value) {
 		return
 	}
@@ -64,7 +110,7 @@ func (f frame) each(fn func(name string, value Value)) {
 func (f frame) snapshot() frame {
 	vars := make(map[string]Value, f.width())
 	f.each(func(name string, value Value) { vars[name] = value })
-	return mapFrame(vars)
+	return ownedFrame(f.owner, vars)
 }
 
 // width is the number of names the frame binds.

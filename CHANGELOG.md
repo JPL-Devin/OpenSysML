@@ -6,6 +6,481 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+## 0.6.0 — 2026-09-07
+
+### Added
+
+- **An analysis case runs.** An `analysis` definition or usage is the calculation it is: `-analysis
+  "Pkg::Case[(args)] [object]"` and `%analysis` run it and print its `out` and `return` values with
+  their units, then the verdict of its `objective` and of every `assert constraint` in its body —
+  `satisfied`, `not satisfied` with the condition that failed, or `undecided` with the reason — and
+  exit 0, 1 or 2 accordingly. The `subject` is an `in` parameter: a usage binding it (`subject s =
+  ship;`) needs nothing more, a definition or an unbinding usage takes the object the run names (one
+  `-instantiate`/`%instantiate` created) and a case nested in another runs on the enclosing case's
+  subject; a case run with no subject is refused naming it rather than run empty. Arguments bind the
+  other `in` parameters positionally or by name, as `-calc` takes them. The body's `action`,
+  `perform` and nested `analysis` steps run through the action executor as one flow over the
+  successions they state (`then`, `first`, forks, joins, decisions and merges) or in declaration
+  order where they state none, each a subperformance whose outputs later steps and the case's
+  outputs read by `step.pin`; a step that fails, a body that deadlocks or exceeds its step budget, a
+  case that runs itself and an `in` parameter left without a value are typed refusals naming the
+  case. Reading an analysis usage's output as a feature — `An::shipCost.total` on a package-level
+  usage, `holder.inner.total` on a usage a part owns, `attribute :>> x = a.result;` — runs the case
+  the way a `calc` usage's output does, memoized until a value it read changes. The gRPC service
+  gains `RunAnalysis` (symbol, optional subject, positional and named arguments; outputs, verdicts,
+  the subject's instances, and a typed `failure_reason`), the Connect adapter and the Go client gain
+  `RunAnalysis`, and the Python client gains `Model.run_analysis` answering an `AnalysisResult`.
+  `-calc`/`%calc`/`EvaluateCalc` still refuse an analysis by kind and now say to run it as one;
+  `%optimize` is unchanged. A verification case body shares the grammar and lowers the same way but
+  is not yet run: its verdict stays what `-requirement`/`-satisfy` compute.
+
+- **A binding connector's ends are connector ends, so they may be named.** `bind e1 ::> a =
+  e2 references b;` and KerML `binding of e1 ::> a = e2 references b;` declare two end features
+  `e1` and `e2` owned by the binding, each reference-subsetting the feature it binds, exactly as
+  `succession first s1 ::> a then s2 ::> b;` and `connect c1 ::> a to c2 ::> b;` already did.
+  `e1` was read as the binding's own name and `bind e3 ::> a = b;` dropped `e3` on the floor;
+  both are now end names that hover, go-to-definition and rename find, and the semantic binding
+  still joins the two referenced features. The RDF graph states both ends as `sysx:relatedFeature`
+  end nodes carrying `sysx:endName`, `sysx:endIndex` and each end's multiplicity, instead of
+  putting the second end in `sysml:value`; a graph stripped of its source text writes back to the
+  same notation, spelling a named end `::>` unless `sysx:endReferencesKeyword` records the word
+  `references`. An end with two names, a named end with no referenced feature, or a binding with
+  fewer than two end nodes is refused by name rather than failing as a notation error.
+
+- **Six more KerML structural rules are checked the way the reference does.** A binding
+  connector whose effective ends — declared, positional, bound `references` targets and
+  inherited alike — are not exactly two reports `Binding connector must be binary`. A feature
+  chain whose later link is not a feature of the type the earlier link reaches, written in a
+  usage header, a `references`, a connector end or a flow, reports it as not featured within
+  that type, aliases and inherited members followed. An annotating element that annotates
+  itself reports `Must own its annotating element`. An `end` feature with a direction reports
+  `End feature cannot have direction`, and one that is derived, abstract, variation, composite
+  or portion reports `End feature cannot be derived, abstract, composite or portion`. A
+  conjugated classifier, which owns no specialization of its own, must still reach its kind's
+  default supertype through the type it conjugates (`Must directly or indirectly specialize
+  Objects::Object`, say), and a conjugated feature that reaches no type at all reports
+  `Features must have at least one type`. Anonymous usages now keep their `abstract`,
+  `variation`, `ref`, `derived`, `constant`, `var` and portion modifiers, so these checks see
+  them.
+
+- **A coordinate frame and a measurement scale are runtime values.** A usage typed `CoordinateFrame` with its `:>> mRefs` (Annex A's `spatialCF : CartesianSpatial3dCoordinateFrame[1] { :>> mRefs = (m, m, m); }`) evaluates to the frame it declares, carrying its dimensions, one measurement reference per axis and the transformation it states; `MeasurementRefCalculations::'CoordinateFrame*'`/`'CoordinateFrame/'` and the `*`/`/` operators compose every axis with a unit (`velocityCF = spatialCF / s`), `VectorCalculations::'['` builds a vector quantity over a frame (`(1.0, 2.0, 3.0) [spatialCF]`) whose `mRef` is the frame itself, and a frame conforms to its declared type and its generals in the checker and the runtime alike. A measurement scale is the one-axis case: `SI::'°C_abs'`, `Time::UTC` and a model's `TimeScale` carry their unit, mapping and placement, a quantity on one (`21.5 [SI::'°C_abs']`) reads, and `ConvertQuantity` converts through the scale's placement (`ConvertQuantity(300.0 [K], SI::'°C_abs')` is `26.85 ['°C_abs']`, and back), refusing with a typed error a scale the library places nowhere (`Time::UTC`), a mapping that disagrees with the placement, or an origin that is not a quantity. `VectorCalculations::transform` re-expresses a vector over a transformation's source in its target for a `CoordinateFramePlacement` (the inverse of the stated placement, basis directions normalized), a `TranslationRotationSequence` (angles converted through their unit; intrinsic rotations about the moved axes), an `AffineTransformationMatrix3d` and a `NullTransformation`, and names any other transformation type, a vector over the wrong frame, or incommensurable components. Frames and transformations compare and hash, describe, trace, render in the REPL and `%features`, are refused by the solver, traversed by document queries, carried across re-analysis, and cross gRPC as an unsupported null naming them: the wire has no arm for a frame yet.
+
+- **A derived `=` value follows the features it read.** `attribute a : Integer default 3;
+  attribute d : Integer = a * 2;` read `d` as `6` once and kept it after `a` was assigned `9`;
+  the runtime now records what a `=` value reads while it is derived and, when one of those
+  features changes — an `assign` in an action or state body, a `SetFeatureValue` from the REPL or
+  the gRPC service, a binding propagating a new value, a classifier's subsetter superseding a
+  `default null` collection a roll-up had summed while empty — drops the derived value so the
+  next read derives it again, transitively through the values that read it. Nothing is
+  recomputed before it is read, a value a run assigned keeps the assignment, a probe or
+  transaction that wrote such a feature is rolled back with the values that read it, and a value
+  derived from itself is still `ErrCyclicFeatureValue`. The `in` parameters of a calc or action
+  usage are unchanged: bound once per invocation, they stay bound while its outputs are read.
+
+- **Queries project `shortName`, `declaredShortName` and `documentation`.** The three KerML `Element` features join the fixed property set beside `name` and `declaredName`: `Project`, `OrderBy`, `WhereFeature`, `Column` expressions (`Element::shortName`, `Element::documentation`), the gRPC/OSLC query surfaces and reflective access all accept them. `shortName` is the effective short name (`<'HLR-R001'>`), following redefinitions the way `name` does; `documentation` is the body of each `doc` comment in declaration order with its delimiters, indentation and the `*` margin a block comment runs down its left edge removed (a `*` the author wrote — emphasis, a bullet — stays) — the same normalization the LSP hover shows — so an element with two bodies projects two values in the cell. An element without a short name or without documentation projects an absent cell, as any missing property does.
+- **Documents render query rows as prose with the `Definitions` content kind.** A `part … : Definitions` names a `term` and a `description` column of the query bound by its nested `calc`, and each result row becomes one entry: `**HLR-R001** — The mission shall …` in Markdown (and so in PDF), a `<dl class="sysml-definitions">` of `<dt>`/`<dd>` pairs carrying the row's element in HTML. A column the query does not project is a typed `unknown-definition-column` error at planning time when the projection is statically known, otherwise at evaluation; a missing `term`/`description` or a `Definitions` without a query is a typed planning error. `docs/manual/authoring.md` documents the construct and `docs/manual/examples/requirements.sysml` renders requirement identifiers and doc text both as a table and as prose.
+
+- **End features, return parameters and conjugation are checked the way the reference does.** An
+  end feature none of whose multiplicities — its own, or one it takes through subsetting,
+  redefinition, typing, a reference, a feature chain or an implicit end — is exactly `1..1` is
+  reported with the warning `End feature must have multiplicity 1`; a SysML end usage defaults to
+  `1..1`, so only a declared own multiplicity other than `[1]` warns there, and the multiplicity
+  written between `end` and the keyword (`end [0..*] item x : A`) belongs to the cross feature
+  and is silent. A `return` parameter whose owner is no function, expression, calculation,
+  constraint, requirement or case is the error `Return parameter membership not allowed`, and a
+  type that declares a second conjugation (`classifier C ~A ~B;`) reports `Cannot have more than
+  one conjugator` on each `~` past the first.
+- **The multiplicity between `end` and the keyword is the cross feature's.** `end [m] item x : A`
+  now declares an anonymous cross feature carrying `[m]`, as the grammar reads it, instead of
+  copying `[m]` onto the end itself; an end that also declares its own `[n]` keeps both, and
+  the multiplicity a query, type fact or RDF export reports for the end is its own. The RDF
+  mapping writes the cross feature as a feature the end owns through an `OwningMembership`,
+  with its own bounds and specializations, and reads it back. An end that declares its cross
+  feature this way and also `crosses` another feature is reported `Must be the cross feature`,
+  as the reference does.
+
+- **`-html-mermaid` has an HTML document load Mermaid to draw its diagrams.** `-html-mermaid cdn` adds one `<script>` before `</body>` loading a pinned Mermaid release from jsDelivr, and `-html-mermaid <url>` loads the script from a URL of your own; `-render-documents` puts it on every page of the set. Diagram blocks keep their `<pre class="mermaid">` source, so a page still reads where the script cannot load, and the default output is unchanged — no script, no network reference. The option is HTML-only and is refused with `-html-fragment`, since a fragment has no page shell for the script.
+
+- **`-html-theme` styles an HTML document with a bundled theme.** `modern` (clean corporate sans-serif with filled table headers and zebra rows), `report` (serif technical report with open, ruled tables and captions above) and `print` (monochrome, compact, page-break aware) are layered over the default stylesheet inside the same `opensysml` cascade layer, so unlayered `-html-css` sheets still win over both; `default` names the default sheet alone, which stays the default output. A `-render-documents` set writes the themed sheet as its shared `sysml-document.css`, and `-html-default-css -html-theme <name>` writes a theme's whole sheet to start from. The option is HTML-only and is refused with `-html-fragment` and `-html-no-default-css`.
+
+- **A named measurement reference answers its declaration's members.** `SI::km.unitConversion.conversionFactor` is `1000.0`, `km.unitConversion.referenceUnit` is `m` (so `ConvertQuantity(3 [km], km.unitConversion.referenceUnit)` is `3000.0 [m]`), `km.unitConversion.isExact` is `true`, `m.quantityDimension.quantityPowerFactors#(1).exponent` is `1`, `m.unitPowerFactors#(1).unit` is `m` and `K.definitionalQuantityValues#(1).num` is `[273.16]` (`DefinitionalQuantityValue::num` is `Number[1..*]`): a reference naming a declaration reads the members it does not carry itself from the object that declaration materializes as — the one `%features SI::km` shows, kept through REPL re-analysis — with the library's redefinitions and defaults followed. A unit composed at runtime (`m / s`) names no declaration, so those members stay a typed error naming `MeasurementReferences::DerivedUnit` and the reduction. Which library attribute definitions are held as values and which materialize as objects is now decided by specialization (a scalar, an enumeration, a `TensorQuantityValue` or a `TensorMeasurementReference` — frames and scales included — is a value; `UnitConversion`, `UnitPrefix`, `QuantityDimension`, `QuantityPowerFactor`, `UnitPowerFactor`, `DefinitionalQuantityValue`, `QuantityValueMapping` are records), so a model's own `attribute myConv : ConversionByPrefix { :>> prefix = kilo; :>> referenceUnit = m; }` lists and answers `conversionFactor = 1000.0`, and a model's own `TensorMeasurementReference` usage that does not restate `isBound` answers the inherited `default false` instead of "member isBound not found".
+
+- **A measurement reference is a runtime value.** `SI::m`, `SI::'m/s'` and `MeasurementReferences::one` evaluate to a measurement reference carrying the unit's spelling, the declarations it is composed of and its reduction to base units; `m * s`, `m / s` and `m ** 2` compose one, and two references are equal when they reduce alike (`SI::'m/s' == m / s`). `QuantityCalculations::'['(3.0, m)` builds `3.0 [m]`, `ConvertQuantity(3 [km], m)` is `3000.0 [m]` (incommensurable units stay `ErrIncommensurableUnits`), a quantity's `num` and `mRef` read (`q.mRef == SI::m`, a vector quantity's `mRef` when its axes share one unit), and `MeasurementRefCalculations::'*'`, `'/'`, `'**'`, `'^'` and `ToString` compute. A reference conforms to the unit definition of its dimension in the checker and the runtime alike (`m * m` to `AreaUnit` and to `DerivedUnit`, not to `LengthUnit`; `m` to no quantity value type; no unit to a measurement scale such as `Time::TimeScale`), is carried across re-analysis, refused by the solver, bound by document queries as a single unit, and crosses gRPC as an unsupported null naming it. Arithmetic the library does not declare (`m * 3`, `m + m`) is a type mismatch, and the declaration's own members (`m.quantityDimension`) report themselves by name, as does a measurement scale (`Time::UTC`, `SI::'°C_abs'`): the runtime holds a unit and its reduction, not a scale's origin, points or mapping. Coordinate frames (`VectorCalculations::'['`, `transform`, the `CoordinateFrame` operators) and tensors (`outer`, `TensorCalculations`) remain unevaluable by name: the runtime holds no frame or tensor value and the library gives them no bodies.
+
+- **A bare measurement reference crosses the gRPC/Connect API whole, in both directions.** `Value` gains a `measurement_ref` arm carrying what the runtime value carries: the unit as written, its reduced unit term (required wherever the unit names one, the rule `Quantity` already follows), and `unit_id`, the fully qualified name of the declaration a named unit is (`SI::metre` for `m` and for the alias `SI::m`) — omitted for a composed unit such as `m / s`, which names no one declaration, and never to be fabricated by a client. Where the service used to answer `unsupported: measurement reference m` for `SI::m`, `m / s` or a quantity's `mRef`, it now sends the reference, and one supplied as an action input or calc argument decodes to the same runtime value, so `ConvertQuantity(q, ref)` converts through it; a malformed one — no unit and no id, a named unit without its reduction, an id naming nothing or something that is not a unit, or a reduction that disagrees with the declaration's own — is a typed error, never a value of another shape. The service advertises this as the `measurement_refs` capability, separate from `structured_values` so a client built against the three structured arms keeps reading a bare reference as the unsupported null it read before; a service withholding it keeps reporting that null and refuses a reference sent to it with `UNIMPLEMENTED`, and every shipped client checks the list before sending one. The Go, Python, Node, Java and Rust clients map the arm to native types — `opensysml.MeasurementRef`, the `MeasurementRef` dataclass over `Unit`, `{ kind: "measurementRef" }`, `Value.MeasurementRefValue`, `Value::MeasurementRef` — that check the same invariants, and the conformance suite exercises it over gRPC, Connect protobuf and Connect JSON.
+
+- `OOSEM` library under `OpenSysML Libraries`: a non-normative SysML v2 vocabulary for the Object-Oriented Systems Engineering Method — definitions, base usages and semantic-metadata keywords for the enterprise, stakeholders, the four requirement levels, the system context (system of interest, external systems, users, environment), system and enterprise use cases, I/O entities and stores, logical and physical components, nodes, as-is/to-be marking and `OOSEMPackage` classification — re-exporting `ParametersOfInterestMetadata`, `TradeStudies`, `RequirementDerivation` and `CauseAndEffect`. Worked example under `examples/oosem-demo/`; design record in `docs/project/oosem-library.md`.
+
+- `OOSEM` viewpoints and view definitions (`EnterpriseModelView`, `SystemContextView`, `SystemUseCaseView`, `RequirementsView`, `MeasuresView`, `LogicalArchitectureView`, `LogicalScenarioView`, `PhysicalArchitectureView`) that specialise the standard view definitions with the method's filters and renderings, so a model writes only `view v : RequirementsView { expose P::*; }`.
+- OOSEM method checks (`oosem-requirement-not-derived`, `oosem-requirement-not-satisfied`, `oosem-logical-component-not-allocated`, `oosem-use-case-subject`): constraint-tier warnings that a requirement derives from the level above, is satisfied, that a logical component is allocated, and that a use case's subject is the system context or enterprise — each rule waits until the model has the level it traces to.
+
+- **Three operator-expression checks of the reference validator.** The type tier now warns, as the OMG pilot does, when a KerML document indexes with `x[i]` instead of `x#(i)` (`bracket-operator`), when a cast `x as T` names a target unrelated to every type of its argument (`cast-conformance`), and when the unit of a quantity `10 [u]` is not a measurement reference — a number, a String, a quantity value, a dimensionless computation or an untyped feature (`quantity-unit`); arithmetic over units, a frame's `mRefs#(i)`, an aliased or feature-held unit stay silent.
+
+- **Queries and documents evaluate attribute values written over other features.** `attribute :>> mass = dryMass + propellantMass;`, `attribute :>> powerLoad = commandModule.powerLoad + serviceModule.powerLoad;` and `attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);` — the shape a mass or power budget takes — now project, filter (`WhereFeature`), sort (`OrderBy`) and take part in `Column` arithmetic, and so reach `-run-query` and document `Table`, `List` and `Definitions` content in Markdown, HTML and PDF. A value the analyser cannot fold statically is evaluated by the runtime as seen from the row's element, so each leaf reads through that carrier's redefinition chain (type-level and usage-level `:>>`, `default` values, feature chains into owned parts) with the runtime's own arithmetic, unit conversion and library functions (`sum`, `size`, `#`, `->collect`): units are kept and `Integer` stays `Integer`. A leaf nothing binds makes the value absent — an empty cell — as a value-less feature already was; a value that depends on the model running (a calculation's `in` parameter, an action's state), a cycle, operands of different dimensions or a result no cell can hold (a part) is a typed `unevaluable-feature` error naming the query, the property, the row element and the runtime's reason, as `docs/manual/query-cookbook.md` now describes under "Derived values". One shape stays a typed error in the query as in the REPL: `sum` over an empty collection is the dimensionless `0.0`, so `mass + sum(subcomponents.totalMass)` on a component with no subcomponents reports incommensurable units. An expression over a feature holding no value reports which feature holds none (`NoValueError`) rather than a type mismatch.
+
+- **RDF mapping: an anonymous `feature`, `event`, `snapshot`, `timeslice` or `assert` declaration is carried structurally instead of refused.** `sysml -convert ttl` used to refuse a synonym, portion, event or assertion keyword on a declaration with no name of its own (`feature :>> x;`, `snapshot :>> start { … }`, `event m.start;`, `assert c { … }`), because the notation could not be rebuilt from the graph without coming back as a different declaration. The graph now types the fact the keyword states — `sysml:portionKind` for `snapshot`/`timeslice`, the metaclasses `sysml:EventOccurrenceUsage` and `sysml:AssertConstraintUsage` (with `sysml:isNegated`) for `event` and `assert`, the occurrence or constraint they name as `sysml:references` — and records `sysx:declaredKeyword` on an anonymous declaration too, so the decoder spells the head from the typed facts and only picks the spelling from the keyword. KerML's `feature`, which no typed fact distinguishes from `attribute`, is carried by the keyword alone. A graph whose keyword contradicts its typing (`snapshot` with no or another `sysml:portionKind`, `event` on a `sysml:PartUsage`, an `AssertConstraintUsage` with another `sysx:declaredPrefix`) or a reference-taking keyword (`perform`, `event`, `assert`) with neither a name nor a `sysml:references` is refused naming the element. The 40 corpus files this refused move to `stable`, so every one of the 346 models under `examples/` now round-trips.
+
+- **Arrays, vectors and vector quantities cross the gRPC/Connect API whole, in both directions.** `Value` gains three arms: `array` carries the dimensions and the elements flattened in row-major order (each element a `Value`, so arrays of quantities or of arrays nest), `vector` carries the numeric components as `Value`s so an Integer and a Real component stay distinct, and `vector_quantity` carries one `Quantity` per component with its magnitude, unit as written and reduced unit term, so a composed unit such as `m/s` and per-component units survive. Where the service used to answer `unsupported: array …`, it now sends the value, and one supplied as an action input or calc argument decodes to the same runtime value; a malformed one — an extent that is not positive, elements that do not fill the dimensions, a non-numeric vector component, an empty vector quantity, a unit without its reduction — is a typed error, never a value of another shape. The service advertises this as the `structured_values` capability; a service withholding it keeps reporting the unsupported null and refuses a structured input with `UNIMPLEMENTED`, and every shipped client checks the list before sending one. The Go, Python, Node, Java and Rust clients map the arms to native types — `opensysml.Array`/`Vector`/`VectorQuantity`, the `Array`/`Vector`/`VectorQuantity` dataclasses, `{ kind: "array" | "vector" | "vectorQuantity" }`, `Value.ArrayValue`/`VectorValue`/`VectorQuantityValue`, `Value::Array`/`Vector`/`VectorQuantity` — that check the same invariants, and the conformance suite exercises the three over gRPC, Connect protobuf and Connect JSON.
+
+- **SysML v1 models exported from Cameo/MagicDraw migrate to v2.** `sysml Model.xmi -convert sysml` (or `ttl`) reads UML 2.5 XMI with the SysML profile applied, or a `.mdzip` archive, and writes SysML v2 notation: packages, blocks, value types, enumerations, properties with multiplicities and defaults, generalization and redefinition, interface blocks and ports, connectors, binding connectors and item flows, requirements with satisfy/verify/derive, constraint blocks, instance specifications, allocations, comments and custom stereotype tags. Behaviors, operations and units are not migrated yet. Every element is accounted for in a migration report — mapped, approximated, unmapped or skipped — written with `-migration-report FILE` (JSON by `.json` extension) and summarized on stderr otherwise; unmapped elements are left as comments where they would have gone. The gRPC `Convert` accepts `from_format: "xmi"` too. See `docs/reference/sysml-v1-migration.md`.
+- **The SysML v1 migration is marked experimental.** Like RDF conversion, every run says so: `sysml -convert` from XMI prints a `note:` on stderr, the gRPC `ConvertResponse` sets `experimental` with the migration's own `experimental_notice` (both notices, migration then RDF, when converting XMI to Turtle), the Python client warns with `ExperimentalFeatureWarning` and `is_experimental` counts `xmi`/`mdzip` input, and the wording lives once in `export.MigrationNotice`. See `docs/reference/sysml-v1-migration.md` § Status.
+- **The migration writes valid notation for Cameo shapes v2 cannot spell.** Two members sharing a name, a connection end named like a participant property, an anonymous property with no migrated type, string multiplicity bounds and `NaN` reals are each renamed, dropped or commented with an approximation in the report instead of stopping the conversion. The parser reads `ref x default = 4;` (a default straight after a modifier-only usage's name), and adding triples to an indexed RDF graph keeps the index instead of rebuilding it, so converting a large model to Turtle takes seconds rather than minutes. Found by migrating the OpenMBEE TMT model.
+
+- **A tensor quantity is a runtime value.** `TensorCalculations::'['((1.0, 2.0, 3.0, 4.0), stressRef)` over a model-declared `TensorMeasurementReference` (`:>> dimensions = (2, 2); :>> mRefs = (Pa, Pa, Pa, Pa);`) builds `Tensor(2, 2)[1.0, 2.0, 3.0, 4.0] [Pa]`: one magnitude and one measurement reference per component in row-major order, `dimensions`, `order`, `flattenedSize`, `elements`, `num`, `isBound` and `mRef` reading, and `#` indexing it as an `Array` (`t#(2, 1)` is `3.0 [Pa]`). The elements must number `mRef.flattenedSize`, and one reference does not broadcast to four components (`mRefs` redefines `Array::elements`, so it must fill the dimensions); both are `ErrMultiplicityViolation` naming the count and the shape. `'+'` and `'-'` (and the operators) are componentwise over two tensors of one shape, each right component converted into the left's unit (`ErrIncommensurableUnits` otherwise, a shape mismatch naming both shapes); `scalarTensorMult`, `TensorScalarMult`, `scalarQuantityTensorMult` and `TensorScalarQuantityMult` scale every component, the quantity forms composing each component's unit with the scalar's (`Pa*m`); `isZeroTensorQuantity` holds when every magnitude is zero; `isUnitTensorQuantity` decides a square order-two tensor against the identity and reports any other shape as unevaluable naming the shape it needs. Every one of these accepts a scalar or vector quantity where it declares a `TensorQuantityValue` and answers the operands' rank. A tensor conforms to `TensorQuantityValue` and `Collections::Array` in the checker and the runtime alike, is described, traced, compared and hashed by content, rendered by `%eval` and `%features`, carried across re-analysis with every component's unit rebound, refused by the solver and as a document-query binding, and crosses gRPC as an unsupported null naming it. `contravariantOrder` and `covariantOrder` are never fabricated: with no default in the library and none set by `'['`, reading one reports the `orderSum` constraint that alone binds them. `tensorVectorMult`, `vectorTensorMult` and `tensorTensorMult` stay unevaluable by name — the library states no contraction convention — as do `VectorCalculations::outer`, whose declared `VectorQuantityValue` return no outer product inhabits (drafted in `docs/project/omg-issues.md`), and `TensorCalculations::transform`, which needs a coordinate frame the runtime does not hold.
+
+- **A composite `variant port` under a `variation port` owned by a port definition or port usage is reported.** A variant has no owning type, so it is not a subport and must be referential (`A port usage must be referential.`), as the pilot reports; write `variant ref port a : PD;`. The parser now also accepts the usage prefix after `variant` (`variant ref port`, `variant in port`, `variant end port`, `variant snapshot part`) that the pilot grammar admits and that previously failed to parse.
+
+- **Windows releases ship an installer, `opensysml-<x.y.z>-windows-amd64.msi`.** A WiX v5 MSI
+  (`packaging/msi`, `scripts/build-msi.sh`) installs `sysml.exe`, `sysml-lsp.exe` and
+  `sysml-grpc.exe` to `Program Files\OpenSysML` on the system `PATH`, upgrades an older
+  install in place, and offers the Z3 SMT solver (5.1.0, pinned by SHA256 in
+  `packaging/msi/z3.pin`, MIT notice included) as an optional feature under `z3\` on `PATH`,
+  so `%check`/`%explain` find a solver without configuration. The release workflow publishes it
+  unsigned with `SHA256SUMS-windows-msi.txt`, or — once SignPath is configured — built from the
+  signed executables and itself signed as `*-signed.msi` (the bundled `z3.exe` is never
+  signed). The install guide recommends the MSI on Windows.
+- **Scoop, winget and MSYS2 manifests are maintained in-repo as templates.**
+  `packaging/scoop`, `packaging/winget` and `packaging/msys2` hold manifests that depend on the
+  package manager's Z3 instead of bundling it, rendered from a release by
+  `scripts/render-scoop-manifest.sh`, `scripts/render-winget-manifests.sh` and
+  `scripts/render-msys2-pkgbuild.sh` like the Homebrew formula; each README documents how a
+  maintainer submits to the external bucket or repository. Nothing is submitted automatically.
+
+### Changed
+
+- **An invocation that leaves a required parameter unbound is an advisory, not an error.** `F(1)` against `calc def F { in x; in y; }`, `F(y = 2)` or `F()` now report the warning `F leaves parameter y unbound, so the call cannot be evaluated` (code `unbound-parameter`), once per omitted default-less input, in every conformance mode including `-strict`; `-validate` exits 0 on such a model. KerML lists no constraint on the count of an invocation's arguments and the reference implementation validates and evaluates every omission form clean, so the expression is well formed — only its call cannot be evaluated, which the runtime still refuses with the same unbound-parameter error. The policy is the same at a bare call and at an invocation heading a feature chain: `A().y` now carries the advisory where it was silently accepted, and `A()` the advisory where it was an error. Too many arguments, a name no parameter carries, a parameter bound twice and an argument of the wrong type stay errors; a parameter a `default` reaches or whose multiplicity admits no value draws nothing.
+
+- **Specialization and binding-conformance validation follows the reference more closely.** A
+  class, data type or SysML definition specializing the wrong classifier family is reported
+  through `:>` as well as `specializes`, in SysML with the reference's wording (`Cannot specialize
+  attribute definition`, `Cannot specialize item definition`) in place of the former kind-mismatch
+  message; a conjugated feature at the specific end of a standalone `specialization subset`,
+  `redefinition` or `typing` is reported like a conjugated subclassifier. `Bound features should
+  have conforming types` now also covers the bindings the language implies — a result expression
+  against its result parameter, a `satisfy … by` operand and a nested requirement's or case's
+  subject against the subject they fill. An invocation argument that corresponds to no input
+  parameter is headed by the reference's `Must correspond to one input parameter of the invoked
+  type`, at the argument itself.
+
+- **An `%optimize` objective states the value to improve by redefining the trade-study library's `eval` calculation, not by rebinding its `best`.** Write `objective o : MinimizeObjective { subject :>> selectedAlternative; in calc :>> eval { expression } }` (or `{ return :>> result = expression; }`, which a redeclaring objective must use): `TradeStudies::TradeStudyObjective` declares `eval` as its extension point and derives `best` from it, so the pinned OMG pilot accepts the spelling silently, where the earlier `attribute :>> best = expression;` overrode a bound feature value (`Cannot override a binding feature value`, the `feature-value-overriding` diagnostic OpenSysML reports too). The runtime reads the objective's value from the lowered body of its `eval`; the solver's direction, conditions, lexicographic order, quantities and the equality between an inherited condition's `best` and the value improved are unchanged, and `%optimize` reports the same optima on the shipped demos. An objective that still rebinds `best` keeps its validation diagnostic and is refused by `%optimize` with a message pointing at the `eval` spelling, and an `eval` computing in steps rather than stating one expression is refused the same way. `examples/solver-demo.sysml`, `examples/disposal-robot-demo/robot.sysml` and `examples/disposal-team-demo/team.sysml` are migrated and now analyse clean; the known-gap entries carrying them in the examples gate are gone.
+
+- **A feature valued only by a `[0..1]` binding end reports both ends of the binding.** `bind [0..1] tf.edges = [0..1] tfe` links one unspecified value of each end, so `tfe` stays the typed `ErrBindingEnd`; its text now reads "which makes some value of tfe a value of tf.edges without saying which value of either; the model does not state what tfe holds", on `-e`, `%eval`, `-instantiate` and `%features` alike. `ShapeItems::Box`'s edge and vertex groups (`box.tfe`, `box.tflv`, `box.tfe.length`, `box.vertices`) are pinned as this error in conformance, and the library question behind them — groups fixed only by partial bindings, and a `size(vertices) == size(edges)` its faces' vertices exceed — is drafted in `docs/project/omg-issues.md`.
+
+- **`redefinition-type-mismatch` is now a warning.** A redefinition is a subsetting, so the redefining feature is typed by its own type *and* the redefined feature's (KerML §8.3.3.3.4, §8.3.3.3.6); neither KerML nor SysML v2 constrains the two to conform and the pinned pilot validator accepts `item :>> faces : Polygon` under `faces : StructuredSurface`. OpenSysML keeps reporting an unrelated redefining type as a likely slip, but no longer as an error: `ShapeItems.sysml` analyzed against the library carries no error.
+
+- **A specialization or redefinition that inherits a result expression may not state a second.**
+  `constraint def Sub :> Base { x > 1 }`, `require constraint :>> c { x > 1 }`,
+  `calc def D :> C { x + 2 }` and a calculation or constraint usage typed by, subsetting or
+  reference-subsetting (`constraint d ::> c { x > 1 }`) one that owns a body are rejected with
+  `Only one (owned or inherited) result expression is allowed`, on the newly stated body, as the
+  reference validators reject them; two generals each owning a
+  result expression are reported on the declaration that inherits both, and a calculation,
+  function or expression body listing two bare expressions (`calc c { 1 2 }`) is reported on
+  the second, which the reference grammar does not admit. An empty or
+  documentation-only redefinition (`:>> c;`, `:>> c { }`, `:>> c { doc /* … */ }`) keeps the
+  inherited expression, and a nested `assert constraint { … }` remains a separate constraint, so
+  a tighter requirement is written as a new or nested constraint rather than by replacing the
+  inherited body. The runtime agrees: a calculation or constraint that states or inherits more
+  than one result expression is refused with a typed error, naming each owner, instead of being
+  evaluated with a silently chosen body, and a bodiless reference-subsetting calculation or
+  constraint (`calc two ::> one;`, `constraint kept ::> c;`) computes or checks the body it
+  inherits rather than reporting none.
+
+- **The SonarCloud findings raised by the 0.5.1 changes are cleared.** Two repeated standard-library names in the implicit-base tables are named constants, argument checking passes the call as one struct instead of eight parameters, and the Windows VERSIONINFO check script uses `[[` tests and a local for its positional parameter. No behavior changes.
+
+### Fixed
+
+- **An actor bound without `:>>` is held to the actor it inherits.** A requirement or
+  objective usage's `actor pilots = pilot;` did not redefine the definition's `actor pilots :
+  Pilot[2]` — only `actor :>> pilots = pilot;` did — so one pilot, or a buoy, passed unchecked. An
+  actor or stakeholder now implicitly redefines the general's actor at its position, as a subject
+  redefines the subject and a parameter the parameter it follows (KerML §7.4.7.3), keeping or not
+  the inherited name: it takes that actor's type and multiplicity, so one pilot is refused as
+  `actor binding: multiplicity violation: 1 value(s) bound to a feature with multiplicity lower
+  bound 2`, two buoys as a `type mismatch`, and two pilots satisfy the requirement; in an
+  objective the refusal leaves the verdict `undecided` with that detail. An explicit `:>>` binding
+  is unchanged. The redefined actor contributes its members and conformance wherever the
+  redefining one is read, in the language server and the passes as at run time.
+
+- **An analysis objective binds its requirement's subject by keyword alone.** An objective typed by
+  a requirement definition (`objective : MassLimit { subject = ship; }`) was always `undecided: no
+  value for feature s`, because only the requirement engine knew the keyword-only form. An
+  objective's own members are now bound the way `-requirement` binds a requirement usage's, so
+  `subject = ship;`, `subject s = ship;` and `subject :>> s = ship;` all decide the verdict, in a
+  definition, a usage and through a nested analysis step, and the binding may read the case's steps'
+  outputs, a nested case's or an action's (`subject = weigh.m;`), as may an `assert constraint` of
+  the body. An objective that binds no subject takes the library's default, the case's result
+  (`Cases::Case::obj` declares `subject subj default Case::result`); a result of the wrong type is
+  `undecided` saying so (`subject s defaults to the case's result (Cases::Case::obj): type
+  mismatch: 1000.0 (a Real) is not a Ship`), one of the wrong multiplicity (one `Ship` for a
+  `Ship[2]` subject) is `undecided` as a multiplicity violation — an objective redeclaring the
+  subject without one (`subject :>> pair;`) keeps the `[2]` — and a case returning none says to
+  bind it or return one. An object bound to a subject, by the default or by an expression, in an
+  objective or a requirement usage, is held as a value of it: a `Ship` bound to a `subject t :
+  Tanker` gains `Tanker`'s features, so `t.cargo` answers where it read `member cargo not found`,
+  and a value the subject cannot hold at all is refused as a `type mismatch` instead; an expression
+  yielding more or fewer values than the subject declares (one `Ship` for `Ship[2]`, or none) is
+  refused as a multiplicity violation, as the default already was. The object a satisfaction
+  assertion supplies with `by` is held to the subject the same way: `satisfy laden by ship` reads
+  `t.cargo` of a `Ship` bound to a `Tanker` subject, and a `Buoy` supplied for a `Ship` is refused
+  (`subject: type mismatch: Buoy #1 (buoy) is not a Ship`) rather than checked.
+- **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
+  examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as
+  an empty sequence when the case's result was unnamed (a trailing expression or `return : Real`),
+  leaving the objective `undecided: comparison operands must be constants`. A qualified feature the
+  running case declares, or inherits from the library (`Cases::Case::result`), now reads the run's
+  binding for it: in the objective's subject, in an `assert constraint` of the body, and as
+  `inner.result` from the case performing `inner` as a step.
+- **A recursive analysis step reports one line, not one per frame.** An analysis performing itself
+  as a nested step, or a `calc def` recursing through its own `calc` usage member, hit the recursion
+  limit with a message repeating `node again:` ten thousand times (hundreds of kilobytes). Those
+  frames now collapse as a calc calling itself does — `analysis An::Rec::again: … 9999 frames:` —
+  keeping the typed error and the hint to raise `OPENSYSML_MAX_CALC_DEPTH`.
+
+- **An analysis case's later objectives keep their position under every general.** When two generals shared an ancestor and one of them restated an objective, the ancestor's objectives were listed for the first general only, so a specialization's second objective redefined nothing through the other and lost that objective's type and members. Each general is now listed in full and only identities are merged.
+
+- **`Must own its annotating element` is reported even when the document has unrelated errors.** The annotation-ownership rule was skipped for the whole document as soon as any lower-tier diagnostic (an unresolved name, say) appeared anywhere in it, so a comment or metadata usage annotating itself went unreported until every other error was fixed. The rule now runs per annotation and only stands down for a reference that itself failed to resolve.
+
+- **A `bool def` is checked like the other behavior definitions.** A Boolean expression
+  definition specializing an attribute, item or part definition now draws the same `Cannot
+  specialize …` report as a `calc def` or `constraint def` would; it was skipped by the family
+  check because the kind had no entry.
+- **Every KerML feature that subsets a classifier is reported, not only `feature`.** A `bool`,
+  `expr`, `step` or other feature whose `:>` names a data type, class, structure or
+  behavior is now reported (`subsets target must be a feature, found …`), as the reference
+  implementation does when it fails to resolve the classifier at that position; only
+  `feature f :> D` was checked.
+
+- **Solving an analysis case that states or inherits more than one result expression is refused.**
+  `analysis def Stated :> Base { size <= 4 }` over a `Base` that owns a result expression, or
+  `analysis def Inherited :> Base, Other;` inheriting one from each, is rejected by validation
+  with `Only one (owned or inherited) result expression is allowed`; the runtime's case
+  conditions now record the same conflict, so `solve` refuses the analysis at the offending body
+  or declaration instead of solving it with a silently chosen result, and does so before
+  reporting a missing objective. A case inheriting a single result expression is unaffected.
+
+- **A chain reads its next segment from the usage it passes through, not only from that usage's type.** `cf.edges` for `item cf : Surface [1] :> faces;` reaches `edges` through the subsetted `faces`, and `a#(i).b` names a member of one element of `a`; the first was reported as an unresolved member, so the geometry library's `ConeOrCylinder`, `Cone` and `Cylinder` failed name resolution, and the editor found no definition for the second. The document's walk and go-to-definition now share one lookup, so they agree on what a chain names.
+- **Comparing a quantity to a bare number is not a dimension mismatch.** `xoffset > 0` on a `LengthValue` was warned about as combining incommensurable quantities, although the pilot validator accepts it and the geometry library is written that way (zero is the null quantity of every dimension, so it is read in the quantity's unit); comparisons with a bare zero are now silent, while `length + 5` and `length > 5` still warn.
+
+- **A KerML `binding`/`succession` written without `of`/`first` puts a leading multiplicity on
+  its first end.** `binding [1] a = [1] b;` and `succession [1] a then [*] b;` declare no
+  connector of their own, so the grammar reads `[1]` as the first end's crossing multiplicity;
+  the parser used to record it as the connector's multiplicity, which the RDF mapping then wrote
+  back behind the second end and could not read again. Both ends now carry their multiplicities,
+  the connector carries none, the RDF graph states each end's bounds on the end node, and the
+  Kernel Semantic Library's `Occurrences.kerml` written back from its graph alone keeps every such
+  site as written. `binding [1] of a = b;` and `succession [1] first a then b;` still give `[1]`
+  to the connector.
+- **A parameter's specializations may follow its multiplicity.** `in x : Integer[1] redefines
+  A::x;`, `in y : Integer[1] :>> A::x;` and `return : Integer[1] ordered :>> C::r;` are accepted
+  for `in`, `out`, `inout` and `return` parameters, with `ordered`/`nonunique` between, as
+  `FeatureSpecializationPart` allows on any feature; they were reported `expected ';' or '{'
+  after parameter`. The parameter path now shares the ordinary usage's specialization loop.
+
+- **A cross feature may be `ordered` or `nonunique`.** `end x1 [1..*] ordered item x : C;` and `end [*] nonunique ordered :> g feature y : C;` are valid (the KerML `MultiplicityPart` admits both words after the multiplicity, in either order) and the pilot accepts them, but the parser stopped the cross feature at the multiplicity and rejected the kind declaration that followed. Both words now stay on the cross feature — in the AST and its serialization, the RDF export and import (`sysml:isOrdered`, `sysml:isNonunique`) and the uniqueness conformance check — and never move onto the end.
+
+- **The prefix an end writes ahead of its cross feature belongs to the cross feature.** In `end in x1 : C [1] item x : C` and `end var x1 : C [1] feature x : C`, the direction and the `derived`, `abstract`, `variation`, `composite`, `portion`, `var`, `constant` and `ref` modifiers between `end` and the cross feature's declaration were recorded on the end `x`, so it was rejected with `End feature cannot have direction` or `End feature cannot be derived, abstract, composite or portion` where the pilot accepts the model. The parser now records them on the cross feature (KerML `BasicFeaturePrefix`, SysML `BasicUsagePrefix`), the variable-feature rules check the cross feature they modify, and the RDF mapping states them on the cross feature and writes them back there.
+
+- **A cross feature declared ahead of its end keeps its own relationships.** In `end x1 : Sub1 [0..1] :> g feature x : C1`, the typing, subsetting, redefinition and reference clauses of the cross feature `x1` were also recorded as relationships of the end `x`, so `x` was typed by `Sub1`, subset `g`, and was checked against those relationships by the typing and conformance rules. The parser now stores them on the cross feature alone, every consumer (name resolution, typing, conformance, RDF export, references, completion) reads the end's and the cross feature's relationships separately, and the operator spellings `:` and `:>` are accepted there alongside `typed by` and `subsets`. A cross feature typed more narrowly than its end is now reported (`Cross feature must have same type as feature`), as the pilot reports it.
+
+- **An unnamed cross feature may specialize after its multiplicity.** `end [1] :> g feature x : C` and `end [0..1] subsets g item x : C` are valid (KerML `FeatureSpecializationPart` lets the specializations follow the multiplicity) and the pilot accepts them, but the parser stopped the cross feature at `[1]` and rejected the kind declaration that followed. It now reads the specializations onto the cross feature, where the ones written ahead of the multiplicity already went; the end keeps only its own.
+
+- **A KerML `disjoint X from Y;` member keeps which end is disjoined from which.** The
+  keyword-first Disjoining is now a relationship element of its own, like `subtype A specializes B`
+  and `inverse f of g`, with ordered ends, an optional `disjoining <id>` identification, a
+  visibility prefix and a relationship body; both ends resolve, including feature-chain ends such
+  as `disjoint earlierOccurrence.successors from laterOccurrence.predecessors;`. The RDF export
+  writes it as a `sysml:Disjoining` with `typeDisjoined` and `disjoiningType`, and a graph
+  without source text converts back to the same notation — previously it was an anonymous feature
+  with two `disjointFrom` objects that came back as `disjoint from X, Y;`, which does not parse.
+  The declaration clause `class C specializes A disjoint from B;` is unchanged.
+
+- **`sum` over an empty collection of quantities is the zero of the collection's declared kind.** `sum(subcomponents.totalMass)` over no subcomponents is `0 [kg]` where `totalMass :> ISQ::mass`, in the kind's coherent SI unit, so a roll-up such as `attribute totalMass :> ISQ::mass = mass + sum(subcomponents.totalMass);` evaluates to `mass` on a leaf instead of failing with `incommensurable units: cannot express 1 (1) in kg`. An empty feature, chain, `default null` collection, `select`/`reject` of nothing and a typed `collect` body carry the declared unit to the aggregate; `product` of none stays `1`, `size`/`#` stay counts, and `10 [kg] + 0 [m]` or `10 [kg] + 5` are rejected as before. The REPL, `-run-query`, documents and the gRPC feature-value path all show the typed value.
+- **A multiplicity-many feature declared `default null` holds the members that subset it.** `part subcomponents : MassedComponent [*] default null;` with `part a : Leaf :> subcomponents;` and `part b : Leaf subsets subcomponents;` holds `a` and `b` — type-level, usage-level, inherited and redefined subsetting members alike — since a default is the feature's value only where nothing else populates it; a collection nothing subsets stays empty, and features subsetting each other report a cyclic feature value instead of recursing.
+
+- **Only an `attribute` typed by an enumeration is held to one type.** `An enumeration attribute
+  cannot have more than one type` was also raised on a `ref` or bare usage typed by an enumeration
+  and another definition, which the reference implementation accepts as a reference usage; and an
+  enumerated value whose value is typed by several types is judged by all of them, so `h =
+  wrongOrLevel` with `ref wrongOrLevel : Wrong, Level` is reported as typed outside its enumeration.
+
+- **An unnamed usage redefining several features reads back from the graph alone.** The RDF decoder derived an anonymous usage's effective name only when it redefined exactly one feature, so `attribute :>> Disc::innerSpaceDimension, faces::innerSpaceDimension;` was refused when a feature chain later named it. It now takes the name from the first redefinition, as the resolver does (KerML 7.3.4.5), unless that target is itself a feature chain.
+
+- **A usage subsetting an inherited library feature now inherits that feature's own members.** The inherited-name conflict rule reached only the members of the library definitions a usage conforms to, so a redefinition naming a member through the subsetted feature (`ref :>> Polygon::edges, Polyhedron::faces::edges`) was still reported as a duplicate of the typing definition's namesake, and ShapeItems carried nine such false `Duplicate of inherited member name` warnings. The members of every type and feature passed on the way to a library base now take part, so such redefinitions are silent while a partial one, or an unredefined name reached from both sides, is still reported as the pinned pilot validator does. A document that re-declares a library file no longer sees the library copy's members as its own.
+
+- **The inherited-name conflict rule now compares short names.** A member inherited from a library base was known under its primary name only, so an owned `attribute h` or `attribute <h> myHeight` beside an inherited `attribute <h> height` drew no `Duplicate of inherited member name` warning, and a diamond reached only through a short name went unreported. Each inherited member now counts under both identifiers, each owned member or alias is compared under both of its own, and the warning is placed at the identifier that repeats, as the pinned pilot validator places it. A member that redefines the inherited feature, or an alias for it, stays silent whichever name it reuses.
+
+- `Only one subject/objective is allowed` now counts inherited subjects and objectives the way the pilot does: a case or requirement whose generals together supply two is reported on its declaration, an owned one that redefines them (by clause or by position) silences them, and an owned one beside an unredefined inherited one is reported on the owned member.
+- An analysis case stating several objectives redefines its general's objective at each position, so a later unnamed objective keeps the inherited type and members (its `eval` resolves) instead of only the first; the solver likewise treats such a restatement as the inherited objective declared again, keeping the inherited place in the lexicographic order, rather than as one more objective beside or after it.
+- A case inheriting the same general through two paths, one of which restates its objective, sees the restatement in the objective's place rather than both, whichever general is written first; a further specialization's objectives line up with it, and the solver optimizes it once.
+- A case or requirement usage that reference-subsets another (`case c : A ::> b;`) inherits the referenced usage's subjects and objectives too, as the pilot does, so `Only one subject/objective is allowed` counts them and an owned role redefines them by position.
+- The subject a satisfy-by or nested subject is judged against is the one that survives redefinition through a diamond of generals and referenced usages, whichever branch is written first; a branch restating the common subject with a narrower type no longer leaves the wider one in force.
+
+- A view usage's `expose` now honours the `filter` conditions of its view definition and that definition's supertypes, not only the conditions written in the usage itself.
+- An `expose` a view inherits from its definition or supertypes is now admitted against the inheriting view's own `filter` conditions too, so a view narrowing its definition exposes only what satisfies both.
+
+- RDF: a connector end that declares a name ahead of the feature it references (`connector a ::> a.x to b;`, `connect bead ::> t.bead to …`) now relates that feature as `sysx:relatedFeature` and carries its own name as `sysx:endName`, so the head is written back from the graph without its source text; a named KerML connector (`connector c from a to b;`) keeps its `from` on the way back. Before, the end's name stood in for the feature and the name was lost.
+- Parser: golden and negative coverage for every form of the KerML binary connector — the first end is an end, not the connector's name, unless `from` follows the declaration — and the AST dump shows an `all` prefix; symbols, name resolution and the LSP are tested to keep an end's name out of the type featuring the connector.
+
+- **The v1 migration writes a read-only property as `constant`, and its prefix keywords in the grammar's order.** It wrote `readonly`, which is not a SysML v2 keyword, so a migrated model with a read-only value property no longer parsed once the parser stopped reading a stray name ahead of the kind keyword; and `derived`/`abstract` came before a flow property's `in`/`out` and a constraint parameter's `in`, which the pilot rejects. The prefix is now `in`/`out`/`inout`, `derived`, `abstract`, `constant`, `ref`, on every usage kind. A read-only property of a value type stays a plain attribute with the loss noted in the report, since the features of an attribute definition cannot vary and `constant` is not allowed on them. Found by the migration's own golden test.
+
+- **A value typed by several types conforms when any one of them does.** `Bound features
+  should have conforming types` and `cast-conformance` judged a multi-typed value (`part ab : A, B`,
+  a calculation returning `A, B`, an element `abs#(1)` or `abs.?{…}` of such a sequence, a feature
+  typed only by such a value) by its first type alone, so a result expression, a bound subject, a
+  `satisfy … by` operand or a cast that conformed through the second type was reported. Every
+  statically known type is now kept and the reference implementation's existential rule applied;
+  arithmetic and conditional results, which are not statically known, stay silent as before.
+  Conversely, a value whose types are all unrelated to a scalar-typed feature (`attribute
+  a : Integer = b` with `part b : Boat`, or `part a : A, Integer = b`) is now reported instead of
+  being skipped as a scalar case, and an indexed element `xs#(i)` is judged by the element's type.
+
+- **A name written ahead of a kind keyword is a syntax error, not a renamed member.** `part def B
+  { foo attribute bar : A; }` was accepted silently as an attribute named `foo`, and the declared
+  name `bar` was dropped; likewise `x part def P;` became a definition named `x`. Neither the SysML
+  nor the KerML grammar has such a form — a name always follows its keyword — and the reference
+  implementation rejects it. The stray name is now reported (`expected a body member`, or `expected
+  a namespace member` at package level), skipped, and the members after it still parse.
+
+- **Cast, bracket and quantity warnings reach filter conditions and multiplicity bounds.** The
+  operator-expression checks were only applied to values and behavior bodies; an
+  `x[i]` in a KerML filter, an unrelated `as` target or a non-reference unit in `filter` or `[lo..hi]`
+  is now reported once, like the same expression elsewhere. The declarations an expression body
+  `{ … }` makes are reached too, and a bound's operators are judged by the type tier, so an
+  unrelated error elsewhere in the document no longer silences them. Every bound the notation
+  writes is covered: a `multiplicity m [lo..hi]` declaration, a body parameter's `in x : T[lo..hi]`,
+  a cast's, a connector end's, a cross feature's and a subject's or assume/require's. The members
+  a `multiplicity` or `specialization` declaration owns in its body are type-checked like any other
+  body's, so an invalid cast or value in them is reported too, also when the declaration sits under
+  a definition or package that a filter's expression body declares.
+
+- **Parser: prefix metadata written ahead of `subject`, `actor`, `stakeholder`, `objective`, `variant`, `assume` or `require` is now a syntax error.** The grammar places it after these keywords (`subject #M s : T;`, `assume #M constraint a : C;`), which is what the pilot implementation accepts; `#M subject s : T;` was read silently as if written the other way, so a graph-only RDF round trip rewrote the source without a word. The error spans the `#` run, names the accepted spelling and offers the quick fix that moves the run; the member is still read so later diagnostics and editor features carry on. Prefix metadata ahead of an ordinary usage or definition and ahead of `assert` is unchanged.
+
+- Parser: a `use case` definition or usage may now carry prefix metadata (`#structuredUseCase use case u;`); the two-word kind keyword was not recognised after `#` prefixes and the member was reported as `expected a namespace member`.
+
+- **The Python client asks the service for uncompressed responses.** Under load, grpcio
+  occasionally handed a gzip-compressed response to the protobuf parser, so an RPC the service
+  had answered correctly failed with `Exception deserializing response!` or `Wire format was
+  corrupt`. Every channel the client opens now accepts identity encoding only, which the service
+  honours, so no response reaches the parser compressed.
+
+- **`python -m opensysml.generate` connects on its own.** The generator went through the
+  module-level default connection, which is kept per address for the life of the process along
+  with the service's handshake. Run twice in one process against services that took turns on one
+  port, the second run was judged by the first service's handshake and could refuse a current
+  service as too old. Each run now opens a connection of its own and closes it when done.
+
+- **A quantity compared with a bare zero evaluates.** `xoffset > 0` over a `LengthValue`, as the geometry library writes it, failed at evaluation with `cannot express 1 (1) in m (metre)` although the static check accepted it, so a constraint written that way never reached a verdict. Zero is the null quantity of every dimension, so a comparison (`>`, `<`, `>=`, `<=`, `==`, `!=`, and the `QuantityCalculations` forms) now reads a bare zero on either side in the quantity's unit, at evaluation, in model-level constant folding and in element filters alike; any other bare number stays incommensurable with a measured quantity, as do `length + 0` and `max(length, 0)`, whose result would have to name a unit, and the static check now warns on `length > 5` where it already warned on `length + 5`, and stays silent for any constant that folds to zero (`length > 1 - 1`), so the two tiers agree.
+
+- **Document queries read quantity-valued attributes.** `attribute :>> mass = 5840 [kg];` —
+  the form every Apollo 11 component uses — was refused by `Project`, `WhereFeature`, `OrderBy`
+  and `Column` expressions with `cannot evaluate feature mass`, because the constant folder
+  behind them knew literals but not the quantity operator. Quantities and the constant
+  expressions over them (`2 [kg] * 3`) now fold in semantics into a value that keeps its
+  magnitude, the unit the model spelt and the reduced unit term; the runtime shares that
+  representation instead of owning its own. Cells render as the REPL prints them
+  (`2290000 [kg]`) in `-run-query` listings, Markdown and HTML tables (the HTML span also
+  carries `data-magnitude` and `data-unit`) and over gRPC as a `quantity` `DocumentValue`.
+  `WhereFeature` compares a bare threshold against the magnitude in the attribute's own unit;
+  `OrderBy` converts commensurable units (`500000 [g]` sorts below `119000 [kg]`) and refuses
+  different dimensions with an `invalid-order` error naming both units; column arithmetic keeps
+  and composes units (`mass / length` is `[kg/m]`) and refuses incommensurable operands with a
+  `column-incommensurable` error naming the column and row. An attribute whose value is not a
+  constant (`mass = dryMass + propellantMass`) stays a typed `unevaluable-feature` error, now
+  naming the row element too.
+
+- **Notation written from an RDF graph alone parses again for connectors, guarded successions
+  and nested expressions.** With `sysx:sourceText` stripped, `sysml -convert sysml|kerml` wrote
+  an anonymous connector's own multiplicity after its last end (`succession first a then b[n]`),
+  where the grammar reads it as the end's; it is now written in the declaration slot
+  (`succession [n] first a then b`, `bind [1] a = [1] b`), and a KerML `binding`/`succession`
+  with a connector multiplicity always writes `of`/`first` (`binding [1] of a = b`), since
+  without the verb the grammar gives the multiplicity to the first end.
+- **The expression writer places parentheses by the parser's precedence table.** A
+  conditional or any other loosely binding form used as an operand of a tighter operator is
+  parenthesized (`size(ae) == (if isEmpty(af) ? 0 else 2) and …`, `(p ?? q) implies r`,
+  `(a + b)[1]`, `(x as T).f`, `not (p and q)`), and redundant parentheses are no longer written
+  around every operator (`x * 2`, `if x > 0 ? x else - x`); before, a nested conditional came
+  back bare and did not parse, while every other operator was wrapped unconditionally.
+- **A guarded succession records its syntax from the AST, not from the words ahead of it.**
+  `public succession S first A1 if x == 0 then A2;` recorded the bare-source transition form
+  because `first` was not among the first tokens, and came back as `transition S A1 if …`,
+  which does not parse; the encoder now derives the form from where the AST places the source
+  and keeps the `succession` keyword, and the decoder writes a named transition or succession
+  with `first` and its visibility.
+
+- **KerML `const` and `portion` feature prefixes survive a graph-only RDF round trip.**
+  The decoder wrote `sysml:isConstant` back as SysML's `constant` under a KerML root, where the
+  grammar spells it `const`, so a graph stripped of its `sysx:sourceText` came back unwritable
+  (`cannot convert the reference to Prefixes::A from Prefixes::B::k`); it now spells the flag in
+  the grammar the root's `sysx:sourceLanguage` records. The encoder did not export
+  `Feature::isPortion` at all, so `portion feature p : A;` came back as `composite feature p : A;`
+  from the graph alone; it now writes `sysml:isPortion`, which a KerML root reads back as
+  `portion` in place of `composite`. On a SysML root the flag is the fact `snapshot`/`timeslice`
+  states (the encoder now writes it for those too), and a graph stating it without a
+  `sysml:portionKind` is refused rather than respelled, SysML having no `portion` prefix.
+
+- **A KerML `member feature` is exported as a plain `sysml:OwningMembership` and comes back with its `member` prefix.** The RDF encoder typed every feature a type owns as a `sysml:FeatureMembership`, so `class C { member feature x; }` reached the graph as a feature of `C` and returned from it as `feature x;`, a different model. The membership is now the `OwningMembership` the grammar names, with none of the feature-ownership predicates, and the decoder writes `member` for a feature a type owns that way — except through a variant, result, metadata or head-declared cross-feature membership, which KerML writes otherwise. SysML has no `member` keyword, so a SysML-language type owning a feature through a plain `OwningMembership` is refused with an `UnsupportedError` rather than written as a feature of the type.
+- **A `featured by` naming an anonymous redefining `portion` is written in a spelling that resolves on re-read.** Inside `portion :>> startShot { member feature s featured by CC1::startShot; }` the converter wrote `featured by startShot`, checked that spelling in the enclosing scope, and missed that the parser reads a head's `featured by` in the feature's own scope first, where the inherited `Occurrence::startShot` shadows the portion; the re-encoded graph then held the literal `"startShot"` where the original held the portion. References collected from a head relationship now carry that scope and are probed where the document reads them, so the converter writes `CC1::startShot`; a plain `:>>` target is read in the owning scope, as before.
+
+- **RDF mapping: a named `event`, `perform`, `exhibit` or `assert` graph the notation would read back as a reference is refused instead of rewritten.** A graph stating `sysx:declaredKeyword "event"` together with a `sysml:declaredName` came back as `event e;`, which names an existing `e` rather than declaring one, so a second conversion produced a different graph without a word; the same held for a named `sysml:AssertConstraintUsage` that nothing but a body or a multiplicity follows (`assert c { … }`). Both are now typed refusals naming the element and the fact at odds, while `assert safe : Safe;` and `assert c references mc;`, which the parser reads as declarations, still round-trip from the graph alone.
+
+- **A `portion` feature comes back from RDF as a portion.** The mapping stated a KerML `portion feature p : A` — and a `portion` cross feature — only as `sysml:isComposite`, so a graph without `sysx:sourceText` was written back as `composite feature p : A`. It now also states `sysml:isPortion`, and a feature stating `isPortion` is written back with `portion` whether or not the graph also states `isComposite`.
+
+- **An unnamed feature takes a name from its reference only in the forms the reference
+  validators name.** `perform a;`, `exhibit s;`, `include u;`, `require`/`assume`, `frame`,
+  `render`, a variant and a state's `entry`/`do`/`exit` action are members of their owner under
+  the referenced feature's name, inside it and through a qualified name or chain from outside
+  (`h.a` names the performed `a`, and duplicates the inherited one, as `Duplicate of inherited
+  member name` warns in both tools). An `assert q;`, a `satisfy r;`, an `event` and a plain
+  `::> q` declare no name, so `h.q` written anywhere still names the inherited `H::q`; `assert
+  h.q;` written inside `h` still does not find itself. A member redefining several features is
+  named by the first (`part :>> engine :>> motor;` is `engine`), a declared short name suppresses
+  the derived name (`part <e> :>> engine;` is `e` alone), a redefined feature chain names nothing
+  (`part :>> p.q;`), and a `require`/`assume` stating a chain (`require h.rule;`) is a reference to
+  its last feature, named `rule` and requiring that constraint's conditions. Only a redefinition hides the inherited member it names; an ordinary `:>`
+  subsetting or a reference no longer masks it, so a feature reached through such a member
+  resolves as the reference validators resolve it. A name-conflict warning on a member with a
+  derived name is reported on the whole declaration, where the validators place it.
+- **A parameter redefined under a short name alone is bound at run time.** `in <f> :>> factor
+  default 3;` in a calc or action, and `in <a> :>> x = 4;` as the argument of a performed action
+  or exhibited state machine, were dropped when the behavior ran, so the body read the inherited
+  default instead; a redefinition under a new name (`in g :>> factor`) left the body's reads of
+  `factor` unbound too. The body now reads the redefining feature's value under either name.
+
+- **Both ends of a keyword-first KerML relationship are kind-checked.** `subtype`,
+  `subclassifier`, `typing`, `subset`, `redefinition`, `conjugate`, `inverse`, `disjoint` and
+  `featuring` members whose source or target resolves to an element the relationship cannot relate
+  — a package at any end, a class where only a feature may stand (`subset C :> f`,
+  `inverse C of f`, `typing C : T`, `featuring C by T`), a feature where only a classifier may
+  (`subclassifier f :> B`) — are now reported at the type tier
+  (`<keyword> source|target must be a type|classifier|feature, found <kind>`), as the reference
+  implementation reports when it cannot link the typed cross-reference. Previously only the
+  declaration clauses (`class C :> Q;`, `feature f : Q;`) were checked and
+  `disjoint Q from B;` with `Q` a package analysed clean. Unresolved ends are still left to name
+  resolution, and the declaration-clause reports are unchanged, with one exception: a named
+  multiplicity is a feature and so a type (KerML 1.0 §8.3.3, Multiplicity specializes Feature),
+  so with `multiplicity M [1..2] { feature x; }` the clauses `feature g : M;` and
+  `feature g :> M.x;` are no longer reported as `type must be a type, found multiplicity` and
+  `feature chain segment must be a feature, found multiplicity` — the reference implementation
+  accepts both, as it does the keyword-first spellings.
+
+- **REPL: `%eval` reads the object a submission carried over.** After an action wrote a part's feature (`holder.n := 5`) and an unrelated declaration (`part def Widget;`) re-analyzed the session, `%features Demo::holder` listed `n = 5` while `%eval Demo::holder.n` answered `<unset>` and `%eval Demo::holder.cells.rank` failed with `member rank not found`: the carried object was rebound to the model index's symbol for `holder`, and the prompt resolves the name to the buffer's own symbol, so evaluation materialized a second, unwritten object beside the carried one. The runtime now rebinds a carried object to the symbols the caller resolves in, so `%eval`, `%features`, a debugger still stepping and `===` all observe the one object; a resubmission that changes the holder's declaration still drops it and every surface reports the loss.
+
+- **A redefinition of a namesake resolves to that namesake, whatever comes first in the declaration.** `causes[1..*] :> participant :>> causes` resolved its redefinition to the redefining feature itself when the subsetting was resolved first, so the feature redefined nothing (the standard library's `Multicausation::effects` lost its redefinition of `effects`) and the RDF export named the wrong target once the clauses were reordered. The redefinition's target is now resolved on the redefinition's own path, which the redefining feature never masks.
+
+- **`shortName` is derived only for features that declare no identifier at all.** A feature written with a name of its own (`perform action turn references steer;`, `part b :>> a;`) projected the short name of the feature it references or redefines, so a query, a document or a filter read `turn` as `<ss>`. KerML derives `Element::shortName` from the naming feature only when both `declaredName` and `declaredShortName` are absent; such a feature now projects no short name, while an unnamed one (`perform providePower;`, `part :>> a;`) still takes the short name of its naming feature.
+
+- **A feature redefining a sibling no longer hides that sibling from chains through its owner.** Redefinition removes what the owning type inherits, and a type never inherits its own members, so `feature slice redefines xs;` beside `feature xs;` left `sub.xs` (with `sub` typed by the owner) unresolvable and made the RDF writer spell it `sub.C::xs`. Such a redefinition now masks nothing, as in the pilot implementation; redefining an inherited feature still masks it.
+
+- **A state usage typed directly by the library's `StateAction` is exhibited.** `exhibit state phases : StateAction;` and `: States::StateAction`, as the Apollo 11 model's `Mission` writes it, failed with `recursive state typing: state self is typed by StateAction, whose content contains it`: the runtime withheld the library definition's content, but answered lowering with the same result as an unresolved name, so lowering looked the name up again through the scope tree. A body-less usage runs the library definition itself as its machine, and inside that body `StateAction` is lexically in scope, so the content was materialized anyway; a definition `:> StateAction` or a usage stating its own body is lowered in the model's document, where the scope tree alone never reaches the library, which is why those forms already worked. The lowering contract now says *withheld* distinctly from *unresolved*, and only an unresolved name falls back to the scope tree. A usage typed by `StateAction` that states its own body runs it; one stating none has no initial state and fails as any such machine does, `no initial state found in state machine StateAction`.
+
+- **The Linux `amd64` release binaries no longer require glibc 2.34.** `sysml`, `sysml-lsp` and `sysml-grpc` were linked against the build machine's libc, so they failed to start on Ubuntu 20.04, Debian 11, RHEL 8 and similar. The release job now builds with `CGO_ENABLED=0`, producing fully static binaries as the `arm64` ones already were; the only cgo users were Go's standard `net` resolver and `runtime/cgo`, so the pure-Go resolver is now used instead.
+
+- **Every transition guard is checked for a Boolean value, and a state body accepts the `if … then` and `transition if … then` target-transition spellings.** The guard of an action body's guarded succession (`first a if "go" then b`, `succession s first a if x then b`, a decision's `if e then b`) was not type-checked; it now reports `transition guard must be Boolean, found String` like a state transition's guard does. `if ready then s2;` and `transition if not ready do action reset then s1;` in a state body, which SysML v2 admits as a transition from the enclosing state, parsed as `expected a body member`; they parse, resolve and lower with the enclosing state as their source, like `accept … then` already did.
+
+- **A composite `variant port` is reported exactly once, and only under a port owner.** A `variant port` nested in a chain of variation ports drew `A port usage must be referential.` once per enclosing variation; and a `variation port` owned by a part reported its composite variant ports and variant parts although the pilot accepts them, since a variant is not a nested usage of the port that owns the variation.
+
 ## 0.5.1 — 2026-09-05
 
 ### Added

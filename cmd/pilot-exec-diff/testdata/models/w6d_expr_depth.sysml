@@ -69,6 +69,31 @@ package W6D {
     calc def SumQMixed { return : MassValue = sum(W6D::qsMixed); }
     calc def SumEmpty { return : Real = sum(()); }
     calc def AddBareToMeasured { return : MassValue = 3.0 [SI::kg] + 1.0; }
+    attribute qsNone : MassValue[*];
+    calc def SumEmptyQuantity { return : MassValue = sum(W6D::qsNone); }
+    calc def AddEmptyQuantitySum { return : MassValue = 3.0 [SI::kg] + sum(W6D::qsNone); }
+
+    // A `default null` collection holds the parts that subset it; the pilot
+    // folds the default instead, and counts any undefaulted collection as one.
+    part def SysDefaulted {
+        part subsystem : Sub[*] default null;
+        part a : Sub :> subsystem;
+        part b : Sub :> subsystem;
+        attribute n : Natural = size(subsystem);
+    }
+    part def SysTwo {
+        part subsystem : Sub[*];
+        part a : Sub :> subsystem;
+        part b : Sub :> subsystem;
+        attribute n : Natural = size(subsystem);
+    }
+    part def SysNone {
+        part subsystem : Sub[*];
+        attribute n : Natural = size(subsystem);
+    }
+    part sysDefaulted : SysDefaulted;
+    part sysTwo : SysTwo;
+    part sysNone : SysNone;
 
     // KerML function library: VectorFunctions and ComplexFunctions.
     calc def VecElements { return : Real[*] = CartesianThreeVectorOf((1.0, 2.0, 2.0)).elements; }

@@ -108,7 +108,11 @@ func valueFromProto(value *pb.Value) Value {
 	case *pb.Value_Null:
 		return Null(kind.Null)
 	case *pb.Value_Quantity:
-		return quantityFromProto(kind.Quantity)
+		quantity, ok := quantityFromProto(kind.Quantity)
+		if !ok {
+			return Null("unsupported: quantity without a magnitude")
+		}
+		return quantity
 	case *pb.Value_EnumLiteral:
 		return EnumLiteral{
 			LiteralID:     kind.EnumLiteral.GetLiteralId(),
@@ -117,8 +121,53 @@ func valueFromProto(value *pb.Value) Value {
 		}
 	case *pb.Value_Unset:
 		return Unset{}
+	case *pb.Value_Array:
+		if err := sysmlgrpc.CheckArrayShape(kind.Array.GetDimensions(), len(kind.Array.GetElements())); err != nil {
+			return Null("unsupported: " + err.Error())
+		}
+		out := Array{
+			Dimensions: append([]int64(nil), kind.Array.GetDimensions()...),
+			Elements:   make([]Value, 0, len(kind.Array.GetElements())),
+		}
+		for _, element := range kind.Array.GetElements() {
+			out.Elements = append(out.Elements, valueFromProto(element))
+		}
+		return out
+	case *pb.Value_Vector:
+		out := make(Vector, 0, len(kind.Vector.GetComponents()))
+		for _, component := range kind.Vector.GetComponents() {
+			number, ok := valueFromProto(component).(Number)
+			if !ok {
+				return Null("unsupported: vector with a non-numeric component")
+			}
+			out = append(out, number)
+		}
+		return out
+	case *pb.Value_VectorQuantity:
+		if len(kind.VectorQuantity.GetComponents()) == 0 {
+			return Null("unsupported: vector quantity without components")
+		}
+		out := make(VectorQuantity, 0, len(kind.VectorQuantity.GetComponents()))
+		for _, component := range kind.VectorQuantity.GetComponents() {
+			quantity, ok := quantityFromProto(component)
+			if !ok {
+				return Null("unsupported: vector quantity with a component without a magnitude")
+			}
+			out = append(out, quantity)
+		}
+		return out
+	case *pb.Value_MeasurementRef:
+		ref := kind.MeasurementRef
+		if ref.GetUnit() == "" && ref.GetUnitTerm() == nil && ref.GetUnitId() == "" {
+			return Null("unsupported: measurement reference naming no unit")
+		}
+		if ref.GetUnitTerm() == nil {
+			return Null("unsupported: measurement reference without its reduction")
+		}
+		return MeasurementRef{Unit: ref.GetUnit(), Term: unitTermFromProto(ref.GetUnitTerm()), UnitID: ref.GetUnitId()}
 	default:
-		return nil
+		// A newer service's arm parses as an unknown field: no kind at all.
+		return Null("unsupported: a value arm this client does not know")
 	}
 }
 
@@ -161,6 +210,41 @@ func valueToProto(value Value) (*pb.Value, error) {
 			EnumerationId: v.EnumerationID,
 			Name:          v.Name,
 		}}}, nil
+	case Array:
+		array := &pb.Array{
+			Dimensions: append([]int64(nil), v.Dimensions...),
+			Elements:   make([]*pb.Value, 0, len(v.Elements)),
+		}
+		for _, element := range v.Elements {
+			sent, err := valueToProto(element)
+			if err != nil {
+				return nil, err
+			}
+			array.Elements = append(array.Elements, sent)
+		}
+		return &pb.Value{Kind: &pb.Value_Array{Array: array}}, nil
+	case Vector:
+		vector := &pb.Vector{Components: make([]*pb.Value, 0, len(v))}
+		for _, component := range v {
+			sent, err := valueToProto(component)
+			if err != nil {
+				return nil, err
+			}
+			vector.Components = append(vector.Components, sent)
+		}
+		return &pb.Value{Kind: &pb.Value_Vector{Vector: vector}}, nil
+	case VectorQuantity:
+		vq := &pb.VectorQuantity{Components: make([]*pb.Quantity, 0, len(v))}
+		for _, component := range v {
+			vq.Components = append(vq.Components, quantityToProto(component))
+		}
+		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: vq}}, nil
+	case MeasurementRef:
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: &pb.MeasurementRef{
+			Unit:     v.Unit,
+			UnitTerm: unitTermToProto(v.Term),
+			UnitId:   v.UnitID,
+		}}}, nil
 	case Unset:
 		return nil, &StatusError{
 			Code:    CodeInvalidArgument,
@@ -179,12 +263,28 @@ func quantityToProto(quantity Quantity) *pb.Quantity {
 	case Real:
 		out.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: float64(magnitude)}
 	}
-	if quantity.Term != nil {
-		term := &pb.UnitTerm{ScaleNum: quantity.Term.ScaleNum, ScaleDen: quantity.Term.ScaleDen}
-		for _, factor := range quantity.Term.Factors {
-			term.Factors = append(term.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
-		}
-		out.UnitTerm = term
+	out.UnitTerm = unitTermToProto(quantity.Term)
+	return out
+}
+
+func unitTermToProto(term *UnitTerm) *pb.UnitTerm {
+	if term == nil {
+		return nil
+	}
+	out := &pb.UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
+	for _, factor := range term.Factors {
+		out.Factors = append(out.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
+	}
+	return out
+}
+
+func unitTermFromProto(term *pb.UnitTerm) *UnitTerm {
+	if term == nil {
+		return nil
+	}
+	out := &UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
+	for _, factor := range term.Factors {
+		out.Factors = append(out.Factors, UnitFactor{UnitID: factor.UnitId, Exponent: factor.Exponent})
 	}
 	return out
 }
@@ -213,22 +313,20 @@ func instancesFromProto(instances []*pb.Instance) []*Instance {
 	return out
 }
 
-func quantityFromProto(quantity *pb.Quantity) Quantity {
+// quantityFromProto is false for a quantity carrying no magnitude, which no
+// number stands in for.
+func quantityFromProto(quantity *pb.Quantity) (Quantity, bool) {
 	out := Quantity{Unit: quantity.GetUnit()}
 	switch magnitude := quantity.GetMagnitude().(type) {
 	case *pb.Quantity_IntMagnitude:
 		out.Magnitude = Int(magnitude.IntMagnitude)
 	case *pb.Quantity_RealMagnitude:
 		out.Magnitude = Real(magnitude.RealMagnitude)
+	default:
+		return Quantity{}, false
 	}
-	if term := quantity.GetUnitTerm(); term != nil {
-		converted := &UnitTerm{ScaleNum: term.ScaleNum, ScaleDen: term.ScaleDen}
-		for _, factor := range term.Factors {
-			converted.Factors = append(converted.Factors, UnitFactor{UnitID: factor.UnitId, Exponent: factor.Exponent})
-		}
-		out.Term = converted
-	}
-	return out
+	out.Term = unitTermFromProto(quantity.GetUnitTerm())
+	return out, true
 }
 
 func instanceFromProto(inst *pb.Instance) *Instance {

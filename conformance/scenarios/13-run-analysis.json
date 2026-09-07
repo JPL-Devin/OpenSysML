@@ -1,0 +1,261 @@
+{
+  "scenarios": [
+    {
+      "id": "run_analysis/a_usage_binding_its_subject_reports_its_outputs_and_objective",
+      "description": "The usage binds the ship whose cost and other sum to 12, under the default limit of 20, so the output is 12, the objective holds, and the ship is the subject reported.",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::shipCost"
+      },
+      "expect": {
+        "response": {
+          "outputs": [
+            {
+              "name": "total",
+              "value": {
+                "real_value": 12.0
+              }
+            }
+          ],
+          "verdicts": [
+            {
+              "kind": "objective",
+              "element_id": "An::CostAnalysis::affordable",
+              "element": "affordable",
+              "holds": true,
+              "instance_type_id": "An::ship"
+            }
+          ]
+        },
+        "non_empty": [
+          "instances"
+        ],
+        "absent": [
+          "error"
+        ]
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "verification"
+      }
+    },
+    {
+      "id": "run_analysis/a_case_with_no_objective_reports_its_outputs_alone",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::plain"
+      },
+      "expect": {
+        "response": {
+          "outputs": [
+            {
+              "name": "x",
+              "value": {
+                "real_value": 3.0
+              }
+            }
+          ]
+        },
+        "counts": {
+          "verdicts": 0
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "run_analysis/a_definition_runs_against_the_subject_named",
+      "description": "The barge costs 30 + 7 = 37, over the default limit, so the objective does not hold and names the violated condition; the subject's values are reported with the verdict.",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::CostAnalysis",
+        "subject_symbol_id": "An::barge"
+      },
+      "expect": {
+        "response": {
+          "outputs": [
+            {
+              "name": "total",
+              "value": {
+                "real_value": 37.0
+              }
+            }
+          ],
+          "verdicts": [
+            {
+              "kind": "objective",
+              "holds": false,
+              "instance_type_id": "An::barge"
+            }
+          ]
+        },
+        "non_empty": [
+          "verdicts.0.condition",
+          "instances"
+        ],
+        "absent": [
+          "error",
+          "verdicts.0.error"
+        ]
+      }
+    },
+    {
+      "id": "run_analysis/a_named_argument_binds_a_defaulted_input",
+      "description": "A limit of 50 sent by name replaces the default of 20, so the barge's 37 satisfies the objective.",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::CostAnalysis",
+        "subject_symbol_id": "An::barge",
+        "named_arguments": {
+          "limit": {
+            "real_value": 50.0
+          }
+        }
+      },
+      "expect": {
+        "response": {
+          "verdicts": [
+            {
+              "kind": "objective",
+              "holds": true
+            }
+          ]
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "run_analysis/a_positional_argument_binds_the_first_input",
+      "description": "The subject is not a positional input: the first positional argument binds the limit.",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::CostAnalysis",
+        "subject_symbol_id": "An::barge",
+        "arguments": [
+          {
+            "real_value": 10.0
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "verdicts": [
+            {
+              "kind": "objective",
+              "holds": false
+            }
+          ]
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "run_analysis/a_definition_with_no_subject_is_an_evaluation_failure",
+      "description": "The definition's subject is bound by no usage and no request, so the run fails in band naming the subject.",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::CostAnalysis"
+      },
+      "expect": {
+        "response": {
+          "failure_reason": "FAILURE_REASON_EVALUATION"
+        },
+        "contains": {
+          "error": "subject"
+        }
+      }
+    },
+    {
+      "id": "run_analysis/a_symbol_of_another_kind_is_the_wrong_kind",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::ship"
+      },
+      "expect": {
+        "response": {
+          "failure_reason": "FAILURE_REASON_WRONG_KIND"
+        },
+        "non_empty": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "run_analysis/an_unknown_symbol_is_reported_in_band",
+      "rpc": "RunAnalysis",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "analysis.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "An::missing"
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ],
+        "absent": [
+          "outputs",
+          "verdicts"
+        ]
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -238,7 +239,11 @@ func TestQuantityFromWireNeedsTheModel(t *testing.T) {
 		t.Errorf("over an undeclared base unit: err = %v, want ErrUnknownBaseUnit", err)
 	}
 
-	for _, scale := range []*pb.UnitTerm{{ScaleNum: 1, ScaleDen: 0}, {ScaleNum: 0, ScaleDen: 1}} {
+	for _, scale := range []*pb.UnitTerm{
+		{ScaleNum: 1, ScaleDen: 0}, {ScaleNum: 0, ScaleDen: 1},
+		{ScaleNum: math.NaN(), ScaleDen: 1}, {ScaleNum: 1, ScaleDen: math.NaN()},
+		{ScaleNum: math.Inf(1), ScaleDen: 1}, {ScaleNum: 1, ScaleDen: math.Inf(-1)},
+	} {
 		unusable := &pb.Quantity{
 			Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
 			Unit:      "SI::m",
@@ -248,6 +253,29 @@ func TestQuantityFromWireNeedsTheModel(t *testing.T) {
 			t.Errorf("over scale %g/%g: err = %v, want ErrUnitScaleUnusable",
 				scale.ScaleNum, scale.ScaleDen, err)
 		}
+	}
+
+	for _, exponent := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		unusable := &pb.Quantity{
+			Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+			Unit:      "SI::m",
+			UnitTerm:  &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "SI::metre", Exponent: exponent}}},
+		}
+		if _, err := ProtoToQuantity(unusable, idx, sem); !errors.Is(err, ErrUnitExponentUnusable) {
+			t.Errorf("over exponent %g: err = %v, want ErrUnitExponentUnusable", exponent, err)
+		}
+	}
+
+	overflowing := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "SI::m",
+		UnitTerm: &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{
+			{UnitId: "SI::metre", Exponent: math.MaxFloat64},
+			{UnitId: "SI::metre", Exponent: math.MaxFloat64},
+		}},
+	}
+	if _, err := ProtoToQuantity(overflowing, idx, sem); !errors.Is(err, ErrUnitExponentUnusable) {
+		t.Errorf("over repeated exponents summing past the largest double: err = %v, want ErrUnitExponentUnusable", err)
 	}
 
 	noMagnitude := &pb.Quantity{Unit: "SI::kg"}

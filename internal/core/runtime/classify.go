@@ -132,6 +132,7 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 			return err
 		}
 	}
+	ctx.unfoldSubsettedDefaults(inst, typ, features)
 	if err := ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried); err != nil {
 		rollback()
 		return err
@@ -157,6 +158,7 @@ func (ctx *Context) refineFeatureValue(inst *Instance, fv *FeatureValue, feat *E
 	}
 	ctx.noteProbeWrite(fv)
 	if !fv.Materialized || (!fv.Written && feat.DefaultValue != have.DefaultValue) {
+		ctx.invalidateDependents(fv)
 		ctx.initFeatureValue(inst, fv, feat)
 		return nil
 	}

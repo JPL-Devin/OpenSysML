@@ -51,6 +51,8 @@ type UndeterminedBindingError struct {
 	Target   string
 	Binding  string
 	Endpoint string
+	// Other is the binding's end opposite Endpoint, as written.
+	Other string
 	// Across names the collection the binding's end path crosses to reach Target, if any.
 	Across string
 }
@@ -60,8 +62,8 @@ func (e *UndeterminedBindingError) Error() string {
 		return fmt.Sprintf("%s: %s is bound by `%s` through every object %s holds; the model does not determine which of the bound values %s holds",
 			ErrBindingEnd, e.Target, e.Binding, e.Across, e.Target)
 	}
-	return fmt.Sprintf("%s: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
-		ErrBindingEnd, e.Target, e.Binding, e.Endpoint)
+	return fmt.Sprintf("%s: %s is bound by `%s`, which makes some value of %s a value of %s without saying which value of either; the model does not state what %s holds",
+		ErrBindingEnd, e.Target, e.Binding, e.Endpoint, e.Other, e.Endpoint)
 }
 
 func (e *UndeterminedBindingError) Unwrap() error { return ErrBindingEnd }
@@ -183,14 +185,23 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
-	if target.BindingDerived && ctx.CompositeTypeOf(target.Feature) == nil {
-		ctx.noteProbeWrite(target)
-		target.Value = Value{}
-		target.Values = Value{}
-		target.Materialized = false
-		target.BindingDerived = false
+	if !target.BindingDerived || ctx.CompositeTypeOf(target.Feature) != nil {
+		return ctx.resolveBindings(inst, target, name, key)
 	}
+	// A value a binding gave is resolved afresh: clearing it and binding it again is one write.
+	before := ctx.beforeWrite(target)
+	ctx.noteProbeWrite(target)
+	target.Value = Value{}
+	target.Values = Value{}
+	target.Materialized = false
+	target.BindingDerived = false
+	val, found, err := ctx.resolveBindings(inst, target, name, key)
+	ctx.afterWrite(target, before)
+	return val, found, err
+}
 
+// resolveBindings is what the bindings of the target's owners, innermost first, determine it holds.
+func (ctx *Context) resolveBindings(inst *Instance, target *FeatureValue, name string, key featureValueRef) (Value, bool, error) {
 	// A binding linking one unspecified value determines nothing, so it is reported
 	// only once no binding at any level determines the feature.
 	var undetermined *UndeterminedBindingError
@@ -288,6 +299,7 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 					Target:   bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
 					Binding:  ctx.bindingText(binding),
 					Endpoint: endpointName,
+					Other:    ctx.bindingEndpointText(binding, 1-bindingEndForPath(binding, endpointName)),
 					Across:   across,
 				}
 			}
@@ -449,6 +461,7 @@ func (ctx *Context) ownEndpointValue(loc bindingLocation) (Value, bool, error) {
 			return Value{}, false, err
 		}
 	}
+	ctx.noteRead(fv)
 	val := fv.HeldValue()
 	return val, val.Kind != ValInvalid, nil
 }
@@ -764,6 +777,7 @@ func (ctx *Context) bindingLocationValue(loc bindingLocation, materialize bool) 
 	if fv.BindingDerived {
 		if ctx.CompositeTypeOf(fv.Feature) != nil {
 			if val := fv.HeldValue(); val.Kind != ValInvalid {
+				ctx.noteRead(fv)
 				return val, true, nil
 			}
 		}
@@ -784,6 +798,7 @@ func (ctx *Context) bindingLocationValue(loc bindingLocation, materialize bool) 
 			return Value{}, false, err
 		}
 	}
+	ctx.noteRead(fv)
 	if val := fv.HeldValue(); val.Kind != ValInvalid {
 		return val, true, nil
 	}
@@ -831,7 +846,11 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 			ErrBindingEnd, ctx.bindingEndpointText(binding, end), ctx.bindingEndpointText(binding, 1-end), endpoint.across())
 	}
 	loc := endpoint.locations[0]
-	return ctx.assignBindingValue(loc.instance, loc.instance.FeatureValues[loc.name], loc.name, val)
+	fv := loc.instance.FeatureValues[loc.name]
+	before := ctx.beforeWrite(fv)
+	err := ctx.assignBindingValue(loc.instance, fv, loc.name, val)
+	ctx.afterWrite(fv, before)
+	return err
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {

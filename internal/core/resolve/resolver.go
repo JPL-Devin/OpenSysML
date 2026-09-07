@@ -32,7 +32,9 @@ type supertypeProvider interface {
 // one of its features redefines them. *semantics.Model implements it.
 type maskChecker interface {
 	InheritanceMasked(sym, candidate *symbols.Symbol) bool
-	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
+	InheritanceMaskedRedefining(sym, candidate *symbols.Symbol) bool
+	NamingRedefiner(sym, masked *symbols.Symbol) *symbols.Symbol
+	NamingRedefinerRedefining(sym, masked *symbols.Symbol) *symbols.Symbol
 }
 
 // elementFilterChecker is the part of the semantic model that decides an element
@@ -122,6 +124,10 @@ type Resolver struct {
 	trial *ast.QualifiedName
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
+	// viewFilters memoizes the conditions a view inherits from the views it
+	// specializes; viewFiltersInProgress cuts the re-entrant query short.
+	viewFilters           map[*symbols.Scope][]symbols.ElementFilter
+	viewFiltersInProgress map[*symbols.Scope]bool
 	// payloads are the accept-node payloads a scope's body shares, collected
 	// once per scope: see (*Resolver).acceptPayload.
 	payloads map[*symbols.Scope]map[string]*symbols.Symbol
@@ -132,7 +138,7 @@ type Resolver struct {
 	// scope the document pass has not stamped: see (*Resolver).scopeOwner.
 	bodyOwners map[*symbols.Scope]*symbols.Symbol
 	// effNames memoizes whether a feature named by a redefinition binds that
-	// name: see (*Resolver).bindsEffectiveName.
+	// name: see (*Resolver).BindsName.
 	effNames map[*symbols.Symbol]bool
 	model    MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
 	naming   map[*symbols.Symbol]bool // effective names being computed, for cycle detection
@@ -244,26 +250,28 @@ func (r *Resolver) Journal(node ast.Node, drop func()) {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:              idx,
-		memo:             map[ast.Node]resolution{},
-		modeMemo:         map[modeMemoKey]resolution{},
-		filtered:         map[filteredMemoKey]resolution{},
-		resolving:        map[ast.Node]int{},
-		featureChains:    map[featureChainKey]resolution{},
-		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
-		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
-		endpoints:        map[*ast.QualifiedName]resolution{},
-		initials:         map[*ast.InitialNode]*symbols.Symbol{},
-		imports:          map[ast.Node][]*ast.Import{},
-		importStack:      map[*ast.Import]bool{},
-		resolvingImports: map[*ast.Import]bool{},
-		naming:           map[*symbols.Symbol]bool{},
-		valuesInProgress: map[*ast.Usage]bool{},
-		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
-		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
-		redefined:        map[*symbols.Symbol][]*symbols.Symbol{},
-		bodyOwners:       map[*symbols.Scope]*symbols.Symbol{},
-		effNames:         map[*symbols.Symbol]bool{},
+		idx:                   idx,
+		memo:                  map[ast.Node]resolution{},
+		modeMemo:              map[modeMemoKey]resolution{},
+		filtered:              map[filteredMemoKey]resolution{},
+		resolving:             map[ast.Node]int{},
+		featureChains:         map[featureChainKey]resolution{},
+		parts:                 map[*ast.QualifiedName][]*symbols.Symbol{},
+		aliasNames:            map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints:             map[*ast.QualifiedName]resolution{},
+		initials:              map[*ast.InitialNode]*symbols.Symbol{},
+		imports:               map[ast.Node][]*ast.Import{},
+		importStack:           map[*ast.Import]bool{},
+		resolvingImports:      map[*ast.Import]bool{},
+		naming:                map[*symbols.Symbol]bool{},
+		valuesInProgress:      map[*ast.Usage]bool{},
+		nsFilters:             map[*symbols.Scope][]symbols.ElementFilter{},
+		viewFilters:           map[*symbols.Scope][]symbols.ElementFilter{},
+		viewFiltersInProgress: map[*symbols.Scope]bool{},
+		payloads:              map[*symbols.Scope]map[string]*symbols.Symbol{},
+		redefined:             map[*symbols.Symbol][]*symbols.Symbol{},
+		bodyOwners:            map[*symbols.Scope]*symbols.Symbol{},
+		effNames:              map[*symbols.Symbol]bool{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
@@ -422,9 +430,6 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 // a trigger payload; what its imports surface is not considered.
 func (r *Resolver) lookupMemberOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	if found, ok := r.model.LookupMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.model.LookupContributedMember(sym, name); ok {
 		return found, true
 	}
 	return r.triggerPayload(sym, name)

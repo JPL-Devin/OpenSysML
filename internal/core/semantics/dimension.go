@@ -212,7 +212,7 @@ func (m *Model) dimensionOfOperator(scope *symbols.Scope, e *ast.OperatorExpr) (
 		if !ok || !exp.IsNumeric() {
 			return Dimension{}, false
 		}
-		return Dimension{Term: base.Term.Pow(exp.asReal())}, true
+		return Dimension{Term: base.Term.Pow(exp.AsReal())}, true
 	}
 	return Dimension{}, false
 }
@@ -443,7 +443,7 @@ func (m *Model) powerFactor(scope *symbols.Scope, ref ast.Node) (UnitFactor, boo
 	if !ok || !evaluated.IsNumeric() {
 		return UnitFactor{}, false
 	}
-	return UnitFactor{Unit: base, Exponent: evaluated.asReal()}, true
+	return UnitFactor{Unit: base, Exponent: evaluated.AsReal()}, true
 }
 
 // inheritedDimension reports the dimension a unit takes from what it specializes.

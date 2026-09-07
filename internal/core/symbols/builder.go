@@ -128,10 +128,9 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
 		// If usage is attribute kind with specializes/subsets but no typing, treat as definition.
 		kind := classifyUsage(d)
-		id, namingTarget := effectiveIdent(d)
+		id, naming := effectiveIdent(d)
 		sym := newSymbol(id, kind, d, vis, child, scope, trivia)
-		sym.EffectiveName = namingTarget != nil
-		sym.NamingTarget = namingTarget
+		naming.apply(sym)
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildCrossFeature(child, d)
@@ -150,11 +149,10 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 	case *ast.SubjectMember:
 		// SubjectMember represents requirement subject: subject <name> : <Type>;
 		// Create a part usage symbol (subject is structural usage like part)
-		id, namingTarget := namingIdent(d.Ident, d.NamingFeature())
+		id, naming := namingIdent(d.Ident, d.NamingFeature())
 		child := NewScope(scope, d)
 		sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
-		sym.EffectiveName = namingTarget != nil
-		sym.NamingTarget = namingTarget
+		naming.apply(sym)
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		if len(d.Body) > 0 {
@@ -431,19 +429,23 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 // buildRequirementConstraint registers the constraint usage an assume/require member
 // declares as a member of its requirement (SysML v2 §7.20.5), anonymous if unnamed.
 func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
-	oc, ok := ast.OwnedConstraintOf(decl)
-	if !ok {
+	var id ast.Identification
+	var naming derivedNaming
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		id, naming = namingIdent(oc.Ident, oc.NamingFeature())
+	} else if ref := ast.ConstraintReferenceOf(decl); ref != nil {
+		// `require r1;` owns a constraint named by the one it references.
+		id, naming = derivedIdent(id, NamedByReference, ref)
+	} else {
 		buildConstraintBodyScope(scope, decl, body)
 		return
 	}
-	id, namingTarget := namingIdent(oc.Ident, oc.NamingFeature())
 	child := NewScope(scope, decl)
 	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
-	sym.EffectiveName = namingTarget != nil
-	sym.NamingTarget = namingTarget
+	naming.apply(sym)
 	defineIdent(scope, id, sym)
 	scope.AddChild(child)
-	buildMembers(child, oc.Body)
+	buildMembers(child, body)
 }
 
 // buildConstraintBodyScope links the scope a nested constraint body declares
@@ -609,27 +611,48 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 }
 
 // effectiveIdent returns the identification a usage is registered under, and
-// the reference that supplied it: the name of the usage's naming feature
+// how it was derived: the name of the usage's naming feature
 // (ast.NamingFeature) keeps its own declared short name.
 //
 // The naming feature's own effective name is approximated by the reference's
 // last segment, since resolution has not run when scopes are built.
-func effectiveIdent(u *ast.Usage) (ast.Identification, ast.Node) {
+func effectiveIdent(u *ast.Usage) (ast.Identification, derivedNaming) {
 	return namingIdent(u.Ident, ast.NamingFeature(u))
 }
 
 // namingIdent is effectiveIdent for any declaration: id completed with the name
 // its naming feature rel supplies, and the target that supplied it.
-func namingIdent(id ast.Identification, rel *ast.Relationship) (ast.Identification, ast.Node) {
+func namingIdent(id ast.Identification, rel *ast.Relationship) (ast.Identification, derivedNaming) {
 	if rel == nil {
-		return id, nil
+		return id, derivedNaming{}
 	}
-	name, span := ast.TargetName(rel.Target)
+	kind := NamedByReference
+	if rel.Kind == ast.RelRedefines {
+		kind = NamedByRedefinition
+	}
+	return derivedIdent(id, kind, rel.Target)
+}
+
+// derivedIdent is namingIdent for a target reached through a relationship of
+// the given kind.
+func derivedIdent(id ast.Identification, kind Naming, target ast.Node) (ast.Identification, derivedNaming) {
+	name, span := ast.TargetName(target)
 	if name == "" {
-		return id, nil
+		return id, derivedNaming{}
 	}
 	id.Name, id.NameSpan = name, span
-	return id, namingTargetNode(rel.Target)
+	return id, derivedNaming{kind: kind, target: namingTargetNode(target)}
+}
+
+// derivedNaming is the name derivation namingIdent found, if any.
+type derivedNaming struct {
+	kind   Naming
+	target ast.Node
+}
+
+func (n derivedNaming) apply(sym *Symbol) {
+	sym.Naming = n.kind
+	sym.NamingTarget = n.target
 }
 
 // namingTargetNode returns the node a relationship target is resolved as, so

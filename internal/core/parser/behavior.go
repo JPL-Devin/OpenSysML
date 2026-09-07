@@ -368,37 +368,33 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		ident = p.parseIdentificationStopping("ordered", "nonunique")
 	}
 
-	// Optional multiplicity before relationships (e.g., name[mult]: Type)
-	var multiplicity *ast.Multiplicity
-	if p.at(lexer.LBracket) {
-		multiplicity = p.parseMultiplicity()
+	// Create Usage node with direction
+	usage := &ast.Usage{
+		Kind:         kind,
+		Ident:        ident,
+		IsReference:  isRef,
+		Direction:    direction,
+		IsEvent:      isEvent,
+		IsIndividual: isIndividual,
+		Portion:      portion,
 	}
 
-	// Optional typing and relationships, written either as an operator (`:>`) or
-	// as the keyword it stands for (`subsets`); parseRelationships consumes
-	// nothing when neither begins the token at the cursor.
-	relationships := p.parseRelationships(true)
-
-	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
-	if multiplicity == nil && p.at(lexer.LBracket) {
-		multiplicity = p.parseMultiplicity()
-	}
-
-	// Parse post-multiplicity modifiers (ordered/nonunique)
-	postMods := p.parsePostModifiers()
+	// A parameter specializes and states its multiplicity as any usage does
+	// (`in x : T[1] redefines y`, `in x[1] : T`), so it shares the usage loop.
+	p.parseFeatureSpecializationPart(usage)
 
 	// Optional value (= expr, := expr, or default [=] expr)
-	var value ast.Node
 	valueOp, hasValue := p.acceptValueOperator()
 	if hasValue {
-		value = p.ParseExpression()
+		usage.Value = p.ParseExpression()
 	}
+	usage.ValueOperatorSpan = valueOp.span
+	usage.ValueIsDefault = valueOp.isDefault
+	usage.ValueIsInitial = valueOp.isInitial
 
 	// Optional body or semicolon
-	var members []ast.Node
-	var hasBody bool
 	if p.accept2(lexer.Semicolon) {
-		hasBody = false
+		usage.HasBody = false
 	} else if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
 		// Parse body members generically
@@ -406,35 +402,14 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			m := p.parseBodyMember()
 			if m != nil {
-				members = append(members, m)
+				usage.Members = append(usage.Members, m)
 			}
 		}
 		leave()
 		p.expect(lexer.RBrace, "expected '}'")
-		hasBody = true
+		usage.HasBody = true
 	} else {
 		p.error(p.peek().Span, "expected ';' or '{' after parameter")
-	}
-
-	// Create Usage node with direction
-	usage := &ast.Usage{
-		Kind:              kind,
-		Ident:             ident,
-		Relationships:     relationships,
-		Multiplicity:      multiplicity,
-		Value:             value,
-		ValueOperatorSpan: valueOp.span,
-		ValueIsDefault:    valueOp.isDefault,
-		ValueIsInitial:    valueOp.isInitial,
-		Members:           members,
-		HasBody:           hasBody,
-		IsReference:       isRef,
-		Direction:         direction,
-		IsOrdered:         postMods.isOrdered,
-		IsNonunique:       postMods.isNonunique,
-		IsEvent:           isEvent,
-		IsIndividual:      isIndividual,
-		Portion:           portion,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 
@@ -1573,45 +1548,8 @@ func (p *Parser) parseResultMember() ast.Node {
 		}
 
 		// FeatureSpecializationPart: the typing and the specializations, in the
-		// order written (`: T`, `:> engine`, `: T :>> x`).
-		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
-
-		// Parse optional multiplicity '[n..m]'
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// Parse additional feature modifiers after multiplicity (e.g., 'nonunique')
-		// Stdlib pattern: return : Type[mult] nonunique;
-		mods2 := p.parseFeatureModifiers()
-		if mods2.isAbstract {
-			u.IsAbstract = true
-		}
-		if mods2.isReference {
-			u.IsReference = true
-		}
-		if mods2.isEnd {
-			u.IsEnd = true
-		}
-		if mods2.isComposite {
-			u.IsComposite = true
-		}
-		if mods2.isPortion {
-			u.IsPortion = true
-		}
-		if mods2.isDerived {
-			u.IsDerived = true
-		}
-		if mods2.isOrdered {
-			u.IsOrdered = true
-		}
-		if mods2.isNonunique {
-			u.IsNonunique = true
-		}
-
-		// Parse additional relationships after post-modifiers (e.g., redefines result redefines values)
-		postModRels := p.parseRelationships(true)
-		u.Relationships = append(u.Relationships, postModRels...)
+		// order written (`: T`, `:> engine`, `: T[1] nonunique :>> x`).
+		p.parseFeatureSpecializationPart(u)
 
 		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
 		p.parseUsageValue(u)
@@ -1951,14 +1889,8 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 	// Check for requirement-specific keywords FIRST (before tryParseDeclaration)
 	// These keywords have special meaning in requirement context that differs from general usage
-	if p.bodyAdmitsMember("subject") && p.acceptKeyword("subject") {
-		return p.parseSubjectMember(start)
-	}
-	if p.acceptKeyword("assume") {
-		return p.parseAssumeMember(start)
-	}
-	if p.acceptKeyword("require") {
-		return p.parseRequireMember(start)
+	if node := p.parseKeywordedRequirementMember(start); node != nil {
+		return node
 	}
 
 	// Try general declaration (nested requirements, features, etc.)
@@ -2002,15 +1934,40 @@ func usageIsSubstantive(u *ast.Usage) bool {
 		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
-// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
-// [specializations] [value] (; | body)`, the value written with any value operator.
-func (p *Parser) parseSubjectMember(start int) ast.Node {
-	// 'subject' already consumed
-
-	// A subject takes prefix metadata after its keyword: `subject #B s;`
-	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
+// parseKeywordedRequirementMember parses a `subject`, `assume` or `require` member, reporting
+// prefix metadata written ahead of the keyword and reading it as if it followed; nil if neither.
+func (p *Parser) parseKeywordedRequirementMember(start int) ast.Node {
+	kw := p.peekN(p.prefixLookahead())
+	if kw.Kind != lexer.Keyword {
+		return nil
+	}
+	switch kw.KeywordID {
+	case "subject":
+		if !p.bodyAdmitsMember("subject") {
+			return nil
+		}
+	case "assume", "require":
+	default:
+		return nil
+	}
 	prefixes := p.parsePrefixMetadata()
+	if len(prefixes) > 0 {
+		p.reportMisplacedPrefixMetadata(prefixes, kw)
+	}
+	p.advance() // the keyword
+	prefixes = append(prefixes, p.parsePrefixMetadata()...)
+	switch kw.KeywordID {
+	case "subject":
+		return p.parseSubjectMember(start, prefixes)
+	case "assume":
+		return p.parseAssumeMember(start, prefixes)
+	}
+	return p.parseRequireMember(start, prefixes)
+}
 
+// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
+// [specializations] [value] (; | body)`; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseSubjectMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// A bare `subject;` declares the subject parameter without naming or typing
 	// it, as the OMG viewpoint examples write it.
 	if p.at(lexer.Semicolon) {
@@ -2083,12 +2040,9 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	return node
 }
 
-// parseAssumeMember parses: assume <expr>;
-func (p *Parser) parseAssumeMember(start int) ast.Node {
-	// 'assume' already consumed
-
+// parseAssumeMember parses: assume <expr>; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseAssumeMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
-	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
 		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
@@ -2133,12 +2087,9 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 	return node
 }
 
-// parseRequireMember parses: require <expr>;
-func (p *Parser) parseRequireMember(start int) ast.Node {
-	// 'require' already consumed
-
+// parseRequireMember parses: require <expr>; the keyword and its prefix metadata are consumed.
+func (p *Parser) parseRequireMember(start int, prefixes []*ast.PrefixMetadata) ast.Node {
 	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
-	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
 		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
@@ -2473,8 +2424,9 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 		case "then":
 			// Standalone implicit-source succession and inline statement forms.
 			return p.parseSuccessionEdge(p.advance(), allowBody)
-		case "accept":
-			// Accept transition: accept <signal> then <state>;
+		case "accept", "if":
+			// A target transition stated by its trigger or guard alone:
+			// `accept <signal> then <state>;`, `if <guard> then <state>;`.
 			return p.parseAcceptTransition(start)
 		}
 	}
@@ -2786,10 +2738,11 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 	return evt
 }
 
-// parseAcceptTransition parses a transition stated by its trigger alone, whose
-// source is the state containing it (SysML.xtext `TargetTransitionUsage`):
+// parseAcceptTransition parses a transition stated without a source, which is
+// the state containing it (SysML.xtext `TargetTransitionUsage`):
 //
 //	accept <trigger> [via <port>] [if <guard>] [do <effect>] then <target>;
+//	if <guard> [do <effect>] then <target>;
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	return p.parseTransitionTail(start, ast.NameSegment{}, nil)
 }
@@ -2875,7 +2828,9 @@ func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) 
 
 	// An inline action usage or definition: `<kind> action warmUp : WarmUp;`.
 	if p.atKeyword("action") {
-		return []ast.Node{p.parseBodyMember()}, nil
+		member := p.parseBodyMember()
+		markStateSubaction(member, kind)
+		return []ast.Node{member}, nil
 	}
 
 	// A behavioral statement: `<kind> assign x := 1;`, `<kind> send s to t;`.
@@ -2893,6 +2848,19 @@ func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) 
 	en := &ast.ErrorNode{Message: msg}
 	en.NodeSpan = p.spanFrom(start)
 	return nil, en
+}
+
+// markStateSubaction records the subaction keyword as the prefix of the action
+// usage it introduces: `entry action ::> a` performs `a` just as `perform
+// action ::> a` does (SysML.xtext StateActionUsage → PerformActionUsage).
+func markStateSubaction(member ast.Node, kind stateSubactionKind) {
+	m, ok := member.(*ast.Membership)
+	if !ok {
+		return
+	}
+	if u, ok := m.Member.(*ast.Usage); ok && u.Kind == ast.UsageAction && u.PrefixKeyword == "" {
+		u.PrefixKeyword = string(kind)
+	}
 }
 
 // parseStateSubactionBlock parses the braced action sequence of a subaction;
@@ -3027,6 +2995,9 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	case p.atKeyword("first"):
 		p.advance() // consume 'first'
 		source = p.parseChainedName()
+	case p.atTransitionClause():
+		// `transition [accept …] [if …] [do …] then <target>;` names no source:
+		// a TargetTransitionUsage whose source is the enclosing state.
 	case p.atName() || p.at(lexer.Keyword):
 		// `first` is optional in `TransitionUsage`, so a bare source may be followed
 		// straight by its clauses: `transition idle then off;`.

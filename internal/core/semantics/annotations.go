@@ -413,12 +413,15 @@ func boundFeatureName(u *ast.Usage) string {
 	return ""
 }
 
-// annotationValue evaluates one value an annotation binds: a constant, or a
-// reference to an element such as an enumeration literal, which is compared by
-// identity.
+// annotationValue evaluates one value an annotation binds: a constant, a
+// quantity, or a reference to an element such as an enumeration literal, which
+// is compared by identity.
 func (m *Model) annotationValue(scope *symbols.Scope, value ast.Node) symbols.FilterValue {
 	if v, ok := evalConst(value); ok {
 		return constValue(v)
+	}
+	if q, ok := m.EvalQuantity(scope, value); ok {
+		return quantityValue(q)
 	}
 	switch e := value.(type) {
 	case *ast.LiteralString:
@@ -438,8 +441,8 @@ func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]sy
 	if m == nil || sym == nil || feature == "" {
 		return nil, false
 	}
-	if value, ok := m.reflectiveFeatureValue(sym, feature); ok {
-		return []symbols.FilterValue{value}, true
+	if values, ok := m.ReflectiveFeatureValues(sym, feature); ok {
+		return values, true
 	}
 	member, ok := m.LookupMember(sym, feature)
 	if !ok || member == nil {
@@ -493,14 +496,40 @@ func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.
 			if _, empty := element.(*ast.NullExpr); empty {
 				continue
 			}
-			values = append(values, m.annotationValue(member.OwnerScope, element))
+			values = append(values, m.declaredValue(member.OwnerScope, element))
 		}
 		return values, true
 	}
 	if _, empty := usage.Value.(*ast.NullExpr); empty {
 		return nil, true
 	}
-	return []symbols.FilterValue{m.annotationValue(member.OwnerScope, usage.Value)}, true
+	return []symbols.FilterValue{m.declaredValue(member.OwnerScope, usage.Value)}, true
+}
+
+// declaredValue is annotationValue for a feature's own value, where a reference
+// to an attribute reads that attribute's value — as seen from the carrier when
+// the attribute is one of its features — rather than naming it. A unit, an
+// enumeration literal or a non-value element stays the element it names.
+func (m *Model) declaredValue(scope *symbols.Scope, value ast.Node) symbols.FilterValue {
+	result := m.annotationValue(scope, value)
+	ref, ok := value.(*ast.FeatureReference)
+	if result.Kind != symbols.FilterValueRef || !ok {
+		return result
+	}
+	if sym, ok := m.resolver.ResolveQualified(scope, ref.Name); ok && m.readsValueOf(sym) {
+		return symbols.FilterValue{}
+	}
+	return result
+}
+
+// readsValueOf reports whether a reference to sym denotes the value the attribute
+// holds rather than the element sym itself: a unit and an enumeration literal are
+// values by identity, a definition or an object feature is no value at all.
+func (m *Model) readsValueOf(sym *symbols.Symbol) bool {
+	if sym == nil || (sym.Kind != symbols.SymbolAttributeUsage && sym.Kind != symbols.SymbolEnumerationUsage) {
+		return false
+	}
+	return EnumerationOwning(sym) == nil && !m.IsMeasurementUnit(sym)
 }
 
 // metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML
@@ -625,6 +654,7 @@ var relationshipMetaclassNames = map[ast.RelationshipKind]string{
 	ast.RelRedefines:   "Redefinition",
 	ast.RelInverseOf:   "FeatureInverting",
 	ast.RelFeaturedBy:  "TypeFeaturing",
+	ast.RelDisjoint:    "Disjoining",
 }
 
 // sysmlMetaclassPrefix qualifies the reflective metadata types of the SysML
@@ -694,6 +724,30 @@ func (m *Model) ReflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 	return m.reflectiveFeatureValue(sym, feature)
 }
 
+// ReflectiveFeatureValues is ReflectiveFeatureValue for a feature that may hold
+// several values: Element::documentation reads one per `doc` body, in order.
+func (m *Model) ReflectiveFeatureValues(sym *symbols.Symbol, feature string) ([]symbols.FilterValue, bool) {
+	if m == nil || sym == nil {
+		return nil, false
+	}
+	if feature == "documentation" {
+		bodies := m.DocumentationOf(sym)
+		values := make([]symbols.FilterValue, 0, len(bodies))
+		for _, body := range bodies {
+			values = append(values, symbols.FilterValue{Kind: symbols.FilterValueString, Str: body})
+		}
+		return values, true
+	}
+	value, ok := m.reflectiveFeatureValue(sym, feature)
+	if !ok {
+		return nil, false
+	}
+	if value.Kind == symbols.FilterValueEmpty {
+		return nil, true
+	}
+	return []symbols.FilterValue{value}, true
+}
+
 // reflectiveFeatureValue is what the candidate's declaration states for a
 // metaclass feature of it, and whether that feature is derived here at all
 // (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.
@@ -701,6 +755,10 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 	switch feature {
 	case "name", "declaredName":
 		return stringOrEmpty(simpleSymbolName(sym)), true
+	case "shortName":
+		return stringOrEmpty(m.EffectiveShortNameOf(sym)), true
+	case "declaredShortName":
+		return stringOrEmpty(sym.ShortName), true
 	case "qualifiedName":
 		return stringOrEmpty(m.fqnOf(sym)), true
 	}

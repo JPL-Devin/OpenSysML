@@ -35,7 +35,8 @@ try (Connection connection = Connection.open()) {      // starts a private sysml
 ```
 
 Every value the API answers with is immutable: `Value` is a sealed interface over
-records (`IntegerValue`, `RealValue`, `ComplexValue`, `QuantityValue`, `EnumerationValue`,
+records (`IntegerValue`, `RealValue`, `ComplexValue`, `QuantityValue`, `ArrayValue`,
+`VectorValue`, `VectorQuantityValue`, `MeasurementRefValue`, `EnumerationValue`,
 `InstanceReference`, `Sequence`, `NullValue`, `UnsetValue`, …), and `Symbol`,
 `Diagnostic`, `Instance` and `Instantiation` are records with copied collections.
 No generated protobuf message or builder appears in the public API.
@@ -305,7 +306,7 @@ Deliberately out of scope, rather than half-implemented:
 - **RDF conversion** (`Convert`) — Turtle/RDF export;
 - **verification helpers** (`VerifyConstraint`, `VerifyRequirement`,
   `VerifySatisfaction`), **behaviour execution** (`ExecuteAction`,
-  `ExecuteState`), **`EvaluateCalc`** and **`Query`**/OSLC;
+  `ExecuteState`), **`EvaluateCalc`**, **`RunAnalysis`** and **`Query`**/OSLC;
 - **generated model-ergonomics types** — no code generation from a model into
   Java classes.
 

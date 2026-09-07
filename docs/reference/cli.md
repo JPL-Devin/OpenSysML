@@ -162,7 +162,8 @@ reported, so a script that reads it takes the output from the first `{`.
 | `--strict` | | Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning (see [Strict conformance](../guide/03-command-line.md#strict-conformance)) |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
-| `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
+| `--from <format>` | | Input format for `--convert`: the `--convert` formats, or `xmi`/`mdzip` for a SysML v1 model to migrate (default: from the input's extension; `.xmi` and `.mdzip` are recognized) — see [SysML v1 migration](sysml-v1-migration.md) |
+| `--migration-report <file>` | | With `--convert` from `xmi`: write the element-by-element migration report to this file, JSON when it ends in `.json`, text otherwise. Without it the one-line summary goes to stderr |
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
@@ -172,10 +173,12 @@ reported, so a script that reads it takes the output from the first `{`.
 | `--doc-title-page` | | Put the document title on a page of its own (`--doc-form html` or `pdf`) |
 | `--doc-toc` | | Write a table of contents ahead of the content (`--doc-form html` or `pdf`) |
 | `--doc-number-sections` | | Number the section headings hierarchically (`--doc-form html` or `pdf`) |
+| `--html-theme <name>` | | Style the HTML page with a bundled theme layered over the default stylesheet: `default`, `modern`, `print` or `report` (default: the default stylesheet alone) |
 | `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined in a single page and written beside a set's pages, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
 | `--html-no-default-css` | | Leave the default stylesheet out, so only `--html-css` sheets style the document |
-| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own |
+| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own; with `--html-theme`, the theme's whole sheet |
 | `--html-fragment` | | Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own |
+| `--html-mermaid <cdn\|url>` | | Have the HTML page load Mermaid to draw its diagrams: `cdn` loads a pinned release from jsDelivr, a URL loads the script it names (default: diagrams stay Mermaid source) |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
 | `--pdf-title-page` | | Alias of `--doc-title-page` |
 | `--pdf-toc` | | Alias of `--doc-toc` |
@@ -197,6 +200,7 @@ written in, so the verdicts are about that object:
 | `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
 | `-instantiate <name>` | Creates an object first, so the verdicts are about it |
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
+| `-analysis "<name>[(<args>)] [object]"` | Runs an analysis case and reports its `out` and `return` values with their units, then the verdict of its `objective` — `satisfied`, `not satisfied` with the violated condition, or `undecided` with the reason — as `%analysis` does. An objective typed by a requirement def binds the def's subject as a requirement usage does (`subject = ship;`, `subject s = ship;` or `subject :>> s = ship;`); one binding none checks the case's result, the library's default for it, and is `undecided` naming the type when that result is not of the subject's type. Arguments bind the case's `in` parameters, positionally (`Pkg::Case(3.0)`) or by name (`Pkg::Case(limit = 3.0)`); the object, one `-instantiate` created and named as `-state` names its performer, is the case's `subject`. A usage that binds its subject (`subject s = ship;`) needs no object; a definition, or a usage that binds none, is refused by name without one. Repeatable |
 | `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does — including any computed `Column(name = "<column>", expression = <expr>)` projections evaluated per row. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
 | `-state "<name> [object]"` | Runs a state machine and reports where it settled. The object is one `-instantiate` created, named as `%state` names it: a usage's name, a feature path to a part it holds (`Fleet::driver.r`), or the id the report prints (`#2`). Naming the machine the object exhibits attaches to its running machine rather than performing it again (a definition exhibited as several usages is refused with the usages to name instead); naming a usage whose definition alone was instantiated says which usage to `-instantiate` |
@@ -344,19 +348,27 @@ sysml model.sysml -render-document Reports::MassReport -doc-form html \
 
 The structure is ordinary semantic HTML — `<article>`, nested `<section>` whose heading levels
 follow the nesting, `<p>`, `<table>` with `<caption>`, `<thead>` and `<th scope="col">`,
-`<ul>`/`<ol>`, `<figure>` with `<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`,
-`<code>`, `<a>` inline. Styling hooks are a small `sysml-` class vocabulary (`sysml-document`,
-`sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
-`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin), and the
-model facts ride alongside on `data-` attributes: the content kind and name, the query behind a
-table or list, the group-by column, each row's or item's selected element and its element kind
+`<ul>`/`<ol>`, `<dl>` with `<dt>`/`<dd>`, `<figure>` with `<figcaption>`, `<nav>` for the
+contents, and `<em>`, `<strong>`, `<code>`, `<a>` inline. Styling hooks are a small `sysml-` class
+vocabulary (`sysml-document`, `sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`,
+`sysml-value`, `sysml-list`, `sysml-item`, `sysml-definitions`, `sysml-entry`, `sysml-term`,
+`sysml-description`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin),
+and the model facts ride alongside on `data-` attributes: the content kind and name, the query
+behind a table, list or definitions block, the group-by column, each row's, item's or entry's
+selected element and its element kind
 (`partUsage`, `requirementDef`, …), each cell's projected column and value kind, and a diagram's
 view, kind and flow direction. Identifiers are anchors only, matching the Markdown anchors, so a
 `Ref` resolves within a page and across a rendered set.
 
 Diagram blocks embed their Mermaid source in `<pre class="mermaid">`, which a page that loads
-Mermaid renders as a diagram and any other page shows as source. The output loads nothing over the
-network, runs no JavaScript of its own, and is byte-identical between runs.
+Mermaid renders as a diagram and any other page shows as source. By default the output loads
+nothing over the network, runs no JavaScript of its own, and is byte-identical between runs.
+`-html-mermaid cdn` adds one `<script>` before `</body>` that loads a pinned Mermaid release from
+jsDelivr so a browser with network access draws the diagrams; `-html-mermaid <url>` loads the
+script from a URL of your own instead, such as a copy served beside the pages. The page still
+carries only the source, so it degrades to source wherever the script cannot load. The option
+does not combine with `-html-fragment`: a fragment has no page shell to hold the script, so the
+embedding page loads Mermaid itself.
 
 ### Styling the HTML
 
@@ -370,8 +382,10 @@ The default stylesheet is inlined in a standalone page and declared in a cascade
 Your own CSS is unlayered, so it wins on cascade origin rather than specificity — overriding a
 default needs neither `!important` nor a matching selector. Every default value comes from a
 `--sysml-*` custom property on `.sysml-document`, so retheming can be a handful of properties, and
-the renderer emits no `style` attributes to compete with. `-html-default-css` writes that sheet to
-copy from, `-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
+the renderer emits no `style` attributes to compete with. `-html-theme modern|print|report` layers
+a bundled theme over the default sheet, in the same layer, so your CSS still wins over both.
+`-html-default-css` writes that sheet to copy from (the theme's whole sheet with `-html-theme`),
+`-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
 `-html-no-default-css` drops it entirely. A `-render-documents` set writes one shared
 `sysml-document.css` that every page links, so the styling is edited in one place, and
 `-html-fragment` writes the `<article>` alone, with no page shell and no stylesheet, for embedding

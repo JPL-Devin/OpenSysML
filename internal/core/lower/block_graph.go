@@ -51,10 +51,25 @@ func isFlowNode(member ast.Node) bool {
 	case *ast.PerformActionNode:
 		return true
 	case *ast.Usage:
-		return m.Kind == ast.UsageAction && !m.IsBodyParameter && !m.IsAccept
+		return (m.Kind == ast.UsageAction && !m.IsBodyParameter && !m.IsAccept) || IsCaseNode(m)
 	default:
 		return false
 	}
+}
+
+// IsCaseNode reports whether a usage is a case nested in a body as a step of it:
+// an analysis usage (SysML v2 §7.22), performed as the calculation it is. Its own
+// body is the case's, run by the case, so the flow it is a node of lowers none of it.
+func IsCaseNode(u *ast.Usage) bool {
+	return u.Kind == ast.UsageAnalysisCase && !u.IsBodyParameter
+}
+
+// recordNodeScope records a node's own namespace, which its members resolve in.
+func recordNodeScope(graph *ActionGraph, node ast.Node, scope *symbols.Scope) {
+	if graph.Scopes == nil {
+		graph.Scopes = make(map[ast.Node]*symbols.Scope)
+	}
+	graph.Scopes[node] = scope
 }
 
 // outsideBlockFlow reports whether a member states a flow only an action body
@@ -78,6 +93,18 @@ func outsideBlockFlow(member ast.Node) bool {
 // node, a node per run of plain statements, a succession in declaration order.
 // nodeBody says the members are a nested action's own, so a parameter is its own.
 func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *ActionGraph {
+	return lowerBlockFlowWith(members, scope, func(graph *ActionGraph, nodes []ast.Node, member ast.Node) (Statement, bool) {
+		return blockStep(graph, nodes, member, scope, nodeBody)
+	})
+}
+
+// blockStepLowering lowers a member of a block's flow that is not a node of it,
+// given the graph and its action nodes, reporting whether it states a step.
+type blockStepLowering func(graph *ActionGraph, nodes []ast.Node, member ast.Node) (Statement, bool)
+
+// lowerBlockFlowWith lowers a block to its declaration-order flow, lowering the
+// members between action nodes with step.
+func lowerBlockFlowWith(members []ast.Node, scope *symbols.Scope, step blockStepLowering) *ActionGraph {
 	graph := &ActionGraph{
 		Scope:     scope,
 		Nodes:     make([]ast.Node, 0, len(members)),
@@ -108,7 +135,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 			lowerFlowNode(graph, actual, scope)
 			continue
 		}
-		stmt, states := blockStep(graph, nodes, actual, scope, nodeBody)
+		stmt, states := step(graph, nodes, actual)
 		if !states {
 			continue
 		}
@@ -142,6 +169,12 @@ func recordBlockNodes(graph *ActionGraph) {
 		}
 		graph.BlockNodes[node] = nodes
 	}
+}
+
+// BlockNodes returns the action nodes the blocks among stmts declare, in
+// declaration order: the nodes a body's performance runs as subperformances.
+func BlockNodes(stmts []Statement) []ast.Node {
+	return blockNodesOf(stmts, nil)
 }
 
 // blockNodesOf appends the action nodes the blocks among stmts declare, in
@@ -268,6 +301,10 @@ func lowerFlowNode(graph *ActionGraph, node ast.Node, scope *symbols.Scope) {
 				Node:        n,
 				Scope:       scope,
 			}}
+			return
+		}
+		if IsCaseNode(n) {
+			recordNodeScope(graph, n, childScope(scope, n))
 			return
 		}
 		lowerNestedNode(graph, n, childScope(scope, n))

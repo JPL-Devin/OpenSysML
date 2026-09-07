@@ -121,6 +121,9 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walkDeclaration(n.Members, n)
 		case *ast.Usage:
 			w.kermlRelationships(n.Relationships)
+			if n.CrossFeature != nil {
+				w.kermlRelationships(n.CrossFeature.Relationships)
+			}
 			w.sysmlDeclaration(n, n.Keyword)
 			w.keywordAsName(n.Ident)
 			w.requirementConstraint(n)

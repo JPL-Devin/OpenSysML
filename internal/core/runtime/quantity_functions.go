@@ -8,17 +8,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// Reasons the domain library's calculations this runtime does not evaluate are
-// reported with, named per representation the runtime lacks.
-const (
-	noMeasurementRefValue = "a measurement reference is a library declaration, not a value the evaluator " +
-		"passes as an argument; write the quantity as `num [unit]`"
-	noTensorQuantity = "a tensor quantity has no representation: the runtime has no tensor value kind, " +
-		"and TensorCalculations gives its calculations no bodies to compute one by"
-	noCoordinateTransformation = "a coordinate transformation has no representation: a coordinate frame is a " +
-		"library declaration, not a value, and transform has no body applying origin and basisDirections"
-)
-
 // init registers the Quantities and Units domain library's calculation packages:
 // computed over the quantity or vector representation, or unevaluable by name.
 func init() {
@@ -31,7 +20,7 @@ func init() {
 // registerQuantityCalculations registers QuantityCalculations over the quantity
 // representation; `sum` folds in the first element's unit, not the body's unvalued `zero`.
 func registerQuantityCalculations() {
-	registerUnevaluable("QuantityCalculations::[", []declaredParam{param("num"), param("mRef")}, noMeasurementRefValue)
+	registerValueFunction("QuantityCalculations::[", []string{"num", "mRef"}, 2, quantityOf)
 	registerValueFunction("QuantityCalculations::isZero", []string{"x"}, 1, quantityPredicate(0))
 	registerValueFunction("QuantityCalculations::isUnit", []string{"x"}, 1, quantityPredicate(1))
 	registerValueFunction("QuantityCalculations::abs", []string{"x"}, 1, quantityMagnitudeUnary(numericAbs))
@@ -58,30 +47,30 @@ func registerQuantityCalculations() {
 	registerValueFunction("QuantityCalculations::ToDimensionOneValue", []string{"x"}, 1, toDimensionOneValue)
 	registerValueFunction("QuantityCalculations::sum", []string{"collection"}, 0, quantityAggregate(ast.OpAdd))
 	registerValueFunction("QuantityCalculations::product", []string{"collection"}, 0, quantityAggregate(ast.OpMul))
-	registerUnevaluable("QuantityCalculations::ConvertQuantity", []declaredParam{param("x"), param("targetMRef")}, noMeasurementRefValue)
+	registerValueFunction("QuantityCalculations::ConvertQuantity", []string{"x", "targetMRef"}, 2, convertQuantity)
 }
 
-// registerMeasurementRefCalculations registers MeasurementRefCalculations, all
-// of which take a measurement reference as an argument.
+// registerMeasurementRefCalculations registers MeasurementRefCalculations over
+// the measurement reference and coordinate frame values.
 func registerMeasurementRefCalculations() {
-	registerUnevaluable("MeasurementRefCalculations::*", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::/", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::**", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::^", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame*", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::CoordinateFrame/", []declaredParam{param("x"), param("y")}, noMeasurementRefValue)
-	registerUnevaluable("MeasurementRefCalculations::ToString", []declaredParam{param("x")}, noMeasurementRefValue)
+	registerValueFunction("MeasurementRefCalculations::*", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpMul))
+	registerValueFunction("MeasurementRefCalculations::/", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpDiv))
+	registerValueFunction("MeasurementRefCalculations::**", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
+	registerValueFunction("MeasurementRefCalculations::^", []string{"x", "y"}, 2, measurementRefArithmetic(ast.OpPow))
+	registerValueFunction("MeasurementRefCalculations::CoordinateFrame*", []string{"x", "y"}, 2, frameArithmetic(ast.OpMul))
+	registerValueFunction("MeasurementRefCalculations::CoordinateFrame/", []string{"x", "y"}, 2, frameArithmetic(ast.OpDiv))
+	registerValueFunction("MeasurementRefCalculations::ToString", []string{"x"}, 1, measurementRefToString)
 }
 
 // anonymous is an `in : Type` parameter: it has no name and binds by position only.
 const anonymous = ""
 
 // registerVectorCalculations registers VectorCalculations over vectors and vector
-// quantities; those needing a measurement reference value or a tensor are named.
+// quantities; those needing a tensor are named.
 // A parameter declared `in : Type` under a VectorFunctions general takes that
 // general's parameter name (KerML implicit redefinition); otherwise it is anonymous.
 func registerVectorCalculations() {
-	registerUnevaluable("VectorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noMeasurementRefValue)
+	registerValueFunction("VectorCalculations::[", []string{"elements", "mRef"}, 2, vectorQuantityOf)
 	registerValueFunction("VectorCalculations::isZeroVectorQuantity", []string{"v"}, 1, vectorIsZero)
 	registerValueFunction("VectorCalculations::isUnitVectorQuantity", []string{anonymous}, 1, vectorIsUnit)
 	registerValueFunction("VectorCalculations::+", []string{"v", "w"}, 2, vectorAdd)
@@ -93,30 +82,30 @@ func registerVectorCalculations() {
 	registerValueFunction("VectorCalculations::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
 	registerValueFunction("VectorCalculations::vectorScalarQuantityDiv", []string{anonymous, anonymous}, 2, vectorScalarQuantityDiv)
 	registerValueFunction("VectorCalculations::inner", []string{"v", "w"}, 2, vectorInner)
-	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
+	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noOuterProductType)
 	registerValueFunction("VectorCalculations::norm", []string{"v"}, 1, vectorNorm)
 	registerValueFunction("VectorCalculations::angle", []string{"v", "w"}, 2, vectorAngle)
-	registerUnevaluable("VectorCalculations::transform",
-		[]declaredParam{param("transformation"), param("sourceVector")}, noCoordinateTransformation)
+	registerValueFunction("VectorCalculations::transform", []string{"transformation", "sourceVector"}, 2, transformVector)
 }
 
-// registerTensorCalculations registers TensorCalculations as unevaluable: the
-// runtime has no tensor value.
+// registerTensorCalculations registers TensorCalculations over the tensor quantity
+// representation; the products the library states no contraction for, and the
+// transformation needing a frame, are named.
 func registerTensorCalculations() {
-	registerUnevaluable("TensorCalculations::[", []declaredParam{param("elements"), param("mRef")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::isZeroTensorQuantity", []declaredParam{param("x")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::isUnitTensorQuantity", []declaredParam{param("x")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::+", []declaredParam{param("x"), param("y")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::-", []declaredParam{param("x"), param("y")}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarQuantityTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarQuantityMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
+	registerValueFunction("TensorCalculations::[", []string{"elements", "mRef"}, 2, tensorOf)
+	registerValueFunction("TensorCalculations::isZeroTensorQuantity", []string{"x"}, 1, tensorIsZero)
+	registerValueFunction("TensorCalculations::isUnitTensorQuantity", []string{"x"}, 1, tensorIsUnit)
+	registerValueFunction("TensorCalculations::+", []string{"x", "y"}, 2, tensorAdditive(ast.OpAdd))
+	registerValueFunction("TensorCalculations::-", []string{"x", "y"}, 2, tensorAdditive(ast.OpSub))
+	registerValueFunction("TensorCalculations::scalarTensorMult", []string{anonymous, anonymous}, 2, scalarTensorMult(0, 1))
+	registerValueFunction("TensorCalculations::TensorScalarMult", []string{anonymous, anonymous}, 2, scalarTensorMult(1, 0))
+	registerValueFunction("TensorCalculations::scalarQuantityTensorMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(0, 1))
+	registerValueFunction("TensorCalculations::TensorScalarQuantityMult", []string{anonymous, anonymous}, 2, scalarQuantityTensorMult(1, 0))
+	registerUnevaluable("TensorCalculations::tensorVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorVectorMultDecl))
+	registerUnevaluable("TensorCalculations::vectorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(vectorTensorMultDecl))
+	registerUnevaluable("TensorCalculations::tensorTensorMult", []declaredParam{param(anonymous), param(anonymous)}, noContractionConvention(tensorTensorMultDecl))
 	registerUnevaluable("TensorCalculations::transform",
-		[]declaredParam{param("transformation"), param("sourceTensor")}, noCoordinateTransformation)
+		[]declaredParam{param("transformation"), param("sourceTensor")}, noTensorTransformation)
 }
 
 // registerAngleFunction adds a trigonometric function of an angle in radians,
@@ -165,7 +154,7 @@ func angleArgument(ctx *Context, val Value) (semantics.Value, bool) {
 		if q.Unit.Term.Scale == semantics.UnitScale(1) {
 			return q.Num, true
 		}
-		return semantics.Value{Kind: semantics.ValReal, Real: q.baseMagnitude()}, true
+		return semantics.Value{Kind: semantics.ValReal, Real: q.BaseMagnitude()}, true
 	}
 	return semantics.Value{}, false
 }
@@ -292,11 +281,15 @@ func quantityEquality(name string, _ *Context, args []Value) (Value, error) {
 
 // quantityExtremum is max (op '>') or min (op '<'): the winning operand as written,
 // `max(1 [m], 200 [cm])` being `200 [cm]`, and the first where the two are equal.
+// Its result names a unit, so unlike a comparison a bare zero adopts none here.
 func quantityExtremum(op ast.OperatorKind) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
 		x, y, err := quantityArgs(name, args)
 		if err != nil {
 			return Value{}, err
+		}
+		if _, err := y.ConvertTo(x.Unit); err != nil {
+			return Value{}, fmt.Errorf("function %s: %w", name, err)
 		}
 		yWins, err := compareQuantities(op, y, x)
 		if err != nil {

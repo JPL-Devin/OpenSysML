@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var (
@@ -28,7 +30,7 @@ var (
 
 	// ErrDivisionByZero is returned when a division or remainder has a zero
 	// divisor. It is the answer to the expression, not a missing declaration.
-	ErrDivisionByZero = errors.New("division by zero")
+	ErrDivisionByZero = semantics.ErrDivisionByZero
 
 	// ErrMultiplicityViolation is returned when a feature value access/assignment violates multiplicity bounds.
 	ErrMultiplicityViolation = errors.New("multiplicity violation")
@@ -88,6 +90,10 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrConflictingResultExpressions is returned when a calc or constraint owns or
+	// inherits more than one result expression (KerML 8.3.4.8); no body is chosen.
+	ErrConflictingResultExpressions = errors.New("more than one result expression, owned or inherited")
+
 	// ErrUnsupportedOperator is returned when an operator has no runtime
 	// evaluation, so an expression naming it fails rather than yielding nothing.
 	ErrUnsupportedOperator = errors.New("unsupported operator")
@@ -112,6 +118,14 @@ var (
 	// ErrCalcExternalAssignment is returned when a calc body assigns to a name it
 	// does not declare itself, which would make the calculation impure.
 	ErrCalcExternalAssignment = errors.New("assignment outside the calculation body")
+
+	// ErrStatementNotExecutable is returned when a body reaches a member the
+	// lowering marked as not executable in that kind of body (lower.Unsupported).
+	ErrStatementNotExecutable = errors.New("statement not executable")
+
+	// ErrCalcUsageRecursion is returned when a calc or analysis usage's body reads
+	// the usage itself: bound once, it would run itself without end.
+	ErrCalcUsageRecursion = errors.New("a calc usage runs itself")
 
 	// ErrReturnOutsideCalc is returned when a `return` is executed by a host that
 	// has no result to return, an action node's body.
@@ -146,6 +160,10 @@ var (
 	// no value of the type the trigger takes — the judgement validation makes of it.
 	ErrTimeTriggerType = errors.New("time trigger argument of the wrong type")
 
+	// ErrActionResultParameter is returned when an action to perform declares a
+	// `return` parameter, which only a function or expression owns.
+	ErrActionResultParameter = errors.New("action declares a return parameter")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// the run's calc depth budget, which an unbounded recursion would otherwise
 	// do until the process ran out of stack.
@@ -158,6 +176,10 @@ var (
 	// ErrStateEventLimitExceeded is returned when state processing exceeds its
 	// event budget.
 	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
+
+	// ErrNoInitialState is returned when a state machine initializes with no
+	// entry into its states: it states no `entry; then <state>;`.
+	ErrNoInitialState = errors.New("no initial state found")
 
 	// ErrStatePerformanceOccurrence is returned when an exhibited machine cannot
 	// read or write the occurrence of its state usage.
@@ -224,9 +246,8 @@ var (
 	ErrNotAQuantity = errors.New("not a quantity expression")
 
 	// ErrIncommensurableUnits is returned when an operation combines quantities
-	// whose units measure different things, or whose conversion is not derivable
-	// from the library. It is never answered by comparing magnitudes.
-	ErrIncommensurableUnits = errors.New("incommensurable units")
+	// whose units measure different things; see semantics.ErrIncommensurableUnits.
+	ErrIncommensurableUnits = semantics.ErrIncommensurableUnits
 
 	// ErrUnitRoot is returned when the root of a quantity is taken whose unit
 	// has none: `sqrt(9 [m])`, since no unit squares to a metre.
@@ -396,6 +417,8 @@ type NoValueError struct {
 	// Ref is the written name whose read found no value, so a caller can tell a
 	// read of its own expression from one made while evaluating a default.
 	Ref *ast.QualifiedName
+	// Symbol is the feature declaration the read reached, when it is known.
+	Symbol *symbols.Symbol
 }
 
 func (e *NoValueError) Error() string {
@@ -407,12 +430,20 @@ func (e *NoValueError) Unwrap() error { return ErrNoValue }
 // UnboundSubjectError reports a check whose subject nothing supplied, naming
 // the subject and how a caller supplies one.
 type UnboundSubjectError struct {
-	Kind    string // "constraint" or "requirement"
+	Kind    string // "constraint", "requirement", "analysis" or "objective"
 	Element string // name of the element declaring the subject
 	Subject string // name of the subject parameter
 }
 
 func (e *UnboundSubjectError) Error() string {
+	switch e.Kind {
+	case "analysis":
+		return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`) or run it on an object",
+			e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject)
+	case "objective":
+		return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`) or return a result from the case for it to default to",
+			e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject)
+	}
 	return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`), check it on an object, or assert `satisfy %s by <element>`",
 		e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject, e.Element)
 }
@@ -466,6 +497,7 @@ func (e *OperandTypeError) Unwrap() error { return ErrTypeMismatch }
 // calc frames it propagated through so a recursion reports a depth rather than
 // one wrapped line per frame.
 type CalcFrameError struct {
+	Kind   string // the notation keyword of the calc: `calc` or `analysis`
 	Calc   string // the calc the error surfaced from
 	Frames int    // calc frames the error propagated through
 	Err    error
@@ -477,9 +509,9 @@ type CalcFrameError struct {
 
 func (e *CalcFrameError) Error() string {
 	if e.Frames > 1 {
-		return fmt.Sprintf("calc %s: … %d frames: %v", e.Calc, e.Frames, e.Err)
+		return fmt.Sprintf("%s %s: … %d frames: %v", e.Kind, e.Calc, e.Frames, e.Err)
 	}
-	return fmt.Sprintf("calc %s: %v", e.Calc, e.Err)
+	return fmt.Sprintf("%s %s: %v", e.Kind, e.Calc, e.Err)
 }
 
 func (e *CalcFrameError) Unwrap() error { return e.Err }
@@ -487,11 +519,12 @@ func (e *CalcFrameError) Unwrap() error { return e.Err }
 // calcFrame adds one calc frame to err. A calc the chain already passed through
 // is counted rather than wrapped again, so a recursion reports a depth instead
 // of one line per frame, while a calc calling another still names both.
-func calcFrame(calc string, err error) error {
+func calcFrame(kind, calc string, err error) error {
 	var framed *CalcFrameError
 	if errors.As(err, &framed) {
 		if framed.calcs[calc] {
 			return &CalcFrameError{
+				Kind:   kind,
 				Calc:   calc,
 				Frames: framed.Frames + 1,
 				Err:    framed.Err,
@@ -503,13 +536,13 @@ func calcFrame(calc string, err error) error {
 			calcs[name] = true
 		}
 		calcs[calc] = true
-		return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: calcs}
+		return &CalcFrameError{Kind: kind, Calc: calc, Frames: 1, Err: err, calcs: calcs}
 	}
-	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
+	return &CalcFrameError{Kind: kind, Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
 }
 
 // calcDefaultError reports err raised evaluating calc's default for param as one
 // frame of calc, so a default re-invoking its own calc collapses into a count.
-func calcDefaultError(calc, param string, err error) error {
-	return calcFrame(calc, fmt.Errorf("default for parameter %q: %w", param, err))
+func calcDefaultError(kind, calc, param string, err error) error {
+	return calcFrame(kind, calc, fmt.Errorf("default for parameter %q: %w", param, err))
 }

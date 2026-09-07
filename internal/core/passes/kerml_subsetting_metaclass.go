@@ -36,7 +36,7 @@ type kermlSubsettingMetaclassChecker struct {
 
 func (c *kermlSubsettingMetaclassChecker) check(sym *symbols.Symbol) {
 	usage, ok := w8cUsageOf(sym)
-	if !ok || usage.Keyword != "feature" {
+	if !ok || !sym.IsFeature() {
 		return
 	}
 	for _, rel := range usage.Relationships {
@@ -53,7 +53,7 @@ func (c *kermlSubsettingMetaclassChecker) check(sym *symbols.Symbol) {
 				target = resolved
 			}
 		}
-		if target.Kind != symbols.SymbolKerMLType {
+		if target.Kind != symbols.SymbolKerMLType && !target.Kind.IsDefinition() {
 			continue
 		}
 		c.diags = append(c.diags, Diagnostic{

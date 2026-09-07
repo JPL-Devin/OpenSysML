@@ -45,9 +45,10 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (87 cases: 20 original, 45 added along the *unreached* axis
-   described below, 13 from a second sweep, and 7 body-position cases
-   `g61`–`g67` from the constraint census described under `semantic/`). For productions our corpus exercises in the
+1. **`grammar/` — grammar mutation** (91 cases: 20 original, 45 added along the *unreached* axis
+   described below, 13 from a second sweep, 7 body-position cases
+   `g61`–`g67` from the constraint census described under `semantic/`, the two second-result-expression
+   bodies `g69`/`k20`, and the two name-before-keyword members `g70`/`k21`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -110,7 +111,7 @@ systematically from four sources, one subdirectory each:
    pilot's grammar rejects before its validator would), and a constructed payload whose `new`
    names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 234
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 285
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -158,26 +159,59 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-236 case(s): 228 both reject, 0 only the pilot rejects, 8 only we reject, 0 both accept
+285 case(s): 276 both reject, 0 only the pilot rejects, 9 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 87 | 87 | 0 | 0 | 0 |
-| semantic | 106 | 98 | 0 | 8 | 0 |
+| grammar | 91 | 91 | 0 | 0 | 0 |
+| semantic | 151 | 142 | 0 | 9 | 0 |
 | xpect | 35 | 35 | 0 | 0 | 0 |
 
-The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
-the pinned pilot does not implement; they are not permissiveness gaps on our side and are
-adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119, to
+Eight of the nine ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
+the pinned pilot does not implement; the ninth, `s81`, is a non-Boolean guard on an action body's
+guarded succession, which the pinned pilot's `validateTransitionFeatureMembershipGuardExpression`
+leaves silent once the standard library types the guard (see the gap table below). None is a
+permissiveness gap on our side; each is adjudicated as a pilot gap in the differential. The corpus grew from 79 cases to 119, to
 120 with `g60` (an `alias` named by a keyword), to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it, to
 228 with the three send-action cases, to 229 with `s46`, to 231 with `s47` and `g68`, to 234 with the
 three trigger-argument typing cases (`s48`–`s50`), to 235 with the enumerated value typed by
-its literal (`p18-enum-value-typed-outside-enumeration`), and to 236 with the one typed by an
-expression body (`s51`). The KerML constraints in that
+its literal (`p18-enum-value-typed-outside-enumeration`), to 236 with the one typed by an
+expression body (`s51`), to 237 with the composite variant port (`s52`), to 238 with the
+non-Boolean guarded-succession guard (`s81`), to 241 with the three result-expression ownership cases (`s82`, `s83`,
+`k43`: a specialization, a redefining usage and a typed expression each stating a body over an
+inherited result expression), to 243 with the two reference-subsetting ones (`s84`, `k44`), and to 245 with `g69`/`k20` (a calculation or
+function body listing a second bare expression: the pinned `CalculationBodyPart`/`FunctionBodyPart` admit one
+`ResultExpressionMember`, so the pilot stops at the second expression, `missing '}' at 'x'`, while we read it as a
+second result expression under the same one-result rule), and to 246 with `s85` (a viewpoint definition, a
+requirement and so a constraint, inheriting result expressions from two generals), and to 253 with the seven KerML census cases (`k45`–`k49`, `s86`, `s87`:
+an annotating element annotating itself, a three-ended binding, a conjugated feature or structure
+without its type or default supertype, a chain through an alias to another type's feature, and
+an `end` with a direction or a derived/abstract modifier), all landing both-reject, and to 256 with the end-feature rules (`k50`, an end that declares its
+cross feature inline and also `crosses` another; `k51`, a `return` parameter owned by a classifier;
+`k52`, a type with two conjugators), to 257 with `k53` (a Boolean expression, a feature like any
+other, subsetting a data type), and to 259 with `g70`/`k21` (a name written ahead of a usage or
+feature keyword, `foo attribute bar : A;`: no production puts a name before its kind keyword, so the
+pilot stops at the keyword, `no viable alternative at input 'attribute'`, while we report the stray
+name as `expected a body member` — a shape the parser once accepted silently as a member named
+`foo`, dropping `bar`), and to 263 with the inherited case-role cases (`s89`/`s90`, a case or
+requirement definition specializing two generals that each declare an objective or subject;
+`s91`/`s92`, one that references a second objective or subject through a referenced usage — all
+four both-reject, the pilot's `Only one objective/subject is allowed` counting inherited roles),
+and to 265 with `k54`/`s88` (a cross feature declared ahead of its end's kind keyword and typed
+by a subtype of the end's type: `validateFeatureCrossFeatureType` asks for the same type, so both
+reject), and to 266 with `s93` (an assertion written outside `part h : H { assert q; }` as `assert h.q;`
+where `H::q` is a part: the unnamed assertion derives no member name, so `h.q` reaches the part in
+both tools and neither accepts it as a constraint), and to 285 with the keyword-first relationship
+ends (`k55`–`k73`: a `subtype`, `subclassifier`, `typing`, `subset`, `redefinition`, `conjugate`,
+`inverse`, `disjoint` or `featuring` member whose source or target names a package, or a class or
+feature where the metaclass admits only a feature or a classifier — the pilot's typed
+cross-references fail to link, `Couldn't resolve reference to Type|Classifier|Feature '…'`, and the
+type tier now judges both ends of the member by the kinds the declaration clauses already require).
+The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
 named-argument validation that landed alongside closed one of them (`k33`), the constructor
 argument checking of the send-action family closed another (`k34`), the cross-subsetting
@@ -219,7 +253,7 @@ when it was first written, six were closed by the validation work itself — `p0
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 234 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 285 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -284,7 +318,7 @@ reading of the specification.
 | `validateItemUsageType`, `validatePartUsageType`, `validatePartUsagePartDefinition` | `checkItemUsage` and `checkPartUsage` are commented out in `SysMLValidator.xtend`; the generic `checkUsage` requires only a `Classifier`. `item i : AD;` (an attribute definition) is rejected as `validateOccurrenceUsageType` (`An occurrence, item or part must be typed by occurrence definitions.`, which we also report), and `part p : ID;` (an item definition) is accepted by both implementations. |
 | `validateOperatorExpressionQuantity` | Reported as a **warning** (`Should be a measurement reference (unit).`), and warnings do not count as rejection on either side. |
 | `validateUseCaseUsageReference` | Only the name and message constants are declared; `checkUseCaseUsage` implements the typing rule (`validateUseCaseUsageType`, `s38`) and nothing reads `INVALID_USE_CASE_USAGE_REFERENCE`. The `include` form is covered by `validateIncludeUseCaseUsageReference` (`s20`). |
-| `validateTransitionFeatureMembershipGuardExpression` | The error path (`Must be a Boolean expression.`) exists and the pilot's `TransitionUsage_invalid.sysml.xt` expects it for `if "test"`, but that fixture loads a reduced library without `ScalarValues`. With the full standard library the pinned validator accepts `first s1 if "test" then s2` and `if 1 + 2` — the same shape as the fixture — while we reject both (`transition guard must be Boolean, found String`). Recorded as a question in [omg-issues.md](omg-issues.md#a-non-boolean-transition-guard-is-accepted-with-the-full-library-loaded-pilot-2026-07). |
+| `validateTransitionFeatureMembershipGuardExpression` | The error path (`Must be a Boolean expression.`) exists and the pilot's `TransitionUsage_invalid.sysml.xt` expects it for `if "test"`, but that fixture loads a reduced library without `ScalarValues`. With the full standard library the pinned validator accepts `first s1 if "test" then s2`, `if 1 + 2`, and every other non-Boolean guard we tried in a state body (`accept … if 1 then`, `transition if 2.5 then`) or an action body (`first a if "go" then b`, a decision's `if e then`, an enumeration literal, a `String`-valued calc) — while we reject them all (`transition guard must be Boolean, found String`; `s81` pins the action-body form as ours-only). The cause is in `ExpressionAdapter`: a guard implicitly redefines the library's `TransitionPerformance::guard` (`bool guard[*]`), so its result specializes `Boolean` by construction and the validator's `isBoolean` test is vacuous. Recorded in [omg-issues.md](omg-issues.md#a-non-boolean-transition-guard-is-accepted-with-the-full-library-loaded-pilot-2026-07). |
 
 ### Constraints without a constructible violating model
 
@@ -303,16 +337,21 @@ isolate it. The reason is recorded so a later round does not repeat the search.
   `validateAnnotationAnnotatedElementOwnership` (the grammar produces annotations only in the
   owned-or-owning shapes the constraints require), `validateFeatureHasType` (with the library
   loaded every feature gets an implicit type; the library-less Xpect negative is noted under
-  `xpect/` above), `validateTypeAtMostOneConjugator`, and the operator-name constraints for
+  `xpect/` above), and the operator-name constraints for
   collect, select, index and feature-chain expressions (the parser fixes the operator name).
+  `validateTypeAtMostOneConjugator` was listed here until `k45` (`classifier C ~A ~B;`): the
+  pilot grammar rejects the second `~` as a syntax error, so the named constraint never fires
+  there, while OpenSysML parses the form and reports it as a constraint error.
 - Guarded by the grammar: `validateFlowItemFeature` (a flow declaration admits one payload),
   `validateEndFeatureMembershpIsEnd` (the pilot's spelling), `validateFeatureEndNoDirection`,
   `validateFeatureEndNotDerivedAbstractCompositeOrPortion` (an `end` prefix excludes the
   conflicting prefixes), `validateMultiplicityRangeBounds` (bound order and ownership),
   `validateParameterMembershipOwningType`, `validateParameterMembershipDirection`,
-  `validateReturnParameterMembershipOwningType`, `validateResultExpressionMembershipOwningType`
+  `validateResultExpressionMembershipOwningType`
   (parameter and result memberships cannot be spelled outside a behavior, step, function or
-  expression), `validateConstructorExpressionOwnedFeatures`,
+  expression; `validateReturnParameterMembershipOwningType` was listed with them until `k44`,
+  `return` in a classifier body, which the pilot rejects at the grammar and OpenSysML parses and
+  reports as a constraint error), `validateConstructorExpressionOwnedFeatures`,
   `validateInvocationExpressionOwnedFeatures`, `validateInstantiationExpressionInstantiatedType`,
   `validateInstantiationExpressionResult`, `validateFeatureReferenceExpressionResult`,
   `validateFlowEndIsEnd`, `validateFlowEndNestedFeature` and `validateFlowEndOwningType` (the

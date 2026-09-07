@@ -11,6 +11,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
@@ -91,6 +92,7 @@ type Session struct {
 	// sequence the context built next takes over.
 	replaced   *runtime.Context
 	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
+	libSource  libs.Source                  // the library files idx holds, for their spans' text
 	idxVersion int                          // document version idx holds, 0 when it holds none
 	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
@@ -1120,14 +1122,17 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
+	model.SetSourceText(s.sessionSourceText())
 	ctx := runtime.NewContext(model, resolver, s.budgets.MaxSteps)
 	if err := ctx.SetBudgets(s.budgets); err != nil {
 		return nil, err
 	}
 	// Give the runtime the buffer's text, so an error about a declaration reports
-	// the line it was submitted on rather than a byte offset.
+	// the line it was submitted on rather than a byte offset, and the buffer's
+	// scope tree, so a carried object is rebound to the symbols the prompt reaches.
 	for _, doc := range s.sessionDocs() {
 		ctx.RegisterSource(source.New(doc.Name, doc.Content))
+		ctx.RegisterScope(doc.Scope)
 	}
 	ctx.AdoptIdentities(s.replaced)
 	s.rtCtx = ctx
@@ -1150,7 +1155,7 @@ func (s *Session) symbolIndex() *symbols.Index {
 		return nil
 	}
 	if s.idx == nil {
-		s.idx = model.NewIndexWithStdlib()
+		s.idx, s.libSource = model.NewIndexWithStdlib()
 	} else if s.idxVersion == doc.Version {
 		return s.idx
 	}

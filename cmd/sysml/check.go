@@ -21,6 +21,7 @@ type checks struct {
 	requirements stringSlice
 	satisfy      satisfyTargets
 	calcs        stringSlice
+	analyses     stringSlice
 	queries      stringSlice
 	actions      stringSlice
 	states       stringSlice
@@ -48,7 +49,7 @@ func (a *advanceTime) Set(value string) error {
 // is reported rather than leaving a script at a prompt it cannot answer.
 func (c *checks) requested() bool {
 	return c.validate || c.jsonOut || c.advance.given || c.satisfy.given || len(c.instantiate) > 0 ||
-		len(c.constraints) > 0 || len(c.requirements) > 0 || len(c.calcs) > 0 ||
+		len(c.constraints) > 0 || len(c.requirements) > 0 || len(c.calcs) > 0 || len(c.analyses) > 0 ||
 		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
@@ -56,7 +57,7 @@ func (c *checks) requested() bool {
 // against how to report the answer.
 func (c *checks) checksOnly() bool {
 	return c.validate || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
-		len(c.requirements) > 0 || len(c.satisfy.targets) > 0 || len(c.calcs) > 0 ||
+		len(c.requirements) > 0 || len(c.satisfy.targets) > 0 || len(c.calcs) > 0 || len(c.analyses) > 0 ||
 		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
@@ -253,6 +254,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, invocation := range c.calcs {
 		rep.verdict(sess.RunCalc(invocation))
+	}
+	for _, invocation := range c.analyses {
+		rep.verdict(sess.RunAnalysis(invocation))
 	}
 	for _, invocation := range c.queries {
 		rep.verdict(sess.RunDocumentQuery(invocation))

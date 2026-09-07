@@ -1,0 +1,11 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="A"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="exposure" ref=true direction="none" composite=false derived=false ordered=false nonunique=false default=true
+              (LiteralString value="\"4\"")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="margin" ref=false direction="none" composite=false derived=true ordered=false nonunique=false default=true initial=true
+              (LiteralReal value="0.0"))))))))

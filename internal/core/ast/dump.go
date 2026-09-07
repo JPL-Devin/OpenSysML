@@ -298,8 +298,8 @@ func dumpNamespaceMember(b *strings.Builder, n Node, depth int) bool {
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))
 		return true
 	case *RelationshipMember:
-		fmt.Fprintf(b, `(RelationshipMember kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
-			v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
+		fmt.Fprintf(b, `(RelationshipMember visibility=%q kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
+			visibilityString(v.Visibility), v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
 		writeChildren(b, depth, v.Members)
 		return true
 	case *Comment:
@@ -352,6 +352,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsParallel {
 			b.WriteString(` parallel=true`)
 		}
+		if v.IsAll {
+			b.WriteString(` all=true`)
+		}
 		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
 		return true
 	case *Usage:
@@ -391,6 +394,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		}
 		if v.IsParallel {
 			b.WriteString(` parallel=true`)
+		}
+		if v.IsAll {
+			b.WriteString(` all=true`)
 		}
 		if kw := v.Portion.Keyword(); kw != "" {
 			fmt.Fprintf(b, ` %s=true`, kw)
@@ -432,6 +438,22 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *CrossFeatureMember:
 		fmt.Fprintf(b, `(CrossFeatureMember name=%q`, identName(v.Ident))
+		if v.Direction != DirNone {
+			fmt.Fprintf(b, ` direction=%q`, v.Direction.String())
+		}
+		for _, flag := range []struct {
+			name string
+			set  bool
+		}{
+			{"derived", v.IsDerived}, {"abstract", v.IsAbstract}, {"variation", v.IsVariation},
+			{"composite", v.IsComposite}, {"portion", v.IsPortion}, {"variable", v.IsVariable},
+			{"constant", v.IsConstant}, {"ref", v.IsReference},
+			{"ordered", v.IsOrdered}, {"nonunique", v.IsNonunique},
+		} {
+			if flag.set {
+				fmt.Fprintf(b, ` %s=true`, flag.name)
+			}
+		}
 		var kids []Node
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
@@ -917,9 +939,6 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)
-	}
-	if v.ValueMultiplicity != nil {
-		kids = append(kids, v.ValueMultiplicity)
 	}
 	for _, ce := range v.ConnectorEnds {
 		kids = append(kids, ce)

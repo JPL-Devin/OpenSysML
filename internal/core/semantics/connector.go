@@ -436,8 +436,8 @@ func (m *Model) BinaryConnectorExcessEnds(sym *symbols.Symbol) ([]ast.Node, int)
 		switch {
 		case end != nil && end.Decl != nil:
 			excess = append(excess, end.Decl)
-		case usage != nil && i < len(usage.ConnectorEnds) && usage.ConnectorEnds[i] != nil:
-			excess = append(excess, usage.ConnectorEnds[i])
+		case clauseEndNode(usage, i) != nil:
+			excess = append(excess, clauseEndNode(usage, i))
 		}
 	}
 	if len(excess) == 0 {
@@ -511,21 +511,11 @@ func ownedRelatedFeatureCount(usage *ast.Usage) int {
 			count++
 		}
 	}
-	if usage.Kind == ast.UsageBinding {
-		for _, rel := range usage.Relationships {
-			if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
-				count++
-			}
-		}
-		if usage.Value != nil {
-			count++
-		}
-	}
 	return count
 }
 
 // endReferencesFeature reports whether an effective end references a feature, through
-// its own reference clause or its owner's `connect` clause when it has no symbol.
+// its own reference clause or its owner's `connect`/binding clause when it has no symbol.
 func endReferencesFeature(end connectorEnd) bool {
 	if end.feature != nil {
 		switch d := end.feature.Decl.(type) {
@@ -537,7 +527,24 @@ func endReferencesFeature(end connectorEnd) bool {
 		return false
 	}
 	usage, ok := end.owner.Decl.(*ast.Usage)
-	return ok && end.index < len(usage.ConnectorEnds) && usage.ConnectorEnds[end.index].AttachedTarget() != nil
+	return ok && clauseEndTarget(usage, end.index) != nil
+}
+
+// clauseEndNode returns the connector end the clause states at position i:
+// `connect a to b`, `first a then b`, `bind a = b`.
+func clauseEndNode(usage *ast.Usage, i int) ast.Node {
+	if usage == nil || i < 0 || i >= len(usage.ConnectorEnds) || usage.ConnectorEnds[i] == nil {
+		return nil
+	}
+	return usage.ConnectorEnds[i]
+}
+
+// clauseEndTarget returns the feature the clause end at position i attaches to.
+func clauseEndTarget(usage *ast.Usage, i int) ast.Node {
+	if end, ok := clauseEndNode(usage, i).(*ast.ConnectorEnd); ok {
+		return end.AttachedTarget()
+	}
+	return nil
 }
 
 // referencesFeature reports whether rels carry a reference-subsetting clause.

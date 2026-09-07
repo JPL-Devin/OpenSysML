@@ -215,11 +215,11 @@ nor double-counted as two independent disagreements.
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/sysml-examples` | 99 | 95 | 7 | 0 | 0 | 0 | 7 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
+| `examples/pilot-corpora/kerml-examples` | 58 | 50 | 4 | 6 | 0 | 0 | 4 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 33 | 25 | 11 | 556 | 9 | 1 | 1 | 546 |
+| `examples` | 33 | 25 | 2 | 571 | 0 | 1 | 1 | 570 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **367** | **338** | **65** | **617** | **43** | **2** | **20** | **572** |
+| **Total** | **367** | **337** | **57** | **632** | **34** | **2** | **21** | **596** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -227,7 +227,8 @@ positives from the reference's **own** corpora: `pilot-examples` 16 → **7** an
 retired one more of `pilot-examples` by publishing the conforming type its
 [non-conforming redefinition](omg-issues.md) named, leaving 6, and the quantity-dimension error on
 `Analysis Examples/Dynamics.sysml`:13 — a published product bound to a return typed by another
-dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**. The
+dimension — takes it to **7**; the [unbound-parameter advisory](#the-unbound-parameter-advisory)
+then takes `kerml-examples` to **4**. Our diagnostics on those roots therefore fall 20 → **11**. The
 `examples` root carries 1, the non-standard-notation warning on the `junction` of
 `pseudostates-demo.sysml`, the one demo that keeps the pseudostate notation because no SysML v2
 spelling of it exists. It carried 64 before the demos were rewritten to standard notation: the
@@ -235,9 +236,41 @@ succession shorthands retired 30, removing `initial <state>;` and `transition <s
 retired 27 more, and the standard-notation round below retired the last 7. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **10**. `severity-only` (2) holds pairs of the same shape:
+reference corpora is **11** — of which one, the `Behaviors.kerml` advisory, is deliberate and
+adjudicated below rather than suspect. `severity-only` (2) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### The unbound-parameter advisory
+
+One invocation-argument policy now applies at a bare call and at an invocation heading a feature
+chain alike: an argument past the last input parameter is an error both implementations report
+(`Must correspond to one input parameter of the invoked type` on the pilot's side), and a
+default-less input left unbound is the advisory `unbound-parameter` — a warning in every
+conformance mode — that the pilot does not report at all. Before this round the omission was an
+error at a bare call and unreported at a chain head, so `A()` and `A().y` against
+`behavior A { in x; … }` were judged differently. KerML 1.0 §8.3.4.8.8 lists no
+`InvocationExpression` constraint on the count of arguments, the pinned validators are silent on
+every omission form (positional, named, `[1]`, `[1..*]`, calc, behavior, constructor, chain head)
+and the pinned evaluator forms and evaluates the call; the transcript is in
+[omg-issues.md](omg-issues.md#an-invocation-leaving-an-input-parameter-unbound-validates-clean-pilot-2026-07).
+
+The advisory reaches one file of the reference corpora, `kerml-examples/Simple Tests/Behaviors.kerml`,
+line 14: `var z = A().y;` — formerly exempt as a chain head — leaves `A`'s `in x` unbound,
+which the pilot's `validate-kerml` accepts and its `ParsingTests_Behaviors.kerml.xt` declares
+error-free. It is **ours, one-sided by design**: an advisory that the call cannot be evaluated,
+which the runtime confirms with `ErrUnboundParameter`, on a file that is nonetheless well formed.
+It is recorded in the pilot-corpora ratchet (`Behaviors.kerml` 0 → 1) and here, and it moves no
+Xpect row: the suite carries no `// ERROR` for the line and we report a warning, so the Xpect
+harness is 1268 agree / 57 disagree before and after, the 57 being the pre-existing rows.
+
+| Count | Before | Now |
+|---|---:|---:|
+| overall: fully agreeing | 338 | **337** |
+| overall: our diagnostics | 56 | **57** |
+| overall: only ours | 20 | **21** |
+| `kerml-examples`: fully agreeing | 51 | **50** |
+| `kerml-examples`: only ours | 3 | **4** |
 
 ### Standard-notation demo round
 
@@ -284,13 +317,11 @@ What remains is adjudicated as extension notation this project supports delibera
 - **`choice` and `junction`** — no SysML v2 production exists for pseudostates, so the notation stays
   supported and stays demonstrated. `pseudostates-demo.sysml` is now the only file that writes it, and
   says so; its 1 only-ours warning, 1 severity-only pair and 5 pilot rows are that file alone.
-- **`attribute :>> best = <expression>` and a second objective** (`solver-demo.sysml`,
-  `robot.sysml`, `disposal-team-demo/team.sysml`) — the trade-study contract this project reads
-  (`internal/core/solve/doc.go`). The
-  library binds `best`, so the reference reports `Cannot override a binding feature value` for the
-  expression to improve — since the feature-value overriding round below we report it too, so
-  those nine rows are agreement, not divergence — and it admits one objective per analysis case
-  where we improve several lexicographically: 1 + 1 `unmapped` rows that stay the reference's.
+- **a second objective** (`solver-demo.sysml`, `robot.sysml`) — the reference admits one
+  objective per analysis case where we improve several lexicographically
+  (`internal/core/solve/doc.go`): 1 + 1 `unmapped` rows that stay the reference's. The objective's
+  value itself draws no row since the objective-evaluation round below: it is stated as the
+  library's `eval` calculation, which both sides accept.
   The exemption is the analysis case alone; a `case`, `verification` or `use case` declaration
   with a second objective is reported as the reference reports it, since no other case kind has
   the lexicographic semantics.
@@ -307,14 +338,15 @@ adjudicated where they are rather than rewritten away.
 ### The team demo
 
 `examples/disposal-team-demo/team.sysml` was written to exercise notation the robot demo does not
-reach. The reference reports four rows on it; since the feature-value overriding round we report
-the `best` one too, and none of the other three is a rule of ours that is missing:
+reach. The reference reports three rows on it, and none is a rule of ours that is missing (a
+fourth, on the objective's `attribute :>> best = robotMass;`, was reported by both sides between the
+feature-value overriding round and the objective-evaluation round, which restated the objective as
+the library's `eval` calculation):
 
 | Row | The reference's reading | Verdict |
 |---|---|---|
 | `:29` (2 `warning: Bound features should have conforming types`) | `attribute payload : MassValue = sum(robots.mass) + sum(cradles.mass);` — the value is an operator expression, and the reference compares the argument types of the implicit binding | Same family as `BindingConnector_Invalid2.sysml.xt:42`: our `W9CBoundFeatureTypesPass` checks feature endpoints, and no numbered constraint was found for argument-level conformance on an expression |
 | `:117` (`error: Referent must be time varying.` + the same warning) | `assign accepted := accepted + 1;` in a state's entry action, where `accepted` is an attribute of the enclosing `part def` | Reference-side asymmetry: the identical assignment written in an `action` of the same part def, nested or not, is clean on both sides, so the referent's `mayTimeVary` is not what the two implementations read differently — the state's entry action is |
-| `:271` (`error`, `unmapped`) | `attribute :>> best = robotMass;` in the analysis objective | The trade-study notation adjudicated in the bullet above; now reported by both sides |
 
 ### Package-keyword round
 
@@ -349,8 +381,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **572** |
-| pilot diagnostics | 123 | **617** |
+| only pilot | 82 | **596** |
+| pilot diagnostics | 123 | **632** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -377,7 +409,7 @@ view and analysis packages, and each is a construct the pinned artifact does not
 |---|---:|---|
 | `frame concern` in a view usage | 2 syntax | the member is not in its view grammar, and the cascade takes the file's closing brace |
 | `view … : StateTransitionView` / `: ActionFlowView`, `render asElementTable` | 3 `unresolved-reference`, 4 `kind-mismatch` | our standard view definitions and rendering, which its libraries do not publish |
-| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case |
+| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case (the rebinding rows retired with the objective-evaluation round, which states the value as the library's `eval`) |
 | a second objective for a lexicographic optimum | 2 `unmapped` | `Only one objective is allowed` |
 
 Nothing in the demo's structure, calculations, action or state machine draws a pilot diagnostic, so
@@ -477,10 +509,11 @@ populated and unchanged: 122 diagnostics total, 66 pilot-only. Step 3's two sema
 Xpect assertions not present in these seven differential roots.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`, 1 `multiplicity` (the
+[unbound-parameter advisory](#the-unbound-parameter-advisory)); `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 15 `unmapped`, 242 `kind-mismatch`, 279 `unresolved-reference` — of which
+`examples` 10 syntax, 15 `unmapped`, 258 `kind-mismatch`, 287 `unresolved-reference` — of which
 `relay-probe-demo/mission.sysml` carries none: it carried a `kind-mismatch` on its send of a
 `Telemetry` invocation until the send-argument round above, and the demo now writes the
 constructor, `send new Telemetry(…) via antenna`, which both implementations accept, so the row
@@ -554,20 +587,21 @@ page's history.
 
 | Count | Now |
 |---|---:|
-| overall: fully agreeing / only ours / our diagnostics | **338 / 20 / 65** |
-| only pilot | **572** |
-| pilot diagnostics | **617** |
+| overall: fully agreeing / only ours / our diagnostics | **337 / 21 / 57** |
+| only pilot | **596** |
+| pilot diagnostics | **632** |
 | severity-only | **2** |
-| unmapped, our side | **28** |
-| kerml-examples: only ours | **3** |
+| unmapped, our side | **19** |
+| kerml-examples: only ours | **4** |
 | pilot-examples: only ours | **7** |
-| examples: only pilot | **546** |
+| examples: only pilot | **570** |
 
-The KerML root is now the *cleanest* of the three OMG roots in proportion: **3** only-ours against 6
+The KerML root is now the *cleanest* of the three OMG roots in proportion: **4** only-ours against 6
 only-pilot — the only root where the reference reports more than we do — with 50 of 58 files fully
-agreeing (439 / 6 and 10 / 58 when the root was added, and 72 / 39, 15 / 47 and 8 / 48 at earlier rounds). None of the 3 is a syntax or `kind-mismatch` diagnostic — the notation
+agreeing (439 / 6 and 10 / 58 when the root was added, and 72 / 39, 15 / 47 and 8 / 48 at earlier rounds). None of the 4 is a syntax or `kind-mismatch` diagnostic — the notation
 the reference accepts, we parse, and the checks we applied to KerML typings that it does not apply
-are gone. What is left is K5's three specialization cycles, all adjudicated. The class tables below
+are gone. What is left is K5's three specialization cycles and the one deliberate
+[unbound-parameter advisory](#the-unbound-parameter-advisory), all adjudicated. The class tables below
 are kept as measured when each class was adjudicated, so they describe the root at 150 rather than at 3.
 
 One category label moved with this adjudication and **no count did**:
@@ -623,6 +657,34 @@ Two movements, both in `examples/`:
   (13), `self-model/surfaces.sysml` (4) and, through them, `self-model/identity.sysml` (1). Those
   bases now say `default =`, which is what a value meant to be overridden is, so neither side
   reports the override; every `%`-command transcript in the docs is unchanged.
+
+---
+
+### Objective-evaluation round
+
+The solver's objective contract is restated as the trade-study library intends: an objective
+states the value to improve by redefining the library's `eval` calculation
+(`objective o : MinimizeObjective { subject :>> selectedAlternative; in calc :>> eval { expression } }`)
+rather than by giving the bound `best` a value of its own. The rule set is unchanged — no
+diagnostic was added or removed — and the four OMG roots are unmoved; only our own `examples` move:
+
+| Count | Before | Now |
+|---|---:|---:|
+| overall: agreed diagnostics | 43 | **34** |
+| overall: our diagnostics | 65 | **56** |
+| overall: pilot diagnostics | 617 | **608** |
+| `examples`: agreed diagnostics | 9 | **0** |
+| `examples`: our diagnostics | 11 | **2** |
+| `examples`: pilot diagnostics | 556 | **547** |
+
+One movement: **the nine agreed rows of the feature-value overriding round retire.** Every
+`attribute :>> best = <expression>` in `solver-demo.sysml` (4), `disposal-robot-demo/robot.sysml`
+(4) and `disposal-team-demo/team.sysml` (1) is now `in calc :>> eval { <expression> }`, on which
+the pinned reference is silent (run over each migrated file: no diagnostic at the objective), as
+are we. `%optimize` reports the same optima it did (`examples_test.go` carries no solver carve-out
+any more), and the `Only one objective is allowed` rows on the two lexicographic demos stay the
+reference's, adjudicated above. `fully agreeing`, `only ours` and `only pilot` do not move: the
+retired rows were agreement.
 
 ## Adjudications
 
@@ -2295,6 +2357,51 @@ specification:
   the binary base — and the four OMG roots contain no connector of that shape;
   [omg-issues.md](omg-issues.md#a-connector-inheriting-a-third-end-is-given-the-binary-base-pilot-2026-07)
   drafts the question.
+
+### End-feature multiplicity round
+
+`validateFeatureEndFeatureMultiplicity` (KerML 1.1 8.3.3.3), `validateReturnParameterMembershipOwningType`
+(KerML 1.1 8.3.4.7) and `validateTypeAtMostOneConjugator` (KerML 1.1 8.3.3.1) are constraint-tier rules of
+ours (`passes/end_multiplicity.go`, `passes/return_parameter.go`, `passes/conjugator.go`, with
+`semantics/end_multiplicity.go` answering the multiplicity question). Refereed against the pinned
+`c7fc737` validators, three points are adjudicated:
+
+- **The pilot's warning is on `Type::multiplicities`, not the end's own declaration.** The pilot
+  warns `End feature must have multiplicity 1` when no multiplicity among the end's own and its
+  generals' (`FeatureUtil.getMultiplicityRangeOf` over `Type.getMultiplicities`) has bounds `1..1`,
+  so `end feature b : B [0..*]` warns while `end feature b :> one;` with `feature one [1]` is
+  silent, as is an implicitly redefined end taking `[1]` from the association it specializes. We
+  walk the same generals (specializations, references, crossings, chains, positional ends), each
+  symbol once so a specialization cycle terminates. The spelling `[n..1]` with an unevaluable `n`
+  is silent on both sides: `MultiplicityRange::hasBounds` treats a null lower value as equal to
+  the upper (`lowerValue = null and lower = upper`), which is the spec's own OCL, so no
+  divergence is recorded.
+- **A SysML end usage defaults to `1..1`.** The pilot's `UsageAdapter` gives every end usage
+  with no declared multiplicity the default `[1]` ("Multiplicity of 1..1 is always the default
+  for an end usage"), and the SysML v2 Usage semantics say the same, so on the SysML side only a *declared own*
+  non-`1..1` multiplicity warns; `end [0..*] item p : A;` is silent because that `[0..*]` is the
+  cross feature's, not the end's. Our parser now keeps that anonymous crossing multiplicity on an
+  unnamed cross-feature member (grammar `OwnedCrossingFeature`) rather than copying it onto the
+  usage, which is what makes the two provenances distinguishable; the RDF export and every
+  multiplicity consumer read own-else-crossing through `semantics.StatedMultiplicityOf`, so
+  their output is unchanged. The ripple this exposes — `end [1] feature x : A crosses ...` now
+  reports `Must be the cross feature`, as the pilot does at the same position — is corpus case
+  `k43`.
+- **Grammar versus semantics on the other two rules.** The pilot's textual grammar cannot spell a
+  `return` parameter outside a function/expression body, nor a second `~` conjugator, so on a
+  textual model it rejects `k44` and `k45` with `no viable alternative at input 'return'` and
+  `no viable alternative at input '~'` (plus `Features must have at least one type`), never
+  reaching the two named validations; the constraints exist for API-built models. Our parser
+  accepts both spellings and the constraint tier reports them with the rule's message, so both
+  cases sit in both-reject with the pilot rejecting for a grammatical reason. This is a layering
+  difference, not a semantic disagreement, so no defect is drafted.
+
+Measured on the merged tree against a clean `origin/main` (`c754d72a3`): `pilot-diff` is
+unchanged at 366 files, 338 fully agreeing, 43 agreed, 20 only ours, 302 only the pilot's;
+`pilot-xpect` is unchanged at 1266 agree / 59 disagree with the same 59 rows on both sides, so
+the Xpect baseline is left alone; a sweep of `examples/`, `testdata/` and the bundled library
+with both binaries produces identical diagnostics. The 8 only-ours rejection cases are the
+control-node successions the pilot leaves as `TODO`s; the three new cases are both-reject.
 
 ## Current branch movement and adjudications
 

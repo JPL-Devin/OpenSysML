@@ -512,7 +512,7 @@ func (fn *libraryFunction) arity() string {
 func realUnary(f func(float64) float64) func([]semantics.Value) (semantics.Value, error) {
 	return func(args []semantics.Value) (semantics.Value, error) {
 		x := asReal(args[0])
-		res, err := realResult(f(x))
+		res, err := semantics.RealResult(f(x))
 		if err != nil {
 			return semantics.Value{}, fmt.Errorf("%w (argument %v)", err, x)
 		}
@@ -524,7 +524,7 @@ func realUnary(f func(float64) float64) func([]semantics.Value) (semantics.Value
 func realBinary(f func(a, b float64) float64) func([]semantics.Value) (semantics.Value, error) {
 	return func(args []semantics.Value) (semantics.Value, error) {
 		x, y := asReal(args[0]), asReal(args[1])
-		res, err := realResult(f(x, y))
+		res, err := semantics.RealResult(f(x, y))
 		if err != nil {
 			return semantics.Value{}, fmt.Errorf("%w (arguments %v, %v)", err, x, y)
 		}
@@ -547,7 +547,7 @@ func naturalLog(args []semantics.Value) (semantics.Value, error) {
 	if x <= 0 {
 		return semantics.Value{}, fmt.Errorf("%w: the logarithm of %v is not a Real (requires x > 0.0)", semantics.ErrArithmeticDomain, x)
 	}
-	return realResult(math.Log(x))
+	return semantics.RealResult(math.Log(x))
 }
 
 // logToBase is OpenSysMLMathFunctions::log, the logarithm of x to the given
@@ -568,11 +568,11 @@ func logToBase(args []semantics.Value) (semantics.Value, error) {
 	// is 2.9999999999999996.
 	switch base {
 	case 10:
-		return realResult(math.Log10(x))
+		return semantics.RealResult(math.Log10(x))
 	case 2:
-		return realResult(math.Log2(x))
+		return semantics.RealResult(math.Log2(x))
 	}
-	return realResult(math.Log(x) / math.Log(base))
+	return semantics.RealResult(math.Log(x) / math.Log(base))
 }
 
 // atan2Real is OpenSysMLMathFunctions::atan2, the angle to the point (x, y)
@@ -583,7 +583,7 @@ func atan2Real(args []semantics.Value) (semantics.Value, error) {
 	if y == 0 && x == 0 {
 		return semantics.Value{}, fmt.Errorf("%w: atan2(0.0, 0.0) has no angle", semantics.ErrArithmeticDomain)
 	}
-	return realResult(math.Atan2(y, x))
+	return semantics.RealResult(math.Atan2(y, x))
 }
 
 // floorToInteger is RealFunctions::floor, which returns Integer.
@@ -603,7 +603,7 @@ func numericAbs(args []semantics.Value) (semantics.Value, error) {
 	if args[0].Kind == semantics.ValInt {
 		return integerAbs(args)
 	}
-	return realResult(math.Abs(args[0].Real))
+	return semantics.RealResult(math.Abs(args[0].Real))
 }
 
 // integerAbs is the absolute value over Integer, which IntegerFunctions
@@ -631,7 +631,7 @@ func numericExtremum(larger bool) func([]semantics.Value) (semantics.Value, erro
 		if args[0].Kind == semantics.ValInt && args[1].Kind == semantics.ValInt {
 			return integerExtremum(larger)(args)
 		}
-		return realResult(pickReal(larger, asReal(args[0]), asReal(args[1])))
+		return semantics.RealResult(pickReal(larger, asReal(args[0]), asReal(args[1])))
 	}
 }
 
@@ -708,20 +708,6 @@ func asInteger(v semantics.Value) (int64, error) {
 		return 0, fmt.Errorf("%w: requires an Integer argument, got a Real", ErrTypeMismatch)
 	}
 	return v.Int, nil
-}
-
-// realResult wraps a computed Real, reporting a result that is not a finite
-// number instead of returning a NaN or an infinity: a NaN means the argument
-// was outside the function's domain, an infinity that the result has no Real
-// value.
-func realResult(x float64) (semantics.Value, error) {
-	switch {
-	case math.IsNaN(x):
-		return semantics.Value{}, fmt.Errorf("%w: argument outside the function's domain", semantics.ErrArithmeticDomain)
-	case math.IsInf(x, 0):
-		return semantics.Value{}, fmt.Errorf("%w: result is not a finite Real", semantics.ErrArithmeticOverflow)
-	}
-	return semantics.Value{Kind: semantics.ValReal, Real: x}, nil
 }
 
 // integerResult wraps a whole Real as an Integer, reporting a value outside the
@@ -813,12 +799,12 @@ func libraryFeatureByName(fqn string) (*libraryFeature, bool) {
 // degreesFromRadians is TrigFunctions::deg, whose library body is
 // `theta_rad * 180 / pi` over the pi the feature seam supplies.
 func degreesFromRadians(args []semantics.Value) (semantics.Value, error) {
-	return realResult(asReal(args[0]) * 180 / libraryPi)
+	return semantics.RealResult(asReal(args[0]) * 180 / libraryPi)
 }
 
 // radiansFromDegrees is TrigFunctions::rad, `theta_deg * pi / 180`.
 func radiansFromDegrees(args []semantics.Value) (semantics.Value, error) {
-	return realResult(asReal(args[0]) * libraryPi / 180)
+	return semantics.RealResult(asReal(args[0]) * libraryPi / 180)
 }
 
 // ---------------------------------------------------------------------------

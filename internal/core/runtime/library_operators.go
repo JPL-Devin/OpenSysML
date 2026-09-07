@@ -180,7 +180,7 @@ func naturalDivision(name string, ctx *Context, args []Value) (Value, error) {
 	if x%y != 0 {
 		return Value{}, fmt.Errorf(
 			"%w: function %s has no Natural result for %d / %d; the quotient is %s",
-			semantics.ErrArithmeticDomain, name, x, y, FormatReal(float64(x)/float64(y)),
+			semantics.ErrArithmeticDomain, name, x, y, semantics.FormatReal(float64(x)/float64(y)),
 		)
 	}
 	return integerValue(x / y), nil
@@ -312,7 +312,8 @@ func anyOperand(_ *Context, _, _ string, val Value) (Value, error) { return val,
 // whose type conforms to Base::DataValue — not a part, item or other occurrence.
 func dataOperand(ctx *Context, name, param string, val Value) (Value, error) {
 	switch val.Kind {
-	case ValConst, ValString, ValQuantity, ValEnumLiteral, ValComplex, ValVector, ValVectorQuantity:
+	case ValConst, ValString, ValQuantity, ValEnumLiteral, ValComplex, ValVector, ValVectorQuantity, ValTensorQuantity, ValMeasurementRef,
+		ValCoordinateFrame, ValCoordinateTransformation:
 		return val, nil
 	case ValSequence, ValSet:
 		for _, element := range elementsOf(val) {

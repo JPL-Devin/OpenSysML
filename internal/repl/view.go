@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -235,23 +236,18 @@ func (s *Session) viewRenderer() (*view.Renderer, error) {
 }
 
 // sessionSourceText reads notation from the session's loaded documents, and
-// is nil when none are loaded.
+// behind them from the library files its index holds; it is nil when the
+// session holds neither.
 func (s *Session) sessionSourceText() view.SourceText {
 	docs := s.sessionDocs()
-	if len(docs) == 0 {
+	if len(docs) == 0 && s.libSource == nil {
 		return nil
 	}
 	files := make(map[string]*source.SourceFile, len(docs))
 	for _, doc := range docs {
 		files[doc.Name] = source.New(doc.Name, doc.Content)
 	}
-	return func(name string, span source.Span) string {
-		sf, ok := files[name]
-		if !ok {
-			return ""
-		}
-		return sf.Text(span)
-	}
+	return source.TextOf(files, libs.Text(s.libSource))
 }
 
 // conformanceLines renders a conformance report in declaration order: each
@@ -400,7 +396,9 @@ func (r *reportRuntime) runtime() (*runtime.Context, error) {
 		return nil, fmt.Errorf("no document loaded")
 	}
 	resolver := resolve.New(idx)
-	ctx := runtime.NewContext(semantics.NewModel(resolver), resolver, r.session.budgets.MaxSteps)
+	model := semantics.NewModel(resolver)
+	model.SetSourceText(r.session.sessionSourceText())
+	ctx := runtime.NewContext(model, resolver, r.session.budgets.MaxSteps)
 	if err := ctx.SetBudgets(r.session.budgets); err != nil {
 		return nil, err
 	}

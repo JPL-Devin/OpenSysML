@@ -50,6 +50,17 @@ func (s *authoredSource) slice(span source.Span) string {
 	return string(s.text[span.Offset:span.End()])
 }
 
+// lastToken returns the offset of the last code token in a span spelled as
+// word, or -1: a comment saying `from` is not the verb `from`.
+func (s *authoredSource) lastToken(span source.Span, word string) int {
+	for i := s.index(span.End() - 1); i >= 0 && s.spans[i].Offset >= span.Offset; i-- {
+		if !isComment(s.kinds[i]) && s.slice(s.spans[i]) == word {
+			return s.spans[i].Offset
+		}
+	}
+	return -1
+}
+
 // code returns the text of a span up to its last code token: a node's span runs
 // on over the notes and comments after it, which are not part of what it says.
 func (s *authoredSource) code(span source.Span) string {

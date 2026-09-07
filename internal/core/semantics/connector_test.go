@@ -513,3 +513,42 @@ func TestEndsClaimedAcrossSeveralGenerals(t *testing.T) {
 		}
 	}
 }
+
+// A binding's clause states its ends outside a `connect` clause — `of a = b` in
+// KerML, `bind a = b` in SysML — so each is a related feature and occupies an
+// end position beside the body's ends.
+func TestBindingClauseEndsAreRelatedFeatures(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class C {
+			feature x; feature y; feature z;
+			binding b1 of x = y;
+			binding b2 of x = y { end feature e3 references z; }
+			binding b3 { end feature e1 references x; }
+			binding b4;
+			binding b5 :> b1;
+		}
+	}`)
+	c := nested(t, sym(t, root, "P").Scope, "C")
+	for name, want := range map[string]int{"b1": 2, "b2": 3, "b3": 1, "b4": 0, "b5": 2} {
+		if n := m.RelatedFeatureCount(nested(t, c.Scope, name)); n != want {
+			t.Errorf("RelatedFeatureCount(%s) = %d, want %d", name, n, want)
+		}
+	}
+	if n := m.ConnectorEndCount(nested(t, c.Scope, "b2")); n != 3 {
+		t.Errorf("ConnectorEndCount(b2) = %d, want 3", n)
+	}
+
+	m, root = buildModel(t, `package P {
+		part def C {
+			attribute x; attribute y; attribute z;
+			binding b1 bind x = y;
+			binding b2 bind x = y { end e3 references z; }
+		}
+	}`)
+	c = nested(t, sym(t, root, "P").Scope, "C")
+	for name, want := range map[string]int{"b1": 2, "b2": 3} {
+		if n := m.RelatedFeatureCount(nested(t, c.Scope, name)); n != want {
+			t.Errorf("RelatedFeatureCount(%s) = %d, want %d", name, n, want)
+		}
+	}
+}

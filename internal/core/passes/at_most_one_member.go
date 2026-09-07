@@ -35,72 +35,39 @@ func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 				subjects = append(subjects, m)
 			}
 		}
-		// An owned subject redefines the inherited one, so only owned subjects
-		// accumulate.
-		cc.reportExtraMembers(subjects, msgOnlyOneSubject, "only-one-subject")
+		_, inherited := cc.model.SubjectsOf(sym)
+		cc.checkAtMostOneRole(sym, subjects, inherited, msgOnlyOneSubject, "only-one-subject")
 		cc.checkSubjectParameterPosition(sym, members)
 		if objectiveOwnerDecl(sym.Decl) {
-			cc.checkAtMostOneObjective(sym, members)
+			var objectives []ast.Node
+			for _, m := range members {
+				if isObjectiveMemberNode(m) {
+					objectives = append(objectives, m)
+				}
+			}
+			_, inherited := cc.model.ObjectivesOf(sym)
+			cc.checkAtMostOneRole(sym, objectives, inherited, msgOnlyOneObjective, codeOnlyOneObjective)
 		}
 	}
 }
 
-// checkAtMostOneObjective judges a case on the objectives a single type owns,
-// since an objective redefines the objective role of the types above it.
-func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, members []ast.Node) {
-	var local []ast.Node
-	for _, member := range members {
-		if isObjectiveMemberNode(member) {
-			local = append(local, member)
-		}
-	}
-	inheritedPerOwner := map[*symbols.Scope]int{}
-	for _, member := range cc.model.MembersOf(sym) {
-		if member == nil || member.OwnerScope == sym.Scope {
-			continue
-		}
-		// Cases::Case::obj is the frame every case objective redefines, not a
-		// competing objective of the model.
-		if cc.libraryDeclared(member) {
-			continue
-		}
-		if isObjectiveDecl(member.Decl) {
-			inheritedPerOwner[member.OwnerScope]++
-		}
-	}
-	// MembersOf enumerates by name, so an inherited `objective : R;` is only
-	// reachable through the scope of the type declaring it.
-	for _, src := range cc.model.MemberSources(sym) {
-		if src == nil || src.Scope == nil || src.Scope == sym.Scope {
-			continue
-		}
-		for _, member := range src.Scope.AnonymousMembers() {
-			if member == nil || cc.libraryDeclared(member) {
-				continue
-			}
-			if isObjectiveDecl(member.Decl) {
-				inheritedPerOwner[src.Scope]++
-			}
-		}
-	}
-	if len(local) > 0 {
-		cc.reportExtraMembers(local, msgOnlyOneObjective, codeOnlyOneObjective)
-		return
-	}
-	inherited := 0
-	for _, count := range inheritedPerOwner {
-		if count > inherited {
-			inherited = count
-		}
-	}
-	if inherited > 1 {
+// checkAtMostOneRole places the excess like the pilot's checkAtMostOneRelationship:
+// owned ones after the first, the declaration when all are inherited, every owned one for a mix.
+func (cc *constraintChecker) checkAtMostOneRole(sym *symbols.Symbol, owned []ast.Node, inherited []*symbols.Symbol, msg, code string) {
+	switch {
+	case len(owned)+len(inherited) <= 1:
+	case len(owned) == 0:
 		cc.diags = append(cc.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     sym.Decl.Span(),
-			Message:  msgOnlyOneObjective,
-			Code:     codeOnlyOneObjective,
+			Message:  msg,
+			Code:     code,
 			Source:   "constraint",
 		})
+	case len(inherited) == 0:
+		cc.reportExtraMembers(owned, msg, code)
+	default:
+		cc.reportEachMember(owned, msg, code)
 	}
 }
 
@@ -211,11 +178,6 @@ func isSubjectDecl(decl ast.Node) bool {
 		return d.Kind == ast.UsageSubject
 	}
 	return false
-}
-
-func isObjectiveDecl(decl ast.Node) bool {
-	u, ok := decl.(*ast.Usage)
-	return ok && u.Kind == ast.UsageObjective
 }
 
 func isInputParameterDecl(decl ast.Node) bool {

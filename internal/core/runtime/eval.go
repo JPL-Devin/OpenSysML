@@ -10,6 +10,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -112,7 +113,7 @@ func (ec *EvalContext) inEnv(env *conditionEnv) *EvalContext {
 	if env == nil {
 		return ec
 	}
-	out := ec.over(ec.scope, []frame{mapFrame(env.bindings)})
+	out := ec.over(ec.scope, []frame{env.bindings})
 	out.features = env.features
 	if env.enclosing {
 		out.resolving = nil
@@ -182,7 +183,7 @@ func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared
 	var decl ast.Node
 	if ec.ctx.resolver != nil {
 		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
-			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction && !lower.IsCaseNode(usage) {
 				return nil, false, nil
 			}
 			decl = sym.Decl
@@ -276,11 +277,14 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 	case *ast.NullExpr:
 		return ec.evalNull(n)
 	case *ast.FeatureReference:
-		return ec.evalFeatureReference(n)
+		val, err := ec.evalFeatureReference(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.QualifiedName:
-		return ec.evalName(n)
+		val, err := ec.evalName(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.FeatureChainExpr:
-		return ec.evalFeatureChain(n)
+		val, err := ec.evalFeatureChain(n)
+		return ec.declaredElements(n, val, err)
 	case *ast.OperatorExpr:
 		return ec.evalOperator(n)
 	case *ast.SequenceExpr:
@@ -293,6 +297,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 		return ec.evalInvocation(n)
 	case *ast.IndexExpr:
 		return ec.evalIndexExpr(n)
+	case *ast.ConstructorExpr:
+		return ec.evalConstructor(n)
 	case *ast.BodyExpr:
 		// A body is a value closed over its environment, applied where it is called.
 		return NewExprValue(n, ec.closure()), nil
@@ -329,6 +335,10 @@ func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
 		defer ctx.beginRun()()
 		if val, ok, err := ctx.declaredArrayValue(sym); ok {
 			return val, err
+		}
+		// A calc usage returning one unnamed result is read as that result.
+		if isCalcUsageSymbol(sym) && ctx.returnsResult(sym) {
+			return NewEvalContext(ctx, sym.OwnerScope).evalCalcUsageMembers(sym, resultSegments)
 		}
 		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
 	}
@@ -389,6 +399,63 @@ func (ec *EvalContext) evalLiteralString(n *ast.LiteralString) (Value, error) {
 // evalNull evaluates a null expression.
 func (ec *EvalContext) evalNull(n *ast.NullExpr) (Value, error) {
 	return Value{Kind: ValNull}, nil
+}
+
+// declaredElements types a feature read that yields no element by the quantity
+// dimension the read declares (KerML 8.4.4.9: a feature's values are of its type),
+// in that dimension's coherent unit; an aggregate of the read then keeps the kind.
+func (ec *EvalContext) declaredElements(node ast.Node, val Value, err error) (Value, error) {
+	if err != nil || !isEmptyValue(val) {
+		return val, err
+	}
+	if typed, ok := ec.ctx.emptyOfDeclared(ec.scope, node); ok {
+		return typed, nil
+	}
+	return val, nil
+}
+
+// emptyOfDeclared is the empty sequence of the quantities an expression is
+// statically declared to yield, in their coherent unit; false where the
+// declarations fix no dimension or a dimensionless one.
+func (ctx *Context) emptyOfDeclared(scope *symbols.Scope, node ast.Node) (Value, bool) {
+	if ctx.model == nil || scope == nil {
+		return Value{}, false
+	}
+	return ctx.emptyOfDimension(ctx.model.DimensionOfExpr(scope, node))
+}
+
+// emptyOfFeature is emptyOfDeclared for the values a feature declares it holds.
+func (ctx *Context) emptyOfFeature(feat *EffectiveFeature) (Value, bool) {
+	if ctx.model == nil || feat == nil {
+		return Value{}, false
+	}
+	return ctx.emptyOfDimension(ctx.model.DimensionOfFeature(feat.heldBy()))
+}
+
+// emptyOfDimension is the empty sequence of quantities of a dimension, in its
+// coherent unit; false where none is fixed or it is dimensionless.
+func (ctx *Context) emptyOfDimension(dim semantics.Dimension, ok bool) (Value, bool) {
+	if !ok || dim.Term.Dimensionless() {
+		return Value{}, false
+	}
+	unit, ok := ctx.model.CoherentUnit(dim)
+	if !ok {
+		return Value{}, false
+	}
+	return NewEmptySequenceOf(unit), true
+}
+
+// readFeatureValue is what fv reads as in an expression, an empty read typed by
+// the quantities its feature declares.
+func (ctx *Context) readFeatureValue(fv *FeatureValue, name string) (Value, error) {
+	val, err := fv.ReadValue(name)
+	if err != nil || val.Kind != ValSequence || val.Sequence().Size() != 0 {
+		return val, err
+	}
+	if typed, ok := ctx.emptyOfFeature(fv.Feature); ok {
+		return typed, nil
+	}
+	return val, nil
 }
 
 // evalFeatureReference evaluates a feature reference (variable lookup).
@@ -500,6 +567,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if name == thatName && ec.self != nil {
 			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
 		}
+		// Then `self`, the thing being evaluated, read as its value.
+		if ec.self != nil && ec.namesSelf(name) {
+			return ec.ctx.objectValue(ec.self)
+		}
 		// Then `this`, the context occurrence of what is being evaluated: the
 		// object owning the performance, which is the bound instance.
 		if name == thisName && ec.namesOccurrenceThis(name) {
@@ -526,9 +597,18 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.outerFeatureValue(sym); ok {
 					return val, err
 				}
+				// A transformation's target is the frame featuring it, which its
+				// value carries and no object states.
+				if val, ok, err := ec.featuringReferenceValue(sym); ok {
+					return val, err
+				}
 				// A library feature's value comes from the feature seam, not its
 				// declared body: a warm library cache restores symbols without AST.
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
+					return val, err
+				}
+				// A measurement unit declaration is the measurement reference it names.
+				if val, ok, err := ec.ctx.MeasurementUnitValue(sym); ok {
 					return val, err
 				}
 				// A part, item or structured value names an object, so the name
@@ -536,6 +616,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				// would have to hold.
 				if val, ok, err := ec.occurrenceReference(sym); ok {
 					return val, err
+				}
+				// A calc usage returning one unnamed result is read as that result.
+				if isCalcUsageSymbol(sym) && ec.ctx.returnsResult(sym) {
+					return ec.evalCalcUsageMembers(sym, resultSegments)
 				}
 				// A feature declared with no value, whose multiplicity admits none,
 				// states the empty sequence — what an object holding nothing reads.
@@ -603,9 +687,20 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		return Value{}, ec.unresolvedQualifiedName(qn, reading)
 	}
 
+	// A feature of a behavior whose run is on the stack (`MassCase::result` in its
+	// objective or assertion) reads the value that run bound to it.
+	if qualifier, ok := reading.Part(len(qn.Parts) - 2); ok {
+		if val, ok := ec.frameFeatureValue(qualifier, currentSym); ok {
+			return val, nil
+		}
+	}
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
 	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
+	}
+	// A measurement unit declaration (`SI::m`) is the measurement reference it names.
+	if val, ok, err := ec.ctx.MeasurementUnitValue(currentSym); ok {
 		return val, err
 	}
 	// A qualified feature of an enclosing type (`Rectangle::length` inside its
@@ -635,6 +730,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok, err := ec.occurrenceReference(currentSym); ok {
 			return val, err
 		}
+		// A calc usage returning one unnamed result is read as that result.
+		if isCalcUsageSymbol(currentSym) && ec.ctx.returnsResult(currentSym) {
+			return ec.evalCalcUsageMembers(currentSym, resultSegments)
+		}
 		// A calc usage or a KerML type is never the empty sequence, whatever it admits.
 		if isCalcUsageSymbol(currentSym) || declaresType(currentSym) {
 			return Value{}, ec.resolvedWithoutValue(currentSym, qn)
@@ -658,6 +757,25 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		}
 	}
 	return Value{}, ec.resolvedWithoutValue(currentSym, qn)
+}
+
+// frameFeatureValue reads the resolved member sym, qualified by qualifier, from the innermost
+// frame whose owner is (or specializes) the qualifier, under the name that owner's run binds it by.
+func (ec *EvalContext) frameFeatureValue(qualifier, sym *symbols.Symbol) (Value, bool) {
+	for i := len(ec.frames) - 1; i >= 0; i-- {
+		f := ec.frames[i]
+		if f.owner == nil || !f.owner.qualifiedBy(ec.ctx, qualifier) {
+			continue
+		}
+		name, ok := f.owner.memberName(ec.ctx, sym)
+		if !ok {
+			continue
+		}
+		if val, ok := f.lookup(name); ok {
+			return val, true
+		}
+	}
+	return Value{}, false
 }
 
 // resolvedWithoutValue reports a name that resolves to sym but reads no value:
@@ -743,7 +861,7 @@ func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value
 	if err := ec.ctx.classifyHeld(sym, val); err != nil {
 		return Value{}, fmt.Errorf("%s: %w", what, err)
 	}
-	return ec.bindVariationOf(sym, val)
+	return ec.bindVariationOf(sym, ec.ctx.classifiedFrame(sym, val))
 }
 
 // occurrenceReference evaluates a name denoting one object — an occurrence or a
@@ -768,6 +886,16 @@ func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
 		return Value{}, false
 	}
 	return sequenceOf(nil), true
+}
+
+// namesSelf reports whether the name resolves, where the expression was written,
+// to the `self` feature every thing has of itself or a restatement of it.
+func (ec *EvalContext) namesSelf(name string) bool {
+	if ec.scope == nil {
+		return false
+	}
+	sym, ok := ec.ctx.resolver.LookupName(ec.scope, name)
+	return ok && ec.ctx.model.IsSelf(sym)
 }
 
 // namesOccurrenceThis reports whether the name resolves to the library's
@@ -815,7 +943,14 @@ func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
-	value, err := fv.ReadValue(name)
+	value, err := ec.ctx.readFeatureValue(fv, name)
+	if err != nil {
+		return value, true, err
+	}
+	// An object the feature holds is read as what it denotes, as a chain reads it.
+	if inst, ok := ec.ctx.instances[value.Instance]; ok && value.Kind == ValInstance {
+		value, err = ec.ctx.objectValue(inst)
+	}
 	return value, true, err
 }
 
@@ -859,7 +994,12 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
 		}
-		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
+		// The object reads as its value, whose own members it answers before the object's.
+		val, err := ec.ctx.objectValue(inst)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(val, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)
@@ -947,10 +1087,10 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	switch value.Kind {
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
-	case ValArray, ValVector, ValVectorQuantity:
-		// An array or vector read from an object keeps that object's members; any
-		// other's own features are answered from the value.
-		if inst, ok := ec.ctx.structuredObject(value); ok {
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity, ValQuantity, ValMeasurementRef, ValCoordinateFrame, ValCoordinateTransformation:
+		// An array or vector read from an object keeps that object's members; a
+		// frame answers its own features from the value, then from its object.
+		if inst, ok := ec.ctx.structuredObject(value); ok && isStructuredValue(&value) {
 			return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
 		}
 		member, ok, err := ec.ctx.structuredFeature(value, parts[0].Text)
@@ -985,6 +1125,13 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
+	// A frame, scale or transformation object answers its members from the value it is.
+	if ref, isRef, err := ec.ctx.referenceValueOfObject(inst); isRef {
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(ref, parts, from)
+	}
 	// A shaped Array object answers Array's features and their redefinitions from
 	// the value; its other members stay the object's, whatever their names.
 	if arr, isArray, err := ec.ctx.arrayOfObject(inst); isArray {
@@ -1027,7 +1174,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	if err != nil {
 		return Value{}, err
 	}
-	member, err := fv.ReadValue(name)
+	member, err := ec.ctx.readFeatureValue(fv, name)
 	if err != nil {
 		return Value{}, err
 	}
@@ -1037,7 +1184,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 // chainOverElements reads the rest of a chain from every element of a
 // multi-valued member, concatenating the values each contributes.
 func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, from string) (Value, error) {
-	var collected []Value
+	var collected, reads []Value
 	for _, elem := range elementsOf(value) {
 		val, err := ec.chainMemberValue(elem, parts, from)
 		if err != nil {
@@ -1048,6 +1195,12 @@ func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, f
 			return Value{}, err
 		}
 		collected = append(collected, contributed...)
+		reads = append(reads, val)
+	}
+	if len(collected) == 0 {
+		if unit, ok := elementUnitOf(reads...); ok {
+			return NewEmptySequenceOf(unit), nil
+		}
 	}
 	return sequenceOf(collected), nil
 }
@@ -1338,8 +1491,14 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		if re, ok := value.realPart(); ok {
 			return ctx.directValueType(scope, realConst(re))
 		}
-	case ValArray, ValVector, ValVectorQuantity:
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity:
 		return ctx.structuredValueType(value)
+	case ValMeasurementRef:
+		return ctx.measurementRefValueType(value.MeasurementRef())
+	case ValCoordinateFrame:
+		return ctx.frameValueType(value.CoordinateFrame())
+	case ValCoordinateTransformation:
+		return ctx.transformationValueType(value.CoordinateTransformation())
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1448,7 +1607,7 @@ func (ec *EvalContext) evalConditional(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 3 {
 		return Value{}, fmt.Errorf("conditional requires 3 operands, got %d", len(n.Operands))
 	}
-	cond, err := ec.Eval(n.Operands[0])
+	cond, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1541,17 +1700,20 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) < 2 {
 		return Value{}, fmt.Errorf("arithmetic operator requires 2 operands")
 	}
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
-	right, err := ec.Eval(n.Operands[1])
+	right, err := ec.valueOperand(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
 	// Operator notation over a vector is the VectorFunctions operator of the same
-	// symbol, which specializes DataFunctions'.
+	// symbol, which specializes DataFunctions'; over a tensor, TensorCalculations'.
 	if val, ok, err := ec.ctx.vectorArithmetic(n.Operator, left, right); ok {
+		return val, err
+	}
+	if val, ok, err := ec.ctx.tensorArithmetic(n.Operator, left, right); ok {
 		return val, err
 	}
 	return arithmeticValues(n.Operator, left, right, n.Span())
@@ -1564,6 +1726,15 @@ func arithmeticValues(op ast.OperatorKind, left, right Value, span source.Span) 
 	// StringFunctions declares; a non-string operand is not coerced.
 	if op == ast.OpAdd && left.Kind == ValString && right.Kind == ValString {
 		return concatStrings(left.Str(), right.Str()), nil
+	}
+
+	// A product, quotient or power of measurement references is the unit it composes.
+	if ref, ok := composeMeasurementRefs(op, left, right); ok {
+		return ref, nil
+	}
+	// A coordinate frame times or over a unit is the frame of composed axes.
+	if frame, ok, err := composeFrame(op, left, right); ok {
+		return frame, err
 	}
 
 	// A quantity carries its unit through arithmetic: a sum converts, a product
@@ -1634,7 +1805,7 @@ func constArithmetic(op ast.OperatorKind, left, right semantics.Value) (semantic
 		case ast.OpAdd, ast.OpSub, ast.OpMul:
 			var ok bool
 			if result, ok = semantics.IntArith(op, left.Int, right.Int); !ok {
-				return semantics.Value{}, integerOverflow(op, left.Int, right.Int)
+				return semantics.Value{}, semantics.IntegerOverflow(op, left.Int, right.Int)
 			}
 		case ast.OpMod:
 			if right.Int == 0 {
@@ -1670,13 +1841,7 @@ func constArithmetic(op ast.OperatorKind, left, right semantics.Value) (semantic
 		result = math.Mod(leftReal, rightReal)
 	}
 	// A result that is not a finite Real is reported, not carried as an infinity.
-	return realResult(result)
-}
-
-// integerOverflow reports an Integer operation whose result leaves the range.
-func integerOverflow(op ast.OperatorKind, left, right int64) error {
-	return fmt.Errorf("%w: %d %s %d exceeds the Integer range",
-		semantics.ErrArithmeticOverflow, left, op.String(), right)
+	return semantics.RealResult(result)
 }
 
 // toReal converts a semantics.Value to float64.
@@ -1738,12 +1903,12 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("comparison requires 2 operands, got %d", len(n.Operands))
 	}
 
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
 
-	right, err := ec.Eval(n.Operands[1])
+	right, err := ec.valueOperand(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1833,7 +1998,7 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
 	}
 
-	left, err := ec.Eval(n.Operands[0])
+	left, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1888,6 +2053,19 @@ func combineBooleans(op ast.OperatorKind, l, r bool) (Value, error) {
 	return Value{}, fmt.Errorf("%w: '%s' is not a Boolean operator", ErrUnsupportedOperator, op)
 }
 
+// valueOperand evaluates an operand an operator needs a value of: a feature
+// holding none is reported as such, not as an operand of the wrong type.
+func (ec *EvalContext) valueOperand(node ast.Node) (Value, error) {
+	val, err := ec.Eval(node)
+	if err != nil {
+		return Value{}, err
+	}
+	if ec.ctx.HoldsNoValue(val) {
+		return Value{}, ec.ctx.noValueError(val, node)
+	}
+	return val, nil
+}
+
 // boolOperand reads a Boolean out of a value, naming what was expected when the
 // value is not one.
 func boolOperand(what string, v Value) (bool, error) {
@@ -1916,7 +2094,7 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 		}
 	}
 
-	operand, err := ec.Eval(n.Operands[0])
+	operand, err := ec.valueOperand(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1972,7 +2150,7 @@ func constUnary(op ast.OperatorKind, operand semantics.Value) (semantics.Value, 
 	if op == ast.OpNot {
 		// Logical not: not bool
 		if operand.Kind != semantics.ValBool {
-			return semantics.Value{}, fmt.Errorf("%w: logical not requires bool operand, got %s", ErrTypeMismatch, FormatConst(operand))
+			return semantics.Value{}, fmt.Errorf("%w: logical not requires bool operand, got %s", ErrTypeMismatch, semantics.FormatConst(operand))
 		}
 		return semantics.Value{Kind: semantics.ValBool, Bool: !operand.Bool}, nil
 	}
@@ -1982,7 +2160,7 @@ func constUnary(op ast.OperatorKind, operand semantics.Value) (semantics.Value, 
 	}
 	result, ok := semantics.EvalUnary(op, operand)
 	if !ok {
-		return semantics.Value{}, fmt.Errorf("%w: unary '%s' is not defined for %s", ErrTypeMismatch, op, FormatConst(operand))
+		return semantics.Value{}, fmt.Errorf("%w: unary '%s' is not defined for %s", ErrTypeMismatch, op, semantics.FormatConst(operand))
 	}
 	return result, nil
 }
@@ -2313,14 +2491,22 @@ func valueEqual(a, b Value) bool {
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.
-		converted, err := b.Quantity().convertTo(a.Quantity().Unit)
-		return err == nil && toReal(a.Quantity().Num) == converted
+		c, err := semantics.CompareMagnitudes(*a.Quantity(), *b.Quantity())
+		return err == nil && c == 0
 	case ValArray:
 		return arrayEqual(a.Array(), b.Array())
 	case ValVector:
 		return vectorEqual(a.Vector(), b.Vector())
 	case ValVectorQuantity:
 		return vectorQuantityEqual(a.VectorQuantity(), b.VectorQuantity())
+	case ValTensorQuantity:
+		return tensorQuantityEqual(a.TensorQuantity(), b.TensorQuantity())
+	case ValMeasurementRef:
+		return a.MeasurementRef().equal(b.MeasurementRef())
+	case ValCoordinateFrame:
+		return a.CoordinateFrame().equal(b.CoordinateFrame())
+	case ValCoordinateTransformation:
+		return a.CoordinateTransformation().equal(b.CoordinateTransformation())
 	default:
 		return false
 	}
@@ -2371,12 +2557,24 @@ func vectorQuantityEqual(a, b *VectorQuantity) bool {
 	if a.Dimension() != b.Dimension() {
 		return false
 	}
+	// Vectors are equal over one mRef only: the same frame, or none for both.
+	if !sameVectorFrame(a, b) {
+		return false
+	}
 	for i := 0; i < a.Dimension(); i++ {
 		if !valueEqual(NewQuantityValue(a.component(i)), NewQuantityValue(b.component(i))) {
 			return false
 		}
 	}
 	return true
+}
+
+// sameVectorFrame holds when both vectors are over one frame or neither is over any.
+func sameVectorFrame(a, b *VectorQuantity) bool {
+	if (a.Frame == nil) != (b.Frame == nil) {
+		return false
+	}
+	return a.Frame == nil || a.Frame.equal(b.Frame)
 }
 
 // sequenceEqual checks structural equality of sequences (element-wise).

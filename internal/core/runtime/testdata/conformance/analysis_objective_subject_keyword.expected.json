@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::light",
+  "outputs": {
+    "r": {"type": "Real", "value": 1000.0}
+  },
+  "verdicts": {
+    "obj": "satisfied"
+  }
+}

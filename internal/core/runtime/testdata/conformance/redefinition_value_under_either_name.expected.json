@@ -7,7 +7,7 @@
     "redefiningBase": {"type": "Real", "value": 400.0},
     "baseName": {"type": "Real", "value": 500.0},
     "baseRedefining": {"type": "Real", "value": 500.0},
-    "deep": {"type": "Real", "value": 2100.0},
+    "deep": {"type": "Real", "value": 700.0},
     "throughFamily": {"type": "Real", "value": 400.0}
   }
 }

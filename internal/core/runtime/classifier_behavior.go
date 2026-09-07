@@ -55,13 +55,14 @@ func (b *ObjectBehavior) Describe() string {
 
 // forgetBehaviorWrites drops what a run wrote, so a restarted behavior reads the
 // object's declared initial values instead of what the discarded run left.
-func (inst *Instance) forgetBehaviorWrites() {
+func (inst *Instance) forgetBehaviorWrites(ctx *Context) {
 	for _, fv := range inst.FeatureValues {
 		if !fv.Written {
 			continue
 		}
 		fv.Value, fv.Values = Value{}, Value{}
 		fv.Materialized, fv.Written = false, false
+		ctx.invalidateDependents(fv)
 	}
 }
 
@@ -250,6 +251,9 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
 // startClassifierBehaviorsOf starts the behaviors of every one of the objects as
 // one collective run, so objects materialized together exchange messages.
 func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) error {
+	if ctx.declarative {
+		return nil
+	}
 	attached := len(ctx.objectBehaviors)
 	if err := ctx.startBehaviorsOfAll(objects); err != nil {
 		ctx.abandonCreationSince(mark, attached)
@@ -281,9 +285,11 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 // keeping those registered since, along with occurrences naming the removed.
 func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	abandoned := make(map[int64]bool)
+	var gone []*Instance
 	for _, id := range ctx.created[mark:end] {
-		if _, live := ctx.instances[id]; live {
+		if inst, live := ctx.instances[id]; live {
 			abandoned[id] = true
+			gone = append(gone, inst)
 			delete(ctx.instances, id)
 		}
 	}
@@ -298,6 +304,7 @@ func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	}
 	ctx.forgetLives(abandoned)
 	ctx.forgetVariantsNaming(abandoned)
+	ctx.forgetEdgesOf(gone)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
 }
@@ -331,6 +338,7 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 			}
 			fv.Value, fv.Values = Value{}, Value{}
 			fv.Materialized, fv.Written = false, false
+			ctx.invalidateDependents(fv)
 		}
 	}
 }
@@ -350,9 +358,9 @@ func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
 }
 
 // namesAbandonedObject reports whether a value is, or a variant standing for, an
-// object that is gone, or an array or vector read from one or an array holding one.
+// object that is gone, or an array, vector or tensor keeping one or an array holding one.
 func namesAbandonedObject(val Value, abandoned map[int64]bool) bool {
-	if abandoned[backingObject(val)] {
+	if abandoned[keptObject(val)] {
 		return true
 	}
 	switch val.Kind {
@@ -774,8 +782,10 @@ func (ctx *Context) performanceOccurrence(
 				sentinel, name, inst.ID, err)
 		}
 		ctx.noteProbeWrite(fv)
+		before := ctx.beforeWrite(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
+		ctx.afterWrite(fv, before)
 		return occurrence, nil
 	}
 	id, ok := fv.HeldValue().Object()
@@ -886,9 +896,20 @@ func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierB
 			return nil, fmt.Errorf("%s %s of %s: bind %s: %w",
 				decl.behavior.Kind, decl.behavior.Name, symbolText(inst.Type), arg.Name, err)
 		}
-		args[arg.Name] = value
+		args[ctx.argumentParameter(scope, arg)] = value
 	}
 	return args, nil
+}
+
+// argumentParameter names the behavior parameter an argument binds: the feature
+// its declaration redefines (`in <a> :>> x = 4` binds x), else its own name.
+func (ctx *Context) argumentParameter(scope *symbols.Scope, arg lower.Attribute) string {
+	for _, redefined := range ctx.model.RedefinedFeatures(memberSymbol(scope, arg.Node)) {
+		if redefined.Name != "" {
+			return redefined.Name
+		}
+	}
+	return arg.Name
 }
 
 // actionBodySymbol resolves the element holding the body an action symbol

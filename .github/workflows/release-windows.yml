@@ -1,6 +1,8 @@
 name: Release Windows (SignPath)
 
-# Authenticode-signs the Windows release binaries through SignPath Foundation.
+# Authenticode-signs the Windows release binaries through SignPath Foundation
+# and builds the Windows installer (MSI).
+#
 # SignPath's OSS program only accepts artifacts that originate from a trusted
 # build system, and CircleCI is not one, so the Windows binaries are rebuilt
 # here with the same Makefile targets and version variables the CircleCI
@@ -9,9 +11,16 @@ name: Release Windows (SignPath)
 # stays authoritative for the unsigned assets, SHA256SUMS.txt and its cosign
 # bundle; see "Code signing policy" in README.md and docs/project/releasing.md.
 #
+# The MSI (packaging/msi, scripts/build-msi.sh) is built here rather than in
+# CircleCI because the WiX toolset only runs on Windows. Without SignPath the
+# `msi` job publishes an unsigned opensysml-<x.y.z>-windows-amd64.msi; with
+# SignPath the `msi-signed` job rebuilds it from the signed binaries and has
+# the MSI itself signed, published as ...-windows-amd64-signed.msi. The
+# bundled z3.exe is never signed (SignPath policy).
+#
 # Until SignPath approves the project and a maintainer configures the
-# SIGNPATH_API_TOKEN secret plus the SIGNPATH_* variables, only the build job
-# runs: it produces an artifact and nothing reaches the release.
+# SIGNPATH_API_TOKEN secret plus the SIGNPATH_* variables, only the build and
+# msi jobs run.
 on:
   push:
     tags:
@@ -36,6 +45,10 @@ concurrency:
 
 env:
   UNSIGNED_ARTIFACT: windows-amd64-unsigned
+  SIGNED_EXE_ARTIFACT: windows-amd64-signed-exe
+  UNSIGNED_MSI_ARTIFACT: windows-amd64-msi-unsigned
+  PRESIGN_MSI_ARTIFACT: windows-amd64-msi-presign
+  WIX_VERSION: 5.0.2
 
 jobs:
   build:
@@ -70,7 +83,7 @@ jobs:
             VERSION="$INPUT_VERSION"
           fi
           case "$VERSION" in
-            v[0-9]*) ;;
+            v[0-9]*.[0-9]*.[0-9]*) ;;
             *) echo "Error: VERSION '$VERSION' must look like v<major>.<minor>.<patch>[-suffix]"; exit 1 ;;
           esac
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -138,14 +151,94 @@ jobs:
           fi
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
 
+  msi:
+    name: Build the MSI (unsigned)
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Download the unsigned binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ env.UNSIGNED_ARTIFACT }}
+          path: dist/unsigned
+
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version "$WIX_VERSION"
+          wix --version
+
+      - name: Build and validate the MSI
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          scripts/build-msi.sh "$VERSION" dist/unsigned/sysml-windows-amd64.exe dist/unsigned/sysml-lsp-windows-amd64.exe dist/unsigned/sysml-grpc-windows-amd64.exe
+          msi=$(ls dist/opensysml-*-windows-amd64.msi)
+          wix msi validate "$msi"
+          mkdir -p dist/release
+          mv "$msi" dist/release/
+          (cd dist/release && sha256sum ./*.msi | sed 's|\./||' | tee SHA256SUMS-windows-msi.txt)
+
+      - name: Upload the unsigned MSI as a workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.UNSIGNED_MSI_ARTIFACT }}
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-msi:
+    # Only when SignPath is not configured: with SignPath the MSI is published
+    # signed by `publish-signed` instead, never both.
+    name: Publish the unsigned MSI
+    needs: [build, msi]
+    if: github.ref_type == 'tag' && needs.build.outputs.sign != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Download the unsigned MSI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ env.UNSIGNED_MSI_ARTIFACT }}
+          path: dist/release
+
+      - name: Wait for CircleCI to publish the gated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: scripts/wait-for-release-gate.sh "$TAG" "$COMMIT"
+
+      - name: Upload the unsigned MSI to the GitHub Release
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
+        with:
+          tag_name: ${{ needs.build.outputs.version }}
+          files: dist/release/*
+          fail_on_unmatched_files: true
+          # Only the MSI assets are touched; the release itself, its notes and
+          # every CircleCI-published asset are left as they are.
+          overwrite_files: true
+
   sign:
-    name: Sign with SignPath and publish
+    name: Sign the binaries with SignPath
     needs: build
     if: needs.build.outputs.sign == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 330
-    permissions:
-      contents: write
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Check out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -163,24 +256,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.build.outputs.version }}
           COMMIT: ${{ github.sha }}
-        run: |
-          # CircleCI publishes SHA256SUMS.txt.bundle last, and only after the
-          # test suite and build-release passed on the tag, so its presence is
-          # the release gate. Nothing is signed for a tag CircleCI rejected.
-          deadline=$((SECONDS + 5400))
-          until gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx 'SHA256SUMS.txt.bundle'; do
-            if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "Error: CircleCI has not published SHA256SUMS.txt.bundle on release $TAG; not signing."
-              exit 1
-            fi
-            echo "Waiting for CircleCI to publish release $TAG..."
-            sleep 60
-          done
-          resolved=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
-          if [ "$resolved" != "$COMMIT" ]; then
-            echo "Error: tag $TAG resolves to $resolved, this workflow built $COMMIT; not signing."
-            exit 1
-          fi
+        run: scripts/wait-for-release-gate.sh "$TAG" "$COMMIT"
 
       - name: Submit the signing request to SignPath
         id: signpath
@@ -209,12 +285,125 @@ jobs:
             make windows-versioninfo-check EXE="$exe" VERSION="$VERSION"
           done
 
+      - name: Upload signed binaries
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.SIGNED_EXE_ARTIFACT }}
+          path: dist/signed/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  msi-signed:
+    name: Build the MSI from the signed binaries and sign it
+    needs: [build, sign]
+    runs-on: windows-latest
+    timeout-minutes: 330
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Check the MSI artifact configuration is configured
+        env:
+          MSI_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          if [ -z "$MSI_ARTIFACT_CONFIGURATION_SLUG" ]; then
+            echo "Error: SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG variable is not set; see docs/project/releasing.md."
+            exit 1
+          fi
+
+      - name: Download the signed binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ env.SIGNED_EXE_ARTIFACT }}
+          path: dist/signed
+
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version "$WIX_VERSION"
+          wix --version
+
+      - name: Build and validate the MSI
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          scripts/build-msi.sh "$VERSION" dist/signed/sysml-windows-amd64.exe dist/signed/sysml-lsp-windows-amd64.exe dist/signed/sysml-grpc-windows-amd64.exe
+          msi=$(ls dist/opensysml-*-windows-amd64.msi)
+          wix msi validate "$msi"
+          mkdir -p dist/presign
+          mv "$msi" dist/presign/
+
+      - name: Upload the MSI for signing
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.PRESIGN_MSI_ARTIFACT }}
+          path: dist/presign/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Submit the MSI signing request to SignPath
+        # The MSI artifact configuration must sign only the MSI itself: the
+        # .exe files inside are already signed and z3.exe must stay unsigned.
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: "14000"
+          output-artifact-directory: dist/signed-msi
+
+      - name: Rename the signed MSI
+        run: |
+          ls -la dist/signed-msi
+          mkdir -p dist/release
+          for msi in dist/signed-msi/*.msi; do
+            mv "$msi" "dist/release/$(basename "${msi%.msi}")-signed.msi"
+          done
+          ls -la dist/release
+
+      - name: Upload the signed MSI
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-amd64-msi-signed
+          path: dist/release/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-signed:
+    name: Publish the signed assets
+    needs: [build, sign, msi-signed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Download the signed binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ env.SIGNED_EXE_ARTIFACT }}
+          path: dist/signed
+
+      - name: Download the signed MSI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-amd64-msi-signed
+          path: dist/release
+
       - name: Package the signed assets
         run: |
           # Same layouts as the CircleCI assets of the same base name, under a
           # `-signed` suffix so the CircleCI-published SHA256SUMS.txt and its
           # cosign bundle never describe a file they did not hash.
-          mkdir -p dist/release
           cd dist/signed
           zip -q ../release/sysml-windows-amd64-signed.zip sysml-windows-amd64.exe
           zip -q ../release/sysml-lsp-windows-amd64-signed.zip sysml-lsp-windows-amd64.exe
@@ -226,7 +415,7 @@ jobs:
           rm -rf stage
           cd ../release
           sha256sum sysml-grpc-windows-amd64-signed.exe > sysml-grpc-windows-amd64-signed.exe.sha256
-          sha256sum ./*.zip sysml-grpc-windows-amd64-signed.exe | sed 's|\./||' > SHA256SUMS-windows-signed.txt
+          sha256sum ./*.zip ./*.msi sysml-grpc-windows-amd64-signed.exe | sed 's|\./||' > SHA256SUMS-windows-signed.txt
           cat SHA256SUMS-windows-signed.txt
 
       - name: Upload signed assets as a workflow artifact

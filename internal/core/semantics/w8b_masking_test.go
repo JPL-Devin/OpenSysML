@@ -65,27 +65,53 @@ func TestRedefinitionMasksTransitivelyRedefinedFeatures(t *testing.T) {
 	}
 }
 
-func TestRedefinitionClosureSkipsNamesakeIntermediate(t *testing.T) {
+func TestRedefinitionClosureMasksThroughNamesakeIntermediate(t *testing.T) {
 	m, root := buildModel(t,
 		"part def A { part a; } part def B specializes A { part :>> a; }"+
-			" part def C specializes B { part c redefines B::a; }")
+			" part def C specializes B { part c redefines B::a; } part def D specializes B;")
 	a := sym(t, root, "A").Scope.LookupLocalAll("a")[0]
 	ba := sym(t, root, "B").Scope.LookupLocalAll("a")[0]
 	c := sym(t, root, "C")
 	if !m.InheritanceMasked(c, ba) {
 		t.Fatalf("C's redefinition must mask B::a")
 	}
-	if m.InheritanceMasked(c, a) {
-		t.Fatalf("B::a's namesake edge must not mask A::a")
+	if !m.InheritanceMasked(c, a) {
+		t.Fatalf("B::a's redefinition of A::a masks it in C too")
+	}
+	d := sym(t, root, "D")
+	if m.InheritanceMasked(d, ba) || !m.InheritanceMasked(d, a) {
+		t.Fatalf("D inherits B::a in place of A::a")
 	}
 }
 
+// Siblings redefining each other close cyclically; the closure terminates and
+// masks nothing, since a type never inherits its own members — pilot-refereed.
 func TestCyclicRedefinitionMaskTerminates(t *testing.T) {
 	m, root := buildModel(t,
 		"part def A { part a redefines b; part b redefines a; }"+
 			" part def B specializes A {}")
-	if names := visibleNames(m, sym(t, root, "B")); len(names) != 0 {
-		t.Fatalf("cyclic redefinitions should mask both inherited features: %v", names)
+	if names := visibleNames(m, sym(t, root, "B")); names["a"] != 1 || names["b"] != 1 {
+		t.Fatalf("B inherits both of A's features whatever they redefine: %v", names)
+	}
+}
+
+// A chain that crosses a sibling edge masks only its inherited links — on the
+// cached closure path and on the exact fallback alike. Pilot-refereed.
+func TestTransitiveMaskStopsAtSiblingEdge(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; part b redefines a; }"+
+			" part def B specializes A { part c redefines b; }")
+	b := sym(t, root, "B")
+	a := sym(t, root, "A")
+	aa, _ := a.Scope.LookupLocal("a")
+	ab, _ := a.Scope.LookupLocal("b")
+	c, _ := b.Scope.LookupLocal("c")
+	if !m.InheritanceMasked(b, ab) || m.InheritanceMasked(b, aa) {
+		t.Fatalf("B masks b and keeps a: %v", visibleNames(m, b))
+	}
+	exact := m.buildMask(b, []*symbols.Symbol{c})
+	if !exact[ab] || exact[aa] {
+		t.Fatalf("exact expansion = %v, want {b}", exact)
 	}
 }
 
@@ -297,6 +323,26 @@ func TestMaskingIsIndependentOfTheRedefinedMembershipVisibility(t *testing.T) {
 			"part def A { "+vis+"part a; } part def B specializes A { part b redefines a; }")
 		if names := visibleNames(m, sym(t, root, "B")); names["a"] != 0 {
 			t.Fatalf("%q member still visible in B: %v", vis, names)
+		}
+	}
+}
+
+// A redefinition of a namesake targets that namesake, not the redefining feature
+// itself, whichever specialization clause is resolved first (KerML 8.3.3.3.6).
+func TestSelfNamedRedefinitionTargetIsIndependentOfClauseOrder(t *testing.T) {
+	for _, clauses := range []string{":>> causes :> participant", ":> participant :>> causes"} {
+		m, root := buildModel(t, `package P {
+			abstract occurrence causes[*];
+			occurrence def Link { ref occurrence participant[*]; }
+			abstract occurrence def Multicausation :> Link {
+				abstract constant ref occurrence causes[1..*] `+clauses+`;
+			}
+		}`)
+		p := sym(t, root, "P")
+		outer := nested(t, p.Scope, "causes")
+		inner := nested(t, p.Scope, "Multicausation", "causes")
+		if got := m.RedefinedFeatures(inner); len(got) != 1 || got[0] != outer {
+			t.Fatalf("%q: RedefinedFeatures(Multicausation::causes) = %v, want [P::causes]", clauses, got)
 		}
 	}
 }

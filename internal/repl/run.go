@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -298,6 +299,20 @@ func (s *Session) RunCalc(invocation string) Verdict {
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})
 }
 
+// RunAnalysis runs an analysis case outside the prompt and returns what it
+// computed and decided. invocation is what `%analysis` takes: a name, optionally
+// carrying arguments as `Case(3.0, limit = 4.0)`, then the object that is its
+// subject. Its status is the worst its objective and assertions decided.
+func (s *Session) RunAnalysis(invocation string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, err := splitAnalysisArgs(invocation)
+	if err != nil {
+		return s.withTrace(unresolvedVerdict(invocation, err.Error()))
+	}
+	return s.withTrace(s.analysisVerdict(inv))
+}
+
 // RunAction runs an action to completion outside the prompt, on the object
 // performer names when it names one. An action that could not be run, or that
 // stopped short of completing, is unresolved: it produced no outputs to judge.
@@ -354,7 +369,7 @@ func (s *Session) runStateMachine(name string, duration *float64, performer []st
 	exec := s.stateExec.executor
 	values := []NamedValue{
 		{Name: "state", Value: currentStateName(exec)},
-		{Name: "time", Value: runtime.FormatReal(s.stateExec.now)},
+		{Name: "time", Value: semantics.FormatReal(s.stateExec.now)},
 	}
 	values = append(values, namedValues(s.stateExec.contextOf(), exec.StateData())...)
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})

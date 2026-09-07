@@ -1,0 +1,28 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rig",
+  "libraries": true,
+  "slots": {
+    "leaf.subcomponents": {"type": "Sequence", "elements": []},
+    "leaf.totalMass": {"type": "Quantity", "value": 100, "unit": "kg"},
+    "stack.subcomponents": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "stack.a.totalMass": {"type": "Quantity", "value": 100, "unit": "kg"},
+    "stack.totalMass": {"type": "Quantity", "value": 210, "unit": "kg"},
+    "tower.subcomponents": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "tower.s.totalMass": {"type": "Quantity", "value": 210, "unit": "kg"},
+    "tower.totalMass": {"type": "Quantity", "value": 311, "unit": "kg"},
+    "loop.xs": {"error": "cyclic feature value dependency"},
+    "emptySum": {"type": "Quantity", "value": 0, "unit": "kg"},
+    "emptyLengthSum": {"type": "Quantity", "value": 0, "unit": "m"},
+    "emptyProduct": {"type": "Integer", "value": 1},
+    "emptyCount": {"type": "Integer", "value": 0},
+    "otherEmptyKind": {"error": "incommensurable units"},
+    "emptyCountSum": {"error": "incommensurable units"}
+  },
+  "identical": [
+    ["stack.subcomponents.1", "stack.a"],
+    ["stack.subcomponents.2", "stack.b"],
+    ["tower.subcomponents.1", "tower.s"],
+    ["tower.subcomponents.2", "tower.c"]
+  ]
+}

@@ -45,6 +45,8 @@ func doc() usage.Doc {
 				usage.Ex("sysml -validate model.sysml", "Report diagnostics only"),
 				usage.Ex("sysml -validate -strict model.sysml", "...asking whether it is conforming SysML v2"),
 				usage.Ex(`sysml -calc "Fall(3, 4)" model.sysml`, "Invoke a calculation"),
+				usage.Ex("sysml -analysis shipCost model.sysml", "Run an analysis case"),
+				usage.Ex(`sysml -analysis "CostAnalysis ship" model.sysml`, "...on an object as its subject"),
 				usage.Ex(`sysml -run-query "Heavy root=scope" model.sysml`, "Execute a document query"),
 				usage.Ex("sysml -action Drive model.sysml", "Run an action to completion"),
 				usage.Ex("sysml -state Mission -advance 10 model.sysml", "Run a state machine for 10 time units"),
@@ -67,8 +69,9 @@ func doc() usage.Doc {
 				// Printed rather than restated, so the help cannot drift from what a
 				// conversion reports.
 				export.ExperimentalNotice,
-				"Every run that converts RDF says so on stderr. Saving to .sysml or " +
-					".kerml is stable.",
+				export.MigrationNotice,
+				"Every run that converts RDF or migrates a v1 model says so on stderr. " +
+					"Saving to .sysml or .kerml is stable.",
 			},
 		}, {
 			Title: "Native compilation",
@@ -132,9 +135,12 @@ func doc() usage.Doc {
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html", ""),
 				usage.Ex("sysml model.sysml -render-documents rendered", "every document, linked"),
 				usage.Ex("sysml model.sysml -render-documents site -doc-form html -html-css theme.css", ""),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -html-theme report -o report.html", "a bundled theme"),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -html-mermaid cdn -o report.html", "diagrams drawn in the browser"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf "+
 					"-pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf", ""),
 				usage.Ex("sysml -html-default-css -o sysml-document.css", "the default stylesheet"),
+				usage.Ex("sysml -html-default-css -html-theme modern -o modern.css", "a theme's full sheet"),
 			},
 			Paragraphs: []string{
 				"A document is a part def specializing DocumentQueries::Document. Its " +
@@ -149,11 +155,14 @@ func doc() usage.Doc {
 					"with mermaid-cli (mmdc). None of these tools is needed until PDF " +
 					"output is asked for; scripts/download-doc-pdf-toolchain.sh " +
 					"provisions pinned copies.",
-				"HTML output needs nothing external and loads nothing: -html-css adds " +
+				"HTML output needs nothing external and loads nothing by default: -html-theme " +
+					"picks one of the bundled looks (default, modern, print, report), -html-css adds " +
 					"your own stylesheets, -html-no-default-css drops the default one, " +
 					"-html-fragment writes the document element alone to embed in a " +
 					"page of yours, and -html-default-css writes the default sheet out " +
-					"to start from.",
+					"— or, with -html-theme, a theme's whole sheet — to start from. Diagrams are written as Mermaid source; -html-mermaid " +
+					"cdn has the page load a pinned Mermaid release from jsDelivr so a " +
+					"browser draws them, or names a URL of your own to load it from.",
 			},
 		}, {
 			Title: "Flag order",
@@ -248,7 +257,8 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
 	fs.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	fs.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
-	fs.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
+	fs.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle, rdf, or xmi/mdzip for a SysML v1 model to migrate (experimental; default: from the input's extension)")
+	fs.StringVar(&migrationReport, "migration-report", "", "With -convert from xmi: write the element-by-element migration report to this file (JSON when it ends in .json, text otherwise)")
 	fs.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	fs.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	fs.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
@@ -263,9 +273,11 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&pdfTOC, "doc-toc", false, "Write a table of contents ahead of the content (-doc-form html or pdf)")
 	fs.BoolVar(&pdfNumbering, "doc-number-sections", false, "Number the section headings hierarchically (-doc-form html or pdf)")
 	fs.Var(&htmlCSS, "html-css", "Style the HTML with this stylesheet: a file is inlined, a URL is linked (repeatable, applied in order after the default sheet)")
+	fs.StringVar(&htmlTheme, "html-theme", "", "Style the HTML page with a bundled theme layered over the default stylesheet: default, modern, print or report (default: the default stylesheet alone)")
 	fs.BoolVar(&htmlNoCSS, "html-no-default-css", false, "Leave the default stylesheet out, so only -html-css sheets style the document")
 	fs.BoolVar(&htmlShowCSS, "html-default-css", false, "Write the default document stylesheet and exit, as a starting point for your own")
 	fs.BoolVar(&htmlFragment, "html-fragment", false, "Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own")
+	fs.StringVar(&htmlMermaid, "html-mermaid", "", "Have the HTML page load Mermaid to draw its diagrams: cdn loads a pinned release from jsDelivr, a URL loads the script it names (default: diagrams stay Mermaid source)")
 	fs.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
 	fs.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
 	fs.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
@@ -280,6 +292,7 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
 	fs.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
 	fs.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
+	fs.Var(&modelChecks.analyses, "analysis", "Run this analysis case and report its outputs and the verdict of its objective, as -analysis \"Pkg::Case(3.0) Pkg::part\" with arguments for its inputs and an object as its subject (repeatable)")
 	fs.Var(&modelChecks.queries, "run-query", "Execute this document query and report its rows, as -run-query \"HeavySubsystems root=telescope\" (repeatable)")
 	fs.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
 	fs.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")

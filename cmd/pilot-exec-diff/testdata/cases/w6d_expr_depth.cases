@@ -52,6 +52,15 @@ sum-quantities-mixed-units ::  :: W6D::SumQMixed()
 sum-empty ::  :: W6D::SumEmpty()
 quantity-add ::  :: 3.0 [SI::kg] + 500.0 [SI::g]
 add-bare-to-measured ::  :: W6D::AddBareToMeasured()
+sum-empty-quantity ::  :: W6D::SumEmptyQuantity()
+add-empty-quantity-sum ::  :: W6D::AddEmptyQuantitySum()
+
+# The pilot folds a `default null` collection to its default rather than to the
+# parts subsetting it, and counts an undefaulted collection as one value whether
+# two parts subset it or none does, so membership is unrefereeable here.
+subsetting-defaulted-count ::  :: W6D::sysDefaulted.n
+subsetting-two-count ::  :: W6D::sysTwo.n
+subsetting-none-count ::  :: W6D::sysNone.n
 
 # KerML function library: VectorFunctions and ComplexFunctions. Only the
 # concrete library bodies the pilot can fold are refereeable.

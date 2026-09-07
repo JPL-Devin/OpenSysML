@@ -1281,15 +1281,15 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, owner ast.
 }
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
-// containingState is used as the source when member.Source is nil (sourceless accept...then).
+// containingState is used as the source when member.Source is nil (`accept … then`, `if … then`).
 // scope is the scope the transition was declared in.
 func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState, owner ast.Node, scope *symbols.Scope) (*Transition, error) {
-	// A sourceless `accept ... then` leaves the state it is written in, so the
-	// state declaring it is the source; anywhere else it names no source at all.
+	// A sourceless transition leaves the state it is written in, so the state
+	// declaring it is the source; anywhere else it names no source at all.
 	var source ast.Node
 	if member.Source == nil {
 		if containingState == nil {
-			return nil, fmt.Errorf("sourceless transition (accept...then) at top level has no containing state")
+			return nil, fmt.Errorf("sourceless transition at top level has no containing state")
 		}
 		vertex, ok := graph.findVertex(containingState)
 		if !ok {

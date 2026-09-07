@@ -12,11 +12,13 @@ import (
 // VectorFunctions and the vector arithmetic VectorCalculations shares with it.
 // ---------------------------------------------------------------------------
 
-// vectorOperand is a vector argument as arithmetic reads it: its numbers and,
-// for a vector quantity, the unit of each axis (nil for a plain vector).
+// vectorOperand is a vector argument as arithmetic reads it: its numbers, for a
+// vector quantity the unit of each axis (nil for a plain vector), and the frame
+// it was written over, if any.
 type vectorOperand struct {
 	num   []semantics.Value
 	units []Unit
+	frame *CoordinateFrame
 }
 
 func (v vectorOperand) dimension() int { return len(v.num) }
@@ -26,7 +28,7 @@ func (v vectorOperand) hasUnits() bool { return v.units != nil }
 // axis is component i as a scalar quantity; a plain vector's is of dimension one.
 func (v vectorOperand) axis(i int) *Quantity {
 	if v.units == nil {
-		return &Quantity{Num: v.num[i], Unit: unitOne()}
+		return &Quantity{Num: v.num[i], Unit: semantics.UnitOne()}
 	}
 	return &Quantity{Num: v.num[i], Unit: v.units[i]}
 }
@@ -40,7 +42,7 @@ func (v vectorOperand) reals(name string) ([]float64, error) {
 			out[i] = asReal(n)
 			continue
 		}
-		converted, err := v.axis(i).convertTo(v.units[0])
+		converted, err := v.axis(i).ConvertTo(v.units[0])
 		if err != nil {
 			return nil, functionError(name, err)
 		}
@@ -57,7 +59,7 @@ func readVector(name, label string, val Value) (vectorOperand, error) {
 		return vectorOperand{num: val.Vector().Elements}, nil
 	case ValVectorQuantity:
 		vq := val.VectorQuantity()
-		return vectorOperand{num: vq.Num, units: vq.Units}, nil
+		return vectorOperand{num: vq.Num, units: vq.Units, frame: vq.Frame}, nil
 	}
 	num, err := labelledVectorElements(name, label, val)
 	if err != nil {
@@ -161,10 +163,69 @@ func (ctx *Context) checkedComponents(elements []semantics.Value) ([]semantics.V
 
 // vectorOperandValue is the vector or vector quantity an operand was read from.
 func (ctx *Context) vectorOperandValue(v vectorOperand) (Value, error) {
+	if v.frame != nil {
+		return ctx.framedVectorQuantity(v.num, v.frame)
+	}
 	if v.hasUnits() {
 		return ctx.vectorQuantityValue(v.num, v.units)
 	}
 	return ctx.vectorValue(v.num)
+}
+
+// framedResult is vectorResult over a frame, each axis in the frame's unit for it;
+// over no frame it is vectorResult.
+func (ctx *Context) framedResult(name string, frame *CoordinateFrame, axes []Value) (Value, error) {
+	if frame == nil {
+		return ctx.vectorResult(name, axes)
+	}
+	num := make([]semantics.Value, len(axes))
+	for i, axis := range axes {
+		q, ok := asQuantity(axis)
+		if !ok {
+			return Value{}, fmt.Errorf("%w: function %s computed %s for a component",
+				ErrTypeMismatch, name, describeValue(axis))
+		}
+		converted, err := semantics.ConvertQuantity(*q, frame.Axes[i])
+		if err != nil {
+			return Value{}, functionError(name, err)
+		}
+		num[i] = converted.Num
+	}
+	return ctx.framedVectorQuantity(num, frame)
+}
+
+// sharedFrame is the frame two operands of one operation are over: the same frame,
+// or none when neither is over any; a vector over a frame and one over none, or
+// vectors over two frames, have no common coordinates to combine.
+func sharedFrame(name string, v, w vectorOperand) (*CoordinateFrame, error) {
+	switch {
+	case v.frame == nil && w.frame == nil:
+		return nil, nil
+	case v.frame != nil && w.frame != nil && v.frame.equal(w.frame):
+		return v.frame, nil
+	case v.frame != nil && w.frame != nil:
+		return nil, fmt.Errorf("%w: function %s combines vectors over the coordinate frames %s and %s; transform one into the other's frame first",
+			ErrTypeMismatch, name, v.frame.Name(), w.frame.Name())
+	}
+	framed := v.frame
+	if framed == nil {
+		framed = w.frame
+	}
+	return nil, fmt.Errorf("%w: function %s combines a vector over the coordinate frame %s with one over no frame; write both over the frame (`(x, y, z) [%s]`)",
+		ErrTypeMismatch, name, framed.Name(), framed.Name())
+}
+
+// scaledFrame is the frame a vector over frame is over once scaled by x: the frame
+// itself for a number, else the frame composed with x's unit (`CoordinateFrame*`, `/`).
+func scaledFrame(name string, op ast.OperatorKind, frame *CoordinateFrame, x *Quantity) (*CoordinateFrame, error) {
+	if frame == nil || x.Unit.None() {
+		return frame, nil
+	}
+	composed, _, err := composeFrame(op, NewCoordinateFrameValue(frame), measurementRefOf(x.Unit))
+	if err != nil {
+		return nil, functionError(name, err)
+	}
+	return composed.CoordinateFrame(), nil
 }
 
 // vectorResult is the vector of per-axis scalar results: a vector quantity when
@@ -194,7 +255,7 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 	if v.Kind != semantics.ValReal {
 		return v, nil
 	}
-	return realResult(v.Real)
+	return semantics.RealResult(v.Real)
 }
 
 // isNumeric reports whether a value is an Integer or a Real.
@@ -222,7 +283,7 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
 			)
 		}
-		return realResult(res)
+		return semantics.RealResult(res)
 	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
@@ -249,7 +310,7 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 func (ctx *Context) realVector(components []float64) (Value, error) {
 	elements := make([]semantics.Value, len(components))
 	for i, x := range components {
-		elem, err := realResult(x)
+		elem, err := semantics.RealResult(x)
 		if err != nil {
 			return Value{}, err
 		}
@@ -261,7 +322,7 @@ func (ctx *Context) realVector(components []float64) (Value, error) {
 // checkedReal wraps a computed Real as a runtime value, reporting a result that
 // is not a finite number.
 func checkedReal(x float64) (Value, error) {
-	res, err := realResult(x)
+	res, err := semantics.RealResult(x)
 	if err != nil {
 		return Value{}, err
 	}
@@ -325,6 +386,10 @@ func (ctx *Context) combineVectors(name string, op ast.OperatorKind, v, w vector
 	if v.dimension() != w.dimension() {
 		return Value{}, dimensionMismatch(name, v, w)
 	}
+	frame, err := sharedFrame(name, v, w)
+	if err != nil {
+		return Value{}, err
+	}
 	axes := make([]Value, v.dimension())
 	for i := range axes {
 		axis, err := addQuantities(op, v.axis(i), w.axis(i))
@@ -333,7 +398,7 @@ func (ctx *Context) combineVectors(name string, op ast.OperatorKind, v, w vector
 		}
 		axes[i] = axis
 	}
-	return ctx.vectorResult(name, axes)
+	return ctx.framedResult(name, frame, axes)
 }
 
 // zeroLike is the zero of a numeric value's kind, which negation subtracts from.
@@ -415,7 +480,7 @@ func (ctx *Context) negateVector(name string, v vectorOperand) (Value, error) {
 		}
 		axes[i] = axis
 	}
-	return ctx.vectorResult(name, axes)
+	return ctx.framedResult(name, v.frame, axes)
 }
 
 // vectorOf is VectorFunctions::VectorOf, the NumericalVectorValue of a non-empty
@@ -484,7 +549,7 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 		return Value{}, err
 	}
 	if v.hasUnits() {
-		return ctx.scaleVectorQuantity(name, ast.OpMul, &Quantity{Num: x, Unit: unitOne()}, v)
+		return ctx.scaleVectorQuantity(name, ast.OpMul, &Quantity{Num: x, Unit: semantics.UnitOne()}, v)
 	}
 	scaled := make([]semantics.Value, v.dimension())
 	for i, elem := range v.num {
@@ -500,8 +565,12 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 // scaleVectorQuantity multiplies or divides each axis of a vector by a scalar
 // quantity, composing the units as the scalar QuantityCalculations do.
 func (ctx *Context) scaleVectorQuantity(name string, op ast.OperatorKind, x *Quantity, v vectorOperand) (Value, error) {
-	if v.dimension() == 0 && !x.Unit.none() {
+	if v.dimension() == 0 && !x.Unit.None() {
 		return Value{}, functionError(name, errEmptyVectorQuantity())
+	}
+	frame, err := scaledFrame(name, op, v.frame, x)
+	if err != nil {
+		return Value{}, err
 	}
 	axes := make([]Value, v.dimension())
 	for i := range axes {
@@ -515,7 +584,7 @@ func (ctx *Context) scaleVectorQuantity(name string, op ast.OperatorKind, x *Qua
 		}
 		axes[i] = axis
 	}
-	return ctx.vectorResult(name, axes)
+	return ctx.framedResult(name, frame, axes)
 }
 
 // scalarQuantityVectorMult is VectorCalculations::scalarQuantityVectorMult, a
@@ -559,7 +628,7 @@ func vectorScalarDiv(name string, ctx *Context, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
 	}
 	if v.hasUnits() {
-		return ctx.scaleVectorQuantity(name, ast.OpDiv, &Quantity{Num: x, Unit: unitOne()}, v)
+		return ctx.scaleVectorQuantity(name, ast.OpDiv, &Quantity{Num: x, Unit: semantics.UnitOne()}, v)
 	}
 	quotients := make([]float64, v.dimension())
 	for i, elem := range v.num {
@@ -627,6 +696,9 @@ func innerQuantity(name string, v, w vectorOperand) (Value, error) {
 	if v.dimension() != w.dimension() {
 		return Value{}, dimensionMismatch(name, v, w)
 	}
+	if _, err := sharedFrame(name, v, w); err != nil {
+		return Value{}, err
+	}
 	if v.dimension() == 0 {
 		return integerValue(0), nil
 	}
@@ -690,6 +762,9 @@ func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
 	}
 	if vOperand.dimension() != wOperand.dimension() {
 		return Value{}, dimensionMismatch(name, vOperand, wOperand)
+	}
+	if _, err := sharedFrame(name, vOperand, wOperand); err != nil {
+		return Value{}, err
 	}
 	v, err := vOperand.reals(name)
 	if err != nil {

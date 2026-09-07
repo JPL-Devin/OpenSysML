@@ -566,7 +566,7 @@ elmt:Prefixed__context_om
     sysml:membershipOwningNamespace elmt:Prefixed .
 
 elmt:Prefixed__context__stopped
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Prefixed::context::stopped" ;
     sysml:elementId "Prefixed__context__stopped" ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -575,7 +575,6 @@ elmt:Prefixed__context__stopped
     sysml:owningRelationship elmt:Prefixed__context__stopped_om ;
     sysml:owningMembership elmt:Prefixed__context__stopped_om ;
     sysml:declaredName "stopped" ;
-    sysx:declaredPrefix "assert" ;
     sysml:ownedMember elmt:Prefixed__context__stopped___400 ;
     sysml:ownedMembership elmt:Prefixed__context__stopped___400_om ;
     sysml:ownedRelationship elmt:Prefixed__context__stopped___400_om ;
@@ -619,7 +618,7 @@ elmt:Prefixed__context__stopped___400_om
     sysml:membershipOwningNamespace elmt:Prefixed__context__stopped .
 
 elmt:Prefixed__context__moving
-    a sysml:ConstraintUsage ;
+    a sysml:AssertConstraintUsage ;
     sysml:qualifiedName "Prefixed::context::moving" ;
     sysml:elementId "Prefixed__context__moving" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -628,7 +627,6 @@ elmt:Prefixed__context__moving
     sysml:owningRelationship elmt:Prefixed__context__moving_om ;
     sysml:owningMembership elmt:Prefixed__context__moving_om ;
     sysml:declaredName "moving" ;
-    sysx:declaredPrefix "assert" ;
     sysml:isNegated "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Prefixed__context__moving___400 ;
     sysml:ownedMembership elmt:Prefixed__context__moving___400_om ;

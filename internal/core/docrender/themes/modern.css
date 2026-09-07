@@ -1,0 +1,117 @@
+/* modern: a clean corporate sans-serif. Neutral greys, a single navy accent,
+   filled table headers and zebra rows, code in a soft surface. Written
+   against the default sheet's tokens, in the same layer, so unlayered
+   reader CSS still overrides it. */
+@layer opensysml {
+  .sysml-document {
+    --sysml-font-body: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --sysml-font-mono: "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", monospace;
+    --sysml-font-size: 1rem;
+    --sysml-line-height: 1.6;
+    --sysml-measure: 48rem;
+    --sysml-text: #1f2328;
+    --sysml-muted: #59636e;
+    --sysml-accent: #0b3d91;
+    --sysml-rule: #d0d7de;
+    --sysml-surface: #f6f8fa;
+    --sysml-cell-padding: 0.5rem 0.8rem;
+    --sysml-code-font-size: 0.875em;
+    --sysml-caption-font-size: 0.875em;
+  }
+
+  .sysml-document h1,
+  .sysml-document h2,
+  .sysml-document h3,
+  .sysml-document h4 {
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  .sysml-document .sysml-title {
+    font-size: 2em;
+    padding-bottom: 0.3em;
+    border-bottom: var(--sysml-border-width) solid var(--sysml-rule);
+  }
+
+  .sysml-document .sysml-title-page .sysml-title {
+    border-bottom: none;
+  }
+
+  .sysml-document h2 {
+    font-size: 1.5em;
+    margin-top: 2em;
+    padding-bottom: 0.3em;
+    border-bottom: var(--sysml-border-width) solid var(--sysml-rule);
+  }
+
+  .sysml-document h3 {
+    font-size: 1.2em;
+    margin-top: 1.5em;
+  }
+
+  .sysml-document .sysml-toc {
+    padding: var(--sysml-space);
+    background: var(--sysml-surface);
+    border: var(--sysml-border-width) solid var(--sysml-rule);
+    border-radius: 6px;
+  }
+
+  .sysml-document .sysml-table {
+    border: var(--sysml-border-width) solid var(--sysml-rule);
+    border-radius: 6px;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+  }
+
+  .sysml-document .sysml-table th,
+  .sysml-document .sysml-table td {
+    border: none;
+    border-bottom: var(--sysml-border-width) solid var(--sysml-rule);
+  }
+
+  .sysml-document .sysml-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .sysml-document .sysml-table thead th {
+    background: var(--sysml-accent);
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .sysml-document .sysml-table tbody tr:nth-child(even) td {
+    background: var(--sysml-surface);
+  }
+
+  .sysml-document .sysml-caption {
+    caption-side: bottom;
+    padding-top: var(--sysml-space-tight);
+  }
+
+  .sysml-document .sysml-diagram pre,
+  .sysml-document code {
+    background: var(--sysml-surface);
+    border-radius: 4px;
+  }
+
+  .sysml-document code {
+    padding: 0.1em 0.35em;
+  }
+
+  .sysml-document .sysml-diagram pre {
+    padding: var(--sysml-space);
+    border: var(--sysml-border-width) solid var(--sysml-rule);
+  }
+
+  .sysml-document .sysml-link,
+  .sysml-document .sysml-ref {
+    text-decoration: none;
+  }
+
+  .sysml-document .sysml-link:hover,
+  .sysml-document .sysml-ref:hover {
+    text-decoration: underline;
+  }
+}

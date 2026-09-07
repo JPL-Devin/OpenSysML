@@ -12,8 +12,8 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 303 of the 345 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 42 are refused. Of the 303, a second
+  the construct. Every one of the 346 models under `examples/` (committed, training and
+  pilot corpora) converts to Turtle, and a second
   conversion of the written-back notation reproduces the Turtle byte for byte for
   every one — the notation is written from the [source text](#source-text) the
   graph carries. These figures are the
@@ -83,8 +83,10 @@ rather than read without what those terms said: the pre-rename namespace
 `urn:systemica:sysml:`, and the metadata properties `sysx:prefixMetadata` and
 `sysml:annotates` that release 0.4.3 wrote for a `#` prefix and an `about`
 target (now a `sysml:MetadataUsage` and `sysml:annotatedElement`, see
-[What each element carries](#what-each-element-carries)). The error names the
-term; re-export the model from its notation source.
+[What each element carries](#what-each-element-carries)), and the flags
+`sysml:isSnapshot` and `sysml:isTimeslice` that release 0.5.1 wrote for a
+portion (now `sysml:portionKind`). The error names the term; re-export the
+model from its notation source.
 
 ### Element IRIs
 
@@ -197,8 +199,24 @@ triples come); a set of classes with no such member is refused, naming the subje
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
   `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,
-  `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
-  `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
+  `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isIndividual`, `isPortion`,
+  `isConjugated`, `isAll`, `isAccept`, `isResult`, and `isEvent` for an `event`
+  modifier on a usage whose metaclass is not itself `sysml:EventOccurrenceUsage`.
+  A flag the two grammars spell differently is written back in the grammar of
+  its root (`sysx:sourceLanguage`): `isConstant` as KerML's `const` or SysML's
+  `constant`; `isPortion` as KerML's `portion`, in place of `composite` (a
+  portion is composite, so `isPortion` without `isComposite` is refused), and
+  on a SysML root as nothing of its own — there it is the fact `snapshot` or
+  `timeslice` states (`OccurrenceUsage::portionKind` implies it), so it is
+  written back by the portion kind and refused without one, SysML having no
+  `portion` prefix and `composite` dropping the fact. The other flags are
+  spelled alike in both grammars
+- `sysml:portionKind`, `"snapshot"` or `"timeslice"`, for a usage declared as a
+  portion (`snapshot :>> start`, `timeslice occurrence t`); the two are the
+  metamodel's `OccurrenceUsage::portionKind`, so no flag spells them. Such a
+  usage also carries `sysml:isPortion`, the fact its kind implies; a graph
+  stating the kind alone reads back by its kind, and gains the flag when
+  re-exported
 - Declaration-head relationships, as element IRIs where the target resolves
   inside the model — by name resolution, so a name reached through an import,
   an alias or a nested package qualification links to the same element its
@@ -223,6 +241,26 @@ triples come); a set of classes with no such member is refused, naming the subje
   actions the loop body declares. A body expression's parameter, a `for` loop's
   variable and a trigger's parameter are no elements of the graph: a reference
   to one stays its name, even where it shadows a feature of the same name.
+- A KerML relationship written keyword-first as a member of its own
+  (`specialization Gen subtype A specializes B;`, `subset f subsets g;`,
+  `inverse f of g;`, `featuring of f by T;`, `disjoint A from B;`) is an element
+  typed by its metaclass, and its two ends are two properties whose order the
+  metamodel fixes: `sysml:Specialization` with `specific` and `general`;
+  `sysml:FeatureTyping` with `typedFeature` and `type`; `sysml:Subsetting` with
+  `subsettingFeature` and `subsettedFeature`; `sysml:Redefinition` with
+  `redefiningFeature` and `redefinedFeature`; `sysml:Conjugation` with
+  `conjugatedType` and `originalType`; `sysml:FeatureInverting` with
+  `invertingFeature` and `featureInverted`; `sysml:TypeFeaturing` with
+  `featureOfType` and `featuringType`; `sysml:Disjoining` with `typeDisjoined`
+  and `disjoiningType`. Each end is a link or a literal by the rule above, so a
+  feature chain (`disjoint earlier.successors from later.predecessors;`) is
+  carried as `sysx:Expression` text. `sysx:declaredKeyword` keeps the keyword
+  the member was written with (`subtype` against `subclassifier`) and
+  `sysx:declaredPrefix` the `specialization`, `inverting` or `disjoining` that
+  introduces its name; the notation is written back from the two ends, so
+  swapping them in the graph swaps them in the notation. This is distinct from
+  the clause of a declaration (`class C specializes A disjoint from B;`), which
+  stays a property of `C` (`sysml:specializes`, `sysml:disjointFrom`).
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node, with
@@ -250,6 +288,14 @@ triples come); a set of classes with no such member is refused, naming the subje
   in the grammar's position: ahead of the kind keyword and of `assert`/`perform`
   (`#Safety assert not constraint c;`), after `subject`, `actor`, `stakeholder`,
   `objective`, `variant`, `assume`, `require` and `var` (`assume #Safety constraint c;`).
+- The cross feature an end declares ahead of its kind keyword —
+  `end [0..*] item x : A;`, `end x1 [1] typed by Sub1 item y : B;` — is a
+  `sysml:Feature` (in SysML, a `sysml:ReferenceUsage`) owned by the end through
+  an `OwningMembership`, indexed after the end's body members and prefix
+  annotations, carrying its name, its `sysml:lowerBound`/`sysml:upperBound` and
+  its specializations. Its bounds are never the end's:
+  `end [0..*] item x : A[1];` states `[0..*]` on the cross feature and `[1]` on
+  the end, and the decoder writes each back where it was declared.
 
 The `sysx:` properties:
 
@@ -258,11 +304,13 @@ The `sysx:` properties:
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. Also marks an expression body node, so `{}` rebuilds from structure. |
 | `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
-| `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
-| `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
+| `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under, and a flag the two grammars spell differently (`const` against `constant`, see the feature flags above) is written in that grammar. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, KerML's `feature` and `attribute`, `snapshot` and `occurrence`), on a named declaration and on an anonymous one alike (`feature :>> x;`, `snapshot :>> start { … }`). The AST records one kind for all of them, so without this the notation would come back rewritten. Where the graph types the fact the keyword states — `sysml:portionKind` for `snapshot`/`timeslice`, the metaclass `sysml:EventOccurrenceUsage` for `event`, `sysml:AssertConstraintUsage` for `assert` — the typed fact is authoritative and this predicate only chooses between two spellings of it (`snapshot :>> start` against `snapshot occurrence :>> start`; `event m.start` against `event occurrence references m.start`; `assert c` against `assert constraint references c`); a keyword the typing contradicts (`snapshot` with `sysml:portionKind "timeslice"` or none, `event` on a `sysml:PartUsage`, `assert` on a `sysml:ConstraintUsage`) is refused rather than one of the two written. KerML's `feature` has no typed counterpart — an attribute usage is what the AST records for it and `sysx:sourceLanguage` does not decide between the two — so it is carried as this spelling alone. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
+| `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assume` of `assume constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. The `assert` of `assert constraint c : C` is not written here: that usage is a `sysml:AssertConstraintUsage`, and the metaclass states it; a graph stating both with another prefix is refused. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
-| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`, `connector c from a to b`). Without it the verb would be missing or doubled. |
+| `sysx:endName` | The name a connector end declares for itself ahead of the feature it reference-subsets (`connect bead ::> t.bead to …`, `connector a ::> a.x to b;`, `bind e1 ::> a = e2 ::> b;`). The end's node relates the feature; without the name the end would come back as the bare feature. See [End-binding heads](#end-binding-heads). |
+| `sysx:endReferencesKeyword` | On a named end, the ReferencesKeyword written between the name and the feature when it is the word `references` (`bind e1 references a = …`). Absent, the end is written with `::>`; a value other than the two spellings is refused. |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
@@ -427,6 +475,21 @@ elmt:Demo__Vehicle
   `sysml:owningType` on it and `sysml:ownedFeature` and
   `sysml:ownedFeatureMembership` on the owner. `FeatureMembership` specializes
   `OwningMembership`, so the `_om` id and the properties above still apply.
+- A KerML **`member feature`** — `class C { member feature x; }`, the grammar's
+  `TypeFeatureMember` — is a feature the type owns through a plain
+  `sysml:OwningMembership`, not a `FeatureMembership`: it is a member of the type
+  but not one of its features, so none of `ownedFeature`,
+  `ownedFeatureMembership`, `ownedMemberFeature` or `owningType` is stated.
+  Reading a graph back, a `Feature` a `Type` owns through a plain
+  `OwningMembership` is written with the `member` prefix, after its visibility
+  (`private member feature x;`), unless the membership is one KerML writes
+  another way: a `VariantMembership`, a `ResultExpressionMembership`, a
+  metadata annotation, an enumerated value, or the cross feature an end declares
+  in its head (described with the metadata annotations above). SysML has no
+  `member` keyword, so a SysML-language type
+  that owns a feature through a plain `OwningMembership` is an
+  `UnsupportedError` naming the feature: writing it as `attribute x;` would
+  make it a feature of the type, a different model.
 - A **relationship a namespace declares** — an import, a dependency, a state's
   entry membership — is owned directly, with `sysml:owningRelatedElement` on it
   and `sysml:ownedRelationship` on the owner, and no membership between. An
@@ -657,6 +720,18 @@ The rules the tree follows:
   a shape this mapping cannot write (a missing operator, an operand count an
   operator does not take, a literal with no value) is reported as unsupported,
   naming the node, never guessed.
+- **Parentheses follow the parser's precedence table.** The tree records no
+  parentheses, so the writer places them where the grammar needs them: an operand
+  that binds more loosely than the operator around it is parenthesized
+  (`size(ae) == (if isEmpty(af) ? 0 else 2) and …`, `(p ?? q) implies r`,
+  `(a + b)[1]`, `(x as T).f`, `- (1 + 2) ** 2`, `not (p and q)`), one that binds as
+  tightly or tighter is not (`a + b * c`, `if p ? x else - x`, `p hastype T or q`).
+  A conditional, being the loosest form, is parenthesized wherever it is an
+  operand or the condition of another conditional; as the operand of
+  `**` the left side must bind tighter than exponentiation, so `(a ** b) ** c`
+  keeps its parentheses while `a ** b ** c` groups to the right, as the parser
+  reads it. Text kept from `sysx:sourceText` is placed the same way, so a
+  foreign operand written into a kept expression is parenthesized when needed.
 - **An expression body is structure too.** `{ in y : Real; y + x }` is a
   `sysml:Expression` node whose `sysx:bodyParameter`s are nodes of their own —
   each typed `sysml:ReferenceUsage` with `sysml:direction "in"`, its name, `ref`
@@ -748,6 +823,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `accept sig : Signal;`, `accept when c;` | the usage's own metaclass | `sysml:isAccept`, and `sysx:declaredKeyword "accept"` where the optional `action` was not written |
 | `fork`, `join`, `merge`, `decide` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
 | `succession first a then b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
+| `public succession S first a if g then b;` (a guarded succession, which is a transition) | `sysml:TransitionUsage` | as a transition, with `sysx:declaredKeyword "succession"` for the keyword written; `sysx:transitionSyntax` is derived from where the AST places the source, not from the words ahead of it, so a visibility or a name does not change it. Written back, a named form always writes `first` (`succession S first a …`, `transition T first a …`), since only a nameless `transition` may state a bare source |
 | `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
 | `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
@@ -827,7 +903,13 @@ name there would reach the inherited redefinition; a `part payload :> payload`
 whose target is the package's `payload` writes `subsets Shadowing::payload`,
 since `payload` inside the definition would be the subsetting part itself; and a
 `: Packet` inside a definition that declares its own `Packet` writes
-`: Shadowing::Packet` when the outer one is meant. A name shadowed at every
+`: Shadowing::Packet` when the outer one is meant. The scope a spelling is read
+in is the one the parser reads it in: a `featured by` or `crosses` target in a
+feature's head is read in that feature's own scope first, where its type's
+members are visible, so a `member feature` nested in an anonymous
+`portion :>> startShot` that is featured by that portion writes `featured by
+CC1::startShot`, since the short name in the feature's head would reach the
+inherited `Occurrence::startShot` instead. A name shadowed at every
 level falls back to the global form (`$::Shadowing::Packet`), and an element
 that no spelling reaches from where it is written is reported rather than
 written as a different element. What a spelling reaches can depend on how the
@@ -891,18 +973,33 @@ expr:P__Car___402.end0
 `payload`). An end written behind a multiplicity (`connect [1] a to [0..1] b`,
 `bind [0..1] a = [0..1] b`) carries its bounds on that node as `sysml:lowerBound`
 and `sysml:upperBound` expression nodes, the way a feature carries its own; the
-decoder writes them back ahead of the end. A `bind` head's second end is the
-value node the head already states as `sysml:value`, so a `bind a = b` relates
-`sysml:references` and `sysml:value` as its two ends without a copy of either
-(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`). The forms
-and what each writes:
+decoder writes them back ahead of the end. A binding's two ends are two such
+nodes like a succession's or a connector's — `bind a = b` relates `end0` for `a`
+and `end1` for `b` — and neither is the connector's `sysml:value`: a binding
+states no value and no `sysml:references` of its own
+(`export_test.go:TestBindingEndMultiplicitiesAreStatedAsStructure`,
+`binding_connector_ends_test.go`). An end that
+declares a name of its own and reference-subsets the feature it attaches to
+(`connect bead ::> t.bead to …`, KerML `connector a ::> a.x to b;`,
+`bind e1 ::> a = e2 references b;`) relates that
+feature — `sysml:referent` or `sysml:targetFeature` is `t.bead`, not `bead` —
+and carries the name as `sysx:endName` on the same node, with
+`sysx:endReferencesKeyword "references"` where the source spelled the word; the
+decoder writes it back as `<name> ::> <feature>` unless that spelling is recorded
+(`export_test.go:TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText`,
+`binding_connector_ends_test.go:TestKerMLBindingConnectorEndsCarryTheRoundTripWithoutSourceText`).
+A named end that relates no feature, or one the graph names twice, is refused as
+that connector end rather than written (`TestBindingEndsWithoutANotationAreRefused`).
+A KerML binary connector without `from` starts with its first end, so
+`connector eng to t;` is an anonymous connector whose `end0` is `eng`, and a
+named one writes `from` as its `sysx:endVerb`. The forms and what each writes:
 
 | `sysx:endForm` | Notation | Head |
 |----------------|----------|------|
-| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b` |
+| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b`, `connector c from a to b` |
 | `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
-| `equals` | `<end0> = <end1>` | `bind a = b` |
-| `firstThen` | `<end0> then <end1>` | `succession first a then b` |
+| `equals` | `<end0> = <end1>` | `bind a = b`, `bind e1 ::> a = e2 references b`, `binding [1] of a = b`, `binding of e1 ::> a = e2 ::> b` |
+| `firstThen` | `<end0> then <end1>` | `succession first a then b`, `succession [n] first a then b` |
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
@@ -913,15 +1010,25 @@ that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
 is a synonym for the kind (`verify` for a satisfy, `allocate` for an
 allocation) it is carried as `sysx:declaredKeyword`, as elsewhere.
 
+An anonymous connector's own multiplicity (`sysml:lowerBound`/`sysml:upperBound`
+on the connector, as against on an end node) is its declaration, and is written
+ahead of the ends: `succession [n] first a then b`, `binding [1] of a = b`. A
+declaration is always followed by the end verb, since `binding [1] a = b` reads
+the leading `[1]` as the first end's multiplicity in both notations: a `binding`
+or `succession` that declares something but recorded no `sysx:endVerb` is written
+with KerML `of`/`first` or SysML `bind`/`first`, which the second hop then records
+as its verb. SysML's `bind` shorthand declares nothing, so a `bind` whose graph
+states a multiplicity is written `binding [1] bind a = b`.
+
 **The form is only recorded when rebuilding from it reproduces the head's tokens.**
 The encoder writes the ends back from `sysx:endForm` and compares them with the
 source, whitespace and comments aside, before recording it — a head written over
 several lines, or with a note inside it, records its form like any other
 (`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
 cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
-more than their ends: an end with a `references` clause, an inline payload
-declaration (`flow of x : P from a to b`), or a satisfy that declares a name of
-its own (`satisfy s : R by v`).
+more than their ends: an end that redefines, an inline payload declaration
+(`flow of x : P from a to b`), or a satisfy that declares a name of its own
+(`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
@@ -1040,12 +1147,36 @@ value — is reported rather than the condition written and the rest dropped.
 The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.
 
-**A synonym keyword on a declaration with no name of its own is refused.** `snapshot s;`
-shares its AST kind with `occurrence`, and a declaration that carries no name of
-its own has nothing for `sysx:declaredKeyword` to attach to, so writing it back as
-the canonical `occurrence` would be a different declaration. It is reported
-instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
-was written with.
+**A synonym keyword on a declaration with no name of its own is carried like a
+named one.** `feature :>> x;`, `composite :>> e = v;`, `snapshot :>> start { … }`,
+`timeslice :>> portionOfLife { … }`, `event m.start;`, `event occurrence e;`,
+`assert constraint { … }`, `assert c { … }` and `assert not c;` all come back from
+the graph alone: the portion, the event and the assertion are typed
+(`sysml:portionKind`, `sysml:EventOccurrenceUsage`, `sysml:AssertConstraintUsage`
+with `sysml:isNegated`), the occurrence or constraint an `event m.start` or
+`assert c` names is its `sysml:references`, and KerML's `feature` is
+`sysx:declaredKeyword` — see [What each element carries](#what-each-element-carries)
+for how the decoder chooses the spelling. Reading back, the head is spelled from
+the typed facts: `snapshot`/`timeslice` from the portion kind, `event` from the
+metaclass or `sysml:isEvent`, `assert` from the metaclass with `not` from
+`sysml:isNegated`, each as the kind keyword itself where `sysx:declaredKeyword`
+says it was written so and as a modifier ahead of `occurrence`/`constraint`
+otherwise. What is still refused is a keyword that takes a reference in place
+of a name — `perform`, `exhibit`, a state's `entry`/`do`/`exit`, `event`,
+`assert` — in a shape the notation cannot state. With neither a
+`sysml:declaredName` nor a `sysml:references` the graph has nothing to put in
+either of the keyword's two places, `perform a` and `perform action a`. With a
+`sysml:declaredName` under `perform`, `exhibit`, `entry`/`do`/`exit` or `event`
+the name has no place at all: `event e;` names the `e` it refers to, and the
+declaration is spelled `event occurrence e;`, which the graph does not state.
+Under `assert` a name is read only where a typing, specialization, `references`
+clause or value follows it (`assert safe : Safe;`, which the parser reads as a
+declaration), so a named assertion that nothing but a body or a multiplicity
+follows — `assert c { … }`, `assert c[1]` — is refused rather than written as a
+reference to a different constraint. The parser never produces these shapes
+(`perform;` declares a feature named `perform`), so only a graph from another
+tool, or one edited by hand, states them; the decoder's refusal names the
+keyword and the fact at odds.
 
 **A metadata annotation is carried structurally**, as described under [What
 each element carries](#what-each-element-carries): its type, its `about`
@@ -1121,8 +1252,9 @@ would be refused as a duplicate.
   the graph is refused naming both rather than the first being kept. Every
   `sysx:` property is single-valued but the members and parameters of a body,
   `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
-  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
-  is one triple to the graph, so only differing objects are a conflict
+  the `sysml:` properties, the boolean `is…` flags and `sysml:portionKind`
+  are. A triple stated twice is one triple to the graph, so only differing
+  objects are a conflict
 - a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
   with no `sysml:value`: the flags spell the operator a feature value is
   written with (`default =`, `:=`), so without a value there is nothing to

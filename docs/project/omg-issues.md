@@ -12,7 +12,11 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 | Library file | Declaration | What the vendored body says | What we implement | Why |
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
+| `Domain Libraries/Quantities and Units/MeasurementReferences.sysml`, `VectorCalculations.sysml` | `attribute def CoordinateFramePlacement`, `attribute def Rotation`, `calc def transform` | `origin specifies the location of the origin of the target frame as a vector in the source frame`; `basisDirections specifies the orientation of the target frame by specifying the directions of the respective basis vectors of the target frame via direction vectors in the source frame`; `transform` has no body — the text fixes what a placement *states* but not which way `transform` applies it, whether a direction vector's magnitude matters, or which axes an intrinsic rotation turns about | a placement maps target coordinates into source ones (`v_source = origin + B v_target`), so `transform(source→target)` applies the inverse `B⁻¹ (v − origin)`; basis directions are normalized; an intrinsic rotation turns about the axis as the earlier elements of the sequence moved it, an extrinsic one about the axis fixed in the source; a `NullTransformation` is the identity | The pinned pilot evaluates `transform` for no input, so the library text is the only authority and each reading is drafted below for clarification rather than asserted as the specification's |
 | `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
+| `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def outer` | `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` — a vector, where the outer product of two vectors of orders one is a tensor of order two (`TensorCalculations::'['` returns `TensorQuantityValue[1]` for exactly that shape) | nothing: `outer` is `ErrUnevaluableLibraryFunction` naming the declaration and its return type (`runtime/quantity_functions.go` `registerVectorCalculations`); the checker types a call by the declared `VectorQuantityValue` | No `VectorQuantityValue` holds an outer product, and answering a `TensorQuantityValue` would disagree with the checker and the declaration; the draft below asks for `return : TensorQuantityValue[1]` |
+| `Domain Libraries/Quantities and Units/TensorCalculations.sysml` | `calc def isUnitTensorQuantity` | `calc def isUnitTensorQuantity { in x : TensorQuantityValue[1]; return : Boolean[1]; }` — no body, and no statement of which tensor is the unit one beside `isUnitVectorQuantity` (a vector of norm one) | the identity of a square order-two tensor: `true` when every diagonal component is one and every other zero; a tensor of any other shape (a vector, a 2×3, an order three) is `ErrUnevaluableLibraryFunction` naming the shape it needs (`runtime/tensor_functions.go` `tensorIsUnit`) | The library names no unit tensor; the identity matrix is the one tensor with an established claim to the name, and it exists for square order two alone, so a reading over other shapes would be invented. Recorded so the reading can be checked against a future release that gives the calculation a body |
+| `Domain Libraries/Geometry/ShapeItems.sysml` | `item def CuboidOrTriangularPrism` (`Cuboid`, `RectangularCuboid`, `Box`) | `item tfe [2] :> edges;` … `binding [1] bind [0..1] tf.edges = [0..1] tfe;` `binding [1] bind [0..1] ff.edges = [0..1] tfe;` — every named edge group and vertex group (`tfe`…`urre`, `tflv`…`brrv`) is valued only by bindings whose ends link *one unspecified* value each; and `item :>> vertices; assert constraint { size(vertices) == size(edges) }` beside `Quadrilateral`'s `item :>> vertices [8];` and `StructuredSpaceObject`'s `faces.vertices subsets vertices` | the groups and everything read through them (`box.tfe`, `box.tflv`, `box.tfe.length`, `box.vertices`) are the typed `ErrBindingEnd` naming the binding; the runtime never picks a member (`runtime/binding.go` `UndeterminedBindingError`) | No conjunction of the bindings, the `MatesWith` connections and the `size(...)` assertions identifies which of a face's four edges a group holds, so no evaluator can name `tfe`; and a `Cuboid`'s `vertices` cannot be both a superset of its six faces' 48 vertex objects and 24 long. The draft below records both |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
 ## `includingAt` — the vendored declaration
@@ -134,6 +138,325 @@ declaration (`runtime/vector_functions.go`; conformance
 `calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
 results as declared (`runtime/quantity_functions.go`).
 
+## `VectorCalculations::outer` — a `VectorQuantityValue` return for an order-two product
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/VectorCalculations.sysml`:
+
+```sysml
+    calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }
+```
+
+and from `TensorCalculations.sysml` in the same directory:
+
+```sysml
+    calc def '[' specializes BaseFunctions::'[' { 
+    	in elements: Number[1..n] ordered nonunique; 
+    	in mRef: TensorMeasurementReference[1]; 
+    	return quantity: TensorQuantityValue[1];
+    	private attribute n = mRef.flattenedSize;
+    }
+```
+
+````markdown
+**Library defect:** `VectorCalculations::outer` declares
+`return : VectorQuantityValue[1]`. The outer product of two vectors of orders
+one is a tensor of order two — `dimensions` of two entries, `order` two — and
+`Quantities::VectorQuantityValue` is the subtype of `TensorQuantityValue` whose
+`dimensions` has at most one entry (`VectorMeasurementReference::dimensions :
+Positive[0..1]`), so no value of the declared type can hold the result. The
+sibling `TensorCalculations::'['` returns `TensorQuantityValue[1]` for exactly
+this shape, and `TensorCalculations::tensorVectorMult`/`vectorTensorMult`
+return `VectorQuantityValue` where the contraction does lower the order.
+Should `outer` declare `return : TensorQuantityValue[1]`?
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates no `VectorCalculations` or `TensorCalculations` call
+(`cmd/pilot-exec-diff`, `tensor_quantities.cases`: all twelve probes, `outer` among
+them, are pinned `pilot-unevaluated`), so it
+offers no reference answer. OpenSysML leaves `outer` unevaluable with a reason
+naming the declared return type (`runtime/quantity_functions.go`
+`registerVectorCalculations`; robustness `tensor_quantity_failure_modes`), and
+types a call by the declaration, as the checker must.
+
+## `TensorCalculations::isUnitTensorQuantity` — the reading OpenSysML takes
+
+Not a defect report; a record of a reading the text does not fix.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/TensorCalculations.sysml`:
+
+```sysml
+    calc def isZeroTensorQuantity { 
+    	in x : TensorQuantityValue[1]; 
+    	return : Boolean[1];
+    }
+    calc def isUnitTensorQuantity { 
+    	in x : TensorQuantityValue[1]; 
+    	return : Boolean[1];
+    }
+```
+
+`isZeroTensorQuantity` has one reading — every component zero — and OpenSysML
+answers it for a tensor of any shape. `isUnitTensorQuantity` has a body neither
+here nor in a Kernel function it specializes, and `VectorCalculations::isUnitVectorQuantity`
+(a vector of norm one) does not generalize: a tensor has no single norm the
+library names. The one tensor with an established claim to the name is the
+identity matrix, which exists for a square tensor of order two alone (the
+library's own matrix, `AffineTransformationMatrix3d`, is an order-two `Array`).
+OpenSysML therefore answers
+`isUnitTensorQuantity` for a square order-two tensor (`true` exactly when the
+diagonal is one and the rest zero) and reports any other shape as
+`ErrUnevaluableLibraryFunction` naming the shape it needs
+(`runtime/tensor_functions.go` `tensorIsUnit`; conformance
+`instance_tensor_quantity`, `instance_tensor_quantity_failures`). Nothing is
+invented for a vector, a rectangular or a higher-order tensor.
+
+## `CoordinateFramePlacement`, `Rotation`, `VectorCalculations::transform` — the direction of a transformation, the magnitude of a direction, and the axes of an intrinsic rotation
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/MeasurementReferences.sysml`:
+
+```sysml
+	attribute def CoordinateFramePlacement :> CoordinateTransformation {
+    	doc
+    	/*
+    	 * CoordinateFramePlacement is a CoordinateTransformation by placement of the target frame in the source frame.
+    	 *
+    	 * Attribute origin specifies the location of the origin of the target frame as a vector in the source frame.
+    	 *
+    	 * Attribute basisDirections specifies the orientation of the target frame by specifying the directions of
+    	 * the respective basis vectors of the target frame via direction vectors in the source frame. An empty sequence of
+    	 * basisDirections signifies no change of orientation of the target coordinate frame.
+    	 */
+		attribute origin : VectorQuantityValue[1];
+		attribute basisDirections : VectorQuantityValue[0..*] ordered nonunique;
+```
+
+```sysml
+	attribute def Rotation :> TranslationOrRotation {
+		/*
+		 * Attribute isIntrinsic asserts whether the intermediate coordinate frame moves with the rotation or not,
+		 * i.e. whether an instrinsic or extrinsic rotation is specified.
+		 *
+		 * See https://en.wikipedia.org/wiki/Davenport_chained_rotations for details.
+		 */
+		attribute axisDirection : VectorQuantityValue[1];
+		attribute angle :>> angularMeasure;
+		attribute isIntrinsic : Boolean[1] default true;
+	}
+```
+
+and from `VectorCalculations.sysml` in the same directory:
+
+```sysml
+	calc def transform {
+	    in transformation : CoordinateTransformation;
+	    in sourceVector : VectorQuantityValue { :>> mRef = transformation.source; }
+	    return targetVector : VectorQuantityValue { :>> mRef = transformation.target { ... } }
+	}
+```
+
+````markdown
+**Clarification request:** `VectorCalculations::transform` re-expresses a vector
+quantity written over `transformation.source` as one over `transformation.target`,
+and `CoordinateFramePlacement` describes the target frame from within the source
+(`origin` is "the location of the origin of the target frame as a vector in the
+source frame"; `basisDirections` are "the directions of the respective basis
+vectors of the target frame via direction vectors in the source frame"). Three
+things the text leaves to the reader decide the numbers `transform` answers:
+
+1. **Direction.** Read literally, a placement maps *target* coordinates into
+   *source* coordinates: a point at target coordinates `t` sits at
+   `origin + B t` in the source, `B` the matrix whose columns are the basis
+   directions. `transform(source → target)` must then apply the **inverse**,
+   `B⁻¹ (v − origin)`, and a `Translation` in a `TranslationRotationSequence`
+   *subtracts* its `translationVector` from the source coordinates. Is that the
+   intent, or does a placement state the mapping `transform` applies directly
+   (`v_target = origin + B v_source`)? The two readings agree only for the
+   `NullTransformation`.
+2. **Magnitude of a direction.** `basisDirections` are "direction vectors", which
+   suggests only their direction is meaningful and `B` is built from the
+   normalized vectors; but a `VectorQuantityValue` carries a magnitude, and
+   `(0, 2, 0)[datum]` as a basis direction could equally state a target axis of
+   twice the source unit. Should a non-unit direction be normalized, scale the
+   axis, or be a violation?
+3. **Intrinsic rotations.** For a `Rotation` with `isIntrinsic = true` (the
+   default), the Davenport reference the doc cites turns about the axis of the
+   *intermediate* frame, i.e. `axisDirection` as the earlier elements of the
+   sequence have moved it, and an extrinsic one about `axisDirection` fixed in
+   the source; the composition order of the two therefore differs. Is
+   `axisDirection` written in the source frame in both cases, and does a
+   `Translation` between two rotations move the intermediate frame's origin
+   without affecting the axes?
+
+A fourth, smaller point: `MeasurementScale`s that specialize `CoordinateFrame`
+(`IntervalScale`) state `basisDirections` in one dimension (`1 [UTC]` in the
+validation suite's `MissionElapsedTimeScale`). A magnitude of 1 is the identity;
+is a magnitude other than 1 a scale factor between the two scales' units, or is
+the unit's own `unitConversion` the only factor a scale may apply?
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates none of `transform`, `MeasurementRefCalculations::'CoordinateFrame/'`,
+`VectorCalculations::'['` over a frame or `ConvertQuantity` to a scale
+(`cmd/pilot-exec-diff/testdata/cases/coordinate_frames.cases` pins the probes as
+pilot-unevaluated), so it offers no reference answer for any of the four.
+
+OpenSysML follows the literal reading of each: a placement maps target
+coordinates into the source and `transform` applies the inverse (a
+`TranslationRotationSequence` of a translation and a rotation followed by its
+inverse sequence round-trips, conformance `instance_coordinate_frames`); basis
+directions are normalized, a zero or a linearly dependent direction being a typed
+error; an intrinsic rotation turns about the axis as the earlier elements moved
+it and an extrinsic one about the axis fixed in the source; and a one-dimensional
+basis direction of magnitude 1 is the identity while any other magnitude is a
+typed error naming it, the library giving a scale no other basis
+(`runtime/frame_transform.go`, `runtime/scale_conversion.go`; the compliance
+record's *Structured values* section names each decision).
+
+## `ShapeItems::CuboidOrTriangularPrism` — edge and vertex groups fixed only by `[0..1]` bindings, and a vertex count its faces exceed
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Geometry/ShapeItems.sysml`
+(`CuboidOrTriangularPrism`; `Cuboid` adds the `srf`, `tsre`, `ufre`, `urre`,
+`tfrv`, `trrv` bindings in the same form):
+
+```sysml
+		item :>> edges = faces.edges;
+		...
+		assert constraint { size(edges) == 18 or size(edges) == 24 }
+
+		item tfe  [2]	 :> edges;
+		item tre  [2]	 :> edges;
+		item tsle [2]	 :> edges;
+		...
+		item :>> vertices;
+		assert constraint { size(vertices) == size(edges) }
+
+		item tflv [3]	 :> vertices;
+		...
+		/* Bind face edges to specific edges */
+		binding [1] bind [0..1] tf.edges = [0..1] tfe;
+		binding [1] bind [0..1] tf.edges = [0..1] tre;
+		binding [1] bind [0..1] tf.edges = [0..1] tsle;
+		...
+		binding [1] bind [0..1] ff.edges = [0..1] tfe;
+		...
+		/* Bind edge vertices to specific vertices */
+		binding [1] bind [0..1] tfe.vertices = [0..1] tflv;
+		binding [1] bind [0..1] tsle.vertices = [0..1] tflv;
+		binding [1] bind [0..1] ufle.vertices = [0..1] tflv;
+		...
+		/* Meeting edges */
+		connection :MatesWith connect [1] tfe to [1] tfe;
+		...
+		/* Meeting vertices  */
+		connection :MatesWith connect [2] tflv to [2] tflv;
+```
+
+and from `Polygon` and `Quadrilateral` in the same file and `StructuredSpaceObject`
+in `Kernel Libraries/Kernel Semantic Library/Objects.kerml`:
+
+```sysml
+	item def Polygon :> Path, PlanarCurve {
+		item :>> edges : Line { item :>> vertices [2]; }
+		...
+	item def Quadrilateral :> Polygon {
+		item :>> edges [4] = (e1, e2, e3, e4);
+		...
+		item :>> vertices [8];
+```
+
+```kerml
+	portion feature faces : StructuredSurface[0..*] ordered subsets structuredSpaceObjectCells {
+		feature redefines that : StructuredSpaceObject;
+		feature redefines edges subsets that.edges;
+		feature redefines vertices subsets that.vertices;
+	}
+```
+
+````markdown
+**Library question, two parts.**
+
+**1. The edge and vertex groups are underdetermined.** `tfe [2] :> edges` (the two
+edge portions where the top and front faces meet) is valued by nothing but
+`binding [1] bind [0..1] tf.edges = [0..1] tfe` and
+`binding [1] bind [0..1] ff.edges = [0..1] tfe`. The `[0..1]` on each end is a
+connector-end multiplicity (KerML 1.0 §7.4.6.2): each binding declares exactly one
+`SelfLink` (§8.4.4.6.2 BindingConnector) joining *some* value of `tf.edges` to *some*
+value of `tfe`, and constrains how many values of either end take part — it does not say
+which of `tf`'s four edges is meant. Nothing else in the model does either:
+`tf.edges` and `ff.edges` are disjoint objects, so their bindings pick two different
+members of `tfe` without relating them to each other; the other bindings on `tf.edges`
+(`tre`, `tsle`, and `tsre` in `Cuboid`) each pick one unspecified edge too, and no
+constraint says the four groups partition `tf.edges`; `connection :MatesWith connect
+[1] tfe to [1] tfe` relates the two members of the group to one another, which every
+choice satisfies alike; and `size(edges) == 24` counts `faces.edges`, which the groups
+do not affect. The three `[0..1] tfe.vertices` / `tsle.vertices` / `ufle.vertices`
+bindings on `tflv [3]` repeat the pattern one level down, over the four vertices of
+each group's two edges. So any two edges of `tf` are as good a `tfe` as any other —
+the model determines the groups' sizes, not their members — and an evaluator asked
+for `tfe`, `tflv`, `tfe.length` or `vertices` (subsetted by the groups) has nothing
+to answer with but a guess. Are the bindings intended as an identification of a
+*particular* edge (e.g. `tf.e1` and `ff.e3`), spelled by position as `Quadrilateral`
+spells `edges [4] = (e1, e2, e3, e4)`? If so the groups need a value, or the bindings
+need to name the members (`bind tf.e1 = tfe#(1)`).
+
+**2. `size(vertices) == size(edges)` is unsatisfiable for a `Cuboid`.** `vertices`
+is inherited from `StructuredSpaceObject`, whose `faces.vertices subsets vertices`,
+and each `Quadrilateral` face declares `vertices [8]` (two per edge, the endpoints of
+consecutive edges being distinct mating occurrences). A `Cuboid` therefore holds at
+least 6 × 8 = 48 vertex objects, while `edges = faces.edges` holds 6 × 4 = 24 and the
+assertion requires 24 vertices. The eight corner groups `tflv [3]` … `brrv [3]` sum
+to exactly 24, so the assertion appears to count those and to intend `vertices` to
+be the corner groups alone — which the inherited subsetting forbids. Should the
+assertion read over the groups (or over the distinct meeting points), or should
+`vertices` be redefined to exclude the faces' own vertices?
+
+(Aside: the face redefinitions in `CuboidOrTriangularPrism`, `TriangularPrism` and
+`Cuboid` read `ref :>> Quadrilateral::edges, ConeOrCylinder::faces::edges;` — they
+name `ConeOrCylinder`'s faces from a `Polyhedron` that is not one. `faces::edges`
+resolves the same feature, as the `ff`/`rf` declarations beside them spell it.)
+````
+
+The pinned pilot implementation (`2026-07`) offers no reference here: asked through
+`build/pilot-evaluator/eval-sysml` for `box.tfe`, `box.tflv`, `box.vertices` and
+`box.edges` over `part box : ShapeItems::Box { :>> length = 2 [m]; :>> width = 1 [m];
+:>> height = 3 [m]; }`, it answers the unevaluated `ItemUsage tfe`, `ItemUsage tflv`,
+`ItemUsage vertices` and `ItemUsage edges`, and `box.tfe.length` is
+`Couldn't resolve reference to Feature 'length'`. Neither validator reports the pattern:
+the specification places no conformance rule between a connector end's multiplicity and
+the multiplicity of the feature it relates (`[0..1]` ends over `[2]` and `[4]` features
+are well-formed): OpenSysML's `-validate` accepts the `Box` model clean, and the pilot
+loads the library and the model without complaint before leaving the usages unevaluated.
+
+OpenSysML answers `box.faces` (6), `box.edges` (24), `box.tf.edges` (4) and every
+face-local value; the groups and everything read through them are the typed
+`ErrBindingEnd` naming the binding and both ends, on `-e`, `%eval`, `-instantiate`
+and `%features` alike (`runtime/binding.go` `UndeterminedBindingError`; conformance
+`instance_library_geometry_box`):
+
+```text
+binding end cannot be resolved: box.tfe is bound by `bind [0..1] tf.edges = [0..1] tfe`, which makes some value of tfe a value of tf.edges without saying which value of either; the model does not state what tfe holds
+```
+
+The runtime reads each partial binding on its own and does not solve the conjunction of several, so a group two partial bindings *would*
+pin down — two collections sharing exactly one value, bound `[0..1]` to a `[1]`
+feature — is reported the same way; that is a limitation recorded in
+[spec-compliance.md](spec-compliance.md), not a reading of this library, whose groups
+no conjunction pins down.
+
 ---
 
 ## Defects in published OMG example models
@@ -179,8 +502,9 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkMultiplicityRange`, the `validateMultiplicityRangeResultTypes` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a multiplicity bound naming a package-level feature typed by `ScalarValues::Natural` or `Integer` (`feature k : Natural; feature d [k];`, both owned by a package) reports `Must have a Natural value`; the same bound inside a type (`class T { feature k : Natural; feature d [k]; }`) is accepted | established from the pinned `KerMLValidator.xtend` lines 1333–1339, `FeatureReferenceExpression_modelLevelEvaluable_InvocationDelegate` and `MultiplicityRange_valueOf_InvocationDelegate`: a reference to a feature with no featuring type and no value is deemed model-level evaluable, its evaluation yields the feature rather than a `LiteralInteger`, `valueOf` returns the `-2` null marker and the check reports it; a reference to a type's member is not evaluable and is judged by its type through `isInteger`. The method carries `// TODO: Correct validateMultiplicityBoundResults OCL from KERML-199`. Reproduced with the model below through `validate-kerml`; [pilot-differential.md](pilot-differential.md#multiplicity-bound-result-types-round) records how OpenSysML judges both spellings by the referent's type | **not filed** — drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.logic` — `Type_multiplicity_SettingDelegate`, behind `KerMLValidator.checkFeature`'s `validateFeatureMultiplicityDomain` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature whose body holds an `alias` for a `multiplicity` member of the enclosing class, or whose value references one (`class E { multiplicity em [1..4]; feature k : Integer { alias a for em; } }`), reports `Multiplicity must have same featuring types as it feature`, although the feature owns no multiplicity; the spec-genuine violation, a standalone `featuring of C::k::m by D;` on a feature's owned multiplicity, is accepted | established from the pinned `Type_multiplicity_SettingDelegate.getMultiplicityOf` (lines 43–48 at `c7fc737`), which takes the first `Multiplicity` among the members of every `ownedMembership` — aliases and reference memberships included — where KerML 1.1 8.3.3.1.10 `deriveTypeMultiplicity` reads `ownedMember->selectByKind(Multiplicity)`; and from `Feature_featuringType_SettingDelegate.basicGet` (lines 39–51), which reads `ownedTypeFeaturing` where 8.3.3.3.4 `deriveFeatureFeaturingType` reads every `typeFeaturing`. Reproduced with the models below through `validate-kerml`; [validation-constraints.md](validation-constraints.md) records the census row | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.logic` — `ConnectorAdapter.getDefaultSupertype`, with `KerMLValidator.checkConnectorBinarySpecialization` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a connector owning two ends that redefine two ends of a three-ended general (`connector m : N { end redefines a references x; end redefines b references y; }`) reports `Cannot have more than two ends`, while the same shape spelled as an association (`assoc B specializes N { end redefines a : T; end redefines b : T; }`) is accepted | established from the pinned `ConnectorAdapter.xtend` (`getDefaultSupertype` counts `TypeUtil.getOwnedEndFeaturesOf(target)`, two here, so the connector is given `Links::binaryLinks`) and `KerMLValidator.xtend` (`checkConnectorBinarySpecialization` then counts three `connectorEnd`s), reproduced with the model below through `validate-kerml`; KerML 1.1 8.3.4.5.3 implies `Links::binaryLinks` only for `connectorEnd->size() = 2`, which counts the inherited end. [pilot-differential.md](pilot-differential.md#binary-link-specialization-round) records how OpenSysML counts effective ends for the base | **not filed** — question drafted below, awaiting maintainer authorisation |
-| `org.omg.sysml.xtext` — `SysMLValidator`, invocation argument count | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | a positional invocation of a `calc def` with fewer arguments than the calc declares `in` parameters validates clean: `ln(m0 / mf)` against `calc <ln> naturalLogarithm { in x; in y; … }` and `calculateDeltaV(isp, initialMass, finalMass)` against a four-input `calc def calculateDeltaV` | established by running the pinned batch validator over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` (`validate-sysml-batch --root . <every .sysml>`): no diagnostic, while OpenSysML reports the three `requires N argument(s), found M` errors [performance.md](../internals/performance.md#a-real-model-apollo-11) records — defects in that model, not in any OMG material, so they are not rows of this page. The pilot's own `kerml-examples/Simple Tests/Behaviors.kerml:14` has the same shape (`A().y` against `behavior A { in x; … }`), silent under the pinned `validate-kerml`, and its Xpect suite (`ParsingTests_Behaviors.kerml.xt`) declares the file error-free; an invocation heading a feature chain therefore leaves a required parameter unbound without a report, while every other argument check applies there | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator`/`KerMLValidator`, invocation argument count | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | an invocation that leaves a default-less `in` parameter unbound validates clean in every form: positional (`F(1.0)`, `F()` against `calc def F { in x : Real; in y : Real; … }`), named (`F(x = 1.0)`, `F(y = 2.0)`), with the omitted parameter declared `[1]` or `[1..*]`, on a calc, a behavior (`Act(1.0).r`, `Act()`), a constructor (`new P()`, `new P(1.0).q`) and an invocation heading a feature chain; only an argument past the last parameter is reported, `Must correspond to one input parameter of the invoked type` (`arity.sysml:38:32` for `F(1.0, 2.0, 3.0)`; `arity.kerml:30:30` for the KerML twin). The pinned evaluator forms and evaluates the same calls: `F(1.0)`, `F(x = 1.0)`, `F(y = 2.0)` and `F()` answer the unreduced `OperatorExpression +`, `F(1.0, 2.0)` `LiteralRational 3.0`, `D(1.0)` (`in y default 1.0`) `2.0`, `Opt(1.0)` (`in y [0..1]`) `1.0` | established by running the pinned `validate-sysml-batch` and `validate-kerml` over a 20-form probe of the above and `build/pilot-evaluator/eval-sysml --cases` over its evaluable rows (transcript below); earlier, `2026-05` (0.60.1) over the whole `airbus/apollo-11-sysml-v2` model at `6e9c93f` was silent on `ln(m0 / mf)` and `calculateDeltaV(isp, initialMass, finalMass)` ([performance.md](../internals/performance.md#a-real-model-apollo-11)), and the pilot's own `kerml-examples/Simple Tests/Behaviors.kerml:14` (`A().y` against `behavior A { in x; … }`) is silent under `validate-kerml` with `ParsingTests_Behaviors.kerml.xt` declaring the file error-free. **Adjudicated as the specification's reading, not a pilot defect:** KerML 1.0 §8.3.4.8.8 lists no `InvocationExpression` constraint on the count of arguments — `validateInvocationExpressionParameterRedefinition` and `…NoDuplicateParameterRedefinition` bound each argument *written* to one input, and the pinned validator's `Must correspond to one input parameter`, `Parameter already bound` and `Must be an in parameter` are those — so the unbound parameter is a property of the instance the call describes, not of the expression. OpenSysML therefore reports the omission as the advisory `unbound-parameter` (a warning in every conformance mode) identically at a bare call and at a chain head, and refuses the evaluation at run time with `ErrUnboundParameter` | **not filed** — a question, not a defect report, drafted below; a maintainer may still want to confirm the reading |
 | `org.omg.sysml.xtext` — `SysMLValidator.isDuration`/`isTime`, behind `validateTriggerInvocationActionAfterArgument` and `…AtArgument` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | with `d : DurationValue` and `t : TimeInstantValue`, `accept after d * d` and `accept at t * t` validate clean although the product has dimension T², while `accept after 10 [m] / 2 [m/s]`, whose quotient has dimension T, is refused | established from the pinned `SysMLValidator` class: an operator argument is a duration or an instant when its operator is one of `-`, `+`, `*`, `%`, `^`, `**` (`isQuantityOperator`) and every operand is itself one — `/` is not in the list and no dimension is computed; reproduced with the pinned batch validator, transcript below | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
@@ -439,6 +763,17 @@ package T2 {
 }
 ```
 
+The same silence covers every other non-Boolean guard tried: `accept … if 1 then`,
+`transition if 2.5 then`, an enumeration literal, a part-typed attribute, a `String`-valued
+calculation, and the guarded successions of an action body (`first a if "go" then b`, a
+decision's `if e then b`).
+
+The cause appears to be `ExpressionAdapter.getRelevantFeatures` (`EXPRESSION_GUARD_FEATURE`):
+a transition guard implicitly redefines `TransitionPerformances::TransitionPerformance::guard`,
+declared `bool guard[*]`, so `KerMLValidator.isBoolean` finds a `Boolean`-typed result on
+every guard by construction and `checkTransitionFeatureMembership` cannot fail. The reduced fixture library
+has no `TransitionPerformances`, which is why the Xpect expectation holds there.
+
 Is the guard check intended to fire in a full-library workspace? A second
 implementation that rejects `if "test"` with the full library loaded, as the
 fixture suggests it should, currently disagrees with the release's validator on
@@ -483,6 +818,42 @@ Is the operator list the intended reading of `checkTriggerInvocationExpressionAf
 is not a duration, and a quotient of a length by a speed is one; a second
 implementation that judges the value's dimension accepts the last line and
 refuses the first two.
+````
+
+---
+
+### A quantity value is accepted as the unit of a quantity (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML judges the nested quantity by its value type
+(`validation-constraints.md`, `validateOperatorExpressionQuantity`), so the two
+implementations disagree on the shape below.
+
+````markdown
+**Question, not a bug report:** `SysMLValidator.checkOperatorExpression` judges
+the unit of `x [u]` with `resultConformsTo(u, TensorMeasurementReference)`,
+which admits an `OperatorExpression` whose declared result is a supertype of
+the wanted type when one of its arguments conforms. `BaseFunctions::'['` returns
+`Anything`, so a quantity value nested as the unit passes for the measurement
+reference it was built from. With the release's validator
+(`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`) and the full standard
+library:
+
+```sysml
+package Q {
+    private import ISQ::*;
+    private import SI::*;
+    attribute a = 10 [2 [m]];          // no warning: `m` is an argument of `[`
+    attribute b = 10 [(m, 3)];         // no warning: `m` is an element
+    attribute c = 10 [if true ? m else s];  // Should be a measurement reference (unit).
+}
+```
+
+Is the existential reading of `resultConformsTo` intended for `[`? `2 [m]` is a
+`ScalarQuantityValue`, not a measurement reference, and a second implementation
+that judges the value's type warns on `a`; it agrees on `b` (a sequence whose
+elements are units) and on `c` (the branches of a conditional are expression
+bodies, so its result is `Anything` and no argument is a unit).
 ````
 
 ---
@@ -601,6 +972,66 @@ be evaluated to a literal meant to be rejected?
 
 ---
 
+### A multiplicity is found through aliases and references (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML does not check `validateFeatureMultiplicityDomain`
+at all — the census row in
+[validation-constraints.md](validation-constraints.md) records it as not
+implemented — so there is no adjudication of ours to point at, only the
+pilot's behaviour against the clause.
+
+````markdown
+### `validateFeatureMultiplicityDomain` fires on an alias or a reference to a class's multiplicity, and not on a foreign featuring
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    private import ScalarValues::*;
+    class E {
+        multiplicity em [1..4];
+        feature k : Integer { alias a for em; }
+        feature v : Natural = em;
+    }
+}
+```
+
+reports `Multiplicity must have same featuring types as it feature` at line 5 (`feature k`) and
+line 6 (`feature v`). Neither feature owns a multiplicity: `k` owns an alias `Membership` whose
+`memberElement` is `em`, and `v` owns a `FeatureValue` whose `FeatureReferenceExpression` holds
+`em` through a reference `Membership`. `Type_multiplicity_SettingDelegate.getMultiplicityOf` takes
+the first `Multiplicity` among `ownedMembership.memberElement`, which finds `em` in both cases,
+and `checkFeature` then compares `em`'s featuring types with the feature's: `em` is a classifier
+multiplicity, so it has none (as `validateClassifierMultiplicityDomain` requires), while `k` and
+`v` are featured by `E`, and the error is reported. KerML 1.1 8.3.3.1.10 derives `multiplicity`
+from `ownedMember->selectByKind(Multiplicity)`, under which neither feature has a multiplicity
+and the constraint is vacuous; the model is valid.
+
+Conversely,
+
+```kerml
+package P {
+    private import ScalarValues::*;
+    class C { feature k : Integer { multiplicity m [1..2]; } }
+    class D;
+    featuring of C::k::m by D;
+}
+```
+
+validates clean, although `m` is `k`'s multiplicity and its `featuringType` under 8.3.3.3.4
+(`typeFeaturing.featuringType`, every `TypeFeaturing` counted — the one
+`checkMultiplicityTypeFeaturing` implies from `k` and the written one) is `{C, D}` while `k`'s is
+`{C}`. `Feature_featuringType_SettingDelegate.basicGet` reads only `ownedTypeFeaturing` plus the
+adapter's implicit featuring types, so the standalone `featuring` relationship does not reach the
+check. Should `Type::multiplicity` be
+derived from `ownedMember` rather than from every owned membership's member, and should
+`Feature::featuringType` include non-owned `TypeFeaturing`s?
+````
+
+---
+
 ### A connector inheriting a third end is given the binary base (pilot `2026-07`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
@@ -707,44 +1138,195 @@ to agree with the `===` operator, and `isDuring` to reject an argument that is
 not an `Occurrence`, as the declared parameter types say?
 ````
 
-### A positional invocation with too few arguments validates clean (pilot `2026-05`)
+### An invocation leaving an input parameter unbound validates clean (pilot `2026-07`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
-posted upstream, to the pilot or to the model's repository.
+posted upstream, to the pilot or to any model's repository. OpenSysML has
+adjudicated the pilot's behaviour as the specification's reading (see the row
+above), so this is a request to confirm that reading, not a defect report.
 
 ````markdown
-**Question, not a bug report:** is the number of positional arguments of an
-`InvocationExpression` meant to be checked against the invoked behavior's `in`
-parameters? KerML 7.4.9 binds the i-th positional argument to the i-th input
-parameter of the invoked behavior, so a call with fewer arguments leaves an input
-unbound, and one with more has an argument that binds nothing.
+**Question, not a bug report:** is an `InvocationExpression` that leaves an
+input parameter of the invoked type unbound — no argument, no `default`, lower
+multiplicity bound 1 — meant to validate clean? KerML 8.3.4.8.8 constrains the
+arguments an invocation *writes* (`validateInvocationExpressionParameterRedefinition`,
+`validateInvocationExpressionNoDuplicateParameterRedefinition`) and states no
+constraint on the parameters it leaves out, so we read the omission as a property
+of the instance the expression describes (the parameter has no value) rather than
+of the expression, and report it as an advisory only. Is that the intended reading?
 
-The release's SysML validator (`jupyter-sysml-kernel-0.60.1-all.jar`, tag
-`2026-05`) over the public `airbus/apollo-11-sysml-v2` model (commit `6e9c93f`)
-reports no diagnostic for either of these:
+With `jupyter-sysml-kernel-0.61.0-all.jar` (tag `2026-07`), the SysML and KerML
+validators report nothing for any of these:
 
 ```sysml
-calc <ln> naturalLogarithm { in x: DataValue[1]; in y: DataValue[1]; return : DataValue[1]; }
+calc def F { in x : Real; in y : Real; return : Real = x + y; }
+calc def One { in x : Real; in y : Real [1]; return : Real = x + y; }
+calc def Many { in x : Real; in y : Real [1..*]; return : Real = x; }
+action def Act { in a : Real; in b : Real; out r : Real; }
+part def P { attribute p : Real; attribute q : Real; }
 
-calc def calculateDeltaV {
-    in isp :> specificImpulse;
-    in g0 :> ISQ::acceleration;
-    in m0 :> ISQ::mass;
-    in mf :> ISQ::mass;
-    return deltaV :> ISQ::speed = isp * g0 * ln(m0 / mf);
-}
+attribute f0 = F();              attribute f1 = F(1.0);
+attribute fn1 = F(x = 1.0);      attribute fn2 = F(y = 2.0);
+attribute one1 = One(1.0);       attribute many1 = Many(1.0);
+attribute act0 = Act().r;        attribute act1 = Act(1.0).r;
+ref c0 = new P();                attribute c1c = new P(1.0).q;
+```
 
-calc def calculateStageDeltaV {
-    // …
-    return deltaV :> ISQ::speed = calculateDeltaV(isp, initialMass, finalMass);
+The only diagnostic on the probe is the one expected of the argument past the
+last parameter:
+
+```
+arity.sysml:38:32: error: Must correspond to one input parameter of the invoked type   -- F(1.0, 2.0, 3.0)
+arity.kerml:30:30: error: Must correspond to one input parameter of the invoked type   -- the KerML twin
+```
+
+The release's evaluator (`eval-sysml`) forms and evaluates the same calls, so
+the expression is treated as well formed end to end:
+
+```
+F(1.0)        -> OperatorExpression +      F(1.0, 2.0)  -> LiteralRational 3.0
+F(x = 1.0)    -> OperatorExpression +      D(1.0)       -> LiteralRational 2.0   (in y default 1.0)
+F(y = 2.0)    -> OperatorExpression +      Opt(1.0)     -> LiteralRational 1.0   (in y [0..1])
+F()           -> OperatorExpression +
+```
+
+A model author would presumably still want to hear about `F(1.0)`: the public
+`airbus/apollo-11-sysml-v2` model (commit `6e9c93f`) computes
+`isp * g0 * ln(m0 / mf)` against a two-input `naturalLogarithm` and
+`calculateDeltaV(isp, initialMass, finalMass)` against four inputs, and both
+validate clean. Is an advisory the pilot would consider, or is silence the
+intended reading?
+````
+
+---
+
+### A classifier's multiplicity is found through an alias (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML derives a type's multiplicity from its owned members
+only, so an alias of a feature's multiplicity does not become the classifier's
+own, and no diagnostic is drawn; the census row
+(`validateClassifierMultiplicityDomain` in [validation-constraints.md](validation-constraints.md))
+records the disagreement. The same delegate is behind the feature-side draft
+[above](#a-multiplicity-is-found-through-aliases-and-references-pilot-2026-07); the two
+belong in one report.
+
+````markdown
+### `Type.multiplicity` is derived through alias memberships, so `validateClassifierMultiplicityDomain` fires on a valid alias
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    class T;
+    class K { feature f : T { multiplicity m [1..2]; } }
+    class C { alias m for K::f::m; }
 }
 ```
 
-A second implementation reports `naturalLogarithm requires 2 argument(s), found 1`
-and `calculateDeltaV requires 4 argument(s), found 3`, which the model's authors
-would presumably want to hear about. Is silence here a deliberate reading of the
-specification (an unbound input is legal and merely unvalued), or a check that has
-not been implemented yet?
+reports `Multiplicity must not have a featuring type` at line 4 (`class C`). `C` owns no
+multiplicity: its only owned membership is an alias whose `memberElement` is `K::f::m`, a
+multiplicity featured by `f`. KerML 1.1 8.3.3.1 derives `Type::multiplicity` as
+`ownedMember->selectByKind(Multiplicity)->any(true)`, and `ownedMember` is derived from
+`ownedMembership.ownedMemberElement`, which an alias membership does not have, so the
+specification leaves `C.multiplicity` empty and `validateClassifierMultiplicityDomain`
+satisfied. `Type_multiplicity_SettingDelegate.getMultiplicityOf` instead maps
+`ownedMembership` through `Membership::getMemberElement`, which follows the alias to `f`'s
+multiplicity, and `KerMLValidator.checkClassifier` then finds its featuring type. The same
+alias inside a subclass (`class F :> K { alias mf for f::m; }`) and inside a `struct` are
+reported alike. Should the delegate read `ownedMemberElement` (owned memberships only), as
+the derivation says?
+````
+
+---
+
+### A conjugated classifier is judged against its generic default only (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML checks a conjugated classifier against every default
+base its kind and end count imply (`internal/core/passes/w11e_implicit_base.go`);
+the census row (`validateClassifierDefaultSupertype` in
+[validation-constraints.md](validation-constraints.md)) records the difference as
+⚠️ approximate.
+
+````markdown
+### `checkClassifier` validates a conjugated association against `Links::Link` but not `Links::BinaryLink`
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-kerml` over the shipped
+standard library).
+
+```kerml
+package P {
+    class T;
+    assoc struct AS ~ Objects::LinkObject { end feature a : T[1]; end feature b : T[1]; }
+    assoc A ~ Links::Link { end feature a : T[1]; end feature b : T[1]; }
+    interaction I ~ Links::Link { end feature a : T[1]; end feature b : T[1]; }
+}
+```
+
+validates clean. A conjugated type owns no specialization
+(`validateSpecializationSpecificNotConjugated`) and `TypeAdapter.computeImplicitGeneralTypes`
+adds none for it, so the only supertypes these three have are the ones reached through the
+conjugated type. `checkClassifier` tests
+`ImplicitGeneralizationMap.getDefaultSupertypeFor(c.getClass())`, the `base` entry alone —
+`Objects::LinkObject`, `Links::Link`, and for `InteractionImpl` (a Java subclass of
+`AssociationImpl`) again `Links::Link` — all satisfied here. KerML 1.1 8.3.4.7
+`checkAssociationBinarySpecialization` and `checkAssociationStructureBinarySpecialization`
+require a two-end association to specialize `Links::BinaryLink` / `Objects::BinaryLinkObject`,
+and an interaction is a performance as well as a link (7.4.10.2), so it must reach
+`Performances::Performance` too; none of these declarations do. Is the direct check
+meant to cover only the generic default, leaving the `binary` and behavioral bases to the
+implicit-specialization machinery that conjugation switches off?
+````
+
+---
+
+### Repeated anonymous `perform a;` members are distinguishable or not by whether they have bodies (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML reports the two `Duplicate of … member name` warnings
+on every repeated anonymous performed or exhibited use (`internal/core/resolve/distinguishability.go`),
+as the pilot does when the uses have bodies; the Name Resolution map in
+[spec-compliance.md](spec-compliance.md) records the bodiless case as a pilot
+artefact.
+
+````markdown
+### `validateNamespaceDistinguishability` misses repeated anonymous performed uses unless they have bodies
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-sysml-batch`; each file run four
+times with the same result).
+
+```sysml
+package P {
+    part def H { action a; }
+    part h : H { perform a; }                                   // (1)
+    part h2 : H { perform a; perform a; }                       // (2)
+    part h3 : H { perform a; perform a; perform a; }            // (3)
+    part h4 : H { perform a { attribute i; } perform a { attribute j; } }   // (4)
+    part h5 : H { perform a { attribute i; } perform a; }       // (5)
+    part h6 : H { exhibit s; exhibit s; }                       // (6), with `state s;` in H
+}
+```
+
+Each `perform a;` is an unnamed `PerformActionUsage` whose effective name is `a`, the name of
+the action it references (KerML 7.3.4.5, SysML v2 7.16.4), so every one of them duplicates the
+inherited `H::a` and, where repeated, its siblings. With each `part` in a file of its own next to
+`H`:
+
+- (1) `warning: Duplicate of inherited member name 'a' from H` at the `perform` — as expected;
+- (4) and (5) `Duplicate of other owned member name` **and** `Duplicate of inherited member name
+  'a' from H` on each of the two uses — as expected;
+- (2) and (6) **no warning at all**, the inherited duplicate of (1) included;
+- (3) a single `Duplicate of inherited member name 'a' from H` on the *third* use only.
+
+The KerML spellings behave consistently: `feature :>> a; feature :>> a;` reports the two
+owned duplicates with or without bodies, and `feature ::> a;` never names anything. The
+SysML result appears to depend on the order in which the effective names are computed while
+the references are still being linked — computing `memberName` for one use resolves `a` in
+`h2`, which asks the sibling use for *its* `memberName`, which resolves `a` again — rather than
+on anything in the model. Is the bodiless outcome intended, or should (2), (3) and (6) report
+what (4) and (5) do?
 ````
 
 ---

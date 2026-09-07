@@ -10,14 +10,15 @@ import (
 type ErrorKind string
 
 const (
-	ErrorInvalidContext   ErrorKind = "invalid-context"
-	ErrorInvalidPlan      ErrorKind = "invalid-plan"
-	ErrorQueryExecution   ErrorKind = "query-execution"
-	ErrorViewRendering    ErrorKind = "view-rendering"
-	ErrorUnknownGroup     ErrorKind = "unknown-group-column"
-	ErrorUnknownRunColumn ErrorKind = "unknown-run-column"
-	ErrorInvalidRunStyle  ErrorKind = "invalid-run-style"
-	ErrorInvalidRunTarget ErrorKind = "invalid-run-target"
+	ErrorInvalidContext          ErrorKind = "invalid-context"
+	ErrorInvalidPlan             ErrorKind = "invalid-plan"
+	ErrorQueryExecution          ErrorKind = "query-execution"
+	ErrorViewRendering           ErrorKind = "view-rendering"
+	ErrorUnknownGroup            ErrorKind = "unknown-group-column"
+	ErrorUnknownRunColumn        ErrorKind = "unknown-run-column"
+	ErrorInvalidRunStyle         ErrorKind = "invalid-run-style"
+	ErrorInvalidRunTarget        ErrorKind = "invalid-run-target"
+	ErrorUnknownDefinitionColumn ErrorKind = "unknown-definition-column"
 )
 
 // Error is a typed document-evaluation failure with its source location.
@@ -57,6 +58,8 @@ func (e *Error) Error() string {
 			"document %s content %s query %s row %d column %q must supply one non-empty link target, got %s",
 			e.Document, e.Content, e.Query, e.Row, e.Column, e.Actual,
 		)
+	case ErrorUnknownDefinitionColumn:
+		return fmt.Sprintf("document %s definitions %s names column %q, which query %s did not project", e.Document, e.Content, e.Column, e.Query)
 	default:
 		return fmt.Sprintf("document evaluation failed for %s", e.Document)
 	}

@@ -122,20 +122,26 @@ func TestRoundTripIsLossless(t *testing.T) {
 				}
 				return
 			}
-			structuralRoundTrip(t, name, first)
+			structuralRoundTrip(t, name+ext, first)
 		})
 	}
 }
 
 // structuralRoundTrip strips the source text from a graph and requires the
 // structure alone to carry it to notation and back; it returns that notation.
+// name may carry the notation's extension; a bare name reads as SysML.
 func structuralRoundTrip(t *testing.T, name string, first []byte) []byte {
 	t.Helper()
+	ext := filepath.Ext(name)
+	if ext == "" {
+		ext = ".sysml"
+	}
+	name = strings.TrimSuffix(name, ext)
 	fromGraph, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the mapping alone: %v", err)
 	}
-	again, err := export.Convert(name+".sysml", fromGraph, export.FormatSysML, export.FormatTurtle)
+	again, err := export.Convert(name+ext, fromGraph, export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle again from the mapping alone: %v", err)
 	}
@@ -500,13 +506,13 @@ func TestChainSegmentIsSpelledToReachTheGraphsTarget(t *testing.T) {
 	// for the one relinked to B::x, which is spelled to reach its own element.
 	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	repeated := relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1))
-	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = (a.x + a.B::x);") {
+	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = a.x + a.B::x;") {
 		t.Errorf("each repeated chain should be spelled for its own element\n%s", back)
 	}
 	// Both relinked, neither occurrence reads as A::x any more.
 	first := "    sysml:argument expr:P__w_pvalue_pa0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	both := relinked(t, repeated, first, strings.Replace(first, "A__x", "B__x", 1))
-	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = (a.B::x + a.B::x);") {
+	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = a.B::x + a.B::x;") {
 		t.Errorf("both relinked chains should be spelled qualified\n%s", back)
 	}
 }
@@ -2098,7 +2104,10 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 		"bind [0..1] a = [0..1] b;",
 		"bind a = [1] b;",
 		"binding ab bind [2] a = b;",
-		"binding ab of [0..1] a = [1..*] b;",
+		"binding ab bind [0..1] a = [1..*] b;",
+		"bind e1 ::> a = e2 references b;",
+		"bind [1] e1 ::> a = b;",
+		"binding ab bind e1 ::> a = e2 ::> b;",
 		"connect [1] left to [0..1] right;",
 		"connect ([1] left, [2] right);",
 		"allocate a to b;",
@@ -2143,19 +2152,21 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 	graph := string(turtle)
 	for _, triple := range []string{
-		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pvalue ;",
+		"sysx:relatedFeature expr:P__Car___402_pend0, expr:P__Car___402_pend1 ;",
 		"expr:P__Car___402_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"a\" ;",
 		"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend0_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend0_pupperBound .",
-		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pvalue_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pvalue_pupperBound .",
+		"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__Car___402_pend1_plowerBound ;\n    sysml:upperBound expr:P__Car___402_pend1_pupperBound .",
 		"expr:P__Car___402_pend0_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
-		"expr:P__Car___402_pvalue_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+		"expr:P__Car___402_pend1_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
 	} {
 		if !strings.Contains(graph, triple) {
 			t.Errorf("the graph should state %q:\n%s", triple, graph)
 		}
 	}
-	if strings.Contains(graph, "expr:P__Car___402_pend1") {
-		t.Errorf("the value end is the value node itself, not a second copy of it:\n%s", graph)
+	for _, legacy := range []string{"sysml:value expr:", "sysml:references", "_pvalue"} {
+		if strings.Contains(graph, legacy) {
+			t.Errorf("a binding's ends are connector ends, not a reference and a value (%s):\n%s", legacy, graph)
+		}
 	}
 	// Without the bounds the ends come back bare: the notation reads the graph.
 	stripped := withoutTriples(t, turtle, "sysx:sourceText")
@@ -2168,6 +2179,107 @@ func TestBindingEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
 	}
 	if !strings.Contains(string(back), "bind a = b;") {
 		t.Fatalf("ends without bounds should be written bare:\n%s", back)
+	}
+}
+
+// A KerML connector written without `of`/`first` has no declaration, so a leading
+// multiplicity is the first end's: bounds on the end node, not the connector.
+func TestKerMLConnectorEndMultiplicitiesAreStatedAsStructure(t *testing.T) {
+	const endNodes = "sysx:relatedFeature expr:P__C___402_pend0, expr:P__C___402_pend1 ;"
+	cases := []struct {
+		// head is the connector as written; bare is how it reads without bounds.
+		head, bare string
+		// bounds are the bound triples the graph must state; onConnector says
+		// they hang on the connector node rather than on its ends.
+		bounds      []string
+		onConnector bool
+	}{
+		{
+			head: "binding [1] a = [0..1] b;",
+			bare: "binding a = b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+				"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:lowerBound expr:P__C___402_pend1_plowerBound ;\n    sysml:upperBound expr:P__C___402_pend1_pupperBound .",
+				"expr:P__C___402_pend0_pupperBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"1\" ;",
+				"expr:P__C___402_pend1_plowerBound\n    a sysml:LiteralInteger ;\n    sysx:sourceText \"0\" ;",
+			},
+		},
+		{
+			head: "binding [1] a = b;",
+			bare: "binding a = b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+			},
+		},
+		{
+			head: "succession [1] a then [*] b;",
+			bare: "succession a then b;",
+			bounds: []string{
+				"sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend0_pupperBound .",
+				"sysx:endIndex \"1\"^^xsd:integer ;\n    sysml:upperBound expr:P__C___402_pend1_pupperBound .",
+				"expr:P__C___402_pend1_pupperBound\n    a sysml:LiteralInfinity ;\n    sysx:sourceText \"*\" ;",
+			},
+		},
+		{
+			head:        "binding [1] of a = b;",
+			bounds:      []string{"sysml:upperBound expr:P__C___402_pupperBound ;\n    sysx:relatedFeature"},
+			onConnector: true,
+		},
+		{
+			head:        "succession [1] first a then b;",
+			bounds:      []string{"sysml:upperBound expr:P__C___402_pupperBound ;\n    sysx:relatedFeature"},
+			onConnector: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.head, func(t *testing.T) {
+			src := "package P {\n    class C {\n        step a;\n        step b;\n        " + c.head + "\n    }\n}\n"
+			turtle, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			graph := string(turtle)
+			for _, triple := range append([]string{endNodes}, c.bounds...) {
+				if !strings.Contains(graph, triple) {
+					t.Errorf("the graph should state %q:\n%s", triple, graph)
+				}
+			}
+			for _, bound := range []string{"pend0_plowerBound", "pend0_pupperBound", "pend1_plowerBound", "pend1_pupperBound"} {
+				if c.onConnector && strings.Contains(graph, bound) {
+					t.Errorf("a declared connector's multiplicity is not an end's:\n%s", graph)
+				}
+			}
+			for _, bound := range []string{"expr:P__C___402_plowerBound", "expr:P__C___402_pupperBound"} {
+				if !c.onConnector && strings.Contains(graph, bound) {
+					t.Errorf("an undeclared connector has no multiplicity of its own:\n%s", graph)
+				}
+			}
+			// A declared connector's own multiplicity is written after its ends,
+			// which does not read back yet; only the end forms round-trip bare.
+			if c.onConnector {
+				return
+			}
+			// The bounds alone carry the multiplicities back into notation.
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), c.head) {
+				t.Fatalf("the head should come back from the bounds:\n%s", back)
+			}
+			// Without the bounds the connector comes back bare.
+			stripped := withoutTriples(t, turtle, "sysx:sourceText")
+			for _, property := range []string{"sysml:lowerBound", "sysml:upperBound"} {
+				stripped = withoutTriples(t, stripped, property)
+			}
+			back, err = export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation without bounds: %v", err)
+			}
+			if !strings.Contains(string(back), c.bare) {
+				t.Fatalf("a connector without bounds should be written bare:\n%s", back)
+			}
+		})
 	}
 }
 
@@ -2727,6 +2839,8 @@ func TestFormatDetection(t *testing.T) {
 		"model.kerml":      export.FormatSysML,
 		"model.ttl":        export.FormatTurtle,
 		"dir/model.turtle": export.FormatTurtle,
+		"Model.xmi":        export.FormatXMI,
+		"Model.mdzip":      export.FormatXMI,
 	}
 	for path, want := range cases {
 		got, err := export.FormatOfPath(path)
@@ -2743,13 +2857,62 @@ func TestFormatDetection(t *testing.T) {
 	if _, err := export.FormatOfPath("model"); err == nil {
 		t.Error("expected an error for a missing extension")
 	}
-	for _, name := range []string{"sysml", "SysML", "kerml", "ttl", " turtle ", "rdf"} {
+	for _, name := range []string{"sysml", "SysML", "kerml", "ttl", " turtle ", "rdf", "xmi", "mdzip"} {
 		if _, err := export.ParseFormat(name); err != nil {
 			t.Errorf("ParseFormat(%q): %v", name, err)
 		}
 	}
 	if _, err := export.ParseFormat("xml"); err == nil {
 		t.Error("expected an error for an unknown format name")
+	}
+	if export.FormatXMI.Writable() || !export.FormatSysML.Writable() || !export.FormatTurtle.Writable() {
+		t.Error("XMI is the one format that is read and never written")
+	}
+}
+
+// TestConvertFromXMI checks the XMI entry into the conversion paths: v1 XMI
+// migrates to notation and to Turtle, the report comes back from Migrate, and
+// nothing writes XMI.
+func TestConvertFromXMI(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "migrate", "testdata", "cameo", "vehicle.xmi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notation, report, err := export.Migrate("vehicle.xmi", data, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("Migrate to notation: %v", err)
+	}
+	if report == nil || len(report.Entries) == 0 {
+		t.Fatal("Migrate returned no report")
+	}
+	if !strings.Contains(string(notation), "part def Vehicle") {
+		t.Errorf("migrated notation lacks the Vehicle block:\n%s", notation)
+	}
+	if again, err := export.Convert("vehicle.xmi", data, export.FormatXMI, export.FormatSysML); err != nil || string(again) != string(notation) {
+		t.Errorf("Convert from XMI differs from Migrate: %v", err)
+	}
+
+	turtle, _, err := export.Migrate("vehicle.xmi", data, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("Migrate to Turtle: %v", err)
+	}
+	graph, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatalf("migrated Turtle does not parse: %v", err)
+	}
+	if len(graph.Triples()) == 0 {
+		t.Error("migrated Turtle is empty")
+	}
+
+	var notWritable *export.NotWritableError
+	if _, err := export.Convert("model.sysml", []byte("package P;"), export.FormatSysML, export.FormatXMI); !errors.As(err, &notWritable) {
+		t.Errorf("writing XMI: got %v, want a NotWritableError", err)
+	}
+	if _, _, err := export.Migrate("vehicle.xmi", data, export.FormatXMI); !errors.As(err, &notWritable) {
+		t.Errorf("migrating to XMI: got %v, want a NotWritableError", err)
+	}
+	if _, err := export.Convert("model.sysml", []byte("package P;"), export.FormatXMI, export.FormatSysML); err == nil {
+		t.Error("notation read as XMI was accepted")
 	}
 }
 
@@ -2807,7 +2970,7 @@ func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 		if !errors.As(err, &unsupported) {
 			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
 		}
-		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote a metadata annotation this way", "convert the model from source again"} {
+		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote this fact this way", "convert the model from source again"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("expected %q in error:\n%s", want, err.Error())
 			}
@@ -2826,6 +2989,43 @@ func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 	for _, unwanted := range []string{"#Safety", "about"} {
 		if strings.Contains(string(back), unwanted) {
 			t.Errorf("%q should not come from a graph that no longer states it:\n%s", unwanted, back)
+		}
+	}
+}
+
+// The fixture is 0.5.1's own output: `sysml:isSnapshot` and `sysml:isTimeslice`
+// for a portion, which `sysml:portionKind` now states.
+func TestSupersededPortionFlagsAreRefused(t *testing.T) {
+	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "portions_0_5_1.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := func(turtle []byte, property, now string) {
+		t.Helper()
+		_, err := export.Convert("old.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
+		}
+		for _, want := range []string{"the property <" + property + ">", "it is now " + now, "convert the model from source again"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("expected %q in error:\n%s", want, err.Error())
+			}
+		}
+	}
+	refused(turtle, rdf.SysML+"isSnapshot", `sysml:portionKind "snapshot"`)
+	withoutSnapshot := withoutTriples(t, turtle, "sysml:isSnapshot")
+	refused(withoutSnapshot, rdf.SysML+"isTimeslice", `sysml:portionKind "timeslice"`)
+
+	// With both flags gone the keyword contradicts the typing: still refused.
+	_, err = export.Convert("old.ttl", withoutTriples(t, withoutSnapshot, "sysml:isTimeslice"), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected the untyped portion to be refused, got %v", err)
+	}
+	for _, want := range []string{"the `snapshot` declaration <urn:sysmlv2:element:Portions__atStart>", "no sysml:portionKind"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
 		}
 	}
 }
@@ -3125,6 +3325,100 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 	}
 }
 
+// The pilot corpora's three `connector <end> to <end>;` shapes (KerML.xtext:836)
+// declare no name: the graph relates the ends' features and writes them back alone.
+func TestKerMLBinaryConnectorEndsCarryTheRoundTripWithoutSourceText(t *testing.T) {
+	src := `package Corpus {
+	class V6Engine;
+	class FuelTank;
+	class A { feature x; }
+	class B;
+	class Vehicle {
+		feature eng : V6Engine;
+		feature tanks : FuelTank { feature main1 : FuelTank; }
+		feature a : A;
+		feature b : B;
+		feature transitionLink[0..1];
+		feature trigger[1..*];
+		connector eng to tanks.main1;
+		connector a ::> a.x to b;
+		private connector [0..1] transitionLink to [1..*] trigger;
+	}
+}
+`
+	turtle, err := export.Convert("corpus.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, want := range []string{
+		"sysx:relatedFeature expr:Corpus__Vehicle___406_pend0, expr:Corpus__Vehicle___406_pend1 ;",
+		"expr:Corpus__Vehicle___406_pend0\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"eng\" ;\n    sysml:elementId \"Corpus__Vehicle___406_pend0\" ;\n    sysml:referent elmt:Corpus__Vehicle__eng ;",
+		"expr:Corpus__Vehicle___407_pend0\n    a sysml:FeatureChainExpression ;\n    sysx:sourceText \"a.x\" ;",
+		"sysml:targetFeature elmt:Corpus__A__x ;\n    sysx:endIndex \"0\"^^xsd:integer ;\n    sysx:endName \"a\" .",
+		"sysml:referent elmt:Corpus__Vehicle__transitionLink ;\n    sysx:endIndex \"0\"^^xsd:integer ;\n    sysml:lowerBound expr:Corpus__Vehicle___408_pend0_plowerBound ;",
+	} {
+		if !strings.Contains(graph, want) {
+			t.Errorf("the graph should carry %q\n%s", want, graph)
+		}
+	}
+	for _, name := range []string{"eng", "a", "transitionLink"} {
+		if strings.Contains(graph, "elmt:Corpus__Vehicle__"+name+"\n    a sysml:ConnectorAsUsage ;") {
+			t.Errorf("the connector took the end %s as its name\n%s", name, graph)
+		}
+	}
+	back := string(structuralRoundTrip(t, "corpus.kerml", turtle))
+	for _, want := range []string{
+		"connector eng to tanks.main1;",
+		"connector a ::> a.x to b;",
+		"private connector [0..1] transitionLink to [1..*] trigger;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// A comment in a head spelling a verb (`connect /* from */ a to b`) is not the
+// verb: the head's form is read from its tokens, so the graph still states it.
+func TestEndVerbsInCommentsAreNotVerbs(t *testing.T) {
+	src := `package Comments {
+	class T { feature eng; feature t; feature u; }
+	class V :> T {
+		connector /* from */ eng to t;
+		connector /* ( */ [1] eng to /* allocate */ [0..1] u;
+		connector link /* to */ from eng to u;
+	}
+	part def P { part a; part b; part c; }
+	part p : P {
+		connect /* from */ a to b;
+		connect /* ( */ (a, b, c);
+		binding /* of */ bind a = b;
+	}
+}
+`
+	turtle, err := export.Convert("comments.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if n := strings.Count(string(turtle), "sysx:endForm "); n != 6 {
+		t.Errorf("the graph should state all 6 heads' forms, got %d\n%s", n, turtle)
+	}
+	back := backFromTheGraphAlone(t, string(turtle))
+	for _, want := range []string{
+		"connector eng to t;",
+		"connector [1] eng to [0..1] u;",
+		"connector link from eng to u;",
+		"connect a to b;",
+		"connect (a, b, c);",
+		"binding bind a = b;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
 // backFromTheGraphAlone writes turtle back to notation without its source text,
 // and checks that notation yields the same structural graph again. The notation
 // is canonical spelling, so the graphs are compared as sets of triples.
@@ -3272,8 +3566,8 @@ func TestShadowingParametersStayNames(t *testing.T) {
 	}
 	back := backFromTheGraphAlone(t, turtle)
 	for _, want := range []string{
-		"accept setSpeed(value) if (value > 0) then fast;",
-		"accept w : Speed if (w > 0) then idle;",
+		"accept setSpeed(value) if value > 0 then fast;",
+		"accept w : Speed if w > 0 then idle;",
 		"attribute cur = value;",
 	} {
 		if !strings.Contains(back, want) {

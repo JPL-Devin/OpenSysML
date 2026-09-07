@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-machine x64 MSI for OpenSysML (WiX v5), built by scripts/build-msi.sh.
+  Preprocessor variables (all passed with `wix build -d NAME=VALUE`):
+    Version     numeric ProductVersion x.y.z derived from the release tag
+    Tag         the release tag as published (v0.5.0, v0.6.0-rc1)
+    Z3Version   Z3 release bundled by the optional feature (packaging/msi/z3.pin)
+    BinDir      directory holding sysml.exe, sysml-lsp.exe, sysml-grpc.exe
+    Z3Dir       directory holding z3.exe, its VC++ runtime DLLs, LICENSE-z3.txt
+    LicenseFile the repository LICENSE (Apache-2.0)
+  No authored UI (WixUI would embed an MS-RL custom-action DLL): Windows Installer
+  shows its basic progress UI, features are chosen with ADDLOCAL/REMOVE.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!-- UpgradeCode is the product's permanent identity: never change it. -->
+  <Package Name="OpenSysML"
+           Manufacturer="Open-MBEE"
+           Version="$(var.Version)"
+           UpgradeCode="800e1346-9227-42fe-87c1-eb24aff34de2"
+           Language="1033"
+           Codepage="1252"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="OpenSysML $(var.Tag) installer"
+                        Manufacturer="Open-MBEE" />
+
+    <!-- Same-version upgrades let v0.4.0 replace v0.4.0-rc1 (both map to 0.4.0). -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of OpenSysML is already installed. Uninstall it first to install $(var.Tag)." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Open-MBEE/OpenSysML" />
+    <Property Id="ARPHELPLINK" Value="https://open-mbee.github.io/OpenSysML/" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Open-MBEE/OpenSysML/releases" />
+    <Property Id="ARPCONTACT" Value="https://github.com/Open-MBEE/OpenSysML/issues" />
+    <Property Id="ARPCOMMENTS" Value="OpenSysML $(var.Tag): SysML v2 and KerML toolchain (sysml, sysml-lsp, sysml-grpc)." />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="OPENSYSML_TAG" Value="$(var.Tag)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="OpenSysML">
+        <Directory Id="Z3FOLDER" Name="z3" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Core" Title="OpenSysML" Level="1" AllowAbsent="no" AllowAdvertise="no"
+             Description="sysml (REPL and CLI) and sysml-lsp (language server), added to the system PATH.">
+      <ComponentGroupRef Id="CoreComponents" />
+    </Feature>
+
+    <Feature Id="GrpcService" Title="gRPC service (sysml-grpc)" Level="1" AllowAdvertise="no"
+             Description="The sysml-grpc service used by the Python, Node, Java and Rust clients. The clients download their own verified copy; install this to run the service by hand.">
+      <ComponentGroupRef Id="GrpcComponents" />
+    </Feature>
+
+    <Feature Id="Z3" Title="SMT solver (Z3)" Level="1" AllowAdvertise="no"
+             Description="Z3 $(var.Z3Version) (MIT, Microsoft Research) for %check and %explain. Installed under the z3 subdirectory and added to PATH, where sysml finds it without configuration.">
+      <ComponentGroupRef Id="Z3Components" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="CoreComponents" Directory="INSTALLFOLDER">
+      <Component Id="SysmlExe">
+        <File Id="SysmlExe" Source="$(var.BinDir)/sysml.exe" KeyPath="yes" />
+        <!-- Removed with the component on uninstall (Permanent="no"). -->
+        <Environment Id="PathInstallFolder" Name="PATH" Value="[INSTALLFOLDER]"
+                     Action="set" Part="last" Permanent="no" System="yes" />
+      </Component>
+      <Component Id="SysmlLspExe">
+        <File Id="SysmlLspExe" Source="$(var.BinDir)/sysml-lsp.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="License">
+        <File Id="LicenseTxt" Name="LICENSE.txt" Source="$(var.LicenseFile)" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="GrpcComponents" Directory="INSTALLFOLDER">
+      <Component Id="SysmlGrpcExe">
+        <File Id="SysmlGrpcExe" Source="$(var.BinDir)/sysml-grpc.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Z3Components" Directory="Z3FOLDER">
+      <Component Id="Z3Exe">
+        <File Id="Z3Exe" Source="$(var.Z3Dir)/z3.exe" KeyPath="yes" />
+        <Environment Id="PathZ3Folder" Name="PATH" Value="[Z3FOLDER]"
+                     Action="set" Part="last" Permanent="no" System="yes" />
+      </Component>
+      <!-- z3.exe links libz3 statically but the VC++ runtime dynamically; DLLs from the same zip. -->
+      <Component Id="Z3Msvcp140">
+        <File Id="Z3Msvcp140" Source="$(var.Z3Dir)/msvcp140.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="Z3Vcruntime140">
+        <File Id="Z3Vcruntime140" Source="$(var.Z3Dir)/vcruntime140.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="Z3Vcruntime140_1">
+        <File Id="Z3Vcruntime140_1" Source="$(var.Z3Dir)/vcruntime140_1.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="Z3License">
+        <File Id="Z3LicenseTxt" Name="LICENSE-z3.txt" Source="$(var.Z3Dir)/LICENSE-z3.txt" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

@@ -688,16 +688,17 @@ func TestCompleteIndexesSubsettingContributions(t *testing.T) {
 	}
 }
 
-// A redefinition gives a collection a second name, and a feature subsetting
-// either name contributes to it; completion counts that contribution for a
-// nested object known only by type, and offers the same indexes once it exists.
+// A redefinition renames a collection — the redefined name is no longer a member
+// of the type, though the object still holds the value under both — and a feature
+// subsetting the new name contributes to it; completion counts that contribution
+// for a nested object known only by type, and offers the same indexes once it exists.
 func TestCompleteIndexesThroughRedefinedCollection(t *testing.T) {
 	s := submitted(t, `package Fleet {
 	part def Wheel { attribute radius = 0.3; }
 	part def Axle { part wheels : Wheel[0..4]; }
 	part def FrontAxle :> Axle {
 		part front :>> wheels;
-		part spare : Wheel subsets wheels;
+		part spare : Wheel subsets front;
 	}
 	part def Car { part axle : FrontAxle; }
 	part car : Car;

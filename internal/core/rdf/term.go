@@ -101,7 +101,7 @@ type Graph struct {
 	Prefixes map[string]string
 
 	// index groups statements by subject. It is built on the first lookup and
-	// dropped whenever a triple is added.
+	// kept current as triples are added.
 	index map[Term]*subjectIndex
 }
 
@@ -133,26 +133,34 @@ func (g *Graph) AddTriple(t Triple) {
 	}
 	g.seen[t] = true
 	g.triples = append(g.triples, t)
-	g.index = nil
+	if g.index != nil {
+		g.index[t.Subject] = indexTriple(g.index[t.Subject], t)
+	}
+}
+
+// indexTriple records t under its subject's index entry, creating the entry
+// when si is nil.
+func indexTriple(si *subjectIndex, t Triple) *subjectIndex {
+	if si == nil {
+		si = &subjectIndex{objects: make(map[string][]Term)}
+	}
+	if _, seen := si.objects[t.Predicate.Value]; !seen {
+		si.predicates = append(si.predicates, t.Predicate.Value)
+	}
+	si.objects[t.Predicate.Value] = append(si.objects[t.Predicate.Value], t.Object)
+	return si
 }
 
 // subjects returns the per-subject index, building it if needed. Without it a
-// property read scans every triple, making a decode quadratic in model size.
+// property read scans every triple, making a decode quadratic in model size;
+// rebuilding it after every addition would make an encode quadratic too.
 func (g *Graph) subjects() map[Term]*subjectIndex {
 	if g.index != nil {
 		return g.index
 	}
 	g.index = make(map[Term]*subjectIndex)
 	for _, t := range g.triples {
-		si := g.index[t.Subject]
-		if si == nil {
-			si = &subjectIndex{objects: make(map[string][]Term)}
-			g.index[t.Subject] = si
-		}
-		if _, seen := si.objects[t.Predicate.Value]; !seen {
-			si.predicates = append(si.predicates, t.Predicate.Value)
-		}
-		si.objects[t.Predicate.Value] = append(si.objects[t.Predicate.Value], t.Object)
+		g.index[t.Subject] = indexTriple(g.index[t.Subject], t)
 	}
 	return g.index
 }

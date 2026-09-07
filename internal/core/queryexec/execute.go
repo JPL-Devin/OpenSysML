@@ -53,6 +53,7 @@ type executor struct {
 	budget     *visitBudget
 	calls      *visitBudget
 	related    *relationshipTables
+	derived    *derivedValues
 	depthLeft  int
 	stack      []string
 }
@@ -95,6 +96,7 @@ func Execute(program *queryplan.Program, context Context, bindings Bindings, opt
 		budget:     &visitBudget{remaining: budget},
 		calls:      &visitBudget{remaining: calls},
 		related:    newRelationshipTables(),
+		derived:    &derivedValues{},
 		depthLeft:  depth,
 		stack:      []string{definition.Name()},
 	}
@@ -251,6 +253,17 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 			}
 		}
 		return expected == "Element" || expected == "KerML::Root::Element"
+	case ValueQuantity:
+		quantity, ok := value.Quantity()
+		if !ok {
+			return false
+		}
+		for _, target := range e.context.Index.LookupQualified(expected) {
+			if c := e.context.Model.QuantityConforms(quantity.Unit.Term, target); c.Known && c.Holds {
+				return true
+			}
+		}
+		return false
 	default:
 		actual, ok := scalarValueType(value)
 		if !ok {
@@ -386,6 +399,7 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 		budget:     e.budget,
 		calls:      e.calls,
 		related:    e.related,
+		derived:    e.derived,
 		depthLeft:  e.depthLeft - 1,
 		stack:      append(append([]string(nil), e.stack...), target),
 	}

@@ -21,6 +21,9 @@ const (
 	QueryPropType              = corequery.PropertyType
 	QueryPropName              = corequery.PropertyName
 	QueryPropDeclaredName      = corequery.PropertyDeclaredName
+	QueryPropShortName         = corequery.PropertyShortName
+	QueryPropDeclaredShortName = corequery.PropertyDeclaredShortName
+	QueryPropDocumentation     = corequery.PropertyDocumentation
 	QueryPropQualifiedName     = corequery.PropertyQualifiedName
 	QueryPropOwner             = corequery.PropertyOwner
 	QueryPropIsAbstract        = corequery.PropertyIsAbstract

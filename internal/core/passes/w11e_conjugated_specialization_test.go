@@ -37,6 +37,44 @@ func TestConjugatedRuleSurvivesAMetaclassError(t *testing.T) {
 	}
 }
 
+// Subsetting, redefinition and feature typing are Specializations too, so a
+// conjugated feature as their specific end is reported like a subclassifier.
+func TestConjugatedFeatureIsNotSpecializedThroughAnyRelationshipMember(t *testing.T) {
+	for _, member := range []string{
+		"specialization subset g subsets h;",
+		"specialization redefinition g redefines h;",
+		"specialization typing g typed by A;",
+		"specialization subtype g :> h;",
+	} {
+		src := `package p {
+			class A;
+			feature f : A; feature g ~ f; feature h : A;
+			` + member + `
+		}`
+		if !hasMessage(diagsIn(t, "a.kerml", src, "type"), msgConjugatedSpecific) {
+			t.Errorf("%s: expected %q", member, msgConjugatedSpecific)
+		}
+	}
+}
+
+// Only the type that owns the conjugation is conjugated: a standalone
+// conjugation member, a conjugate's owned feature, and an unrelated feature
+// specialize freely.
+func TestConjugationDoesNotSpreadToOtherSpecifics(t *testing.T) {
+	const src = `package p {
+		class A; class B; class Z ~ A;
+		conjugation conjugate B conjugates A;
+		specialization subtype B specializes A;
+		class C ~ Z { feature x : A; }
+		specialization subtype C::x :> Z;
+		feature f : A; feature h : A;
+		specialization subset h subsets f;
+	}`
+	if diags := diagsIn(t, "a.kerml", src, "type"); hasMessage(diags, msgConjugatedSpecific) {
+		t.Fatalf("unexpected %q in %v", msgConjugatedSpecific, diags)
+	}
+}
+
 func hasMessage(diags []Diagnostic, msg string) bool {
 	for _, d := range diags {
 		if d.Message == msg {

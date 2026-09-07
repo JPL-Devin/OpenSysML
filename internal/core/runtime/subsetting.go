@@ -27,9 +27,10 @@ import (
 // its library chain) masks nothing on that walk: the target stays the resolved one.
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
-	for _, qn := range relationshipTargets(sym, kind) {
-		resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if ok && resolved != nil && resolved != sym {
+	for _, rel := range relationshipsOfKind(sym, kind) {
+		qn := ast.AsQualifiedName(rel.Target)
+		resolved := ctx.model.RelationshipTarget(sym, rel)
+		if resolved != nil && resolved != sym {
 			if ctx.isFeatureOf(owner, resolved, sym) {
 				features = append(features, resolved)
 				continue
@@ -97,22 +98,18 @@ func (ctx *Context) ownDeclarationNamed(owner, sym *symbols.Symbol, names ...str
 	return nil, false
 }
 
-// relationshipTargets returns the names sym's relationships of the given kind name.
-func relationshipTargets(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.QualifiedName {
-	var names []*ast.QualifiedName
+// relationshipsOfKind returns sym's relationships of the given kind that name a target.
+func relationshipsOfKind(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.Relationship {
+	var rels []*ast.Relationship
 	for _, rel := range semantics.RelationshipsOf(sym) {
 		if rel == nil || rel.Kind != kind || rel.Target == nil {
 			continue
 		}
-		target := rel.Target
-		if fr, ok := target.(*ast.FeatureReference); ok {
-			target = fr.Name
-		}
-		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
-			names = append(names, qn)
+		if qn := ast.AsQualifiedName(rel.Target); qn != nil && len(qn.Parts) > 0 {
+			rels = append(rels, rel)
 		}
 	}
-	return names
+	return rels
 }
 
 // isFeatureOf reports whether owner carries feature under its name, as its own
@@ -249,14 +246,15 @@ func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[st
 
 // sharedRedefinitionName returns the name in a group of names of one feature
 // whose feature value the group shares: the first name, in most-specific-first order,
-// whose own declaration writes a value, and otherwise the most specific name.
+// whose own declaration values it — by a value, or by a body valuing the features
+// of the value it inherits — and otherwise the most specific name.
 // Two names valued by one declaration are ErrConflictingRedefinition.
 func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*EffectiveFeature, names []string) (string, error) {
 	valued := ""
 	var valuedBy *symbols.Scope
 	for _, name := range names {
 		feat, ok := byName[name]
-		if !ok || feat.Symbol == nil || ctx.extractDefaultValue(feat.Symbol) == nil {
+		if !ok || feat.Symbol == nil || !ctx.declarationValues(feat) {
 			continue
 		}
 		if valued == "" {
@@ -272,6 +270,13 @@ func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*Ef
 		return valued, nil
 	}
 	return names[0], nil
+}
+
+// declarationValues reports whether a feature's own declaration values it: it
+// writes a value, or its body governs the value it inherits (`datum :>> coordinateFrame
+// { :>> mRefs = (mm, mm, mm); }` over `coordinateFrame default universal…`).
+func (ctx *Context) declarationValues(feat *EffectiveFeature) bool {
+	return ctx.extractDefaultValue(feat.Symbol) != nil || ctx.bodyGovernsInheritedValue(feat)
 }
 
 // redefinedNames returns the names of every feature of owner sym redefines,
@@ -472,6 +477,7 @@ func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (
 			fill.fv.Values = sequenceOf(fill.held)
 		}
 		fill.fv.Materialized = true
+		ctx.invalidateDependents(fill.fv)
 	}
 	return made, undo, nil
 }

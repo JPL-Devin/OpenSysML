@@ -40,6 +40,22 @@ func wantOneDiag(t *testing.T, src, want string) {
 	}
 }
 
+// wantOneWarning asserts exactly one type diagnostic, a warning under code, whose message
+// contains want.
+func wantOneWarning(t *testing.T, src, code, want string) {
+	t.Helper()
+	diags := exprDiags(t, src)
+	if len(diags) != 1 {
+		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
+	}
+	if diags[0].Severity != SeverityWarning || diags[0].Code != code {
+		t.Fatalf("expected warning %q, got %s %q (%s)", code, diags[0].Severity, diags[0].Code, diags[0].Message)
+	}
+	if !strings.Contains(diags[0].Message, want) {
+		t.Fatalf("expected message containing %q, got %q", want, diags[0].Message)
+	}
+}
+
 func wantNoDiags(t *testing.T, src string) {
 	t.Helper()
 	if diags := exprDiags(t, src); len(diags) != 0 {
@@ -309,10 +325,23 @@ const calcAdd = `calc def add {
 }
 `
 
+// A call leaving a default-less parameter unbound is well formed (KerML 1.0 §8.3.4.8.8) but
+// cannot be evaluated, so it is advised of each parameter it leaves unbound.
 func TestExprInvocationTooFewArguments(t *testing.T) {
-	wantOneDiag(t,
+	wantOneWarning(t,
 		`package P { `+calcAdd+` calc c { add(1) } }`,
-		"add requires 2 argument(s), found 1")
+		CodeUnboundParameter, "add leaves parameter b unbound, so the call cannot be evaluated")
+	// Every unbound parameter is named, and a supplied argument is still typed.
+	diags := exprDiags(t, `package P { `+calcAdd+` calc c { add() } }`)
+	if len(diags) != 2 || !strings.Contains(diags[0].Message, "parameter a unbound") ||
+		!strings.Contains(diags[1].Message, "parameter b unbound") {
+		t.Fatalf("expected an advisory per unbound parameter, got %v", diags)
+	}
+	diags = exprDiags(t, `package P { `+calcAdd+` calc c { add("one") } }`)
+	if len(diags) != 2 || !strings.Contains(diags[0].Message, "parameter b unbound") ||
+		!strings.Contains(diags[1].Message, "argument 1 of add expects Integer, found String") {
+		t.Fatalf("expected the advisory and the mismatch, got %v", diags)
+	}
 }
 
 func TestExprInvocationTooManyArguments(t *testing.T) {
@@ -333,7 +362,7 @@ func TestExprInvocationCorrectArityOK(t *testing.T) {
 }
 
 // A parameter whose multiplicity admits no value may go without an argument,
-// as the library's `'-'(x)` and two-argument `'if'` do; one declaring `[1]` may not.
+// as the library's `'-'(x)` and two-argument `'if'` do; one declaring `[1]` is advised of.
 func TestExprInvocationOptionalParameterMayBeOmitted(t *testing.T) {
 	const model = `package P {
 		calc def scale {
@@ -345,7 +374,7 @@ func TestExprInvocationOptionalParameterMayBeOmitted(t *testing.T) {
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `2`))
 	wantNoDiags(t, fmt.Sprintf(model, `2, 3`))
-	wantOneDiag(t, fmt.Sprintf(model, ``), "scale requires 1 argument(s), found 0")
+	wantOneWarning(t, fmt.Sprintf(model, ``), CodeUnboundParameter, "scale leaves parameter x unbound")
 	wantNoDiags(t, `package P { calc c { IntegerFunctions::'-'(5) } }`)
 	wantNoDiags(t, `package P { calc c { ControlFunctions::'if'(false, 1) } }`)
 }
@@ -374,8 +403,8 @@ func TestExprInvocationRedefinedParameterKeepsInheritedOptionality(t *testing.T)
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2)`))
 	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2, 3, 4)`))
-	wantOneDiag(t, fmt.Sprintf(model, `Scaled()`), "Scaled requires 1 argument(s), found 0")
-	wantOneDiag(t, fmt.Sprintf(model, `Tight(2)`), "Tight requires 2 argument(s), found 1")
+	wantOneWarning(t, fmt.Sprintf(model, `Scaled()`), CodeUnboundParameter, "Scaled leaves parameter x unbound")
+	wantOneWarning(t, fmt.Sprintf(model, `Tight(2)`), CodeUnboundParameter, "Tight leaves parameter by unbound")
 }
 
 func TestExprInvocationOptionalBeforeRequiredParameter(t *testing.T) {
@@ -396,8 +425,8 @@ func TestExprInvocationOptionalBeforeRequiredParameter(t *testing.T) {
 		calc c { %s }
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `Scale(2, 0, 5)`))
-	wantOneDiag(t, fmt.Sprintf(model, `Scale(5)`), "Scale requires 3 argument(s), found 1")
-	wantOneDiag(t, fmt.Sprintf(model, `Scaled(5)`), "Scaled requires 3 argument(s), found 1")
+	wantOneWarning(t, fmt.Sprintf(model, `Scale(5)`), CodeUnboundParameter, "Scale leaves parameter x unbound")
+	wantOneWarning(t, fmt.Sprintf(model, `Scaled(5)`), CodeUnboundParameter, "Scaled leaves parameter x unbound")
 	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
 }
 
@@ -407,7 +436,7 @@ func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 		alias addAlias for add;
 		calc c { addAlias(%s) }
 	}`
-	wantOneDiag(t, fmt.Sprintf(model, `1`), "add requires 2 argument(s), found 1")
+	wantOneWarning(t, fmt.Sprintf(model, `1`), CodeUnboundParameter, "add leaves parameter b unbound")
 	wantOneDiag(t, fmt.Sprintf(model, `1, "two"`),
 		"argument 2 of add expects Integer, found String")
 	wantNoDiags(t, fmt.Sprintf(model, `1, 2`))
@@ -467,11 +496,11 @@ func TestExprInvocationNamedArgumentsOK(t *testing.T) {
 }
 
 // Arguments that bind by name are held to the parameters as positional ones
-// are: each parameter once, in its type, and none required left unbound.
+// are: each parameter once, in its type, and a default-less one left unbound advised of.
 func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
-	wantOneDiag(t,
+	wantOneWarning(t,
 		`package P { `+calcAdd+` calc c { add(a = 1) } }`,
-		"add requires an argument for parameter b")
+		CodeUnboundParameter, "add leaves parameter b unbound, so the call cannot be evaluated")
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { add(a = 1, a = 2, b = 3) } }`,
 		`add binds parameter "a" twice`)
@@ -492,12 +521,12 @@ func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
 	wantNoDiags(t, fmt.Sprintf(model, `Scale(offset = 1, x = 5, factor = 2)`))
-	wantOneDiag(t, fmt.Sprintf(model, `Scale(factor = 2, offset = 1)`),
-		"Scale requires an argument for parameter x")
+	wantOneWarning(t, fmt.Sprintf(model, `Scale(factor = 2, offset = 1)`),
+		CodeUnboundParameter, "Scale leaves parameter x unbound")
 }
 
 // A node's body parameters redefine the invoked ones by position, so one the
-// body binds a value to is not required of the call, wherever the node is written.
+// body binds a value to is not asked of the call, wherever the node is written.
 func TestExprNodeBodyParameterSuppliesArgument(t *testing.T) {
 	const model = `package P {
 		action def Scale { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
@@ -518,10 +547,10 @@ func TestExprNodeBodyParameterSuppliesArgument(t *testing.T) {
 			state s { entry action { action scaled = Scale(a = seven) { in a; in b = 10; } } }
 		}
 	}`)
-	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a; in b; }`),
-		"Scale requires an argument for parameter b")
-	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a = 1; }`),
-		"Scale requires an argument for parameter b")
+	wantOneWarning(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a; in b; }`),
+		CodeUnboundParameter, "Scale leaves parameter b unbound")
+	wantOneWarning(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a = 1; }`),
+		CodeUnboundParameter, "Scale leaves parameter b unbound")
 	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in b = "x"; }`),
 		`Scale has no parameter named "a"`)
 }

@@ -67,19 +67,22 @@ $ sysml report.sysml -render-document Observatory::MassReport \
 The structure is ordinary semantic HTML — `<article>`, nested `<section>`
 whose heading levels follow the nesting, `<p>`, `<table>` with `<caption>`,
 `<thead>` and `<th scope="col">`, `<ul>`/`<ol>`, `<figure>` with
-`<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`, `<code>`,
+`<figcaption>`, `<dl>` for definitions, `<nav>` for the contents, and `<em>`, `<strong>`, `<code>`,
 `<a>` inline — so a reader, a screen reader and a static-site generator all
 see a document rather than a grid of `<div>`s.
 
 The model rides alongside the structure. A small `sysml-` class vocabulary
 names each part of the document (`sysml-document`, `sysml-section`,
 `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
-`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref`
-and their kin), and `data-` attributes carry the facts behind it: the
-content kind and name, the query behind a table or list, the group-by
-column, each row's or item's selected element with its element kind
+`sysml-item`, `sysml-definitions`, `sysml-entry`, `sysml-term`,
+`sysml-description`, `sysml-diagram`, `sysml-caption`, `sysml-link`,
+`sysml-ref` and their kin), and `data-` attributes carry the facts behind
+it: the content kind and name, the query behind a table, list or
+definitions block, the group-by column, each row's, item's or entry's
+selected element with its element kind
 (`partUsage`, `requirementDef`, …), each cell's projected column and value
-kind, and a diagram's view, kind and flow direction.
+kind (a `quantity` value also carries its `data-magnitude` and `data-unit`
+apart), and a diagram's view, kind and flow direction.
 
 ```html
 <tr class="sysml-row" data-element="Observatory::telescope::mount"
@@ -94,8 +97,13 @@ within the page; in a `-render-documents` set it resolves across pages, whose
 file names are the Markdown names with `.html` instead of `.md`. Diagram
 blocks embed their Mermaid source in `<pre class="mermaid">`, which a page
 that loads Mermaid renders as a diagram and any other page shows as source.
-The output loads nothing over the network, runs no JavaScript of its own,
-and is byte-identical between runs.
+By default the output loads nothing over the network, runs no JavaScript of
+its own, and is byte-identical between runs. To have a browser draw the
+diagrams, `-html-mermaid cdn` adds a `<script>` loading a pinned Mermaid
+release from jsDelivr, and `-html-mermaid <url>` loads it from a URL of your
+own; the page keeps the source, so it still reads where the script cannot
+load. A fragment has no page shell for the script, so a page embedding one
+loads Mermaid itself.
 
 ### Styling it
 
@@ -115,13 +123,30 @@ renderer emits no `style` attributes to compete with.
 
 | Flag | Effect |
 |---|---|
-| `-html-default-css` | Write the default sheet and exit, to copy from |
+| `-html-theme <name>` | Layer a bundled theme over the default sheet: `default`, `modern`, `print` or `report` |
+| `-html-default-css` | Write the default sheet and exit, to copy from; with `-html-theme`, the theme's whole sheet |
 | `-html-css <file\|url>` | Add a sheet after the default one: a file is inlined, a URL is linked (repeatable, applied in order) |
 | `-html-no-default-css` | Leave the default sheet out |
 | `-html-fragment` | Write the `<article>` alone, with no page shell and no stylesheet |
 
+The bundled themes are written against the same tokens, inside the same
+layer, right after the default sheet — so a theme changes the look while your
+unlayered CSS still wins over both:
+
+| Theme | Look |
+|---|---|
+| `default` | The default sheet alone: system sans-serif, one navy accent, boxed tables |
+| `modern` | Clean corporate sans-serif: filled table headers, zebra rows, rounded surfaces for code and contents |
+| `report` | Formal technical report: serif body, wider measure, open tables ruled top and bottom, captions above |
+| `print` | Monochrome and compact for paper: black rules, no fills, tables and figures kept whole across page breaks, external links spelled out |
+
+A theme needs the default sheet under it, so it is refused with
+`-html-no-default-css`, and a fragment has no page to style, so it is refused
+with `-html-fragment`.
+
 A `-render-documents -doc-form html` set writes its stylesheets as files
-beside the pages — `sysml-document.css` and each `-html-css` file, under its
+beside the pages — `sysml-document.css` (default sheet, with the theme when
+one is named) and each `-html-css` file, under its
 own base name, escaped and shortened where a name is not a portable file name
 and distinguished where two sheets share one — and every page links them in
 order, so the styling of a whole set is edited in one place. A `-html-css` URL

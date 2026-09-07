@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "instantiate": "test::Box",
+  "objects": [
+    {
+      "finalState": "assigning",
+      "stateVisits": ["assigning"],
+      "slots": {
+        "a": {"type": "Integer", "value": 9},
+        "d": {"type": "Integer", "value": 18},
+        "dd": {"type": "Integer", "value": 19},
+        "before": {"type": "Integer", "value": 7},
+        "after": {"type": "Integer", "value": 19}
+      }
+    }
+  ]
+}

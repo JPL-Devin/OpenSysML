@@ -101,6 +101,51 @@ func hoverInSrc(t *testing.T, s *Server, name, src string, off int) *protocol.Ho
 	return res
 }
 
+// What follows `connector` in KerML is the connector's name only ahead of
+// `from`; otherwise it is the first end, itself or the end name it declares.
+func TestHoverKerMLBinaryConnectorFirstToken(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_first_end.kerml").Filename()
+	src := "package P {\n\tclass V {\n\t\tfeature eng;\n\t\tfeature t;\n\t\tconnector eng to t;\n\t\tconnector a ::> eng to t;\n\t\tconnector c from eng to t;\n\t}\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for probe, want := range map[string]string{
+		"connector eng": "feature eng",
+		"connector a":   "connector end a",
+		"connector c":   "connector c",
+	} {
+		res := hoverInSrc(t, s, name, src, strings.Index(src, probe)+len("connector "))
+		if !strings.Contains(res.Contents.Value, want) {
+			t.Errorf("%s: hover = %q, want %q", probe, res.Contents.Value, want)
+		}
+	}
+}
+
+// Both ends of a keyword-first Disjoining are references, so hovering either
+// names the type it resolves to rather than the member it sits in.
+func TestHoverKerMLDisjoiningEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_disjoining.kerml").Filename()
+	src := "package P {\n\tclassifier A;\n\tclassifier B { feature next : B; }\n\tfeature b : B;\n\tdisjoining D disjoint A from B;\n\tdisjoint b.next from A;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for probe, want := range map[string]string{
+		"disjoint A":  "classifier A",
+		"A from B":    "classifier B",
+		"disjoint b":  "feature b",
+		"b.next":      "feature next",
+		"next from A": "classifier A",
+	} {
+		off := strings.Index(src, probe) + strings.LastIndexAny(probe, " .") + 1
+		res := hoverInSrc(t, s, name, src, off)
+		if res == nil || !strings.Contains(res.Contents.Value, want) {
+			t.Errorf("%s: hover = %+v, want %q", probe, res, want)
+		}
+	}
+}
+
 func TestHoverRendersMarkdownWhenClientSupportsIt(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)
@@ -261,5 +306,30 @@ func TestHoverMissWhenNoSymbol(t *testing.T) {
 	}
 	if res != nil {
 		t.Errorf("expected nil hover for out-of-range position, got %+v", res)
+	}
+}
+
+// A binding's ends are connector ends (SysML.xtext:1000): a named end hovers as
+// the end it declares, the feature after `::>` as the feature it references.
+func TestHoverBindingConnectorEnds(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/hover_binding_ends.sysml").Filename()
+	src := "package P {\n\tpart def V {\n\t\tattribute a;\n\t\tattribute b;\n\t\tbind a = b;\n\t\tbind e1 ::> a = e2 references b;\n\t\tbinding bb bind e3 ::> a = b;\n\t}\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for _, tc := range []struct{ before, token, want string }{
+		{"bind ", "a = b", "attribute a"},
+		{"bind ", "e1 ::>", "connector end e1"},
+		{"::> ", "a = e2", "attribute a"},
+		{"= ", "e2 references", "connector end e2"},
+		{"binding ", "bb bind", "binding bb"},
+		{"bind ", "e3 ::>", "connector end e3"},
+	} {
+		off := strings.Index(src, tc.before+tc.token) + len(tc.before)
+		res := hoverInSrc(t, s, name, src, off)
+		if !strings.Contains(res.Contents.Value, tc.want) {
+			t.Errorf("%s: hover = %q, want %q", tc.token, res.Contents.Value, tc.want)
+		}
 	}
 }

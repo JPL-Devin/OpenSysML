@@ -157,6 +157,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object; an object is named, #<id>, or a path such as car.fl"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
+	{group: groupBehavioral, name: "%analysis", args: "<name>[(<args>)] [<object>]", desc: "run an analysis case and report its outputs and the verdict of its objective; arguments bind its inputs and an object is its subject"},
 	{group: groupBehavioral, name: cmdRunQuery, args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
 	{group: groupBehavioral, name: cmdRenderDocument, args: argName, desc: "compile a document definition, run its queries and print the rendered Markdown"},
 	{group: groupBehavioral, name: "%constraint", args: argName, desc: "evaluate a constraint definition"},
@@ -375,6 +376,11 @@ func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bo
 		}
 		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
 		return metaOut(s.doCalc(name, argText)), true
+	case "%analysis":
+		if len(fields) < 2 {
+			return metaOut([]string{analysisUsage}, false, nil), true
+		}
+		return metaOut(s.doAnalysis(strings.TrimPrefix(strings.TrimSpace(line), "%analysis"))), true
 	case cmdRunQuery:
 		if len(fields) < 2 {
 			return metaOut([]string{runQueryUsage}, false, nil), true
@@ -758,6 +764,16 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 				fmt.Sprintf("  = %s", formatValue(ctx, val)),
 			}, nil
 		}
+		// A measurement unit is the reference it declares, whatever defines it.
+		if val, isUnit, err := ctx.MeasurementUnitValue(sym); isUnit {
+			if err != nil {
+				return nil, fmt.Errorf("evaluation failed: %w", err)
+			}
+			return []string{
+				fmt.Sprintf("✓ %s", expr),
+				fmt.Sprintf("  = %s", formatValue(ctx, val)),
+			}, nil
+		}
 		// A valueless usage may still name a value its own features shape.
 		if _, isUsage := sym.Decl.(*ast.Usage); !isUsage && !declaresValue(sym) {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
@@ -776,10 +792,10 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		}, nil
 	}
 
-	// A compound expression is evaluated in the session's own namespace, which
-	// an empty session does not have.
+	// A compound expression is evaluated in the session's own namespace; an empty
+	// session has none, so only the library answers there.
 	if doc == nil || doc.Scope == nil {
-		return nil, s.errWithoutDeclarations(expr)
+		return s.evalWithoutDeclarations(ctx, expr)
 	}
 
 	// Complex expression with feature refs - inject into session context
@@ -919,6 +935,32 @@ func (s *Session) errWithoutDeclarations(expr string) error {
 	return errors.New(noDeclarationsLoaded)
 }
 
+// evalWithoutDeclarations answers an expression over the library alone in the
+// session's runtime, so an object it reaches is one %features shows.
+func (s *Session) evalWithoutDeclarations(ctx *runtime.Context, expr string) ([]string, error) {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if value == nil {
+		return nil, errors.New(noDeclarationsLoaded)
+	}
+	val, err := ctx.Eval(value)
+	switch {
+	case err == nil:
+		return []string{
+			fmt.Sprintf("✓ %s", expr),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
+		}, nil
+	case !declarationsWouldAnswer(err):
+		return nil, evalError(expr, err, len(exprPrefix))
+	case errors.Is(err, runtime.ErrUnresolvedReference):
+		return nil, fmt.Errorf("%s: %w", noDeclarationsLoaded, err)
+	default:
+		return nil, errors.New(noDeclarationsLoaded)
+	}
+}
+
 // noDeclarationsLoaded is why an empty session cannot answer a name.
 const noDeclarationsLoaded = "no declarations loaded (literals work, but feature references need declarations)"
 
@@ -1002,6 +1044,11 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 		if isLiteralAnswerError(err) {
 			return nil, true, evalError(expr, err, len(exprPrefix))
 		}
+		return nil, false, nil
+	}
+	// An object is one of the session's, where %features can reach it, not of
+	// this throwaway model: the session materializes the declaration itself.
+	if ctx.HoldsObject(val) {
 		return nil, false, nil
 	}
 
@@ -1117,6 +1164,7 @@ func (s *Session) doFeatures(name string, listing featureListing) ([]string, boo
 	w := &featureValueWalk{
 		ctx:      ctx,
 		onPath:   map[*symbols.Symbol]bool{inst.Type: true},
+		listing:  map[int64]bool{inst.ID: true},
 		maxDepth: listing.depth,
 		budget:   listing.budget,
 		hint:     listing.truncationHint(name),
@@ -1136,13 +1184,16 @@ const (
 	maxFeatureValueLines = 200
 )
 
-// featureValueWalk expands an object graph for %features under three bounds: onPath holds
+// featureValueWalk expands an object graph for %features under four bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
-// detect the cycle), maxDepth, and a line budget shared across the listing.
+// detect the cycle), listing the objects, maxDepth, and a line budget shared across the listing.
 type featureValueWalk struct {
-	ctx      *runtime.Context
-	onPath   map[*symbols.Symbol]bool
+	ctx    *runtime.Context
+	onPath map[*symbols.Symbol]bool
+	// listing holds the objects being expanded above the current one: one that
+	// holds itself (`mRefs = self`) is named on its row, not expanded again.
+	listing  map[int64]bool
 	maxDepth int
 	budget   int
 	// hint is the truncation line's advice on how to see the rest; cut records
@@ -1213,13 +1264,18 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 		// spends only what is left beyond them.
 		reserved := len(features) - i - 1
 		for _, nested := range nestedInstances(w.ctx, fv) {
+			if w.listing[nested.ID] {
+				continue
+			}
 			if w.budget <= reserved {
 				lines = w.truncate(lines, indent+"  ")
 				break
 			}
 			w.budget -= reserved
 			w.onPath[nested.Type] = true
+			w.listing[nested.ID] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
+			delete(w.listing, nested.ID)
 			delete(w.onPath, nested.Type)
 			w.budget += reserved
 		}
@@ -2535,7 +2591,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	}
 	return append(lines,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel+runtime.FormatReal(exec.CurrentTime()),
+		timeLabel+semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	), nil
 }
@@ -2591,7 +2647,7 @@ func (s *Session) attachExhibitedMachine(
 	return []string{
 		fmt.Sprintf("✓ Debugging state machine %q exhibited by %s", behavior.Name, objectMention(inst, label)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
-		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
+		timeLabel + semantics.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}
 }
@@ -2778,7 +2834,7 @@ func (s *Session) stepState() ([]string, bool, error) {
 	return []string{
 		"✓ " + step,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, false, nil
 }
@@ -2976,8 +3032,8 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 
 	out := []string{
 		fmt.Sprintf("Current state: %s", currentStateName(exec)),
-		"Time: " + runtime.FormatReal(s.stateExec.now),
-		"Last event at: " + runtime.FormatReal(exec.CurrentTime()),
+		"Time: " + semantics.FormatReal(s.stateExec.now),
+		"Last event at: " + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
@@ -3124,7 +3180,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	// A machine that took no step and has nowhere to go says why; one whose work
 	// is only due past the deadline still reports the drain and what is left.
 	if processed == 0 && doActions == 0 && !exec.HasPendingWork() {
-		out := []string{"No pending work - simulation time is now " + runtime.FormatReal(s.stateExec.now)}
+		out := []string{"No pending work - simulation time is now " + semantics.FormatReal(s.stateExec.now)}
 		if reason := exec.SuspendReason(); reason != "" {
 			out = append(out, fmt.Sprintf("  %s", reason))
 		}
@@ -3132,9 +3188,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	}
 
 	out := []string{
-		fmt.Sprintf("✓ Advanced to %s (%d event(s) processed)", runtime.FormatReal(s.stateExec.now), processed),
+		fmt.Sprintf("✓ Advanced to %s (%d event(s) processed)", semantics.FormatReal(s.stateExec.now), processed),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		"  Last event at: " + runtime.FormatReal(exec.CurrentTime()),
+		"  Last event at: " + semantics.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
 	}
 
@@ -3155,7 +3211,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		// of untriggered (completion) transitions, which no budget can drain.
 		if exec.State() == runtime.StateRunning && exec.CurrentTime() == startTime {
 			out = append(out, fmt.Sprintf("  All %d event(s) were processed at simulation time %s without advancing it; if the machine cycles through untriggered (completion) transitions, which re-fire immediately, no budget is large enough",
-				processed, runtime.FormatReal(startTime)))
+				processed, semantics.FormatReal(startTime)))
 		}
 	case doActions >= maxDoActions:
 		out = append(out, fmt.Sprintf("  Stopped at the do action budget (%d steps; raise %s to allow more)",

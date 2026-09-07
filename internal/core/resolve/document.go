@@ -1,8 +1,6 @@
 package resolve
 
 import (
-	"strings"
-
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -155,16 +153,15 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
-		if d.Multiplicity != nil {
-			r.resolveExpr(scope, d.Multiplicity.Lower)
-			r.resolveExpr(scope, d.Multiplicity.Upper)
+		r.resolveMultiplicity(scope, d.Multiplicity)
+		if cross := d.CrossFeature; cross != nil {
+			r.resolveHeaderRelationships(scope, child, cross, cross.Relationships)
+			r.resolveMultiplicity(scope, cross.Multiplicity)
 		}
 		// An accept node keeps its trigger in the usage's value, and a trigger's
 		// names are not all references (see resolveTrigger).
 		if d.IsAccept {
 			r.resolveTrigger(scope, d.Value)
-		} else if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, d.Value) {
-			// A calc binding may name its implicit result feature as the value end.
 		} else {
 			r.resolveExpr(scope, d.Value)
 		}
@@ -194,6 +191,10 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 			endpointKind := d.Kind == ast.UsageSuccession || d.Kind == ast.UsageTransition
 			resolveAsEndpoint := endpointKind && inStateMachine(endScope) && !declaresName
 			resolveEnd := func(target ast.Node) {
+				// A calc's binding may name its implicit result feature as an end.
+				if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, target) {
+					return
+				}
 				// A machine succession/transition end names a vertex like a transition endpoint.
 				if qn, ok := target.(*ast.QualifiedName); ok {
 					if resolveAsEndpoint {
@@ -269,19 +270,19 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d, d.Prefixes)
-		r.resolveExpr(scope, d.Expression)
+		r.resolveCondition(scope, d, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
-		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d, d.Reference), d.Body)
 		return true
 	case *ast.RequireMember:
 		r.resolvePrefixes(scope, d, d.Prefixes)
-		r.resolveExpr(scope, d.Expression)
+		r.resolveCondition(scope, d, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
-		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d, d.Reference), d.Body)
 		return true
 	default:
 		return false
@@ -584,36 +585,32 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 				target = fr.Name
 			}
 
+			referencing := ast.IsReferenceSubsetting(decl, rel)
 			// Special case: redefinitions should resolve in inherited scope
 			// Self-subsetting must resolve in the declaration scope so cycle checks see `p4 :> p4`.
-			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
+			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !referencing && !relationshipTargetsDecl(rel, decl)) {
 				if qn, ok := target.(*ast.QualifiedName); ok {
 					if rel.Kind == ast.RelSubsets && r.resolveOwnSibling(scope, qn, decl) {
 						continue
 					}
-					r.resolveRedefinition(scope, qn, decl)
+					r.resolveRedefinition(scope, qn, decl, rel.Kind == ast.RelRedefines)
 					continue
 				}
 			}
-			if rel.Kind == ast.RelReferences && isImplicitCalcResult(scope, target) {
+			if referencing && isImplicitCalcResult(scope, target) {
 				continue
 			}
 
 			// A reference subsetting resolves its leading segment past the
 			// name decl borrows from it; memoizing that result makes the
 			// chain walk below see the referenced feature, not decl.
-			if rel.Kind == ast.RelReferences {
-				hide := &refFilter{
-					decl: decl,
-				}
+			if referencing {
+				hide := referenceFilter(decl, target)
 				// A connector end's participant is featured where the connector
 				// is, so a feature of the connector itself is not one
 				// (KerML 8.3.4.5).
 				if u, ok := decl.(*ast.Usage); ok && u.IsEnd && declaresConnector(scope) {
 					hide.featuredBy = scope
-				}
-				if _, ok := target.(*ast.FeatureChainExpr); ok {
-					hide = hide.forPrefix()
 				}
 				if _, ok := target.(*ast.QualifiedName); ok {
 					r.resolveTarget(scope, target, hide)
@@ -661,16 +658,9 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 		resolvesInHeader := false
 		switch target := target.(type) {
 		case *ast.QualifiedName:
-			if len(target.Parts) > 0 {
-				resolvesInHeader = rel.Kind != ast.RelTyping &&
-					rel.Kind != ast.RelSpecializes &&
-					rel.Kind != ast.RelSubsets &&
-					r.headerHasName(header, target.Parts[0].Text, rel.Kind)
-			}
+			resolvesInHeader = r.resolvesInHeader(header, target, false, rel.Kind)
 		case *ast.FeatureChainExpr:
-			if len(target.Member.Parts) > 0 {
-				resolvesInHeader = r.headerHasName(header, target.Member.Parts[0].Text, rel.Kind)
-			}
+			resolvesInHeader = r.resolvesInHeader(header, target.Member, true, rel.Kind)
 		}
 		if resolvesInHeader {
 			r.resolveRelationships(header, decl, []*ast.Relationship{rel})
@@ -678,6 +668,21 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 			r.resolveRelationships(parent, decl, []*ast.Relationship{rel})
 		}
 	}
+}
+
+// resolvesInHeader reports whether a head relationship's target, opening with name,
+// resolves in the declaring element's own scope; a plain `: T`, `:> T`, `:>> T` never does.
+func (r *Resolver) resolvesInHeader(header *symbols.Scope, name *ast.QualifiedName, chain bool, kind ast.RelationshipKind) bool {
+	if name == nil || len(name.Parts) == 0 {
+		return false
+	}
+	switch kind {
+	case ast.RelTyping, ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
+		if !chain {
+			return false
+		}
+	}
+	return r.headerHasName(header, name.Parts[0].Text, kind)
 }
 
 func (r *Resolver) headerHasName(scope *symbols.Scope, name string, kind ast.RelationshipKind) bool {
@@ -732,6 +737,8 @@ func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
 			name = d.Ident.Name
 		case *ast.Usage:
 			name, _ = ast.EffectiveName(d)
+		case *ast.CrossFeatureMember:
+			name = d.Ident.Name
 		case *ast.SubjectMember:
 			name, _ = d.EffectiveName()
 		}
@@ -739,13 +746,24 @@ func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
 	return name != "" && qn.Parts[0].Text == name
 }
 
+// resolveCondition resolves the condition expression of the require/assume
+// member decl; a lone name is the reference form, so it resolves as one.
+func (r *Resolver) resolveCondition(scope *symbols.Scope, decl ast.Node, expr ast.Node) {
+	if ref := ast.ConditionReference(decl); ref != nil {
+		r.resolveTarget(scope, ref, referenceFilter(decl, ref))
+		return
+	}
+	r.resolveExpr(scope, expr)
+}
+
 // resolveConstraintReference resolves the requirement a require/assume member
-// subsets by reference (SysML.xtext RequirementConstraintUsage).
-func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+// decl subsets by reference (SysML.xtext RequirementConstraintUsage); the member
+// borrows its name, so it is no target of its own.
+func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, decl ast.Node, ref *ast.QualifiedName) *symbols.Symbol {
 	if ref == nil || len(ref.Parts) == 0 {
 		return nil
 	}
-	sym, ok := r.ResolveQualified(scope, ref)
+	sym, ok := r.resolveTarget(scope, ref, referenceFilter(decl, ref))
 	if !ok {
 		return nil
 	}
@@ -816,8 +834,10 @@ func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols
 	for _, general := range r.generalsOf(sym) {
 		// A feature of sym redefining what a general declares means sym does not
 		// inherit it, under that name or any other (KerML 8.3.3.3).
-		if found, ok := r.featureOf(general, name, seen); ok && !r.inheritanceMasked(sym, found) {
-			return found, true
+		if found, ok := r.featureOf(general, name, seen); ok {
+			if found, ok = r.inheritedAs(sym, found); ok {
+				return found, true
+			}
 		}
 	}
 	return nil, false
@@ -830,41 +850,37 @@ func inheritableMember(sym *symbols.Symbol) bool {
 	return sym != nil && symbols.VisibleAs(sym.Visibility, false, true)
 }
 
-// inheritanceMasked reports whether sym does not inherit found because one of
-// sym's own features redefines it.
-func (r *Resolver) inheritanceMasked(sym, found *symbols.Symbol) bool {
-	model, ok := r.model.(maskChecker)
-	return ok && model.InheritanceMasked(sym, found)
+// inheritedAs returns what sym has where found was reached by name: found itself
+// when sym inherits it, else the feature of sym that redefines found and so
+// answers to its names (KerML 7.3.4.5), else nothing.
+func (r *Resolver) inheritedAs(sym, found *symbols.Symbol) (*symbols.Symbol, bool) {
+	return r.inheritedAsFrom(sym, found, false)
 }
 
-// inheritanceMaskedDeclaring is inheritanceMasked as the declaration named
-// declName, being written in sym, sees it: its own redefinition still names its
-// target, and so does the inherited namesake it redefines.
-func (r *Resolver) inheritanceMaskedDeclaring(sym, found *symbols.Symbol, declName string) bool {
+// inheritedAsFrom is inheritedAs as the reference being resolved sees it: a
+// redefinition written in sym is exempt from the masks sym's own redefinitions
+// cause, so the target it names stays resolvable (KerML 8.3.3.3.6).
+func (r *Resolver) inheritedAsFrom(sym, found *symbols.Symbol, redefining bool) (*symbols.Symbol, bool) {
 	model, ok := r.model.(maskChecker)
-	return ok && model.InheritanceMaskedDeclaring(sym, found, declName)
-}
-
-// declaredNameIn returns the name decl binds in sym's own scope, if any.
-func declaredNameIn(sym *symbols.Symbol, decl ast.Node) string {
-	if sym == nil || sym.Scope == nil || decl == nil {
-		return ""
+	if !ok {
+		return found, true
 	}
-	var found *symbols.Symbol
-	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
-		if member.Decl == decl {
-			found = member
-			return false
+	if redefining {
+		if !model.InheritanceMaskedRedefining(sym, found) {
+			return found, true
 		}
-		return true
-	})
-	if found != nil {
-		if i := strings.LastIndex(found.Name, "::"); i >= 0 {
-			return found.Name[i+2:]
+		if redefiner := model.NamingRedefinerRedefining(sym, found); redefiner != nil {
+			return redefiner, true
 		}
-		return found.Name
+		return nil, false
 	}
-	return ""
+	if !model.InheritanceMasked(sym, found) {
+		return found, true
+	}
+	if redefiner := model.NamingRedefiner(sym, found); redefiner != nil {
+		return redefiner, true
+	}
+	return nil, false
 }
 
 // generalsOf returns the symbols sym inherits features from: the resolved
@@ -878,6 +894,8 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 		case *ast.Definition:
 			rels = decl.Relationships
 		case *ast.Usage:
+			rels = decl.Relationships
+		case *ast.CrossFeatureMember:
 			rels = decl.Relationships
 		default:
 			return nil
@@ -904,7 +922,7 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 	if !ok || sym == nil || sym.Decl == decl {
 		return false
 	}
-	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName) {
+	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName()) {
 		return false
 	}
 	r.recordRedefined(qn, sym, true)
@@ -930,7 +948,7 @@ func redefinesUnderItsName(decl ast.Node, borrowed bool) bool {
 // decl owns the redefinition. An unnamed redefining feature takes the redefined
 // feature's name (KerML 7.3.4.5), so that borrowed binding is hidden from the
 // target, which names the redefined feature itself.
-func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) {
+func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node, redefines bool) {
 	// If already resolved, skip
 	if qn == nil || len(qn.Parts) == 0 {
 		return
@@ -939,6 +957,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	hide := &refFilter{
 		decl:             decl,
 		skipBorrowedName: true,
+		redefining:       redefines,
 	}
 	r.Enter()
 
@@ -996,10 +1015,16 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
 
-		// Search each parent's inheritance chain, cached and live alike.
+		// Search each parent's inheritance chain, cached and live alike. What a
+		// feature of the owner redefines is not inherited, so a subsetting
+		// cannot name it; a redefinition of it can (KerML 8.3.3.3.6).
+		owner := scope.Owner()
 		seen := make(map[*symbols.Symbol]bool)
 		for _, parentSym := range parents {
 			if sym, ok := r.featureOf(parentSym, featureName, seen); ok {
+				if sym, ok = r.inheritedAsFrom(owner, sym, redefines); !ok {
+					continue
+				}
 				r.recordRedefined(qn, sym, r.Leave())
 				return
 			}
@@ -1008,12 +1033,12 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		// The walk above follows declared specializations only. The semantic
 		// model also knows the implicit ones — a library base, or the baseType
 		// a semantic-metadata keyword contributes (SysML v2 §7.27.3).
-		owner := scope.Owner()
 		if sym, ok := r.lookupContributedMember(owner, featureName); ok &&
-			visibleAsInheritedMember(owner, sym) &&
-			!r.inheritanceMaskedDeclaring(owner, sym, declaredNameIn(owner, decl)) {
-			r.recordRedefined(qn, sym, r.Leave())
-			return
+			visibleAsInheritedMember(owner, sym) {
+			if sym, ok = r.inheritedAsFrom(owner, sym, redefines); ok {
+				r.recordRedefined(qn, sym, r.Leave())
+				return
+			}
 		}
 	} else {
 		first := qn.Parts[0].Text
@@ -1323,35 +1348,52 @@ func (r *Resolver) walkFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainEx
 				return ok
 			})
 			if outward {
-				outwardSym = r.followChainMemberType(outwardSym)
 				return resolution{sym: outwardSym, ok: outwardSym != nil}
 			}
 		}
 	}
 
 	memberSym := r.resolveMemberChain(operandSym, fc.Member, fc)
-	memberSym = r.followChainMemberType(memberSym)
 	return resolution{sym: memberSym, ok: memberSym != nil}
 }
 
-// chainMember looks a chain segment up as the member walk does: as a member of
-// sym when a model is attached, else in sym's own scope.
+// chainMember looks a chain segment up as a member of sym itself — flattened over
+// its generalizations when a model is attached — else of its type or its value.
 func (r *Resolver) chainMember(sym *symbols.Symbol, name string, chain ast.Node) (*symbols.Symbol, bool) {
+	return r.chainMemberOf(sym, name, chain, nil)
+}
+
+func (r *Resolver) chainMemberOf(sym *symbols.Symbol, name string, chain ast.Node, seen map[*symbols.Symbol]bool) (*symbols.Symbol, bool) {
+	if sym == nil {
+		return nil, false
+	}
 	found, ok := r.lookupMember(sym, name)
 	if ok && namedByChain(found, chain) {
 		found, ok = r.lookupContributedMember(sym, name)
 	}
 	if ok && r.namedThroughNamespace(found) {
+		if found, ok = r.inheritedAs(sym, found); ok {
+			return found, true
+		}
+	}
+	found, ok = r.LocalBinding(sym.Scope, name)
+	if ok && !namedByChain(found, chain) && r.namedThroughNamespace(found) {
 		return found, true
 	}
-	if sym == nil || sym.Scope == nil {
+	// A usage without the member reads it from its type or, untyped, from the
+	// feature its value names; seen stops a chain of values from looping.
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage || seen[sym] || r.IsBaseThat(sym) || r.IsOccurrenceThis(sym) {
 		return nil, false
 	}
-	found, ok = sym.Scope.LookupLocal(name)
-	if !ok || namedByChain(found, chain) || !r.namedThroughNamespace(found) {
-		return nil, false
+	if seen == nil {
+		seen = make(map[*symbols.Symbol]bool)
 	}
-	return found, true
+	seen[sym] = true
+	if typed := r.getUsageType(sym.OwnerScope, usage); typed != nil {
+		return r.chainMemberOf(typed, name, chain, seen)
+	}
+	return nil, false
 }
 
 // namedByChain reports whether sym borrowed its name from chain, the feature
@@ -1417,8 +1459,8 @@ func (r *Resolver) walkMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedN
 	return cur, true
 }
 
-// getOperandSymbol returns the symbol of an expression operand WITHOUT following
-// type relationships. Used in feature chains to access usage inline members.
+// getOperandSymbol returns the feature an expression operand names, which the
+// chain's next segment is read as a member of (see chainMember).
 func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
 	switch v := e.(type) {
 	case *ast.FeatureReference:
@@ -1440,45 +1482,21 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		if !ok {
 			return nil
 		}
-		// If usage has inline members (scope), return it to access those members
-		// Otherwise follow type for inherited members
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !r.IsBaseThat(sym) && !r.IsOccurrenceThis(sym) {
-			if sym.Scope != nil &&
-				(len(sym.Scope.Members()) > 0 || len(r.importsOf(sym.Scope.Node())) > 0) {
-				// Usage has inline members, return usage symbol
-				return sym
-			}
-			// No inline members, follow type
-			typeSym := r.getUsageType(sym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
 		return sym
 	case *ast.FeatureChainExpr:
 		return r.resolveFeatureChain(scope, v)
+	case *ast.IndexExpr:
+		// `a#(i)` names one element of the sequence a, of a's own type.
+		if v.Bracket {
+			r.resolveExpr(scope, e)
+			return nil
+		}
+		r.resolveExpr(scope, v.Index)
+		return r.getOperandSymbol(scope, v.Operand)
 	default:
 		r.resolveExpr(scope, e)
 		return nil
 	}
-}
-
-// followChainMemberType follows a usage's type when it has no inline members.
-func (r *Resolver) followChainMemberType(sym *symbols.Symbol) *symbols.Symbol {
-	if sym == nil {
-		return nil
-	}
-	usage, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage {
-		return sym
-	}
-	if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
-		return sym
-	}
-	if typeSym := r.getUsageType(sym.OwnerScope, usage); typeSym != nil {
-		return typeSym
-	}
-	return sym
 }
 
 // baseThatFQN is the implicit `that` feature every usage takes from the base
@@ -1536,7 +1554,7 @@ func (r *Resolver) getUsageType(scope *symbols.Scope, usage *ast.Usage) *symbols
 	return r.valueType(scope, usage)
 }
 
-// valueType returns what a usage's value expression names, for the member
+// valueType returns the feature a usage's value expression names, for the member
 // lookups a chain through the usage makes. Only the forms that denote a feature
 // are followed; anything else has no members to reach.
 func (r *Resolver) valueType(scope *symbols.Scope, usage *ast.Usage) *symbols.Symbol {
@@ -1555,8 +1573,5 @@ func (r *Resolver) valueType(scope *symbols.Scope, usage *ast.Usage) *symbols.Sy
 			sym = found
 		}
 	})
-	if sym == nil {
-		return nil
-	}
-	return r.followChainMemberType(sym)
+	return sym
 }

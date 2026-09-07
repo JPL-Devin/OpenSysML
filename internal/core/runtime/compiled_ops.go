@@ -117,7 +117,7 @@ func addScalars(l, r scalar) (scalar, error) {
 		if res := a + b; (b <= 0 || res > a) && (b >= 0 || res < a) {
 			return intScalar(res), nil
 		}
-		return scalar{}, integerOverflow(ast.OpAdd, a, b)
+		return scalar{}, semantics.IntegerOverflow(ast.OpAdd, a, b)
 	}
 	return arithScalars(ast.OpAdd, l, r)
 }
@@ -128,7 +128,7 @@ func subScalars(l, r scalar) (scalar, error) {
 		if res := a - b; (b >= 0 || res > a) && (b <= 0 || res < a) {
 			return intScalar(res), nil
 		}
-		return scalar{}, integerOverflow(ast.OpSub, a, b)
+		return scalar{}, semantics.IntegerOverflow(ast.OpSub, a, b)
 	}
 	return arithScalars(ast.OpSub, l, r)
 }

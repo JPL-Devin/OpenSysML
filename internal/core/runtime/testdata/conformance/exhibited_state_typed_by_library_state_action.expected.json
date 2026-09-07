@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Mission",
+  "objects": [
+    {
+      "finalState": "launch",
+      "stateVisits": ["launch"],
+      "slots": {
+        "mass": {"type": "Integer", "value": 12},
+        "launched": {"type": "Integer", "value": 1}
+      }
+    }
+  ]
+}

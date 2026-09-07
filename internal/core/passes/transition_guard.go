@@ -5,7 +5,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// TransitionGuardPass checks that each transition guard is Boolean-valued.
+// TransitionGuardPass checks that each transition guard is Boolean-valued,
+// including the guarded successions of an action body (`first a if x then b;`).
 type TransitionGuardPass struct{}
 
 func (TransitionGuardPass) Level() PassLevel { return LevelType }
@@ -22,7 +23,7 @@ func (TransitionGuardPass) Run(ctx *Context, name string, root *ast.RootNamespac
 	}
 	c := &transitionGuardChecker{
 		ctx:  ctx,
-		expr: &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()},
+		expr: &exprChecker{resolver: ctx.Resolver(), model: ctx.Model(), lang: ctx.Kind},
 	}
 	c.walk(rootScope, root.Members)
 	return c.expr.diags
@@ -64,7 +65,14 @@ func (c *transitionGuardChecker) walkNode(scope *symbols.Scope, node ast.Node) {
 	case *ast.ExitMember:
 		c.walk(scope, n.Actions)
 	case *ast.InitialNode:
+		if !c.ctx.DownstreamOfFailure(n.Guard) {
+			c.expr.checkBoolean(scope, n.Guard, "transition guard")
+		}
 		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.ControlFlowEdge:
+		if !c.ctx.DownstreamOfFailure(n.Guard) {
+			c.expr.checkBoolean(scope, n.Guard, "transition guard")
+		}
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		c.walk(childScopeOr(scope, n), ast.NodeBodyMembers(n))
 	case *ast.StateNode:

@@ -202,6 +202,29 @@ one alongside it).
    (see [Windows Authenticode signing](#windows-authenticode-signing)). No
    approval, no `*-signed*` assets on the release.
 
+5. **Check the Windows installer landed.** The same workflow builds the MSI
+   (see [The Windows installer](#the-windows-installer)) once CircleCI has
+   published the release: `opensysml-<x.y.z>-windows-amd64.msi` with
+   `SHA256SUMS-windows-msi.txt` when SignPath is not configured, or
+   `opensysml-<x.y.z>-windows-amd64-signed.msi` listed in
+   `SHA256SUMS-windows-signed.txt` when it is. A release with neither means the
+   workflow failed (WiX, the Z3 download, ICE validation or the signing
+   request); re-run it after fixing the cause.
+
+6. **Render the Windows package-manager manifests** when a maintainer wants
+   to (re)submit them externally. Nothing here submits anything:
+
+   ```bash
+   scripts/render-scoop-manifest.sh v0.0.5 > opensysml.json
+   scripts/render-winget-manifests.sh v0.0.5 out/
+   scripts/render-msys2-pkgbuild.sh v0.0.5 > PKGBUILD
+   ```
+
+   The procedure for each external repository is in
+   [packaging/scoop](../../packaging/scoop/README.md),
+   [packaging/winget](../../packaging/winget/README.md) and
+   [packaging/msys2](../../packaging/msys2/README.md).
+
 ### The signed checksum manifest
 
 `build-release` signs `dist/SHA256SUMS.txt` — the manifest covering every
@@ -300,10 +323,14 @@ repository settings:
 | Variable | `SIGNPATH_ORGANIZATION_ID` | the SignPath organization ID (a GUID) |
 | Variable | `SIGNPATH_PROJECT_SLUG` | the project slug, e.g. `OpenSysML` |
 | Variable | `SIGNPATH_SIGNING_POLICY_SLUG` | the release policy slug, e.g. `release-signing` |
+| Variable | `SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG` | the artifact configuration for the MSI (see [The Windows installer](#the-windows-installer)) |
 
-With any of the four missing the workflow builds the binaries, checks their
-`VERSIONINFO` against the tag, keeps them as a workflow artifact, and stops:
-nothing is submitted and nothing is uploaded to the release. Try it before the
+With any of the first four missing the workflow builds the binaries, checks
+their `VERSIONINFO` against the tag, keeps them as a workflow artifact, builds
+and publishes the **unsigned** MSI, and stops: nothing is submitted to SignPath.
+With the four present but the fifth missing, the `msi-signed` job fails on
+purpose rather than publish an MSI of signed executables under a name that
+claims the MSI itself is signed. Try it before the
 first real tag with **Run workflow** (`workflow_dispatch`), which stamps the
 `version` input instead of a tag and never publishes; tick `submit` to also
 exercise the SignPath round trip, which creates a real signing request an
@@ -339,6 +366,65 @@ by Git and by every non-Windows build. `make windows-versioninfo-check
 EXE=dist/sysml-windows-amd64.exe VERSION=v0.5.0` extracts the resource from a
 built binary and fails unless all of that is true; the workflow runs it on the
 unsigned and again on the signed executables.
+
+### The Windows installer
+
+`packaging/msi/opensysml.wxs` (WiX Toolset v5, plain MSI, no bootstrapper) and
+`scripts/build-msi.sh` produce `opensysml-<x.y.z>-windows-amd64.msi`: a
+per-machine x64 installer of `sysml.exe`, `sysml-lsp.exe`, `LICENSE.txt` and,
+as separately deselectable features, `sysml-grpc.exe` and the Z3 solver
+(`z3\z3.exe` with its runtime DLLs and `LICENSE-z3.txt`), both directories on
+the system `PATH`. `MajorUpgrade` makes a newer MSI replace an older install;
+the `ProductVersion` is the tag without `v` and without any pre-release suffix
+(`v0.4.0-rc1` and `v0.4.0` are both `0.4.0`, and the later one wins). Details,
+feature ids and the `msiexec` incantations are in
+[packaging/msi/README.md](../../packaging/msi/README.md).
+
+**Where it is built, and why not in CircleCI.** WiX v5 runs only on Windows (its
+cabinet builder is a Win32 executable and the toolset rejects Linux paths), so
+the MSI cannot come out of the `cimg/go` release job. It is built by
+`release-windows.yml` on a `windows-latest` runner, in two shapes:
+
+- **SignPath not configured:** the `msi` job builds the MSI from the unsigned
+  executables the workflow built, runs `wix msi validate` (ICE), and the
+  `publish-msi` job uploads it with `SHA256SUMS-windows-msi.txt` — after the
+  same CircleCI gate the signing job uses, so the MSI never lands on a release
+  CircleCI did not publish. Both jobs run on every tag and on
+  `workflow_dispatch` (which never publishes).
+- **SignPath configured:** the `msi-signed` job rebuilds the MSI from the
+  SignPath-signed executables, validates it, submits the MSI itself to SignPath
+  under `SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG`, and `publish-signed`
+  uploads it as `opensysml-<x.y.z>-windows-amd64-signed.msi`, listed in
+  `SHA256SUMS-windows-signed.txt` with the other `-signed` assets. The unsigned
+  MSI is then kept only as a workflow artifact, so a release never carries two
+  installers whose contents differ only by signature.
+
+The trade-off is the one the `-signed` assets already make: the MSI is not in
+`SHA256SUMS.txt` or the cosign bundle, because those are produced by CircleCI
+from the bytes CircleCI built, and an MSI built elsewhere (and, when signed,
+from different executable bytes) must not be described by a manifest that did
+not hash it. The unsigned MSI has its own `SHA256SUMS-windows-msi.txt`; for the
+signed one the verifiable statement is its Authenticode signature. Nothing the
+clients download or pin changes.
+
+**SignPath and the MSI.** Add a second artifact configuration to the SignPath
+project: a single `.msi` file, Authenticode-signed, and put its slug in the
+`SIGNPATH_MSI_ARTIFACT_CONFIGURATION_SLUG` variable. The MSI's executables are
+already signed by the first request, so this second request signs only the
+installer. **`z3.exe` and its DLLs are never signed**: SignPath Foundation's
+terms allow unsigned upstream open-source binaries inside a signed installer but
+not signing them with the Foundation certificate, so the artifact configuration
+for the MSI must not descend into its contents. Each release therefore parks
+two signing requests for an Approver (executables, then the MSI).
+
+**Updating the bundled Z3.** `packaging/msi/z3.pin` pins the Z3 release
+(`Z3_VERSION`, the `z3-<ver>-x64-win.zip` asset name and its SHA256) in one
+place; the build script refuses a zip whose hash differs. The update procedure —
+fetch the new zip, hash it yourself, update the pin, check the zip's `bin/` still
+has the files the `.wxs` lists — is in
+[packaging/msi/README.md](../../packaging/msi/README.md#updating-the-z3-pin). Bump
+it deliberately, in its own PR with a changelog fragment naming the new Z3
+version: it changes what every installer ships.
 
 ### Pinned release digests
 

@@ -7,9 +7,9 @@ the model's own named queries and documents, not the SysML v2 API & Services
 Query that :mod:`opensysml.query` builds.
 
 A binding value is a plain Python value (``str``, ``int``, ``float``,
-``bool``), or an :class:`ElementRef` naming a model element by qualified name.
-Answered cells decode back to the same kinds, plus :data:`INFINITY` for an
-unbounded multiplicity.
+``bool``), a :class:`~opensysml.values.Quantity`, or an :class:`ElementRef`
+naming a model element by qualified name. Answered cells decode back to the
+same kinds, plus :data:`INFINITY` for an unbounded multiplicity.
 """
 
 from dataclasses import dataclass
@@ -17,6 +17,7 @@ from typing import Sequence, Union
 
 from opensysml.errors import OpenSysMLError, UnsupportedValueError
 from opensysml.proto import sysml_pb2
+from opensysml.values import Quantity
 
 
 class DocumentQueryError(OpenSysMLError, ValueError):
@@ -52,7 +53,7 @@ class _Infinity:
 INFINITY = _Infinity()
 
 #: What a binding value or an answered cell value may be.
-DocumentValue = Union[ElementRef, str, int, float, bool, _Infinity]
+DocumentValue = Union[ElementRef, str, int, float, bool, Quantity, _Infinity]
 
 #: What ``bindings`` accepts for one parameter: one value or several.
 BindingValues = Union[DocumentValue, Sequence[DocumentValue]]
@@ -138,10 +139,28 @@ def _bound_value(parameter, value):
         return sysml_pb2.DocumentValue(int_value=value)
     if isinstance(value, float):
         return sysml_pb2.DocumentValue(real_value=value)
+    if isinstance(value, Quantity):
+        return sysml_pb2.DocumentValue(quantity=_bound_quantity(parameter, value))
     raise DocumentQueryError(
         f"binding {parameter!r} cannot carry {value!r}: a binding is a str, "
-        f"int, float, bool or ElementRef"
+        f"int, float, bool, Quantity or ElementRef"
     )
+
+
+def _bound_quantity(parameter, value):
+    """A Quantity as the wire writes it; one it cannot carry is a caller error."""
+    if isinstance(value.magnitude, int) and not isinstance(value.magnitude, bool):
+        if not -(1 << 63) <= value.magnitude < (1 << 63):
+            raise DocumentQueryError(
+                f"binding {parameter!r} cannot carry {value!r}: an Integer magnitude "
+                f"must fit in a signed 64-bit integer"
+            )
+    try:
+        return value.to_pb()
+    except UnsupportedValueError as exc:
+        raise DocumentQueryError(
+            f"binding {parameter!r} cannot carry {value!r}: {exc}"
+        ) from exc
 
 
 def result_of(response):
@@ -183,6 +202,8 @@ def _value_of(value):
         return value.bool_value
     if kind == "infinity":
         return INFINITY
+    if kind == "quantity":
+        return Quantity.from_pb(value.quantity)
     raise UnsupportedValueError(
         f"the service answered a document value this client cannot read: {value}"
     )

@@ -12,7 +12,7 @@
             (Usage kind="state" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (EntryMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="entry"
                     (Membership visibility="default"
                       (Usage kind="attribute" name="k" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                         (Relationship kind="typing" target=Integer
@@ -26,14 +26,14 @@
                       (*ast.AssignmentActionNode)))))
               (DoMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="do"
                     (*ast.AssignmentActionNode))))
               (ExitMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="exit")))
               (DoMember
                 (Membership visibility="default"
-                  (Usage kind="action" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Usage kind="action" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="do"
                     (*ast.AssignmentActionNode))))))
           (SubstateMember name="z")
           (EntryMember)

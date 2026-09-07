@@ -193,6 +193,43 @@ class CalcOutput(_message.Message):
     value: Value
     def __init__(self, name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
 
+class RunAnalysisRequest(_message.Message):
+    __slots__ = ("model_hash", "symbol_id", "subject_symbol_id", "arguments", "named_arguments")
+    class NamedArgumentsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: Value
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_FIELD_NUMBER: _ClassVar[int]
+    NAMED_ARGUMENTS_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    symbol_id: str
+    subject_symbol_id: str
+    arguments: _containers.RepeatedCompositeFieldContainer[Value]
+    named_arguments: _containers.MessageMap[str, Value]
+    def __init__(self, model_hash: _Optional[str] = ..., symbol_id: _Optional[str] = ..., subject_symbol_id: _Optional[str] = ..., arguments: _Optional[_Iterable[_Union[Value, _Mapping]]] = ..., named_arguments: _Optional[_Mapping[str, Value]] = ...) -> None: ...
+
+class RunAnalysisResponse(_message.Message):
+    __slots__ = ("outputs", "verdicts", "instances", "error", "diagnostics", "failure_reason")
+    OUTPUTS_FIELD_NUMBER: _ClassVar[int]
+    VERDICTS_FIELD_NUMBER: _ClassVar[int]
+    INSTANCES_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
+    outputs: _containers.RepeatedCompositeFieldContainer[CalcOutput]
+    verdicts: _containers.RepeatedCompositeFieldContainer[Verdict]
+    instances: _containers.RepeatedCompositeFieldContainer[Instance]
+    error: str
+    diagnostics: _containers.RepeatedCompositeFieldContainer[Diagnostic]
+    failure_reason: FailureReason
+    def __init__(self, outputs: _Optional[_Iterable[_Union[CalcOutput, _Mapping]]] = ..., verdicts: _Optional[_Iterable[_Union[Verdict, _Mapping]]] = ..., instances: _Optional[_Iterable[_Union[Instance, _Mapping]]] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., failure_reason: _Optional[_Union[FailureReason, str]] = ...) -> None: ...
+
 class ParseFileRequest(_message.Message):
     __slots__ = ("file_path", "content", "content_hash", "language", "strict_conformance")
     FILE_PATH_FIELD_NUMBER: _ClassVar[int]
@@ -627,7 +664,7 @@ class AttributeInfo(_message.Message):
     def __init__(self, name: _Optional[str] = ..., type: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ..., unit: _Optional[str] = ...) -> None: ...
 
 class Value(_message.Message):
-    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset", "complex")
+    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset", "complex", "array", "vector", "vector_quantity", "measurement_ref")
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -639,6 +676,10 @@ class Value(_message.Message):
     ENUM_LITERAL_FIELD_NUMBER: _ClassVar[int]
     UNSET_FIELD_NUMBER: _ClassVar[int]
     COMPLEX_FIELD_NUMBER: _ClassVar[int]
+    ARRAY_FIELD_NUMBER: _ClassVar[int]
+    VECTOR_FIELD_NUMBER: _ClassVar[int]
+    VECTOR_QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    MEASUREMENT_REF_FIELD_NUMBER: _ClassVar[int]
     int_value: int
     real_value: float
     bool_value: bool
@@ -650,7 +691,31 @@ class Value(_message.Message):
     enum_literal: EnumLiteral
     unset: bool
     complex: Complex
-    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ..., complex: _Optional[_Union[Complex, _Mapping]] = ...) -> None: ...
+    array: Array
+    vector: Vector
+    vector_quantity: VectorQuantity
+    measurement_ref: MeasurementRef
+    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ..., complex: _Optional[_Union[Complex, _Mapping]] = ..., array: _Optional[_Union[Array, _Mapping]] = ..., vector: _Optional[_Union[Vector, _Mapping]] = ..., vector_quantity: _Optional[_Union[VectorQuantity, _Mapping]] = ..., measurement_ref: _Optional[_Union[MeasurementRef, _Mapping]] = ...) -> None: ...
+
+class Array(_message.Message):
+    __slots__ = ("dimensions", "elements")
+    DIMENSIONS_FIELD_NUMBER: _ClassVar[int]
+    ELEMENTS_FIELD_NUMBER: _ClassVar[int]
+    dimensions: _containers.RepeatedScalarFieldContainer[int]
+    elements: _containers.RepeatedCompositeFieldContainer[Value]
+    def __init__(self, dimensions: _Optional[_Iterable[int]] = ..., elements: _Optional[_Iterable[_Union[Value, _Mapping]]] = ...) -> None: ...
+
+class Vector(_message.Message):
+    __slots__ = ("components",)
+    COMPONENTS_FIELD_NUMBER: _ClassVar[int]
+    components: _containers.RepeatedCompositeFieldContainer[Value]
+    def __init__(self, components: _Optional[_Iterable[_Union[Value, _Mapping]]] = ...) -> None: ...
+
+class VectorQuantity(_message.Message):
+    __slots__ = ("components",)
+    COMPONENTS_FIELD_NUMBER: _ClassVar[int]
+    components: _containers.RepeatedCompositeFieldContainer[Quantity]
+    def __init__(self, components: _Optional[_Iterable[_Union[Quantity, _Mapping]]] = ...) -> None: ...
 
 class Complex(_message.Message):
     __slots__ = ("real", "imaginary")
@@ -687,6 +752,16 @@ class Quantity(_message.Message):
     unit: str
     unit_term: UnitTerm
     def __init__(self, int_magnitude: _Optional[int] = ..., real_magnitude: _Optional[float] = ..., unit: _Optional[str] = ..., unit_term: _Optional[_Union[UnitTerm, _Mapping]] = ...) -> None: ...
+
+class MeasurementRef(_message.Message):
+    __slots__ = ("unit", "unit_term", "unit_id")
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    UNIT_TERM_FIELD_NUMBER: _ClassVar[int]
+    UNIT_ID_FIELD_NUMBER: _ClassVar[int]
+    unit: str
+    unit_term: UnitTerm
+    unit_id: str
+    def __init__(self, unit: _Optional[str] = ..., unit_term: _Optional[_Union[UnitTerm, _Mapping]] = ..., unit_id: _Optional[str] = ...) -> None: ...
 
 class UnitTerm(_message.Message):
     __slots__ = ("scale_num", "scale_den", "factors")
@@ -832,13 +907,14 @@ class DocumentQueryBinding(_message.Message):
     def __init__(self, parameter: _Optional[str] = ..., values: _Optional[_Iterable[_Union[DocumentValue, _Mapping]]] = ...) -> None: ...
 
 class DocumentValue(_message.Message):
-    __slots__ = ("element_id", "string_value", "int_value", "real_value", "bool_value", "infinity", "element_type")
+    __slots__ = ("element_id", "string_value", "int_value", "real_value", "bool_value", "infinity", "quantity", "element_type")
     ELEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
     INFINITY_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
     ELEMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     element_id: str
     string_value: str
@@ -846,8 +922,9 @@ class DocumentValue(_message.Message):
     real_value: float
     bool_value: bool
     infinity: bool
+    quantity: Quantity
     element_type: str
-    def __init__(self, element_id: _Optional[str] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., infinity: _Optional[bool] = ..., element_type: _Optional[str] = ...) -> None: ...
+    def __init__(self, element_id: _Optional[str] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., infinity: _Optional[bool] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., element_type: _Optional[str] = ...) -> None: ...
 
 class DocumentQueryColumn(_message.Message):
     __slots__ = ("name",)

@@ -73,6 +73,9 @@ const (
 	// SysMLServiceEvaluateCalcProcedure is the fully-qualified name of the SysMLService's EvaluateCalc
 	// RPC.
 	SysMLServiceEvaluateCalcProcedure = "/sysml.SysMLService/EvaluateCalc"
+	// SysMLServiceRunAnalysisProcedure is the fully-qualified name of the SysMLService's RunAnalysis
+	// RPC.
+	SysMLServiceRunAnalysisProcedure = "/sysml.SysMLService/RunAnalysis"
 	// SysMLServiceQueryProcedure is the fully-qualified name of the SysMLService's Query RPC.
 	SysMLServiceQueryProcedure = "/sysml.SysMLService/Query"
 	// SysMLServiceRunDocumentQueryProcedure is the fully-qualified name of the SysMLService's
@@ -114,15 +117,16 @@ type SysMLServiceClient interface {
 	// spans, and the result is re-parsed and validated before it is returned.
 	// Reported as the "apply_edits" capability.
 	ApplyEdits(context.Context, *connect.Request[proto.ApplyEditsRequest]) (*connect.Response[proto.ApplyEditsResponse], error)
-	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
-	// and %calc give, so "does this model satisfy its requirements?" can be asked
-	// by a script. Each evaluates the same runtime paths the prompt does and
-	// returns a verdict rather than formatted lines. Reported as the
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+	// %calc and %analysis give, so "does this model satisfy its requirements?"
+	// can be asked by a script. Each evaluates the same runtime paths the prompt
+	// does and returns a verdict rather than formatted lines. Reported as the
 	// "verification" capability.
 	VerifyConstraint(context.Context, *connect.Request[proto.VerifyConstraintRequest]) (*connect.Response[proto.VerifyConstraintResponse], error)
 	VerifyRequirement(context.Context, *connect.Request[proto.VerifyRequirementRequest]) (*connect.Response[proto.VerifyRequirementResponse], error)
 	VerifySatisfaction(context.Context, *connect.Request[proto.VerifySatisfactionRequest]) (*connect.Response[proto.VerifySatisfactionResponse], error)
 	EvaluateCalc(context.Context, *connect.Request[proto.EvaluateCalcRequest]) (*connect.Response[proto.EvaluateCalcResponse], error)
+	RunAnalysis(context.Context, *connect.Request[proto.RunAnalysisRequest]) (*connect.Response[proto.RunAnalysisResponse], error)
 	// Run a SysML v2 API & Services Query over a parsed model: scope/select/where
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
@@ -237,6 +241,12 @@ func NewSysMLServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(sysMLServiceMethods.ByName("EvaluateCalc")),
 			connect.WithClientOptions(opts...),
 		),
+		runAnalysis: connect.NewClient[proto.RunAnalysisRequest, proto.RunAnalysisResponse](
+			httpClient,
+			baseURL+SysMLServiceRunAnalysisProcedure,
+			connect.WithSchema(sysMLServiceMethods.ByName("RunAnalysis")),
+			connect.WithClientOptions(opts...),
+		),
 		query: connect.NewClient[proto.QueryRequest, proto.QueryResponse](
 			httpClient,
 			baseURL+SysMLServiceQueryProcedure,
@@ -275,6 +285,7 @@ type sysMLServiceClient struct {
 	verifyRequirement  *connect.Client[proto.VerifyRequirementRequest, proto.VerifyRequirementResponse]
 	verifySatisfaction *connect.Client[proto.VerifySatisfactionRequest, proto.VerifySatisfactionResponse]
 	evaluateCalc       *connect.Client[proto.EvaluateCalcRequest, proto.EvaluateCalcResponse]
+	runAnalysis        *connect.Client[proto.RunAnalysisRequest, proto.RunAnalysisResponse]
 	query              *connect.Client[proto.QueryRequest, proto.QueryResponse]
 	runDocumentQuery   *connect.Client[proto.RunDocumentQueryRequest, proto.RunDocumentQueryResponse]
 	renderDocument     *connect.Client[proto.RenderDocumentRequest, proto.RenderDocumentResponse]
@@ -355,6 +366,11 @@ func (c *sysMLServiceClient) EvaluateCalc(ctx context.Context, req *connect.Requ
 	return c.evaluateCalc.CallUnary(ctx, req)
 }
 
+// RunAnalysis calls sysml.SysMLService.RunAnalysis.
+func (c *sysMLServiceClient) RunAnalysis(ctx context.Context, req *connect.Request[proto.RunAnalysisRequest]) (*connect.Response[proto.RunAnalysisResponse], error) {
+	return c.runAnalysis.CallUnary(ctx, req)
+}
+
 // Query calls sysml.SysMLService.Query.
 func (c *sysMLServiceClient) Query(ctx context.Context, req *connect.Request[proto.QueryRequest]) (*connect.Response[proto.QueryResponse], error) {
 	return c.query.CallUnary(ctx, req)
@@ -401,15 +417,16 @@ type SysMLServiceHandler interface {
 	// spans, and the result is re-parsed and validated before it is returned.
 	// Reported as the "apply_edits" capability.
 	ApplyEdits(context.Context, *connect.Request[proto.ApplyEditsRequest]) (*connect.Response[proto.ApplyEditsResponse], error)
-	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
-	// and %calc give, so "does this model satisfy its requirements?" can be asked
-	// by a script. Each evaluates the same runtime paths the prompt does and
-	// returns a verdict rather than formatted lines. Reported as the
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+	// %calc and %analysis give, so "does this model satisfy its requirements?"
+	// can be asked by a script. Each evaluates the same runtime paths the prompt
+	// does and returns a verdict rather than formatted lines. Reported as the
 	// "verification" capability.
 	VerifyConstraint(context.Context, *connect.Request[proto.VerifyConstraintRequest]) (*connect.Response[proto.VerifyConstraintResponse], error)
 	VerifyRequirement(context.Context, *connect.Request[proto.VerifyRequirementRequest]) (*connect.Response[proto.VerifyRequirementResponse], error)
 	VerifySatisfaction(context.Context, *connect.Request[proto.VerifySatisfactionRequest]) (*connect.Response[proto.VerifySatisfactionResponse], error)
 	EvaluateCalc(context.Context, *connect.Request[proto.EvaluateCalcRequest]) (*connect.Response[proto.EvaluateCalcResponse], error)
+	RunAnalysis(context.Context, *connect.Request[proto.RunAnalysisRequest]) (*connect.Response[proto.RunAnalysisResponse], error)
 	// Run a SysML v2 API & Services Query over a parsed model: scope/select/where
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
@@ -520,6 +537,12 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(sysMLServiceMethods.ByName("EvaluateCalc")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sysMLServiceRunAnalysisHandler := connect.NewUnaryHandler(
+		SysMLServiceRunAnalysisProcedure,
+		svc.RunAnalysis,
+		connect.WithSchema(sysMLServiceMethods.ByName("RunAnalysis")),
+		connect.WithHandlerOptions(opts...),
+	)
 	sysMLServiceQueryHandler := connect.NewUnaryHandler(
 		SysMLServiceQueryProcedure,
 		svc.Query,
@@ -570,6 +593,8 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 			sysMLServiceVerifySatisfactionHandler.ServeHTTP(w, r)
 		case SysMLServiceEvaluateCalcProcedure:
 			sysMLServiceEvaluateCalcHandler.ServeHTTP(w, r)
+		case SysMLServiceRunAnalysisProcedure:
+			sysMLServiceRunAnalysisHandler.ServeHTTP(w, r)
 		case SysMLServiceQueryProcedure:
 			sysMLServiceQueryHandler.ServeHTTP(w, r)
 		case SysMLServiceRunDocumentQueryProcedure:
@@ -643,6 +668,10 @@ func (UnimplementedSysMLServiceHandler) VerifySatisfaction(context.Context, *con
 
 func (UnimplementedSysMLServiceHandler) EvaluateCalc(context.Context, *connect.Request[proto.EvaluateCalcRequest]) (*connect.Response[proto.EvaluateCalcResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.EvaluateCalc is not implemented"))
+}
+
+func (UnimplementedSysMLServiceHandler) RunAnalysis(context.Context, *connect.Request[proto.RunAnalysisRequest]) (*connect.Response[proto.RunAnalysisResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.RunAnalysis is not implemented"))
 }
 
 func (UnimplementedSysMLServiceHandler) Query(context.Context, *connect.Request[proto.QueryRequest]) (*connect.Response[proto.QueryResponse], error) {

@@ -131,6 +131,21 @@ private static final long serialVersionUID = 0L;
    * action input or calc argument is accepted; without it,
    * one is refused with UNIMPLEMENTED rather than read as
    * another value.
+   * "structured_values" - a Value carries a Collections::Array, a numerical
+   * vector and a vector quantity as array, vector and
+   * vector_quantity, shape and units intact, rather than
+   * reporting them as unsupported nulls, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value.
+   * "measurement_refs" - a Value carries a bare measurement reference (a
+   * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+   * unit text, reduction and declaration intact, rather than
+   * reporting it as an unsupported null, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value. Separate from structured_values, which a client
+   * built before this arm existed may already claim.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
    * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -172,6 +187,21 @@ private static final long serialVersionUID = 0L;
    * action input or calc argument is accepted; without it,
    * one is refused with UNIMPLEMENTED rather than read as
    * another value.
+   * "structured_values" - a Value carries a Collections::Array, a numerical
+   * vector and a vector quantity as array, vector and
+   * vector_quantity, shape and units intact, rather than
+   * reporting them as unsupported nulls, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value.
+   * "measurement_refs" - a Value carries a bare measurement reference (a
+   * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+   * unit text, reduction and declaration intact, rather than
+   * reporting it as an unsupported null, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value. Separate from structured_values, which a client
+   * built before this arm existed may already claim.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
    * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -212,6 +242,21 @@ private static final long serialVersionUID = 0L;
    * action input or calc argument is accepted; without it,
    * one is refused with UNIMPLEMENTED rather than read as
    * another value.
+   * "structured_values" - a Value carries a Collections::Array, a numerical
+   * vector and a vector quantity as array, vector and
+   * vector_quantity, shape and units intact, rather than
+   * reporting them as unsupported nulls, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value.
+   * "measurement_refs" - a Value carries a bare measurement reference (a
+   * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+   * unit text, reduction and declaration intact, rather than
+   * reporting it as an unsupported null, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value. Separate from structured_values, which a client
+   * built before this arm existed may already claim.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
    * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -253,6 +298,21 @@ private static final long serialVersionUID = 0L;
    * action input or calc argument is accepted; without it,
    * one is refused with UNIMPLEMENTED rather than read as
    * another value.
+   * "structured_values" - a Value carries a Collections::Array, a numerical
+   * vector and a vector quantity as array, vector and
+   * vector_quantity, shape and units intact, rather than
+   * reporting them as unsupported nulls, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value.
+   * "measurement_refs" - a Value carries a bare measurement reference (a
+   * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+   * unit text, reduction and declaration intact, rather than
+   * reporting it as an unsupported null, and one is accepted
+   * as an action input or calc argument; without it, one is
+   * refused with UNIMPLEMENTED rather than read as another
+   * value. Separate from structured_values, which a client
+   * built before this arm existed may already claim.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
    * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -743,6 +803,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -785,6 +860,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -825,6 +915,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -866,6 +971,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -908,6 +1028,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -956,6 +1091,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -1003,6 +1153,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -1050,6 +1215,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -1094,6 +1274,21 @@ private static final long serialVersionUID = 0L;
      * action input or calc argument is accepted; without it,
      * one is refused with UNIMPLEMENTED rather than read as
      * another value.
+     * "structured_values" - a Value carries a Collections::Array, a numerical
+     * vector and a vector quantity as array, vector and
+     * vector_quantity, shape and units intact, rather than
+     * reporting them as unsupported nulls, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value.
+     * "measurement_refs" - a Value carries a bare measurement reference (a
+     * unit by itself, `SI::m` or `m / s`) as measurement_ref,
+     * unit text, reduction and declaration intact, rather than
+     * reporting it as an unsupported null, and one is accepted
+     * as an action input or calc argument; without it, one is
+     * refused with UNIMPLEMENTED rather than read as another
+     * value. Separate from structured_values, which a client
+     * built before this arm existed may already claim.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
      * "document_query" - the RunDocumentQuery RPC runs a named document query

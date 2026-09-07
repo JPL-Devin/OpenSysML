@@ -10,6 +10,6 @@
 (assert (>= |test::MassBudget::mass| 10000.0))
 ; required condition: mass <= 90 [kg] — analysis MassBudget, at objectives.sysml:18:4
 (assert (<= |test::MassBudget::mass| 90000.0))
-; minimize: lightest = mass in gram, at objectives.sysml:21:25
+; minimize: lightest = mass in gram, at objectives.sysml:22:23
 (minimize |test::MassBudget::mass|)
 (check-sat)

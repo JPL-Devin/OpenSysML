@@ -1,0 +1,8 @@
+{
+  "type": "satisfy",
+  "libraries": true,
+  "evaluate": "test::context",
+  "assertions": {
+    "satisfy oneOfPair by ship": true
+  }
+}

@@ -145,11 +145,20 @@ func (v *Vector) format(element func(semantics.Value) string) string {
 type VectorQuantity struct {
 	Num   []semantics.Value
 	Units []Unit
+	// Frame is the coordinate frame the vector was written over (`(1, 2, 3) [datum]`),
+	// whose axes Units are; nil for one written over a scalar unit.
+	Frame *CoordinateFrame
 }
 
 // NewVectorQuantityValue wraps a vector quantity; num and units are the same length.
 func NewVectorQuantityValue(num []semantics.Value, units []Unit) Value {
 	return Value{Kind: ValVectorQuantity, ref: &VectorQuantity{Num: num, Units: units}}
+}
+
+// NewFramedVectorQuantityValue wraps a vector quantity over a coordinate frame,
+// one component per axis.
+func NewFramedVectorQuantityValue(num []semantics.Value, frame *CoordinateFrame) Value {
+	return Value{Kind: ValVectorQuantity, ref: &VectorQuantity{Num: num, Units: frame.Axes, Frame: frame}}
 }
 
 // Dimension is the number of components.
@@ -162,24 +171,32 @@ func (vq *VectorQuantity) component(i int) *Quantity {
 	return &Quantity{Num: vq.Num[i], Unit: vq.Units[i]}
 }
 
-// uniformUnit is the one unit every axis is expressed in, when there is one.
-func (vq *VectorQuantity) uniformUnit() (Unit, bool) {
+// sharedUnit is the one unit every axis measures in, spelt as the first axis
+// spells it (`m` for axes in `m` and `SI::m`), when the axes' references are equal.
+func (vq *VectorQuantity) sharedUnit() (Unit, bool) {
 	if len(vq.Units) == 0 {
 		return Unit{}, false
 	}
-	first := vq.Units[0]
+	first := &MeasurementRef{Unit: vq.Units[0]}
 	for _, u := range vq.Units[1:] {
-		if u.String() != first.String() {
+		if !first.equal(&MeasurementRef{Unit: u}) {
 			return Unit{}, false
 		}
 	}
-	return first, true
+	return vq.Units[0], true
 }
 
-// format renders `⟨1.0, 2.0⟩ [m]`, or `⟨1.0 [m], 2.0 [rad]⟩` when the axes differ.
+// format renders `⟨1.0, 2.0⟩ [m]`, `⟨1.0, 2.0, 3.0⟩ [datum]` over a frame, or
+// `⟨1.0 [m], 2.0 [rad]⟩` when the axes differ and no frame names them.
 func (vq *VectorQuantity) format(element func(semantics.Value) string) string {
 	parts := make([]string, len(vq.Num))
-	if unit, ok := vq.uniformUnit(); ok {
+	if vq.Frame != nil {
+		for i, n := range vq.Num {
+			parts[i] = element(n)
+		}
+		return "⟨" + strings.Join(parts, ", ") + "⟩ [" + vq.Frame.Name() + "]"
+	}
+	if unit, ok := vq.sharedUnit(); ok {
 		for i, n := range vq.Num {
 			parts[i] = element(n)
 		}
@@ -226,10 +243,9 @@ const (
 	scalarValueTypeFQN          = "ScalarValues::ScalarValue"
 )
 
-// structuredFeature reads a library feature of an array, vector or vector
-// quantity; the second result is false for another name. A sequence it answers
-// is charged to the element budget. A vector quantity's mRef is a measurement
-// reference, which has no value, so reading it is an error.
+// structuredFeature reads a library feature of an array, vector, vector, tensor
+// or scalar quantity, or measurement reference; the second result is
+// false for another name. A sequence it answers is charged to the element budget.
 func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, error) {
 	switch val.Kind {
 	case ValArray:
@@ -249,12 +265,20 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 	case ValVectorQuantity:
 		vq := val.VectorQuantity()
 		if name == vectorQuantityMRefFeature {
-			return Value{}, true, fmt.Errorf(
-				"%w: Quantities::VectorQuantityValue::mRef: %s",
-				ErrUnevaluableLibraryFunction, noMeasurementRefValue,
-			)
+			ref, err := vectorQuantityMRef(vq)
+			return ref, true, err
 		}
 		return ctx.oneDimensionalFeature(name, vq.Num, vectorQuantityAliases)
+	case ValQuantity:
+		return ctx.quantityFeature(val, name)
+	case ValMeasurementRef:
+		return ctx.measurementRefFeature(val, name)
+	case ValTensorQuantity:
+		return ctx.tensorQuantityFeature(val, name)
+	case ValCoordinateFrame:
+		return ctx.frameFeature(val, name)
+	case ValCoordinateTransformation:
+		return ctx.transformationFeature(val, name)
 	}
 	return Value{}, false, nil
 }
@@ -363,8 +387,21 @@ func backingObject(value Value) int64 {
 		return value.Array().Object
 	case ValVector:
 		return value.Vector().Object
+	case ValCoordinateFrame:
+		return value.CoordinateFrame().Object
+	case ValCoordinateTransformation:
+		return value.CoordinateTransformation().Object
 	}
 	return 0
+}
+
+// keptObject is the object a value keeps: the one an array or vector was read
+// from, or a tensor quantity built over; 0 for none.
+func keptObject(value Value) int64 {
+	if value.Kind == ValTensorQuantity {
+		return value.TensorQuantity().MRef
+	}
+	return backingObject(value)
 }
 
 // structuredObject is the live object an array or vector was read from, if any.
@@ -375,7 +412,7 @@ func (ctx *Context) structuredObject(value Value) (*Instance, bool) {
 
 // structuredValueType is the most specific library type a structured value is
 // of: the object it was read from or an Array, a Cartesian (three-)vector, a
-// vector quantity.
+// vector or tensor quantity.
 func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	if inst, ok := ctx.structuredObject(value); ok {
 		return ctx.objectType(inst), nil
@@ -392,6 +429,8 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 		}
 	case ValVectorQuantity:
 		fqn = vectorQuantityTypeFQN
+	case ValTensorQuantity:
+		fqn = tensorQuantityTypeFQN
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -399,7 +438,8 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 }
 
 // structuredBaseType is the type a structured value is of whatever its shape (Array,
-// NumericalVectorValue, VectorQuantityValue, or the type of the object it was read from).
+// NumericalVectorValue, VectorQuantityValue, TensorQuantityValue, or the type of the
+// object it was read from).
 func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
 	if inst, ok := ctx.structuredObject(value); ok {
 		return ctx.objectType(inst), nil
@@ -412,6 +452,8 @@ func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
 		fqn = numericalVectorTypeFQN
 	case ValVectorQuantity:
 		fqn = vectorQuantityTypeFQN
+	case ValTensorQuantity:
+		fqn = tensorQuantityTypeFQN
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -436,7 +478,7 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	if arraySym == nil || inst == nil || inst.Type == nil {
 		return Value{}, false, nil
 	}
-	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) {
+	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) || !ctx.shapeHoldsValue(inst.Type) {
 		return Value{}, false, nil
 	}
 	dims, dimsStated, err := ctx.objectArrayFeature(inst, arrayDimensionsFeature)
@@ -456,7 +498,7 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 		return Value{}, true, err
 	}
 	if !dimsStated {
-		if fixed, ok := ctx.fixedDimensions(inst); ok {
+		if fixed, ok := ctx.model.FixedDimensions(ctx.objectType(inst)); ok {
 			dimensions = fixed
 		}
 	}
@@ -466,24 +508,6 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	}
 	val.Array().Object = inst.ID
 	return ctx.vectorOfObject(inst, val)
-}
-
-// fixedDimensions is the dimensions an object's type fixes by a constant on
-// `dimensions` or a redefinition of it (`ThreeVectorValue::dimension = 3`).
-func (ctx *Context) fixedDimensions(inst *Instance) ([]int64, bool) {
-	typ := ctx.objectType(inst)
-	for _, member := range ctx.model.MembersOfIncludingRedefined(typ) {
-		if !semantics.IsShapeFeature(member) {
-			continue
-		}
-		if base, ok := ctx.arrayFeatureOf(member); !ok || base != arrayDimensionsFeature {
-			continue
-		}
-		if fixed, ok := ctx.constantIntegers(member, typ); ok {
-			return fixed, true
-		}
-	}
-	return nil, false
 }
 
 // vectorOfObject is the vector a NumericalVectorValue object of one dimension is;
@@ -560,6 +584,9 @@ func (ctx *Context) declaredArrayValue(sym *symbols.Symbol) (Value, bool, error)
 	if err != nil {
 		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
 	}
+	if val, ok, err := ctx.referenceValueOfObject(inst); ok {
+		return val, true, err
+	}
 	return ctx.arrayOfObject(inst)
 }
 
@@ -582,35 +609,56 @@ func (ctx *Context) objectFeatureElements(inst *Instance, name string) ([]Value,
 	return elementsOf(val), stated, nil
 }
 
-// objectValue is what a name denoting an object evaluates to: the Array a shaped
-// Collections::Array object is, else the object itself.
+// objectValue is what a name denoting an object evaluates to: a unit declaration's
+// reference, the frame, scale or transformation a MeasurementReferences object is,
+// the Array a shaped Collections::Array object is, else the object itself.
 func (ctx *Context) objectValue(inst *Instance) (Value, error) {
+	if val, ok, err := ctx.unitObjectValue(inst); ok {
+		return val, err
+	}
+	if val, ok, err := ctx.referenceValueOfObject(inst); ok {
+		return val, err
+	}
 	if val, ok, err := ctx.arrayOfObject(inst); ok {
 		return val, err
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, nil
 }
 
-// structuredKey is the content hash a structured value's valueKey carries.
-func structuredKey(v Value) uint64 {
-	h := fnv.New64a()
+// keyBytes serializes a valueKey, so values valueEqual holds equal serialize alike.
+func keyBytes(k valueKey) []byte {
 	flag := func(b bool) uint64 {
 		if b {
 			return 1
 		}
 		return 0
 	}
+	// #nosec G115 -- the two's-complement bits are what the hash wants.
+	buf := binary.LittleEndian.AppendUint64(nil, uint64(k.kind))
+	// #nosec G115 -- see above.
+	buf = binary.LittleEndian.AppendUint64(buf, uint64(k.intVal))
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.realVal))
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.imagVal))
+	buf = binary.LittleEndian.AppendUint64(buf, flag(k.boolVal)<<1|flag(k.infVal))
+	buf = binary.LittleEndian.AppendUint64(buf, k.colHash)
+	return append(buf, k.strVal...)
+}
+
+// valueHash is the content hash of a value's key, for the key of a value holding it:
+// a quantity hashes by its base magnitude and dimension, as its equality compares.
+func valueHash(v Value) uint64 {
+	h := fnv.New64a()
+	// #nosec G104 -- hash.Hash.Write is documented never to return an error.
+	h.Write(keyBytes(valueKeyFunc(v)))
+	return h.Sum64()
+}
+
+// structuredKey is the content hash a structured value's valueKey carries.
+func structuredKey(v Value) uint64 {
+	h := fnv.New64a()
 	write := func(k valueKey) {
-		// #nosec G115 -- the two's-complement bits are what the hash wants.
-		buf := binary.LittleEndian.AppendUint64(nil, uint64(k.kind))
-		// #nosec G115 -- see above.
-		buf = binary.LittleEndian.AppendUint64(buf, uint64(k.intVal))
-		buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.realVal))
-		buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(k.imagVal))
-		buf = binary.LittleEndian.AppendUint64(buf, flag(k.boolVal)<<1|flag(k.infVal))
-		buf = binary.LittleEndian.AppendUint64(buf, k.colHash)
 		// #nosec G104 -- hash.Hash.Write is documented never to return an error.
-		h.Write(append(buf, k.strVal...))
+		h.Write(keyBytes(k))
 	}
 	switch v.Kind {
 	case ValArray:
@@ -628,6 +676,14 @@ func structuredKey(v Value) uint64 {
 		vq := v.VectorQuantity()
 		for i := range vq.Num {
 			write(valueKeyFunc(NewQuantityValue(vq.component(i))))
+		}
+	case ValTensorQuantity:
+		tq := v.TensorQuantity()
+		for _, d := range tq.Dimensions {
+			write(valueKeyFunc(integerValue(d)))
+		}
+		for _, component := range tq.components() {
+			write(valueKeyFunc(component))
 		}
 	}
 	return h.Sum64()

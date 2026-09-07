@@ -61,7 +61,9 @@ type Client interface {
 
 	// ExecuteAction executes the named action with the inputs given, bound by
 	// parameter name, and reports the outputs it produced. A Complex input
-	// requires the complex_values capability, checked before anything is sent.
+	// requires the complex_values capability, an Array, Vector or
+	// VectorQuantity input the structured_values one and a MeasurementRef
+	// input the measurement_refs one, checked before anything is sent.
 	ExecuteAction(ctx context.Context, model *Model, actionSymbolID string, inputs map[string]Value) (*ActionRun, error)
 
 	// ExecuteState runs the named state machine, feeding it the events in
@@ -83,9 +85,19 @@ type Client interface {
 
 	// EvaluateCalc invokes the named calculation with positional arguments, or,
 	// given none, evaluates a calc usage from its own members. Requires the
-	// verification capability, and the complex_values capability for a Complex
-	// argument, checked before anything is sent.
+	// verification capability, and the complex_values, structured_values or
+	// measurement_refs capability for a Complex, a structured or a
+	// MeasurementRef argument, checked before anything is sent.
 	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
+
+	// RunAnalysis runs the named analysis case — a definition or a usage — and
+	// reports its outputs with the verdict of its objective and of each
+	// assertion in its body. Positional arguments bind its inputs in
+	// declaration order; Against names its subject and Binding a parameter by
+	// name. Requires the verification capability, and the complex_values or
+	// structured_values capability for a Complex or a structured argument,
+	// checked before anything is sent.
+	RunAnalysis(ctx context.Context, model *Model, symbolID string, opts ...AnalysisOption) (*Analysis, error)
 
 	// Query selects the model's elements the query matches, in declaration
 	// order. Requires the query capability.
@@ -218,6 +230,7 @@ type caller interface {
 	verifyRequirement(ctx context.Context, req *pb.VerifyRequirementRequest) (*pb.VerifyRequirementResponse, error)
 	verifySatisfaction(ctx context.Context, req *pb.VerifySatisfactionRequest) (*pb.VerifySatisfactionResponse, error)
 	evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error)
+	runAnalysis(ctx context.Context, req *pb.RunAnalysisRequest) (*pb.RunAnalysisResponse, error)
 	query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error)
 	runDocumentQuery(ctx context.Context, req *pb.RunDocumentQueryRequest) (*pb.RunDocumentQueryResponse, error)
 	renderDocument(ctx context.Context, req *pb.RenderDocumentRequest) (*pb.RenderDocumentResponse, error)
@@ -489,20 +502,34 @@ func (c *client) call(model *Model) (string, error) {
 	return modelHash(model)
 }
 
-// requireComplexValues refuses to send a Complex to a service without the
-// complex_values capability, which would read it as null rather than refuse it.
-func (c *client) requireComplexValues(ctx context.Context, values ...Value) error {
-	if !slices.ContainsFunc(values, carriesComplex) {
+// requireValueCapabilities refuses to send a value of a kind whose capability
+// the service lacks — a Complex without complex_values, an Array, Vector or
+// VectorQuantity without structured_values, a MeasurementRef without
+// measurement_refs — which would read it as null rather than refuse it.
+func (c *client) requireValueCapabilities(ctx context.Context, values ...Value) error {
+	var needed []string
+	if slices.ContainsFunc(values, carriesComplex) {
+		needed = append(needed, CapabilityComplexValues)
+	}
+	if slices.ContainsFunc(values, carriesStructured) {
+		needed = append(needed, CapabilityStructuredValues)
+	}
+	if slices.ContainsFunc(values, carriesMeasurementRef) {
+		needed = append(needed, CapabilityMeasurementRefs)
+	}
+	if len(needed) == 0 {
 		return nil
 	}
 	info, err := c.serverInfo(ctx)
 	if err != nil {
 		return err
 	}
-	if !info.Has(CapabilityComplexValues) {
-		return &StatusError{
-			Code:    CodeUnimplemented,
-			Message: fmt.Sprintf("capability %q is unavailable", CapabilityComplexValues),
+	for _, capability := range needed {
+		if !info.Has(capability) {
+			return &StatusError{
+				Code:    CodeUnimplemented,
+				Message: fmt.Sprintf("capability %q is unavailable", capability),
+			}
 		}
 	}
 	return nil
@@ -531,14 +558,41 @@ func (c *client) serverInfo(ctx context.Context) (*ServerInfo, error) {
 	return info, nil
 }
 
-// carriesComplex reports whether a value, or any element of a sequence, is a
+// carriesComplex reports whether a value, or any value nested in it, is a
 // Complex.
 func carriesComplex(value Value) bool {
-	switch v := value.(type) {
-	case Complex:
+	if _, ok := value.(Complex); ok {
 		return true
-	case Sequence:
-		return slices.ContainsFunc(v, carriesComplex)
 	}
-	return false
+	return slices.ContainsFunc(nestedValues(value), carriesComplex)
+}
+
+// carriesStructured reports whether a value, or any value nested in it, is an
+// Array, a Vector or a VectorQuantity.
+func carriesStructured(value Value) bool {
+	switch value.(type) {
+	case Array, Vector, VectorQuantity:
+		return true
+	}
+	return slices.ContainsFunc(nestedValues(value), carriesStructured)
+}
+
+// carriesMeasurementRef reports whether a value, or any value nested in it, is
+// a MeasurementRef.
+func carriesMeasurementRef(value Value) bool {
+	if _, ok := value.(MeasurementRef); ok {
+		return true
+	}
+	return slices.ContainsFunc(nestedValues(value), carriesMeasurementRef)
+}
+
+// nestedValues are the values a value holds: a sequence's elements, an array's.
+func nestedValues(value Value) []Value {
+	switch v := value.(type) {
+	case Sequence:
+		return v
+	case Array:
+		return v.Elements
+	}
+	return nil
 }

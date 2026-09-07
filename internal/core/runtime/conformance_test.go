@@ -28,15 +28,20 @@ type ExpectedValue struct {
 	Value interface{} `json:"value"`
 	// Unit is the measurement unit a Quantity is expressed in, as written
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
-	// survived the computation rather than only the magnitude.
+	// survived the computation rather than only the magnitude. A MeasurementRef
+	// is that unit alone, with no value.
 	Unit string `json:"unit,omitempty"`
 	// Im is the imaginary part of a Complex, whose value is its real part.
 	Im *float64 `json:"im,omitempty"`
+	// Text is how a CoordinateFrame or CoordinateTransformation prints: the
+	// declaration it is over its axes (`spatialCF [m, m, m]`), or the frames it relates.
+	Text string `json:"text,omitempty"`
 	// Elements are the members a Sequence holds, in order, for a case asserting a
 	// multi-valued feature. Set it instead of value. A Vector's are its numbers, a
-	// VectorQuantity's its axes as Quantity values, an Array's its row-major elements.
+	// VectorQuantity's its axes as Quantity values, an Array's or a TensorQuantity's
+	// its row-major elements.
 	Elements []ExpectedValue `json:"elements,omitempty"`
-	// Dimensions are an Array's, in order.
+	// Dimensions are an Array's or a TensorQuantity's, in order.
 	Dimensions []int64 `json:"dimensions,omitempty"`
 	// Error is the text producing this value must fail with, for a feature value whose
 	// contract is a diagnostic. Set it instead of type and value.
@@ -111,6 +116,12 @@ type ExpectedOutcome struct {
 	// case states, keyed by the assertion as written ("satisfy r by p"), since
 	// such an assertion is anonymous.
 	Assertions map[string]bool `json:"assertions,omitempty"`
+
+	// Analysis fields: the object run as the case's subject, by the qualified
+	// name of its usage, and the verdict ("satisfied", "not satisfied",
+	// "undecided") expected of each objective and assertion, by name.
+	Subject  string            `json:"subject,omitempty"`
+	Verdicts map[string]string `json:"verdicts,omitempty"`
 
 	// Performers are the objects that each perform the case's behavior, for a
 	// case whose contract depends on which object performs it — two objects
@@ -276,6 +287,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runRequirementConformance(t, ctx, idx, sysmlPath, expected)
 	case "satisfy":
 		runSatisfyConformance(t, ctx, idx, sysmlPath, expected)
+	case "analysis":
+		runAnalysisConformance(t, ctx, idx, sysmlPath, expected)
 	case "instance":
 		runInstanceConformance(t, ctx, idx, expected)
 	default:
@@ -762,6 +775,99 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 	}
 }
 
+// runAnalysisConformance runs the analysis case the outcome names: on the
+// object `subject` names, with `inputs` as positional and `bindings` as named
+// arguments, and checks its outputs, its verdicts and the model's reads of it.
+func runAnalysisConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	rootScope := idx.DocumentRoot(path)
+	caseSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefAnalysisCase, ast.UsageAnalysisCase)
+
+	result, err := ctx.RunAnalysis(caseSym, analysisArgsOf(t, ctx, idx, expected), rootScope, nil)
+	if expected.Error != "" {
+		requireError(t, "RunAnalysis", err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Fatalf("RunAnalysis(%s) failed: %v", ctx.qualifiedSymbolName(caseSym), err)
+	}
+
+	values := make(map[string]Value, len(result.Outputs))
+	for _, out := range result.Outputs {
+		values[out.Name] = out.Value
+	}
+	for name, expectedVal := range expected.Outputs {
+		actual, ok := values[name]
+		if !ok {
+			t.Errorf("missing output %q among %v", name, outputNames(result.Outputs))
+			continue
+		}
+		validateValue(t, ctx, name, expectedVal, actual)
+	}
+	if expected.Result != nil {
+		actual, ok := values[resultOutputName]
+		if !ok {
+			t.Errorf("the case returned no result; its outputs are %v", outputNames(result.Outputs))
+		} else {
+			validateValue(t, ctx, resultOutputName, *expected.Result, actual)
+		}
+	}
+
+	verdicts := make(map[string]AnalysisVerdict, len(result.Verdicts))
+	for _, verdict := range result.Verdicts {
+		verdicts[verdict.Name] = verdict
+	}
+	for name, want := range expected.Verdicts {
+		verdict, ok := verdicts[name]
+		if !ok {
+			t.Errorf("no verdict for %q among %v", name, verdictNames(result.Verdicts))
+			continue
+		}
+		if got := verdict.Status.String(); got != want {
+			t.Errorf("%s %s: verdict %q (%s), want %q", verdict.Kind, name, got, verdict.Detail, want)
+		}
+	}
+	if len(result.Verdicts) != len(expected.Verdicts) {
+		t.Errorf("the case reported %d verdict(s) %v, the outcome states %d",
+			len(result.Verdicts), verdictNames(result.Verdicts), len(expected.Verdicts))
+	}
+
+	for name, expectedVal := range expected.Reads {
+		validateRead(t, ctx, idx, name, expectedVal)
+	}
+}
+
+// analysisArgsOf builds the arguments an analysis outcome states: the object its
+// subject names, materialized, and its positional and named parameter values.
+func analysisArgsOf(t *testing.T, ctx *Context, idx *symbols.Index, expected ExpectedOutcome) AnalysisArgs {
+	t.Helper()
+	args := AnalysisArgs{}
+	if expected.Subject != "" {
+		subject, err := ctx.Instantiate(oneSymbol(t, idx, expected.Subject))
+		if err != nil {
+			t.Fatalf("Instantiate(%s) failed: %v", expected.Subject, err)
+		}
+		args.Subject = subject
+	}
+	for _, input := range expected.Inputs {
+		args.Positional = append(args.Positional, expectedToRuntimeValue(t, input))
+	}
+	if len(expected.Bindings) > 0 {
+		args.Named = make(map[string]Value, len(expected.Bindings))
+		for name, value := range expected.Bindings {
+			args.Named[name] = expectedToRuntimeValue(t, value)
+		}
+	}
+	return args
+}
+
+func verdictNames(verdicts []AnalysisVerdict) []string {
+	names := make([]string, len(verdicts))
+	for i, verdict := range verdicts {
+		names[i] = verdict.Name
+	}
+	return names
+}
+
 // runSatisfyConformance evaluates the satisfaction assertions the case states
 // and validates the verdict of each: the assertion binds the requirement's
 // subject to the object its `by` operand names, so the verdict is about that
@@ -1242,6 +1348,10 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "EnumLiteral":
 		t.Fatalf("an enumeration literal is declared by the model, so it cannot be built from a case value")
+	case "MeasurementRef":
+		t.Fatalf("a measurement reference names a unit the model declares, so it cannot be built from a case value")
+	case "CoordinateFrame", "CoordinateTransformation":
+		t.Fatalf("a %s is declared by the model, so it cannot be built from a case value", ev.Type)
 	case "Complex":
 		v, ok := ev.Value.(float64)
 		if !ok || ev.Im == nil {
@@ -1305,6 +1415,16 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 			t.Errorf("%s: dimensions = %v, want %v", name, got, expected.Dimensions)
 		}
 		validateElements(t, ctx, name, expected.Elements, actual.Array().Elements)
+	case "TensorQuantity":
+		if actual.Kind != ValTensorQuantity || actual.TensorQuantity() == nil {
+			t.Errorf("%s: type = %v, want TensorQuantity", name, actual.Kind)
+			return
+		}
+		tq := actual.TensorQuantity()
+		if got := tq.Dimensions; !slices.Equal(got, expected.Dimensions) {
+			t.Errorf("%s: dimensions = %v, want %v", name, got, expected.Dimensions)
+		}
+		validateElements(t, ctx, name, expected.Elements, tq.components())
 	case "Instance":
 		if actual.Kind != ValInstance {
 			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
@@ -1411,9 +1531,54 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		default:
 			t.Errorf("%s: magnitude kind = %v, want a number", name, got.Kind)
 		}
+	case "MeasurementRef":
+		if actual.Kind != ValMeasurementRef || actual.MeasurementRef() == nil {
+			t.Errorf("%s: type = %v, want MeasurementRef", name, actual.Kind)
+			return
+		}
+		if got := actual.MeasurementRef().Unit.String(); got != expected.Unit {
+			t.Errorf("%s: unit = %q, want %q", name, got, expected.Unit)
+		}
+	case "CoordinateFrame":
+		actual = denotedObjectValue(t, ctx, name, actual)
+		if actual.Kind != ValCoordinateFrame || actual.CoordinateFrame() == nil {
+			t.Errorf("%s: type = %v, want CoordinateFrame", name, actual.Kind)
+			return
+		}
+		if got := actual.CoordinateFrame().String(); got != expected.Text {
+			t.Errorf("%s: frame = %q, want %q", name, got, expected.Text)
+		}
+	case "CoordinateTransformation":
+		actual = denotedObjectValue(t, ctx, name, actual)
+		if actual.Kind != ValCoordinateTransformation || actual.CoordinateTransformation() == nil {
+			t.Errorf("%s: type = %v, want CoordinateTransformation", name, actual.Kind)
+			return
+		}
+		if got := actual.CoordinateTransformation().String(); got != expected.Text {
+			t.Errorf("%s: transformation = %q, want %q", name, got, expected.Text)
+		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
 	}
+}
+
+// denotedObjectValue reads an object a slot holds as an expression naming the
+// slot does: a frame or transformation declaration is the value it declares.
+func denotedObjectValue(t *testing.T, ctx *Context, name string, actual Value) Value {
+	t.Helper()
+	if ctx == nil || actual.Kind != ValInstance {
+		return actual
+	}
+	inst, ok := ctx.Instance(actual.Instance)
+	if !ok {
+		return actual
+	}
+	val, err := ctx.objectValue(inst)
+	if err != nil {
+		t.Errorf("%s: reading the object it holds: %v", name, err)
+		return actual
+	}
+	return val
 }
 
 // validateElements checks the elements of a structured value one by one.

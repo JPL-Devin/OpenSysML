@@ -192,10 +192,10 @@ Note that `not_found` is also the status for an unknown *symbol* on some methods
 which (`model not found:`, `symbol not found:`, `file not found:`), and a client that recovers
 by re-parsing must read it.
 
-## `Value`: eleven arms, exactly one present
+## `Value`: fifteen arms, exactly one present
 
 Every value the engine returns — an expression result, a feature of an instance, an action
-output, a state-machine context variable — is a `Value`, which is a proto `oneof` of eleven
+output, a state-machine context variable — is a `Value`, which is a proto `oneof` of fifteen
 arms. In JSON that is **an object with exactly one key**, and the key is the discriminator.
 A decoder therefore does not look for a `kind` field: it looks at which key is present. The
 arms, each captured from `Evaluate` against the model at the end of this section:
@@ -213,8 +213,14 @@ arms, each captured from `Evaluate` against the model at the end of this section
 | `enumLiteral` | object | `{"result":{"enumLiteral":{"literalId":"Rover::Mode::idle","enumerationId":"Rover::Mode","name":"Mode::idle"}}}` | Enumeration literal |
 | `unset` | boolean | `{"result":{"unset":true}}` | A feature that exists and has no value |
 | `complex` | object | `{"result":{"complex":{"real":1.5,"imaginary":-2}}}` | Complex number |
+| `array` | object | `{"result":{"array":{"dimensions":["2","3"],"elements":[{"intValue":"1"},…,{"intValue":"6"}]}}}` | Multi-dimensional array; `elements` are `Value`s in row-major order |
+| `vector` | object | `{"result":{"vector":{"components":[{"realValue":3},{"realValue":4}]}}}` | Numeric vector; each component an `intValue` or `realValue` |
+| `vectorQuantity` | object | `{"result":{"vectorQuantity":{"components":[{"realMagnitude":3,"unit":"m","unitTerm":{…}},…]}}}` | Vector of quantities; one `quantity` body per component |
+| `measurementRef` | object | `{"result":{"measurementRef":{"unit":"m","unitTerm":{…},"unitId":"SI::metre"}}}` | A measurement reference on its own: a unit, its reduction, and the declaration it names |
 
-Requests for the table's rows were of the form
+The `array`, `vector` and `vectorQuantity` rows were captured against
+`conformance/fixtures/structured.sysml` (`S::grid`, `S::v`, `S::d`), `measurementRef` against
+`conformance/fixtures/measurement_ref.sysml` (`M::u`); the rest against the model below, with requests of the form
 `{"modelHash":"59c4…a654","expression":"<expr>","contextSymbolId":"Rover"}` with `rover.count`,
 `1.0 / 3.0`, `rover.armed`, `"abc"`, `rover.wheel`, `rover.tags`, `null`, `rover.speed`,
 `Mode::idle`, `rover.serial` and `rover.z`, and the model was:
@@ -267,6 +273,14 @@ decode(v):
   quantity     → see below
   enumLiteral  → identity is literalId; enumerationId is its type; name is for display
   complex      → complex(v.complex.real or 0, v.complex.imaginary or 0)
+  array        → shape v.array.dimensions (parse each as int64); elements := map decode over
+                 v.array.elements; require len(elements) == product(dimensions), else an error
+  vector       → map over v.vector.components: intValue → integer, realValue → double,
+                 anything else → an error
+  vectorQuantity → map the quantity rule over v.vectorQuantity.components; empty → an error
+  measurementRef → unit := v.measurementRef.unit, id := v.measurementRef.unitId;
+                 require v.measurementRef.unitTerm when either is present, else an error;
+                 require unit or id, else an error; id absent means a composed unit
   anything else → an error: a newer service than this decoder
 ```
 
@@ -376,6 +390,65 @@ literals of different enumerations can carry the same one.
 **`complex`.** `real` and `imaginary`, both doubles, **either omitted when zero**:
 `rect(0.0, 2.0)` is `{"result":{"complex":{"imaginary":2}}}`. Read each with a default of 0.
 
+**`array`.** The shape and the elements, flattened:
+
+```console
+$ … /Evaluate -d '{"modelHash":"42cc…54b0","expression":"S::grid"}'
+{"result":{"array":{"dimensions":["2", "3"], "elements":[{"intValue":"1"}, {"intValue":"2"}, {"intValue":"3"}, {"intValue":"4"}, {"intValue":"5"}, {"intValue":"6"}]}}}
+```
+
+- `dimensions` is the rank and extents, `int64` strings like `intValue`; a rank-0 array has no
+  `dimensions` key (default omission) and exactly one element.
+- `elements` is the array flattened in **row-major** order — the last dimension varies fastest,
+  so the element at `(i, j)` of a `(2, 3)` array is `elements[i*3 + j]` — and every element is a
+  `Value` of any arm, so an array of quantities, or of arrays, nests without a second encoding.
+- The element count is the product of the dimensions; a client must check it (and that every
+  extent is positive) before indexing, and reject a message that disagrees. The service applies
+  the same rule to an array sent to it.
+
+**`vector`.** `components` is a list of `Value`s each of which is an `intValue` or a
+`realValue` — nothing else — so an Integer and a Real component stay distinct, as they do in
+a `sequence`. A `vector` is not a `sequence`: `VectorOf((3.0, 4.0))` is one value with a
+dimension, and the engine's vector functions accept it where a sequence of numbers would be
+read element by element. A component of any other arm is an error, on both sides.
+
+**`vectorQuantity`.** `components` is a list of `quantity` bodies — each with its own
+magnitude, `unit` and `unitTerm`, exactly as the `quantity` arm carries them:
+
+```console
+$ … /Evaluate -d '{"modelHash":"42cc…54b0","expression":"S::d"}'
+{"result":{"vectorQuantity":{"components":[{"realMagnitude":3, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}, {"realMagnitude":4, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}]}}}
+```
+
+The unit is carried per component rather than once, so a vector whose components were
+composed in different units arrives as it was computed; a client wanting one unit checks that
+every component names the same one. An empty `components` list is an error: a vector quantity
+has at least one component. A component sent without its `unitTerm` is refused by the rule
+under `quantity`.
+
+**`measurementRef`.** A unit on its own — what `SI::m`, `m / s` or a quantity's `.mRef`
+evaluate to — with no magnitude:
+
+```console
+$ … /Evaluate -d '{"modelHash":"5b0f…40d5","expression":"M::u"}'
+{"result":{"measurementRef":{"unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}, "unitId":"SI::metre"}}}
+
+$ … /Evaluate -d '{"modelHash":"5b0f…40d5","expression":"M::speed"}'
+{"result":{"measurementRef":{"unit":"m/s", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}, {"unitId":"SI::second", "exponent":-1}]}}}}
+```
+
+- `unit` and `unitTerm` are the `quantity` arm's, under the same rule: a `unit` that names one
+  is never sent without its reduction, and a client sending one without it is refused.
+- `unitId` is the fully qualified name of the unit *declaration* the reference is — the
+  canonical name, `SI::metre` for `m` and for the alias `SI::m` — and is the identity a client
+  keeps to send the same reference back. It is **absent for a composed unit** (`m / s` above,
+  `km / h`): a unit computed from others names no one declaration, and a client must not
+  fabricate one. A reference sent with a `unitId` is resolved against the model's own
+  declaration, and refused when the id names nothing, names something that is not a unit,
+  or its `unitTerm` disagrees with the declaration's own reduction (see `EvaluateCalc`).
+- A `measurementRef` is not a `quantity` with magnitude one: `ConvertQuantity(q, ref)` takes
+  one, `q * ref` does not.
+
 ### What a client must not do
 
 - **Do not compare enum literals by `name`.** Compare `literalId`.
@@ -389,6 +462,11 @@ literals of different enumerations can carry the same one.
 - **Do not default a missing `realValue` to 0 or a missing `boolValue` to false to "make it
   work".** If the key you expected is not the one present, the value is of another kind, and
   the decoder must say so.
+- **Do not read an `array` or a `vector` as a `sequence`.** The first has a shape and the
+  second a dimension; flattening either into a list loses what the arm exists to carry.
+- **Do not index an `array` before checking `len(elements) == product(dimensions)`.**
+- **Do not invent a `unitId` for a `measurementRef` that has none.** A composed unit names no
+  declaration; send it back as it came, with its `unit` and `unitTerm` only.
 
 ## Three places a failure can be
 
@@ -483,7 +561,7 @@ HTTP/1.1 400 Bad Request
 
 $ … /Query -d '{"modelHash":"2af5…dea2","query":{"where":{"primitive":{"property":"colour","operator":"PRIMITIVE_OPERATOR_EQUAL","value":["red"]}}}}'
 HTTP/1.1 400 Bad Request
-{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, type"}
+{"code":"invalid_argument","message":"unknown query property \"colour\"; queryable properties are @id, @type, declaredName, declaredShortName, documentation, isAbstract, multiplicityLower, multiplicityUpper, name, owner, qualifiedName, shortName, type"}
 
 $ … /ApplyEdits -d '{"modelHash":"b4e0…ded9","operations":[{"setValue":{"target":"Demo::sedan::mass","value":"1300.0"}}]}'
 HTTP/1.1 400 Bad Request
@@ -672,10 +750,75 @@ $ … /EvaluateCalc -d '{"modelHash":"b4e0…ded9","symbolId":"Demo::add","argum
 {"result":{"realValue":5.5}}
 ```
 
+A structured argument goes back the way it came — the same `array`, `vector` or
+`vectorQuantity` body the service writes — and a malformed one is an in-body failure naming
+the fault, not a value read some other way:
+
+```console
+$ … /EvaluateCalc -d '{"modelHash":"42cc…54b0","symbolId":"S::length","arguments":[{"vector":{"components":[{"realValue":3.0},{"realValue":4.0}]}}]}'
+{"result":{"realValue":5}}
+
+$ … /EvaluateCalc -d '{"modelHash":"42cc…54b0","symbolId":"S::length","arguments":[{"vector":{"components":[{"realValue":3.0},{"stringValue":"4"}]}}]}'
+{"error":"calc argument could not be read: vector component is not a number: component 2", "failureReason":"FAILURE_REASON_EVALUATION"}
+```
+
+A `measurementRef` argument goes back the same way, and is read against the model's own unit
+declaration when it names one — a named unit without its reduction, or with a reduction that
+is not the declaration's, is the same kind of in-body failure:
+
+```console
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[{"quantity":{"intMagnitude":"3","unit":"km","unitTerm":{"scaleNum":1000,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]}}},{"measurementRef":{"unit":"m","unitTerm":{"scaleNum":1,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]},"unitId":"SI::metre"}}]}'
+{"result":{"quantity":{"realMagnitude":3000, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}}}
+
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[…,{"measurementRef":{"unit":"m","unitId":"SI::metre"}}]}'
+{"error":"calc argument could not be read: unit carries no reduction to base units: m", "failureReason":"FAILURE_REASON_EVALUATION"}
+
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[…,{"measurementRef":{"unit":"m","unitTerm":{"scaleNum":1000,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]},"unitId":"SI::metre"}}]}'
+{"error":"calc argument could not be read: unit as written does not reduce to its unit_term: SI::metre reduces to metre, unit_term is 1000·metre", "failureReason":"FAILURE_REASON_EVALUATION"}
+```
+
+A service without the `structured_values` capability refuses a structured argument, and one
+without `measurement_refs` a `measurementRef` argument, with the `unimplemented` Connect
+error instead, naming the capability; check `GetServerInfo` first.
+
 A calc *usage* whose output features are evaluated from its own members (no `arguments`)
 answers them as `outputs`, a list of `{"name":…,"value":<Value>}` in declaration order, in
 place of `result`; a client reads whichever of the two is present. A symbol that is not a calc
-is the `FAILURE_REASON_WRONG_KIND` failure shown under [In-body failures](#in-body-failures).
+is the `FAILURE_REASON_WRONG_KIND` failure shown under [In-body failures](#in-body-failures);
+for an analysis case the message says to use `RunAnalysis`.
+
+### `RunAnalysis`
+
+`symbolId` names an analysis definition or usage. `subjectSymbolId` optionally names a part or
+usage to instantiate as the case's `subject`, as `VerifyRequirement` takes one; a usage that
+binds its own subject (`subject s = ship;`) needs none, and a definition or unbinding usage
+run without one is an in-body failure naming the subject. `arguments` is a positional list of
+`Value`s for the case's other `in` parameters in declaration order and `namedArguments` binds
+them by name; a parameter left without a value or default is an in-body failure. `outputs`
+are the case's `out` and `return` values as `EvaluateCalc` reports a usage's, a returned value
+with no name under `result`; `verdicts` is one `Verdict` per `objective` and per
+`assert constraint` in the body, in that order, with `kind` `objective` or `assertion`,
+`holds` for a satisfied one, `condition` for one that is not, and `error` for one that could
+not be decided; `instances` is the subject's object graph when one was
+instantiated:
+
+```console
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::shipCost"}'
+{"outputs":[{"name":"total","value":{"realValue":12}}],"verdicts":[{"kind":"objective","elementId":"An::CostAnalysis::affordable","element":"affordable","holds":true}]}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::CostAnalysis","subjectSymbolId":"An::barge","namedArguments":{"limit":{"realValue":50.0}}}'
+{"outputs":[{"name":"total","value":{"realValue":37}}],"verdicts":[{"kind":"objective","elementId":"An::CostAnalysis::affordable","element":"affordable","holds":true,"instanceId":"1","instanceTypeId":"An::barge"}],"instances":[{"id":"1","typeSymbolId":"An::barge",…}]}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::CostAnalysis"}'
+{"error":"analysis run failed: analysis An::CostAnalysis: s subject is unbound: bind it (`subject s = <element>`) or run it on an object","failureReason":"FAILURE_REASON_EVALUATION"}
+
+$ … /RunAnalysis -d '{"modelHash":"e43c…9a2a","symbolId":"An::Ship"}'
+{"error":"not an analysis case: An::Ship is a part def, not an analysis case definition or usage","failureReason":"FAILURE_REASON_WRONG_KIND"}
+```
+
+A step that fails, a body that deadlocks or exhausts its step budget and a case that runs itself are
+`FAILURE_REASON_EVALUATION` failures naming the case. Structured and complex arguments are
+capability-gated as `EvaluateCalc`'s are.
 
 ### `Evaluate`
 
@@ -833,6 +976,12 @@ arm says what was bound:
 - **`stringValue`, `intValue` (string), `realValue`, `boolValue`, `infinity`** bind a literal;
   the query treats it as a value, not a name. A string that happens to be a qualified name
   bound as `stringValue` is a string.
+- **`quantity`** binds a magnitude with a unit, the same object a `Value` carries (`unit`,
+  `unitTerm` and one of `intMagnitude`/`realMagnitude`); it is how a projected
+  `attribute :>> mass = 2290000 [kg];` is answered. Bound, it conforms to a parameter typed
+  by a quantity value type of the same dimension (`MassValue` for a mass, any for
+  `ScalarQuantityValue`); a parameter of another dimension or of a scalar type such as
+  `String` refuses it with `invalid_argument`.
 
 Model `7e6a…a687` is `conformance/fixtures/document.sysml`; `HeavySubsystemNames` takes
 `root : Element` and `threshold : String`:
@@ -855,8 +1004,8 @@ The answer is a table: `columns` in order, and `rows` each with `element` (the r
 a `DocumentValue`, here always `elementId` plus `elementType`) and `cells` **positionally
 aligned with `columns`**. A cell holds `values`, a list of `DocumentValue`s (several for a
 multi-valued property, none for a missing one, in which case `values` is absent). A
-`DocumentValue` decodes like a `Value` — one arm present — but its arms are the six above and
-never a nested sequence, quantity or enum. `SubsystemTable` projects two columns and shows a
+`DocumentValue` decodes like a `Value` — one arm present — but its arms are the seven above and
+never a nested sequence or enum. `SubsystemTable` projects two columns and shows a
 `realValue` cell:
 
 ```console

@@ -9,14 +9,16 @@
         (Usage kind="part" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
         (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="references" target=R::a
+          (ConnectorEnd target="R::a"
             (*ast.QualifiedName))
-          (FeatureReference name="c")))
+          (ConnectorEnd target="c"
+            (*ast.QualifiedName))))
       (Membership visibility="default"
         (Usage kind="binding" name="b1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="references" target=R::a
+          (ConnectorEnd target="R::a"
             (*ast.QualifiedName))
-          (FeatureReference name="c")))
+          (ConnectorEnd target="c"
+            (*ast.QualifiedName))))
       (Membership visibility="default"
         (Usage kind="part" name="Kite Environment" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
@@ -35,9 +37,10 @@
             (Usage kind="attribute" name="Minimum Wall Height" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
       (Membership visibility="default"
         (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="references" target=(expr)
+          (ConnectorEnd target="*ast.FeatureChainExpr"
             (FeatureChainExpr member="Wall Height"
               (FeatureChainExpr member="Kite Wall"
                 (FeatureChainExpr member="Kite System::Desert Kite"
                   (FeatureReference name="Kite Environment::Region Earth Surface")))))
-          (FeatureReference name="Kite Requirements::Minimum Wall Height"))))))
+          (ConnectorEnd target="Kite Requirements::Minimum Wall Height"
+            (*ast.QualifiedName)))))))

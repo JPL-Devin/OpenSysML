@@ -1,6 +1,9 @@
 package export
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/ast"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+)
 
 // The tables below are the single source of truth for the correspondence
 // between a SysML declaration keyword, the AST kind the parser produced for it,
@@ -94,6 +97,22 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageBool:             "BooleanUsage",
 }
 
+// kermlTypeUsage marks the usage kinds the parser records a KerML type
+// declaration under: their metaclass names a Type the ontology does not declare.
+var kermlTypeUsage = map[ast.UsageKind]bool{
+	ast.UsageClass:       true,
+	ast.UsageStruct:      true,
+	ast.UsageAssoc:       true,
+	ast.UsageBehavior:    true,
+	ast.UsagePredicate:   true,
+	ast.UsageInteraction: true,
+}
+
+// isType reports whether a metaclass is a Type, by the ontology or by kermlTypeUsage.
+func isType(metaclass string) bool {
+	return ontology.IsAncestorOrSelf(metaclass, "Type") || kermlTypeUsage[metaclassUsage[metaclass]]
+}
+
 // keywordMetaclass names the metaclass a keyword builds where several spellings
 // share one AST kind (KerML.xtext:788, :924; SysML.xtext:632).
 var keywordMetaclass = map[string]string{
@@ -102,12 +121,34 @@ var keywordMetaclass = map[string]string{
 	"ref":      "ReferenceUsage",
 }
 
+// crossFeatureMetaclass is what an end's head-written cross feature builds: a bare
+// Feature in KerML, a ReferenceUsage in SysML (SysML.xtext OwnedCrossFeature).
+func crossFeatureMetaclass(kerml bool) string {
+	if kerml {
+		return "Feature"
+	}
+	return keywordMetaclass["ref"]
+}
+
+// The metaclasses an `event` or `assert` declaration builds: the keyword is a
+// type of its own in the metamodel, so the graph types it rather than spelling it.
+const (
+	mEventOccurrenceUsage  = "EventOccurrenceUsage"
+	mAssertConstraintUsage = "AssertConstraintUsage"
+)
+
 // usageMetaclassOf gives the metaclass a usage builds, reading the keyword where
 // the kind does not decide it; a kindless one is a DefaultReferenceUsage, as is
 // a kindless `name = value;` in a metadata body (SysML.xtext MetadataBodyUsage).
 func usageMetaclassOf(n *ast.Usage, inMetadataBody bool) (string, bool) {
 	if m, ok := keywordMetaclass[n.Keyword]; ok {
 		return m, true
+	}
+	switch {
+	case eventOccurrence(n):
+		return mEventOccurrenceUsage, true
+	case assertedConstraint(n):
+		return mAssertConstraintUsage, true
 	}
 	if n.Keyword == "" && (n.Kind == ast.UsageAttribute || inMetadataBody && n.Kind == ast.UsageEnumeration) {
 		return "ReferenceUsage", true
@@ -116,12 +157,37 @@ func usageMetaclassOf(n *ast.Usage, inMetadataBody bool) (string, bool) {
 	return m, ok
 }
 
+// eventOccurrence reports an occurrence declared with `event`, whether as its
+// kind (`event m.start`) or as a modifier (`event occurrence e`).
+func eventOccurrence(n *ast.Usage) bool {
+	return n.Kind == ast.UsageOccurrence && (n.IsEvent || n.Keyword == "event")
+}
+
+// assertedConstraint reports a constraint declared with `assert`, prefixing
+// `constraint` or standing in for it (SysML.xtext AssertConstraintUsage).
+func assertedConstraint(n *ast.Usage) bool {
+	return n.Kind == ast.UsageConstraint && (n.Keyword == "assert" || n.PrefixKeyword == "assert")
+}
+
+// portionKeyword gives the `snapshot`/`timeslice` a usage is a portion of, or "".
+func portionKeyword(portion ast.PortionKind) string {
+	switch portion {
+	case ast.PortionSnapshot:
+		return "snapshot"
+	case ast.PortionTimeslice:
+		return "timeslice"
+	}
+	return ""
+}
+
 // metaclassKeywordUsage reads the keyword-decided metaclasses back to the kind
 // the parser records for them.
 var metaclassKeywordUsage = map[string]ast.UsageKind{
-	"DataType":       ast.UsageAttribute,
-	"Function":       ast.UsageCalc,
-	"ReferenceUsage": ast.UsageAttribute,
+	"DataType":             ast.UsageAttribute,
+	"Function":             ast.UsageCalc,
+	"ReferenceUsage":       ast.UsageAttribute,
+	mEventOccurrenceUsage:  ast.UsageOccurrence,
+	mAssertConstraintUsage: ast.UsageConstraint,
 }
 
 // definitionKeyword and usageKeyword give the source keyword for a kind. The
@@ -185,6 +251,7 @@ var relationshipElementForm = map[ast.RelationshipKind]relationshipEndForm{
 	ast.RelRedefines:   {"Redefinition", "redefiningFeature", "redefinedFeature"},
 	ast.RelInverseOf:   {"FeatureInverting", "invertingFeature", "featureInverted"},
 	ast.RelFeaturedBy:  {"TypeFeaturing", "featureOfType", "featuringType"},
+	ast.RelDisjoint:    {"Disjoining", "typeDisjoined", "disjoiningType"},
 }
 
 // conjugationForm is the form a `conjugate x conjugates y` member takes, which
@@ -204,6 +271,7 @@ var relationshipMemberSyntax = map[string]struct {
 	"conjugate":     {"conjugatedType", "originalType", "conjugates"},
 	"inverse":       {"invertingFeature", "featureInverted", "of"},
 	"featuring":     {"featureOfType", "featuringType", "by"},
+	"disjoint":      {"typeDisjoined", "disjoiningType", "from"},
 }
 
 // relationshipSyntax gives the source syntax that introduces a relationship

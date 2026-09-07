@@ -358,6 +358,39 @@ func TestBodyGovernsAnInheritedValue(t *testing.T) {
 	}
 }
 
+// A renamed redefinition (`fine :>> cost { ... }`) governs the inherited value as
+// a same-named one does: the two names share the object its body describes.
+func TestRenamedRedefinitionBodyGovernsAnInheritedValue(t *testing.T) {
+	src := `
+		attribute def Cost {
+			attribute v = 1.0;
+			attribute w = 2.0;
+		}
+		part def Ring {
+			attribute template : Cost { attribute :>> v = 9.0; attribute :>> w = 8.0; }
+			attribute cost : Cost default template;
+		}
+		part def Band :> Ring {
+			attribute fine :>> cost { attribute :>> v = 11.0; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	band, err := ctx.Instantiate(resolveSymbol(t, root, "Band"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	for _, name := range []string{"fine", "cost"} {
+		if got := nestedReal(t, ctx, band, name, "v"); got != 11.0 {
+			t.Errorf("%s.v = %v, want 11 (the body's value, not the inherited default)", name, got)
+		}
+		if got := nestedReal(t, ctx, band, name, "w"); got != 2.0 {
+			t.Errorf("%s.w = %v, want 2 (Cost's own default)", name, got)
+		}
+	}
+}
+
 // A condition read without an object agrees with materializing: a value a body
 // governs over is not the value the condition sees, so the feature is reported
 // uninitialized rather than judged against the superseded value.

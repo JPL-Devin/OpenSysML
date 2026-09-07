@@ -24,7 +24,8 @@ type Condition struct {
 	// Expr is the condition's expression, nil for a group.
 	Expr ast.Node
 
-	// Scope is where Expr's names resolve, nil for a group.
+	// Scope is where Expr's names resolve, or the type a Conflict is found on;
+	// nil for a group.
 	Scope *symbols.Scope
 
 	// Group is the conditions a body states, all of which must hold; nil for a
@@ -34,6 +35,10 @@ type Condition struct {
 	// Statement is an action statement the body states before its conditions,
 	// which the evaluator does not execute; nil for a condition or a group.
 	Statement ast.Node
+
+	// Conflict is a second result expression, stated or inherited (KerML
+	// 8.3.4.8); no verdict is reached. Nil otherwise.
+	Conflict *semantics.ResultExpressionConflict
 
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
@@ -91,7 +96,7 @@ type scopedExpr struct {
 // and the values the checked element binds by name (subject, actors).
 type conditionEnv struct {
 	features map[string]scopedExpr
-	bindings map[string]Value
+	bindings frame
 
 	// enclosing marks the environment around a constraint usage, which its
 	// arguments read: `in v = v` names the outer v, not the parameter it binds.
@@ -110,6 +115,7 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 // an anonymous one, which no name can redefine, is always inherited.
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	out = ctx.appendResultConflict(out, sym, required)
 	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
 		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
@@ -123,6 +129,20 @@ func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol,
 		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
+}
+
+// appendResultConflict appends the marker for a second owned or inherited result
+// expression of sym, which no body of the runtime's choosing may stand in for.
+func (ctx *Context) appendResultConflict(out []Condition, sym *symbols.Symbol, required bool) []Condition {
+	conflict := ctx.model.ResultExpressionConflict(sym)
+	if conflict == nil {
+		return out
+	}
+	scope := sym.Scope
+	if scope == nil {
+		scope = sym.OwnerScope
+	}
+	return append(out, Condition{Conflict: conflict, Scope: scope, Required: required})
 }
 
 // namedConstraintOf returns the constraint usage a require/assume constraint
@@ -188,17 +208,9 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		}
 		out = append(out, Condition{Group: body, Negated: true, Required: required})
 	case *ast.RequireMember:
-		if m.Expression != nil {
-			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
-		}
-		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
-		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
+		out = ctx.appendRequirementConditions(out, m, m.Expression, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
-		if m.Expression != nil {
-			out = append(out, Condition{Expr: m.Expression, Scope: scope})
-		}
-		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
-		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
+		out = ctx.appendRequirementConditions(out, m, m.Expression, m.Body, scope, false, seen)
 	case *ast.Membership:
 		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
 	default:
@@ -207,6 +219,19 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		}
 	}
 	return out
+}
+
+// appendRequirementConditions appends what a require/assume member states: the
+// conditions of the constraint it references (`require q;`, `require P::q;`),
+// or else its own condition expression, then those its body owns.
+func (ctx *Context) appendRequirementConditions(out []Condition, member ast.Node, expr ast.Node, body []ast.Node,
+	scope *symbols.Scope, required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if ref := ast.ConstraintReferenceOf(member); ref != nil {
+		out = ctx.appendReferencedConditions(out, member, ref, scope, required, seen)
+	} else if expr != nil {
+		out = append(out, Condition{Expr: expr, Scope: scope, Required: required})
+	}
+	return ctx.appendOwnedConditions(out, member, body, scope, required, seen)
 }
 
 // appendOwnedConditions appends what a require/assume member's constraint states:
@@ -232,6 +257,33 @@ func setConstraint(conds []Condition, owner *symbols.Symbol) {
 	for i := range conds {
 		conds[i].Constraints = append([]*symbols.Symbol{owner}, conds[i].Constraints...)
 		setConstraint(conds[i].Group, owner)
+	}
+}
+
+// conflictingResultExpression returns the first result-expression conflict conds
+// record, groups included, or nil when they record none.
+func conflictingResultExpression(conds []Condition) *semantics.ResultExpressionConflict {
+	for _, cond := range conds {
+		if cond.Conflict != nil {
+			return cond.Conflict
+		}
+		if nested := conflictingResultExpression(cond.Group); nested != nil {
+			return nested
+		}
+	}
+	return nil
+}
+
+// conflictText says what a result-expression conflict is: a second result stated
+// in one body, a condition stated over an inherited one, or a declaration inheriting two.
+func conflictText(conflict *semantics.ResultExpressionConflict) string {
+	switch {
+	case conflict.Stated > 1:
+		return "`" + conditionText(conflict.Node) + "` is a second result expression of one body"
+	case conflict.Stated == 1:
+		return "`" + conditionText(conflict.Node) + "` is stated over an inherited result expression"
+	default:
+		return "it inherits a result expression from more than one supertype"
 	}
 }
 
@@ -300,12 +352,12 @@ func statementKeyword(node ast.Node) (string, bool) {
 // reference-subsets a requirement states: that requirement's own conditions,
 // which requiring it requires. A reference naming anything else, or one that
 // does not resolve, states the condition its name evaluates to.
-func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.QualifiedName, scope *symbols.Scope,
+func (ctx *Context) appendReferencedConditions(out []Condition, decl ast.Node, ref ast.Node, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
-	if ref == nil || len(ref.Parts) == 0 {
+	if ref == nil {
 		return out
 	}
-	sym := ctx.referencedRequirement(scope, ref)
+	sym := ctx.referencedRequirement(scope, decl, ref)
 	if sym == nil {
 		return append(out, Condition{Expr: ref, Scope: scope, Required: required})
 	}
@@ -324,14 +376,14 @@ func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.Qualifi
 	return append(out, conds...)
 }
 
-// referencedRequirement resolves the requirement or constraint a require/assume
-// member reference-subsets, and returns nil when the reference names anything
-// else or does not resolve.
-func (ctx *Context) referencedRequirement(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+// referencedRequirement resolves the requirement or constraint the require/assume
+// member decl reference-subsets, and returns nil when the reference names
+// anything else or does not resolve.
+func (ctx *Context) referencedRequirement(scope *symbols.Scope, decl ast.Node, ref ast.Node) *symbols.Symbol {
 	if ctx.resolver == nil {
 		return nil
 	}
-	sym, ok := ctx.resolver.ResolveQualified(scope, ref)
+	sym, ok := ctx.resolver.ResolveReferenceTarget(scope, decl, ref)
 	if !ok || sym == nil {
 		return nil
 	}
@@ -359,9 +411,9 @@ type conditionCheck struct {
 	// self is the object a feature name resolves against, nil when unbound.
 	self *Instance
 
-	// bindings are the names the element binds itself (subject, actor); nil
-	// binds nothing.
-	bindings map[string]Value
+	// bindings are the values the element binds by name (subject, actor), and, for a
+	// check within a case run, the run's, owned by the case; the zero frame binds nothing.
+	bindings frame
 
 	// negated inverts the verdict: the element asserts that its required
 	// conditions do not all hold (`assert not …`, Invariant::isNegated).
@@ -389,6 +441,10 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) 
 		keyword, _ := statementKeyword(stmt)
 		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
 			check.kind, check.name(), check.what, keyword, ErrStatementNotExecuted)
+	}
+	if conflict := conflictingResultExpression(conds); conflict != nil {
+		return false, fmt.Errorf("%s %s: %s evaluation failed: %s: %w; a redefinition keeps the inherited condition and tightens it with a nested `assert constraint { … }`",
+			check.kind, check.name(), check.what, conflictText(conflict), ErrConflictingResultExpressions)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -754,7 +810,7 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
-func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings frame) (bool, error) {
 	for _, constraint := range cond.Constraints {
 		features, bindings = ctx.constraintScope(features, bindings, constraint)
 	}
@@ -771,8 +827,8 @@ func (ctx *Context) conditionHolds(activation int64, cond Condition, features ma
 		ec := NewEvalContextIn(ctx, cond.Scope, self)
 		ec.activation = activation
 		ec.features = features
-		if bindings != nil {
-			ec.Push(bindings)
+		if bindings.vars != nil {
+			ec.pushFrame(bindings)
 		}
 		result, err := ec.Eval(cond.Expr)
 		if err != nil {
@@ -837,7 +893,7 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // its parameters mask same-named ones (subject and actors included). The
 // arguments binding them (`in v = v`) read the enclosing environment; a default
 // its definition wrote (`in y default = x`) reads the usage's own parameters.
-func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings map[string]Value, constraint *symbols.Symbol) (map[string]scopedExpr, map[string]Value) {
+func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings frame, constraint *symbols.Symbol) (map[string]scopedExpr, frame) {
 	own := ctx.conditionFeatures(constraint)
 	if len(own) == 0 {
 		return features, bindings
@@ -869,9 +925,9 @@ func isArgument(decl *symbols.Symbol) bool {
 }
 
 // unmasked returns bindings without the names features declare.
-func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[string]Value {
+func unmasked(bindings frame, features map[string]scopedExpr) frame {
 	masked := false
-	for name := range bindings {
+	for name := range bindings.vars {
 		if _, ok := features[name]; ok {
 			masked = true
 			break
@@ -880,13 +936,13 @@ func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[str
 	if !masked {
 		return bindings
 	}
-	out := make(map[string]Value, len(bindings))
-	for name, value := range bindings {
+	out := make(map[string]Value, len(bindings.vars))
+	for name, value := range bindings.vars {
 		if _, ok := features[name]; !ok {
 			out[name] = value
 		}
 	}
-	return out
+	return bindings.withVars(out)
 }
 
 // conditionLabel renders a condition as written, so a violation names the
@@ -895,6 +951,9 @@ func conditionLabel(cond Condition) string {
 	if cond.Statement != nil {
 		keyword, _ := statementKeyword(cond.Statement)
 		return "`" + keyword + "` statement"
+	}
+	if cond.Conflict != nil {
+		return "conflicting result expression"
 	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {

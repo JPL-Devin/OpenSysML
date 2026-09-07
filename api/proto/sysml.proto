@@ -43,15 +43,16 @@ service SysMLService {
   // Reported as the "apply_edits" capability.
   rpc ApplyEdits(ApplyEditsRequest) returns (ApplyEditsResponse);
 
-  // Verification: the answers the REPL's %constraint, %requirement, %satisfy
-  // and %calc give, so "does this model satisfy its requirements?" can be asked
-  // by a script. Each evaluates the same runtime paths the prompt does and
-  // returns a verdict rather than formatted lines. Reported as the
+  // Verification: the answers the REPL's %constraint, %requirement, %satisfy,
+  // %calc and %analysis give, so "does this model satisfy its requirements?"
+  // can be asked by a script. Each evaluates the same runtime paths the prompt
+  // does and returns a verdict rather than formatted lines. Reported as the
   // "verification" capability.
   rpc VerifyConstraint(VerifyConstraintRequest) returns (VerifyConstraintResponse);
   rpc VerifyRequirement(VerifyRequirementRequest) returns (VerifyRequirementResponse);
   rpc VerifySatisfaction(VerifySatisfactionRequest) returns (VerifySatisfactionResponse);
   rpc EvaluateCalc(EvaluateCalcRequest) returns (EvaluateCalcResponse);
+  rpc RunAnalysis(RunAnalysisRequest) returns (RunAnalysisResponse);
 
   // Run a SysML v2 API & Services Query over a parsed model: scope/select/where
   // as the standard defines them, so a client that speaks that API can filter a
@@ -80,12 +81,15 @@ enum FailureReason {
 // Verdict is one verification's answer: whether the condition held, and, when
 // it did not, which condition the model answered false about.
 message Verdict {
-  // What was verified: "constraint", "requirement" or "satisfy".
+  // What was verified: "constraint", "requirement" or "satisfy"; for a check
+  // an analysis case run made, "objective" or "assertion".
   string kind = 1;
-  // FQN of the element verified; empty for an anonymous satisfy assertion.
+  // FQN of the element verified; empty for an anonymous satisfy assertion or
+  // an anonymous assertion in a case body.
   string element_id = 2;
   // The element as a reader names it: its FQN, or, for an anonymous satisfy
-  // assertion, the assertion as written ("satisfy Range by cruise").
+  // assertion, the assertion as written ("satisfy Range by cruise"); for an
+  // objective or assertion of a case, its name or its condition as written.
   string element = 3;
   // Whether the condition holds. False with an empty `error` is the model's own
   // answer; false with an `error` is no answer at all.
@@ -201,6 +205,45 @@ message EvaluateCalcResponse {
 message CalcOutput {
   string name = 1;
   Value value = 2;
+}
+
+// RunAnalysisRequest runs an analysis case, as %analysis does: its subject and
+// input parameters are bound from the request and from the case's own
+// declarations, its body runs, and every output it declares is reported with
+// the verdict of its objective and of each assertion in its body (SysML 7.22).
+message RunAnalysisRequest {
+  string model_hash = 1;
+  // FQN of the analysis case definition or usage.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate as the case's subject. Empty
+  // leaves the case's own `subject s = ...` binding to supply it; a case that
+  // binds none and is given none fails to run.
+  string subject_symbol_id = 3;
+  // Positional arguments for the case's input parameters, in declaration order;
+  // the subject is never among them.
+  repeated Value arguments = 4;
+  // Arguments bound to input parameters by name.
+  map<string, Value> named_arguments = 5;
+}
+
+// RunAnalysisResponse carries what the case computed and decided.
+message RunAnalysisResponse {
+  // The case's out and return parameters in declaration order; a value the
+  // body returned into an unnamed result is named "result".
+  repeated CalcOutput outputs = 1;
+  // What the case's objective and each assertion in its body decided, the
+  // objective first: kind "objective" or "assertion", holds for satisfied, the
+  // violated condition for not satisfied, and an error for undecided.
+  repeated Verdict verdicts = 2;
+  // Instances reachable from the subject the case ran on, including it, so its
+  // feature values need no follow-up RPC. Empty when the run named no object.
+  repeated Instance instances = 3;
+  // Set when the case could not be run — an unknown symbol, a subject that
+  // could not be built or bound, an input with no value, a failed step.
+  string error = 4;
+  repeated Diagnostic diagnostics = 5;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 6;
 }
 
 // ParseFileRequest specifies the source to parse
@@ -612,7 +655,37 @@ message Value {
     // Always true when set; a value the server sends, never one it accepts.
     bool unset = 10;
     Complex complex = 11;       // one complex number, never two Reals
+    Array array = 12;           // shape and elements, never a flat sequence
+    Vector vector = 13;         // numeric components, never a sequence
+    VectorQuantity vector_quantity = 14; // components each with their unit
+    MeasurementRef measurement_ref = 15; // a unit by itself, no magnitude
   }
+}
+
+// Array is a Collections::Array: its elements flattened in row-major order
+// under its dimensions, compared by content rather than by the object read.
+message Array {
+  // Positive extents, one per rank; their product (one for rank 0) is how many
+  // elements there are, and an array not filling them is rejected.
+  repeated int64 dimensions = 1;
+  // Any Value each, so an array of quantities or of arrays crosses as such.
+  repeated Value elements = 2;
+}
+
+// Vector is a VectorValues::NumericalVectorValue: its components in order,
+// its dimension their number.
+message Vector {
+  // Each an int_value or a real_value, kept apart as the rest of Value does;
+  // a component of any other arm is rejected rather than read as a number.
+  repeated Value components = 1;
+}
+
+// VectorQuantity is a Quantities::VectorQuantityValue: one Quantity per axis,
+// unit and reduction included, since the axes need not share a unit.
+message VectorQuantity {
+  // At least one (num is Number[1..*]); a named unit sent without its
+  // unit_term is rejected as a Quantity's is.
+  repeated Quantity components = 1;
 }
 
 // Complex is one complex number in rectangular form. It crosses as one value
@@ -653,6 +726,29 @@ message Quantity {
   // Required wherever `unit` names one: a named unit sent without its reduction
   // is rejected rather than read as dimension one.
   UnitTerm unit_term = 4;
+}
+
+// MeasurementRef is a MeasurementReferences::ScalarMeasurementReference held as
+// a value: a unit by itself — `SI::m`, `km`, or `m / s` as an operation composed
+// it — as distinct from a Quantity expressed in one. It carries what the runtime
+// value carries: the unit as written and what it reduces to, plus the one
+// declaration it names when it names one.
+message MeasurementRef {
+  // Unit as written ("km") or as an operation composed it ("m/s"); empty for
+  // one never written down, described by unit_term alone.
+  string unit = 1;
+  // What the unit reduces to. Required wherever `unit` names one, as a
+  // Quantity's is: a named unit sent without its reduction is rejected rather
+  // than read as dimension one.
+  UnitTerm unit_term = 2;
+  // FQN of the one unit declaration the reference names ("SI::kilometre"), which
+  // is what tells the declared unit `km` from any other spelling of 1000 metres;
+  // empty for a unit composed of several ("m/s"), which names no declaration.
+  // The service always sends it for a named unit. A client may omit it, in
+  // which case `unit` is read as a Quantity's is; sent, it must name a
+  // measurement unit of the model that reduces to unit_term and that `unit`
+  // spells, or the value is rejected.
+  string unit_id = 3;
 }
 
 // UnitTerm is a unit reduced to a scale factor over base units: `km/h` reduces
@@ -722,6 +818,21 @@ message ServerInfoResponse {
   //                  action input or calc argument is accepted; without it,
   //                  one is refused with UNIMPLEMENTED rather than read as
   //                  another value.
+  //   "structured_values" - a Value carries a Collections::Array, a numerical
+  //                  vector and a vector quantity as array, vector and
+  //                  vector_quantity, shape and units intact, rather than
+  //                  reporting them as unsupported nulls, and one is accepted
+  //                  as an action input or calc argument; without it, one is
+  //                  refused with UNIMPLEMENTED rather than read as another
+  //                  value.
+  //   "measurement_refs" - a Value carries a bare measurement reference (a
+  //                  unit by itself, `SI::m` or `m / s`) as measurement_ref,
+  //                  unit text, reduction and declaration intact, rather than
+  //                  reporting it as an unsupported null, and one is accepted
+  //                  as an action input or calc argument; without it, one is
+  //                  refused with UNIMPLEMENTED rather than read as another
+  //                  value. Separate from structured_values, which a client
+  //                  built before this arm existed may already claim.
   //   "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
   //                  preserving everything the edit did not touch.
   //   "document_query" - the RunDocumentQuery RPC runs a named document query
@@ -849,6 +960,7 @@ message DocumentValue {
     double real_value = 4;
     bool bool_value = 5;
     bool infinity = 6;
+    Quantity quantity = 8;   // magnitude in a unit, `2290000 [kg]`
   }
   // Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
   string element_type = 7;

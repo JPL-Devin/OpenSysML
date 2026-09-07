@@ -33,12 +33,10 @@ func (ctx *Context) stateTypes() lower.EndpointResolver {
 	return &stateTypes{Resolver: ctx.resolver, frame: ctx.librarySymbol(stateActionFQN)}
 }
 
-func (s *stateTypes) TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
-	decl, body, ok := s.Resolver.TypeDecl(scope, qn)
-	if !ok || (s.frame != nil && decl == s.frame.Decl) {
-		return nil, nil, false
-	}
-	return decl, body, true
+// WithholdsStateType reports the library's StateAction, whose content lowering
+// must not take: TypeDecl still resolves it, so lowering looks no further.
+func (s *stateTypes) WithholdsStateType(decl ast.Node) bool {
+	return s.frame != nil && decl == s.frame.Decl
 }
 
 // StateConfiguration represents the active state configuration (simple or multi-region).
@@ -2284,7 +2282,7 @@ func (e *StateExecutor) initialize() error {
 	// State machine has orthogonal regions at top level
 	// Find regions from composite states map (graph has already extracted them)
 	if len(e.graph.RegionInitials) == 0 {
-		return fmt.Errorf("no initial state found in state machine %s", e.stateMachine.Name)
+		return fmt.Errorf("%w in state machine %s", ErrNoInitialState, e.stateMachine.Name)
 	}
 
 	if e.graph.Machine != nil {

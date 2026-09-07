@@ -340,22 +340,26 @@ func TestInitialSuccessorLinksAVertexOfTheMachine(t *testing.T) {
 // A source end that is only a name is no member of the body: a `then` whose
 // graph names its source so is not folded beside a linked neighbour that merely
 // declares the name, since another member may be what the name reaches. The
-// encoder links the member the name reaches, a redefinition answering to it too.
+// encoder links the member the parser took the name from, a redefinition
+// answering to that name, even beside a member declaring the same name.
 func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
 	const positional = "sysx:sourceMember elmt:P__A___401"
+	const linked = "sysml:sourceFeature elmt:P__A___401"
 	src := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
 		"    action def A specializes Base {\n        action walk : Step;\n        action redefines Base::walk;\n        then action b : Step;\n    }\n}\n"
 	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	// The parser names the source after the redefinition, and that name reaches
-	// the body's own walk, so it is linked to that member and no position is stated.
-	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A__walk") || strings.Contains(string(turtle), positional) {
-		t.Fatalf("the source should link the body's own walk by name alone:\n%s", turtle)
+	// The parser names the source after the redefinition it follows, so that
+	// member is linked, not the body's own walk the name would reach.
+	if !strings.Contains(string(turtle), linked) || strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A__walk") ||
+		strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should link the redefinition the parser named it after:\n%s", turtle)
 	}
+	structuralRoundTrip(t, "m", turtle)
 	edited := strings.Replace(string(withoutTriples(t, turtle, "sysx:sourceText")),
-		"sysml:sourceFeature elmt:P__A__walk", `sysml:sourceFeature "walk"`, 1)
+		linked, `sysml:sourceFeature "walk"`, 1)
 	_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
 	var unsupported *export.UnsupportedError
 	if !errors.As(err, &unsupported) {
@@ -373,7 +377,7 @@ func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A___401") || strings.Contains(string(turtle), positional) {
+	if !strings.Contains(string(turtle), linked) || strings.Contains(string(turtle), positional) {
 		t.Fatalf("the source should link the redefinition the name reaches:\n%s", turtle)
 	}
 	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)

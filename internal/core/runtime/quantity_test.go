@@ -144,6 +144,58 @@ func TestQuantityIncommensurable(t *testing.T) {
 	}
 }
 
+// TestQuantityAgainstBareNumber is the operator matrix of a quantity against a
+// number naming no unit. A bare zero is the null quantity of every dimension, so
+// a comparison reads it in the quantity's unit (`xoffset > 0`); any other number
+// is dimensionless and a comparison or sum with it is incommensurable, while a
+// product or quotient scales the quantity. A quantity of another dimension is
+// incommensurable whatever its magnitude.
+func TestQuantityAgainstBareNumber(t *testing.T) {
+	ctx, scope := quantityContext(t)
+	values := map[string]string{
+		"3 [m] > 0":              "true",
+		"3 [m] < 0":              "false",
+		"3 [m] >= 0":             "true",
+		"3 [m] <= 0":             "false",
+		"3 [m] == 0":             "false",
+		"3 [m] != 0":             "true",
+		"0 [m] == 0":             "true",
+		"0 [m] != 0.0":           "false",
+		"-2 [m] < 0":             "true",
+		"0 < 3 [m]":              "true",
+		"0.0 >= 3 [m]":           "false",
+		"0 == 3 [m]":             "false",
+		"0 != 3 [s]":             "true",
+		"3 [m] * 2":              "6 [m]",
+		"3 [m] / 2":              "1.5 [m]",
+		"2 * 3 [m]":              "6 [m]",
+		"3 [m] > 0 or 1 [s] > 0": "true",
+	}
+	for src, want := range values {
+		t.Run(src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, src)
+			if err != nil {
+				t.Fatalf("%s: %v", src, err)
+			}
+			if FormatValue(got) != want {
+				t.Errorf("%s = %s, want %s", src, FormatValue(got), want)
+			}
+		})
+	}
+	for _, src := range []string{
+		"3 [m] > 1", "3 [m] < 1", "3 [m] >= 3", "3 [m] <= 3", "3 [m] == 3", "3 [m] != 3",
+		"1 < 3 [m]", "3 [m] + 1", "3 [m] - 1", "1 + 3 [m]", "3 [m] + 0", "3 [m] - 0",
+		"3 [m] > 0 [s]", "0 [m] == 0 [s]", "3 [m] + 0 [s]",
+	} {
+		t.Run(src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, src)
+			if !errors.Is(err, ErrIncommensurableUnits) {
+				t.Fatalf("%s = %v, %v; want ErrIncommensurableUnits", src, got, err)
+			}
+		})
+	}
+}
+
 // TestQuantityExponentiation raises quantities to constant exponents. The
 // magnitude comes from semantics.Pow, the implementation `**` shares with the
 // folder and the scalar path, so Integer operands with a non-negative exponent

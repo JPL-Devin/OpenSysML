@@ -17,6 +17,11 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 	if ec.model == nil || !commensurabilityRequired(e.Operator) || len(e.Operands) != 2 {
 		return
 	}
+	// A bare zero is the null quantity of every dimension, so a comparison reads
+	// it in the other operand's unit (`length > 0`), as evaluation does.
+	if comparesOperands(e.Operator) && (ec.isBareZero(scope, e.Operands[0]) || ec.isBareZero(scope, e.Operands[1])) {
+		return
+	}
 	lhs, ok := ec.model.DimensionOfExpr(scope, e.Operands[0])
 	if !ok {
 		return
@@ -44,10 +49,7 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 	if declared == nil {
 		return
 	}
-	want, ok := ec.model.DimensionOfType(declared)
-	if !ok {
-		return
-	}
+	want, known := ec.model.DimensionOfType(declared)
 	for _, element := range valueElements(value) {
 		if ec.judgedByType(valueScope, element) {
 			// A named value is judged against the target by specialization,
@@ -57,6 +59,9 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		if statesNoMeasurement(element) {
 			continue
 		}
+		if ec.judgedAsMeasurementRef(valueScope, declared, element) || ec.judgedAsFramedQuantity(valueScope, declared, element) || !known {
+			continue
+		}
 		got, ok := ec.model.DimensionOfExpr(valueScope, element)
 		if !ok || want.Term.Commensurable(got.Term) {
 			continue
@@ -64,6 +69,45 @@ func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope,
 		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s",
 			describeDimension(got), describeDimension(want))
 	}
+}
+
+// judgedAsMeasurementRef judges a unit composed by `*`, `/` or `**` as the DerivedUnit
+// it evaluates to (`m * s` refused by AreaUnit, `m * m` by AreaValue), and a frame
+// composed by `*` or `/` as the CoordinateFrame it evaluates to; false otherwise.
+func (ec *exprChecker) judgedAsMeasurementRef(scope *symbols.Scope, declared *symbols.Symbol, element ast.Node) bool {
+	e, ok := element.(*ast.OperatorExpr)
+	if !ok {
+		return false
+	}
+	c, ok := ec.model.MeasurementRefExprConformance(scope, e, declared)
+	if !ok {
+		c, ok = ec.model.CoordinateFrameExprConformance(scope, e, declared)
+	}
+	if !ok {
+		return false
+	}
+	if c.Known && !c.Holds {
+		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s", c.Found, declared.Name)
+	}
+	return true
+}
+
+// judgedAsFramedQuantity judges numbers written in a coordinate frame, named or
+// composed (`(1, 2, 3) [spatialCF / s]`), as the VectorQuantityValue they are;
+// false for a literal in a scalar unit, which is judged by dimension.
+func (ec *exprChecker) judgedAsFramedQuantity(scope *symbols.Scope, declared *symbols.Symbol, element ast.Node) bool {
+	n, ok := element.(*ast.IndexExpr)
+	if !ok {
+		return false
+	}
+	c, ok := ec.model.FramedQuantityConformance(scope, n, declared)
+	if !ok {
+		return false
+	}
+	if c.Known && !c.Holds {
+		ec.errorf(element.Span(), "cannot bind %s to a feature typed by %s", c.Found, declared.Name)
+	}
+	return true
 }
 
 // judgedByType reports whether value conformance already types the element,
@@ -90,12 +134,30 @@ func statesNoMeasurement(element ast.Node) bool {
 	return false
 }
 
+// isBareZero reports an operand folding to zero and naming no unit: a literal
+// or constant arithmetic such as `1 - 1`.
+func (ec *exprChecker) isBareZero(scope *symbols.Scope, element ast.Node) bool {
+	q, ok := ec.model.EvalQuantity(scope, element)
+	return ok && q.Unit.None() && q.Num.IsNumeric() && q.Num.AsReal() == 0
+}
+
 // commensurabilityRequired reports whether an operator only relates operands of
 // one dimension. A product or quotient combines dimensions instead, and a
 // conditional does not relate its branches to the condition.
 func commensurabilityRequired(op ast.OperatorKind) bool {
 	switch op {
 	case ast.OpAdd, ast.OpSub, ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpEq, ast.OpNeq:
+		return true
+	default:
+		return false
+	}
+}
+
+// comparesOperands reports an operator whose result is a truth value about its
+// operands rather than a quantity of their dimension.
+func comparesOperands(op ast.OperatorKind) bool {
+	switch op {
+	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpEq, ast.OpNeq:
 		return true
 	default:
 		return false

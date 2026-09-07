@@ -68,6 +68,18 @@ func (p UnitProduct) NamesDimensionOne() bool {
 	return true
 }
 
+// Clone returns a product sharing no storage with p, its powers' reductions included.
+func (p UnitProduct) Clone() UnitProduct {
+	out := UnitProduct{Powers: slices.Clone(p.Powers)}
+	for i, f := range out.Powers {
+		if f.Reduces != nil {
+			reduces := f.Reduces.Clone()
+			out.Powers[i].Reduces = &reduces
+		}
+	}
+	return out
+}
+
 // Times returns the product of two unit products.
 func (p UnitProduct) Times(q UnitProduct) UnitProduct { return combineProducts(p, q, 1) }
 
@@ -338,7 +350,7 @@ func (m *Model) unitProductOfOperator(n *ast.OperatorExpr, lookup UnitLookup) (U
 		if !ok || !exp.IsNumeric() {
 			return UnitProduct{}, fmt.Errorf("%w: unit exponent is not a constant number", ErrUnitExpr)
 		}
-		return left.Pow(exp.asReal()), nil
+		return left.Pow(exp.AsReal()), nil
 	default:
 		return UnitProduct{}, fmt.Errorf("%w: operator %v", ErrUnitExpr, n.Operator)
 	}

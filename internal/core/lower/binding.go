@@ -54,22 +54,22 @@ func lowerBinding(u *ast.Usage, scope *symbols.Scope) (Binding, bool) {
 		return Binding{}, false
 	}
 
-	var first *ast.Relationship
-	for _, rel := range u.Relationships {
-		if rel != nil && rel.Kind == ast.RelReferences {
-			first = rel
-			break
+	if len(u.ConnectorEnds) != 2 {
+		return Binding{}, false
+	}
+	var ends [2]BindingEnd
+	for i, end := range u.ConnectorEnds {
+		if end == nil {
+			return Binding{}, false
 		}
-	}
-	if first == nil || first.Target == nil {
-		return Binding{}, false
-	}
-	if u.Value == nil {
-		return Binding{}, false
-	}
-	ends := [2]BindingEnd{
-		{Path: FeaturePath(first.Target), Expr: first.Target, Multiplicity: first.Multiplicity},
-		{Path: FeaturePath(u.Value), Expr: u.Value, Multiplicity: u.ValueMultiplicity},
+		target := end.AttachedTarget()
+		if target == nil {
+			return Binding{}, false
+		}
+		if _, failed := target.(*ast.ErrorNode); failed {
+			return Binding{}, false
+		}
+		ends[i] = BindingEnd{Path: FeaturePath(target), Expr: target, Multiplicity: end.Multiplicity}
 	}
 	return Binding{Ends: ends, Scope: scope, Decl: u}, true
 }

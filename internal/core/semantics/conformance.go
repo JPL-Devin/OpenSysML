@@ -252,31 +252,13 @@ func (m *Model) declaredConcernTarget(sym *symbols.Symbol) *symbols.Symbol {
 		default:
 			continue
 		}
-		target := m.resolveRelTarget(sym, rel)
+		target := m.relationshipTarget(sym, rel)
 		if target == nil || target == sym || !isConcern(target) {
 			continue
 		}
 		return target
 	}
 	return nil
-}
-
-// resolveRelTarget resolves the element a relationship of sym names.
-func (m *Model) resolveRelTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
-	qn := ast.AsQualifiedName(rel.Target)
-	if qn == nil {
-		return nil
-	}
-	target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
-	if !ok {
-		return nil
-	}
-	if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-		target = resolved
-	} else {
-		return nil
-	}
-	return target
 }
 
 // viewFraming is one framing a view makes, and the view that declared it.
@@ -413,7 +395,7 @@ func (m *Model) unresolvedConcernRef(fc *symbols.Symbol) string {
 		default:
 			continue
 		}
-		if m.resolveRelTarget(fc, rel) == nil {
+		if m.relationshipTarget(fc, rel) == nil {
 			return quoteRef(refName(rel.Target))
 		}
 	}
@@ -528,7 +510,7 @@ func (m *Model) declaredSubjectType(subject *symbols.Symbol) *symbols.Symbol {
 		if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
 			continue
 		}
-		return m.resolveRelTarget(subject, rel)
+		return m.relationshipTarget(subject, rel)
 	}
 	return nil
 }
@@ -566,7 +548,7 @@ func (m *Model) partyBinding(party, owner *symbols.Symbol) PartyBinding {
 		default:
 			continue
 		}
-		if target := m.resolveRelTarget(party, rel); target != nil {
+		if target := m.relationshipTarget(party, rel); target != nil {
 			out.Bound = target
 			return out
 		}
@@ -591,7 +573,7 @@ func (m *Model) SatisfyTarget(sat *symbols.Symbol) (*symbols.Symbol, string) {
 		default:
 			continue
 		}
-		return m.resolveRelTarget(sat, rel), refName(rel.Target)
+		return m.relationshipTarget(sat, rel), refName(rel.Target)
 	}
 	return nil, ""
 }

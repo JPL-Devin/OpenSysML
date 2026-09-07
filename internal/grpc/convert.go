@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -289,9 +290,23 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	case runtime.ValComplex:
 		return &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(val.Complex())}}
-	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity:
-		// The wire Value has no Array or Vector arm, so one is named unsupported
-		// rather than flattened into a sequence that loses its shape or unit.
+	case runtime.ValArray:
+		return &pb.Value{Kind: &pb.Value_Array{Array: arrayToProto(rt, val.Array(), idx)}}
+	case runtime.ValVector:
+		return &pb.Value{Kind: &pb.Value_Vector{Vector: vectorToProto(val.Vector())}}
+	case runtime.ValVectorQuantity:
+		pvq := vectorQuantityToProto(val.VectorQuantity())
+		if pvq == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: vector quantity with a non-numeric component"}}
+		}
+		return &pb.Value{Kind: &pb.Value_VectorQuantity{VectorQuantity: pvq}}
+	case runtime.ValMeasurementRef:
+		return &pb.Value{Kind: &pb.Value_MeasurementRef{MeasurementRef: MeasurementRefToProto(val.MeasurementRef())}}
+	case runtime.ValTensorQuantity:
+		// No wire arm carries dimensions above one with a unit per component.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
+	case runtime.ValCoordinateFrame, runtime.ValCoordinateTransformation:
+		// No wire arm carries a frame's axes or a transformation's placement.
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
@@ -323,6 +338,49 @@ func ComplexToProto(z complex128) *pb.Complex {
 // message is zero, as every proto3 default is.
 func ProtoToComplex(pc *pb.Complex) complex128 {
 	return complex(pc.GetReal(), pc.GetImaginary())
+}
+
+// arrayToProto marshals an array as its dimensions and its row-major elements,
+// each converted as any value is.
+func arrayToProto(rt *runtime.Context, a *runtime.Array, idx *symbols.Index) *pb.Array {
+	pa := &pb.Array{Dimensions: slices.Clone(a.Dimensions)}
+	for _, elem := range a.Elements {
+		pa.Elements = append(pa.Elements, ValueToProtoIn(rt, elem, idx))
+	}
+	return pa
+}
+
+// vectorToProto marshals a vector's components, Integer and Real kept apart.
+func vectorToProto(v *runtime.Vector) *pb.Vector {
+	pv := &pb.Vector{}
+	for _, elem := range v.Elements {
+		pv.Components = append(pv.Components, ValueToProto(runtime.Value{Kind: runtime.ValConst, Const: elem}, nil))
+	}
+	return pv
+}
+
+// vectorQuantityToProto marshals a vector quantity as one Quantity per axis;
+// nil if a component's magnitude is not a number.
+func vectorQuantityToProto(vq *runtime.VectorQuantity) *pb.VectorQuantity {
+	pvq := &pb.VectorQuantity{}
+	for i := range vq.Num {
+		pq := QuantityToProto(&runtime.Quantity{Num: vq.Num[i], Unit: vq.Units[i]})
+		if pq == nil {
+			return nil
+		}
+		pvq.Components = append(pvq.Components, pq)
+	}
+	return pvq
+}
+
+// MeasurementRefToProto marshals a bare reference: the unit as written, what it
+// reduces to, and the one declaration it names when it names one.
+func MeasurementRefToProto(ref *runtime.MeasurementRef) *pb.MeasurementRef {
+	pm := &pb.MeasurementRef{Unit: ref.Unit.Text, UnitTerm: unitTermToProto(ref.Unit.Term)}
+	if decl := ref.Declaration(); decl != nil {
+		pm.UnitId = symbols.FQNOf(decl)
+	}
+	return pm
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -369,9 +427,13 @@ var (
 	// measurement unit, which nothing is measured in.
 	ErrNotAMeasurementUnit = errors.New("not a measurement unit")
 
-	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
-	// undefined, which no magnitude can be converted through.
+	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero, undefined
+	// or not finite, which no magnitude can be converted through.
 	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
+
+	// ErrUnitExponentUnusable reports a unit factor raised to a power that is not
+	// a finite number, which measures no dimension.
+	ErrUnitExponentUnusable = errors.New("unit exponent is not a finite number")
 
 	// ErrUnitNotReduced reports a named unit sent without its reduction, over
 	// which alone commensurability is decided.
@@ -383,22 +445,95 @@ var (
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
 	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
+
+	// ErrArrayDimensionNotPositive reports an array sent with a dimension of no
+	// extent, which Collections::Array declares as dimensions: Positive.
+	ErrArrayDimensionNotPositive = errors.New("array dimension is not positive")
+
+	// ErrArrayShapeMismatch reports an array whose elements do not fill its
+	// dimensions, so no row-major reading of them has that shape.
+	ErrArrayShapeMismatch = errors.New("array elements do not fill its dimensions")
+
+	// ErrVectorComponentNotNumeric reports a vector component sent as something
+	// other than an Integer or a Real, which a numerical vector has none of.
+	ErrVectorComponentNotNumeric = errors.New("vector component is not a number")
+
+	// ErrVectorQuantityEmpty reports a vector quantity of no components, whose
+	// num is Number[1..*].
+	ErrVectorQuantityEmpty = errors.New("vector quantity has no components")
+
+	// ErrMeasurementRefNeedsIndex reports a measurement reference converted from
+	// the wire without the model's symbols, which its units resolve against.
+	ErrMeasurementRefNeedsIndex = errors.New("a measurement reference needs the model's symbols to be converted from the wire")
+
+	// ErrMeasurementRefEmpty reports a measurement reference sent with no unit
+	// text, no reduction and no declaration: nothing it could refer to.
+	ErrMeasurementRefEmpty = errors.New("measurement reference names no unit")
+
+	// ErrUnknownMeasurementUnit reports a unit_id the model does not declare
+	// uniquely, so no reference can name the declaration.
+	ErrUnknownMeasurementUnit = errors.New("unknown measurement unit")
+
+	// ErrUnitIDMismatch reports a unit_id whose declaration the unit text sent
+	// with it does not spell, so the two name different units.
+	ErrUnitIDMismatch = errors.New("unit as written does not spell unit_id")
 )
 
-// ValueCarriesComplex reports whether a value, or any element of a sequence,
-// is a Complex: the kind the complex_values capability governs.
+// ValueCarriesMeasurementRef reports whether a value, or any value nested in
+// it, is a MeasurementRef: the kind measurement_refs governs.
+func ValueCarriesMeasurementRef(pv *pb.Value) bool {
+	return valueCarries(pv, func(v *pb.Value) bool {
+		_, ok := v.GetKind().(*pb.Value_MeasurementRef)
+		return ok
+	})
+}
+
+// ValueCarriesComplex reports whether a value, or any value nested in it, is a
+// Complex: the kind the complex_values capability governs.
 func ValueCarriesComplex(pv *pb.Value) bool {
-	switch k := pv.GetKind().(type) {
-	case *pb.Value_Complex:
+	return valueCarries(pv, func(v *pb.Value) bool {
+		_, ok := v.GetKind().(*pb.Value_Complex)
+		return ok
+	})
+}
+
+// ValueCarriesStructured reports whether a value, or any value nested in it, is
+// an Array, a Vector or a VectorQuantity: the kinds structured_values governs.
+func ValueCarriesStructured(pv *pb.Value) bool {
+	return valueCarries(pv, func(v *pb.Value) bool {
+		switch v.GetKind().(type) {
+		case *pb.Value_Array, *pb.Value_Vector, *pb.Value_VectorQuantity:
+			return true
+		}
+		return false
+	})
+}
+
+// valueCarries reports whether is holds of pv or of any value nested in it.
+func valueCarries(pv *pb.Value, is func(*pb.Value) bool) bool {
+	if is(pv) {
 		return true
-	case *pb.Value_Sequence:
-		for _, elem := range k.Sequence.GetElements() {
-			if ValueCarriesComplex(elem) {
-				return true
-			}
+	}
+	for _, nested := range nestedValues(pv) {
+		if valueCarries(nested, is) {
+			return true
 		}
 	}
 	return false
+}
+
+// nestedValues lists the Values a value holds directly: a sequence's elements,
+// an array's elements and a vector's components.
+func nestedValues(pv *pb.Value) []*pb.Value {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Sequence:
+		return k.Sequence.GetElements()
+	case *pb.Value_Array:
+		return k.Array.GetElements()
+	case *pb.Value_Vector:
+		return k.Vector.GetComponents()
+	}
+	return nil
 }
 
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
@@ -427,9 +562,103 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 			}
 		}
 		return runtime.NewSequenceValue(seq), nil
+	case *pb.Value_Array:
+		return protoToArray(k.Array, idx, sem)
+	case *pb.Value_Vector:
+		return protoToVector(k.Vector)
+	case *pb.Value_VectorQuantity:
+		return protoToVectorQuantity(k.VectorQuantity, idx, sem)
+	case *pb.Value_MeasurementRef:
+		return ProtoToMeasurementRef(k.MeasurementRef, idx, sem)
 	default:
 		return protoToScalar(pv), nil
 	}
+}
+
+// protoToArray rebuilds an array, refusing a shape its elements do not fill
+// rather than reading them under some other shape.
+func protoToArray(pa *pb.Array, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	dimensions := slices.Clone(pa.GetDimensions())
+	if err := CheckArrayShape(dimensions, len(pa.GetElements())); err != nil {
+		return runtime.Value{}, err
+	}
+	elements := make([]runtime.Value, 0, len(pa.GetElements()))
+	for _, elem := range pa.GetElements() {
+		val, err := ProtoToValueIn(elem, idx, sem)
+		if err != nil {
+			return runtime.Value{}, err
+		}
+		elements = append(elements, val)
+	}
+	return runtime.NewArrayValue(dimensions, elements), nil
+}
+
+// CheckArrayShape reports whether count elements fill dimensions in row-major
+// order: every dimension positive and their product (one for rank 0) count.
+func CheckArrayShape(dimensions []int64, count int) error {
+	size := int64(1)
+	for i, d := range dimensions {
+		if d < 1 {
+			return fmt.Errorf("%w: dimension %d is %d", ErrArrayDimensionNotPositive, i+1, d)
+		}
+		if size > math.MaxInt64/d {
+			return fmt.Errorf("%w: flattenedSize of dimensions %v exceeds the Integer range", ErrArrayShapeMismatch, dimensions)
+		}
+		size *= d
+	}
+	if size != int64(count) {
+		return fmt.Errorf("%w: %d elements under dimensions %v (flattenedSize %d)",
+			ErrArrayShapeMismatch, count, dimensions, size)
+	}
+	return nil
+}
+
+// protoToVector rebuilds a vector from components that are each an Integer or
+// a Real, refusing any other arm rather than reading it as a number.
+func protoToVector(pv *pb.Vector) (runtime.Value, error) {
+	components := make([]semantics.Value, 0, len(pv.GetComponents()))
+	for i, comp := range pv.GetComponents() {
+		num, err := protoToNumber(comp)
+		if err != nil {
+			return runtime.Value{}, fmt.Errorf("%w: component %d", err, i+1)
+		}
+		components = append(components, num)
+	}
+	return runtime.NewVectorValue(components), nil
+}
+
+// protoToNumber is the Integer or Real a value holds; any other arm is an error.
+func protoToNumber(pv *pb.Value) (semantics.Value, error) {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_IntValue:
+		return semantics.Value{Kind: semantics.ValInt, Int: k.IntValue}, nil
+	case *pb.Value_RealValue:
+		return semantics.Value{Kind: semantics.ValReal, Real: k.RealValue}, nil
+	}
+	return semantics.Value{}, ErrVectorComponentNotNumeric
+}
+
+// protoToVectorQuantity rebuilds a vector quantity axis by axis, each
+// component read exactly as a scalar Quantity is.
+func protoToVectorQuantity(pvq *pb.VectorQuantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if len(pvq.GetComponents()) == 0 {
+		return runtime.Value{}, ErrVectorQuantityEmpty
+	}
+	num := make([]semantics.Value, 0, len(pvq.GetComponents()))
+	units := make([]runtime.Unit, 0, len(pvq.GetComponents()))
+	for i, comp := range pvq.GetComponents() {
+		if comp == nil {
+			return runtime.Value{}, fmt.Errorf("%w: component %d carries no quantity", ErrVectorComponentNotNumeric, i+1)
+		}
+		val, err := ProtoToQuantity(comp, idx, sem)
+		if err != nil {
+			return runtime.Value{}, fmt.Errorf("component %d: %w", i+1, err)
+		}
+		q := val.Quantity()
+		num = append(num, q.Num)
+		units = append(units, q.Unit)
+	}
+	return runtime.NewVectorQuantityValue(num, units), nil
 }
 
 // ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
@@ -471,6 +700,90 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	}
 	unit := runtime.Unit{Text: text, Product: product, Term: term}
 	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
+}
+
+// ProtoToMeasurementRef rebuilds a bare reference from the wire: by the
+// declaration unit_id names, checked against the unit text and reduction sent
+// with it, or else by the unit text read exactly as a Quantity's is.
+func ProtoToMeasurementRef(pm *pb.MeasurementRef, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if pm.GetUnit() == "" && pm.GetUnitTerm() == nil && pm.GetUnitId() == "" {
+		return runtime.Value{}, ErrMeasurementRefEmpty
+	}
+	if (idx == nil || sem == nil) && (len(pm.GetUnitTerm().GetFactors()) > 0 || pm.GetUnitId() != "") {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrMeasurementRefNeedsIndex, pm.GetUnit())
+	}
+	if pm.GetUnitTerm() == nil {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnitNotReduced, cmp.Or(pm.GetUnit(), pm.GetUnitId()))
+	}
+	term, err := protoToUnitTerm(pm.GetUnitTerm(), idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	if pm.GetUnitId() != "" {
+		return declaredMeasurementRef(pm.GetUnitId(), pm.GetUnit(), term, idx, sem)
+	}
+	product, term, err := unitProductOfText(pm.GetUnit(), term, idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	text := pm.GetUnit()
+	if text == "" && !product.IsEmpty() {
+		text = product.String()
+	}
+	return runtime.NewMeasurementRefValue(runtime.Unit{Text: text, Product: product, Term: term}), nil
+}
+
+// declaredMeasurementRef is the reference to the unit declaration id names, refused
+// unless it is a measurement unit reducing to term that text, if any, spells.
+func declaredMeasurementRef(id, text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	matches := idx.LookupQualified(id)
+	if len(matches) != 1 {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnknownMeasurementUnit, id)
+	}
+	unit, ok := sem.MeasurementUnitOf(matches[0])
+	if !ok {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, id)
+	}
+	declared, err := sem.UnitTermOf(unit)
+	if err != nil {
+		return runtime.Value{}, fmt.Errorf("%w: %s: %w", ErrUnitNotReduced, id, err)
+	}
+	if !reducesTo(declared, term) {
+		return runtime.Value{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s", ErrUnitTextMismatch, id, declared, term)
+	}
+	if text != "" && !textSpellsUnit(text, unit, idx, sem) {
+		return runtime.Value{}, fmt.Errorf("%w: %s is not %s", ErrUnitIDMismatch, text, id)
+	}
+	return runtime.DeclaredMeasurementRef(unit, text, declared), nil
+}
+
+// textSpellsUnit reports whether unit text is one name for the declaration unit:
+// its symbol or name (`km`, `kilometre`), or a qualified name resolving to it.
+func textSpellsUnit(text string, unit *symbols.Symbol, idx *symbols.Index, sem *semantics.Model) bool {
+	p := parser.New(source.New("<unit>", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return false
+	}
+	spellings := []string{lexer.NameText(unit.Name)}
+	if unit.ShortName != "" {
+		spellings = append(spellings, lexer.NameText(unit.ShortName))
+	}
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if len(qn.Parts) == 1 {
+			return unit, slices.Contains(spellings, lexer.NameText(qn.Parts[0].Text))
+		}
+		matches := idx.LookupQualified(semantics.QualifiedNameText(qn))
+		if len(matches) != 1 {
+			return nil, false
+		}
+		sym, ok := sem.MeasurementUnitOf(matches[0])
+		return unit, ok && sym == unit
+	})
+	if err != nil || len(product.Powers) != 1 {
+		return false
+	}
+	return product.Powers[0].Unit == unit && product.Powers[0].Exponent == 1
 }
 
 // unitProductOfText reads unit text as a product of the model's units that reduces
@@ -756,7 +1069,7 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
 	}
 	scale := semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}
-	if scale.IsZero() {
+	if scale.IsZero() || !finite(scale.Num) || !finite(scale.Den) {
 		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, scale.Num, scale.Den)
 	}
 	term := semantics.UnitTerm{Scale: scale}
@@ -779,8 +1092,19 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 			Exponent: f.GetExponent(),
 		})
 	}
-	return term.Normalized(), nil
+	// Checked after normalization: repeated factors sum their exponents, and
+	// finite powers can overflow in that sum.
+	term = term.Normalized()
+	for _, f := range term.Factors {
+		if !finite(f.Exponent) {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s**%g", ErrUnitExponentUnusable, symbols.FQNOf(f.Unit), f.Exponent)
+		}
+	}
+	return term, nil
 }
+
+// finite reports whether a wire double is a number a unit term can carry.
+func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
 
 // enumLiteralFromProto resolves a literal against the model, since a literal is
 // the declaration it names: one the model does not declare has no identity here.
@@ -915,13 +1239,11 @@ func instanceRefs(fv *pb.FeatureValue) []int64 {
 	var ids []int64
 	var collect func(*pb.Value)
 	collect = func(v *pb.Value) {
-		switch k := v.GetKind().(type) {
-		case *pb.Value_InstanceId:
+		if k, ok := v.GetKind().(*pb.Value_InstanceId); ok {
 			ids = append(ids, k.InstanceId)
-		case *pb.Value_Sequence:
-			for _, elem := range k.Sequence.GetElements() {
-				collect(elem)
-			}
+		}
+		for _, nested := range nestedValues(v) {
+			collect(nested)
 		}
 	}
 	if fv.Value != nil {

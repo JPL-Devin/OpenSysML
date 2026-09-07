@@ -34,11 +34,13 @@ func TestW7BKeywordFirstRelationshipClassifiesAsItsMetaclass(t *testing.T) {
 		class B;
 		specialization Gen subclassifier A specializes B;
 		conjugation Conj conjugate A conjugates B;
+		disjoining Dis disjoint A from B;
 	`
 	m, root := stdlibModelWithDoc(t, "w7b_metaclass.kerml", src)
 	for _, tc := range []struct{ name, metaclass string }{
 		{"Gen", "Specialization"},
 		{"Conj", "Conjugation"},
+		{"Dis", "Disjoining"},
 	} {
 		elem := sym(t, root, tc.name)
 		got := m.metaclassOf(elem)

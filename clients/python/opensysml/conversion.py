@@ -23,6 +23,9 @@ FORMAT_TURTLE = "ttl"
 #: told apart without repeating the alias table.
 _TURTLE_NAMES = frozenset({"ttl", "turtle", "rdf"})
 
+#: Names of the SysML v1 input the service migrates, an experimental mapping too.
+_XMI_NAMES = frozenset({"xmi", "mdzip"})
+
 #: The fallback wording, for a service too old to send its own notice: the RDF
 #: mapping's status is a property of the mapping, not of the service.
 EXPERIMENTAL_NOTICE = (
@@ -43,16 +46,21 @@ class ExperimentalFeatureWarning(UserWarning):
 
 
 def is_experimental(from_format, to_format):
-    """Report whether a conversion between these formats uses the RDF mapping.
+    """Report whether a conversion between these formats uses an experimental mapping.
 
     Args:
         from_format (str): Format read, as the service reports it.
         to_format (str): Format written, as the service reports it.
 
     Returns:
-        bool: True when either side is RDF. Notation to notation is stable.
+        bool: True when either side is RDF or the input is SysML v1 XMI, which
+        is migrated. Notation to notation is stable.
     """
-    return from_format in _TURTLE_NAMES or to_format in _TURTLE_NAMES
+    return (
+        from_format in _TURTLE_NAMES
+        or to_format in _TURTLE_NAMES
+        or from_format in _XMI_NAMES
+    )
 
 
 #: Extensions the exporter's FormatOfPath knows, so a path names the same format

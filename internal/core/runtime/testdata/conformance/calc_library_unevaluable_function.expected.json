@@ -1,5 +1,5 @@
 {
   "libraries": true,
   "type": "calc",
-  "error": "library function is not evaluable: TensorCalculations::isZeroTensorQuantity"
+  "error": "library function is not evaluable: TensorCalculations::tensorTensorMult: the declaration `calc def tensorTensorMult { in : TensorQuantityValue[1]; in : TensorQuantityValue[1]; return : TensorQuantityValue[1]; }` states only the parameter and result types"
 }

@@ -7,7 +7,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use opensysml::{Complex, Connection, Error, EvalOptions, Value};
+use opensysml::{Complex, Connection, Error, EvalOptions, Magnitude, Value, Vector};
 
 fn service_or_skip() -> Option<Connection> {
     match Connection::private() {
@@ -201,6 +201,125 @@ fn a_complex_number_is_one_value_with_both_parts() {
                 imaginary: 4.0
             }),
         ]
+    );
+}
+
+#[test]
+fn an_array_a_vector_and_a_vector_quantity_arrive_whole() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    assert!(connection.capabilities().has("structured_values"));
+    let model = match connection.parse_content(
+        "package S {
+            private import ScalarValues::*;
+            private import Collections::*;
+            private import VectorValues::*;
+            private import VectorFunctions::*;
+            private import Quantities::*;
+            private import SI::*;
+            attribute grid : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+            attribute v : CartesianVectorValue = VectorOf((3.0, 4.0));
+            attribute d : VectorQuantityValue = VectorOf((3.0, 4.0)) [m];
+        }",
+        &Default::default(),
+    ) {
+        Ok(model) => model,
+        Err(error) => panic!("parse failed: {error}"),
+    };
+    let eval = |expr: &str| match model.evaluate(expr, &EvalOptions::default()) {
+        Ok(evaluation) => evaluation.result,
+        Err(error) => panic!("evaluating {expr} failed: {error}"),
+    };
+
+    let Value::Array(grid) = eval("S::grid") else {
+        panic!("S::grid should be an array");
+    };
+    assert_eq!(grid.dimensions(), [2, 3]);
+    assert_eq!(
+        grid.elements(),
+        (1..=6).map(Value::Integer).collect::<Vec<_>>()
+    );
+    assert_eq!(grid.get(&[1, 2]), Some(&Value::Integer(6)));
+
+    assert_eq!(
+        eval("S::v"),
+        Value::Vector(Vector {
+            components: vec![Magnitude::Real(3.0), Magnitude::Real(4.0)],
+        })
+    );
+
+    let Value::VectorQuantity(d) = eval("S::d") else {
+        panic!("S::d should be a vector quantity");
+    };
+    assert_eq!(d.unit(), Some("m"));
+    assert_eq!(
+        d.components()
+            .iter()
+            .map(|component| component.magnitude)
+            .collect::<Vec<_>>(),
+        [Magnitude::Real(3.0), Magnitude::Real(4.0)]
+    );
+    let term = d.components()[0]
+        .unit_term
+        .as_ref()
+        .expect("a metre reduces to itself");
+    assert_eq!(term.factors[0].unit_id, "SI::metre");
+    assert_eq!(term.factors[0].exponent, 1.0);
+}
+
+#[test]
+fn a_bare_measurement_reference_arrives_with_its_reduction_and_declaration() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    assert!(connection.capabilities().has("measurement_refs"));
+    let model = match connection.parse_content(
+        "package M {
+            private import ScalarValues::*;
+            private import Quantities::*;
+            private import MeasurementReferences::*;
+            private import SI::*;
+            attribute q : ISQ::LengthValue = 3 [km];
+            attribute u : MeasurementUnit = m;
+            attribute speed = m / s;
+        }",
+        &Default::default(),
+    ) {
+        Ok(model) => model,
+        Err(error) => panic!("parse failed: {error}"),
+    };
+    let eval = |expr: &str| match model.evaluate(expr, &EvalOptions::default()) {
+        Ok(evaluation) => evaluation.result,
+        Err(error) => panic!("evaluating {expr} failed: {error}"),
+    };
+
+    let Value::MeasurementRef(u) = eval("M::u") else {
+        panic!("M::u should be a measurement reference");
+    };
+    assert_eq!(u.unit, "m");
+    assert_eq!(u.unit_id.as_deref(), Some("SI::metre"));
+    assert_eq!(u.unit_term.factors[0].unit_id, "SI::metre");
+
+    let Value::MeasurementRef(km) = eval("M::q.mRef") else {
+        panic!("M::q.mRef should be a measurement reference");
+    };
+    assert_eq!(km.unit, "km");
+    assert_eq!(km.unit_id.as_deref(), Some("SI::kilometre"));
+    assert_eq!(km.unit_term.scale_num, 1000.0);
+
+    let Value::MeasurementRef(speed) = eval("M::speed") else {
+        panic!("M::speed should be a measurement reference");
+    };
+    assert_eq!(speed.unit_id, None);
+    assert_eq!(
+        speed
+            .unit_term
+            .factors
+            .iter()
+            .map(|factor| (factor.unit_id.as_str(), factor.exponent))
+            .collect::<Vec<_>>(),
+        [("SI::metre", 1.0), ("SI::second", -1.0)]
     );
 }
 

@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::budget",
+  "outputs": {},
+  "verdicts": {
+    "affordable": "not satisfied",
+    "priced": "satisfied"
+  }
+}

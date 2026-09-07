@@ -25,7 +25,7 @@ func (cc *constraintChecker) checkW10BRedefinition(sym *symbols.Symbol) {
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
-		redefined := cc.resolveRelationshipTarget(sym, rel.Target)
+		redefined := cc.resolveRelationshipTarget(sym, rel)
 		if redefined == nil || redefined == sym || !isUsageKind(redefined.Kind) {
 			continue
 		}

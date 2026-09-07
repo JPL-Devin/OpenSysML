@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::picked",
+  "verdicts": {
+    "obj": "not satisfied"
+  }
+}

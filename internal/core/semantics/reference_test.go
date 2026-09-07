@@ -301,3 +301,93 @@ func TestPerformOfInheritedAction(t *testing.T) {
 		t.Errorf("LookupMember(perform, \"generateTorque\") not found")
 	}
 }
+
+// A `require q { ... }` member references q like a reference subsetting: it
+// takes q's name and inherits q's members (SysML 7.19.3, KerML 7.3.4.5).
+func TestRequireReferenceInheritsTheReferencedMembers(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		requirement def RD { constraint q : Q { attribute inner; } }
+		requirement r : RD { require q { attribute inner2; } }
+	}`)
+
+	pkg := sym(t, root, "P")
+	rd := sym(t, pkg.Scope, "RD")
+	r := sym(t, pkg.Scope, "r")
+	q := sym(t, rd.Scope, "q")
+
+	requires := r.Scope.LookupLocalAll("q")
+	if len(requires) != 1 {
+		t.Fatalf("require members bound as q = %d, want 1", len(requires))
+	}
+	if got := m.ReferencedFeature(requires[0]); got != q {
+		t.Fatalf("ReferencedFeature(require) = %v, want RD::q", got)
+	}
+	for _, name := range []string{"inner", "inner2"} {
+		if _, ok := m.LookupMember(requires[0], name); !ok {
+			t.Errorf("LookupMember(require, %q) not found", name)
+		}
+	}
+}
+
+// The body-less `require q;` and `assume q;` are the same reference form: the
+// member is named q, references RD::q and inherits its members.
+func TestBareRequireAndAssumeReferenceTheNamedConstraint(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		requirement def RD { constraint q : Q { attribute inner; } }
+		requirement r : RD { require q; }
+		requirement r2 : RD { assume q; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	q := sym(t, sym(t, pkg.Scope, "RD").Scope, "q")
+	for _, owner := range []string{"r", "r2"} {
+		r := sym(t, pkg.Scope, owner)
+		refs := r.Scope.LookupLocalAll("q")
+		if len(refs) != 1 || refs[0].Naming != symbols.NamedByReference {
+			t.Fatalf("%s: members bound as q = %v, want one named by reference", owner, refs)
+		}
+		if got := m.ReferencedFeature(refs[0]); got != q {
+			t.Errorf("%s: ReferencedFeature = %v, want RD::q", owner, got)
+		}
+		if got, ok := m.LookupMember(r, "q"); !ok || got != refs[0] {
+			t.Errorf("%s: LookupMember(q) = %v, want the reference member", owner, got)
+		}
+		if _, ok := m.LookupMember(refs[0], "inner"); !ok {
+			t.Errorf("%s: LookupMember(require, inner) not found", owner)
+		}
+	}
+}
+
+func TestChainedRequireAndAssumeReferenceTheChainsLastFeature(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		constraint def Q;
+		part def H { constraint rule : Q { attribute inner; } }
+		part h : H;
+		requirement r { require h.rule; }
+		requirement r2 { assume h.rule; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	rule := sym(t, sym(t, pkg.Scope, "H").Scope, "rule")
+	for _, owner := range []string{"r", "r2"} {
+		r := sym(t, pkg.Scope, owner)
+		refs := r.Scope.LookupLocalAll("rule")
+		if len(refs) != 1 || refs[0].Naming != symbols.NamedByReference {
+			t.Fatalf("%s: members bound as rule = %v, want one named by reference", owner, refs)
+		}
+		if got := m.ReferencedFeature(refs[0]); got != rule {
+			t.Errorf("%s: ReferencedFeature = %v, want H::rule", owner, got)
+		}
+		if got, ok := m.LookupMember(r, "rule"); !ok || got != refs[0] {
+			t.Errorf("%s: LookupMember(rule) = %v, want the reference member", owner, got)
+		}
+		if _, ok := m.LookupMember(refs[0], "inner"); !ok {
+			t.Errorf("%s: LookupMember(require, inner) not found", owner)
+		}
+		if got := r.Scope.LookupLocalAll("h"); len(got) != 0 {
+			t.Errorf("%s: the chain's head h is bound as a member: %v", owner, got)
+		}
+	}
+}

@@ -206,3 +206,16 @@ type CastExpr struct {
 	TargetType   *QualifiedName
 	Multiplicity *Multiplicity
 }
+
+// IsExpression reports whether node is an expression rather than a declaration
+// or a statement: what a calculation body ends in as its result.
+func IsExpression(node Node) bool {
+	switch node.(type) {
+	case *LiteralBool, *LiteralString, *LiteralInteger, *LiteralReal, *LiteralInfinity,
+		*NullExpr, *FeatureReference, *FeatureChainExpr, *OperatorExpr, *IndexExpr,
+		*InvocationExpr, *CollectExpr, *SelectExpr, *ConstructorExpr, *BodyExpr,
+		*SequenceExpr, *MetadataAccessExpr, *CastExpr:
+		return true
+	}
+	return false
+}

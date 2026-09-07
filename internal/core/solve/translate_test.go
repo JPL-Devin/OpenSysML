@@ -337,6 +337,52 @@ func TestAllOrNothing(t *testing.T) {
 	}
 }
 
+// TestConflictingResultExpressionRefusal: a second result expression, stated over
+// an inherited one or inherited twice, refuses translation and the refusal names
+// the document and position of the offending body or declaration, not that of
+// the supertype it inherits from.
+func TestConflictingResultExpressionRefusal(t *testing.T) {
+	ctx, idx := fixtureDocuments(t,
+		document{"base.sysml", `
+			package base {
+				private import ScalarValues::*;
+				constraint def Base { in x : Real; x > 0.0 }
+				constraint def Other { in x : Real; x > 2.0 }
+			}
+		`},
+		document{"sub.sysml", `
+			package sub {
+				private import base::*;
+				constraint def Stated :> Base { x > 1.0 }
+				constraint def Inherited :> Base, Other;
+			}
+		`})
+	cases := []struct {
+		name     string
+		location string
+	}{
+		{"sub::Stated", "sub.sysml:4:37"},
+		{"sub::Inherited", "sub.sysml:5:5"},
+	}
+	for _, tc := range cases {
+		sym := symbolNamed(t, idx, tc.name)
+		q, err := Constraint(ctx, sym, sym.OwnerScope)
+		if q != nil || err == nil {
+			t.Fatalf("translating %s: query %v, err %v; want a refusal", tc.name, q, err)
+		}
+		var refused *NotTranslatableError
+		if !errors.As(err, &refused) {
+			t.Fatalf("translating %s: %v is not a *NotTranslatableError", tc.name, err)
+		}
+		if refused.Construct != "conflicting result expression" {
+			t.Errorf("%s: refusal names %q", tc.name, refused.Construct)
+		}
+		if refused.File != "sub.sysml" || refused.Location != tc.location {
+			t.Errorf("%s: refusal records file %q at %q, want sub.sysml at %s", tc.name, refused.File, refused.Location, tc.location)
+		}
+	}
+}
+
 // TestRefusals: each construct outside the subset refuses rather than being
 // silently dropped, naming what refused.
 func TestRefusals(t *testing.T) {

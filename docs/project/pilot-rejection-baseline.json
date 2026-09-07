@@ -27,17 +27,17 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 236,
-        "digest": "sha256:6a7596e59041e40e42d58c8e751eeaa67e6709c816930e4b14d2c3e683517a5c"
+        "files": 285,
+        "digest": "sha256:bab393e696cd3c90cd76aac6af4c08b39ef9ec7da03210fa6cdc2ee0d345051c"
       }
     ],
-    "recorded": "2026-09-05"
+    "recorded": "2026-09-06"
   },
   "totals": {
-    "cases": 236,
-    "bothReject": 228,
+    "cases": 285,
+    "bothReject": 276,
     "pilotOnlyRejects": 0,
-    "oursOnlyRejects": 8,
+    "oursOnlyRejects": 9,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
@@ -56,18 +56,18 @@
     },
     {
       "source": "grammar",
-      "cases": 87,
-      "bothReject": 87,
+      "cases": 91,
+      "bothReject": 91,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "semantic",
-      "cases": 106,
-      "bothReject": 98,
+      "cases": 151,
+      "bothReject": 142,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     {
@@ -778,6 +778,24 @@
       "pilotErrors": 2
     },
     {
+      "path": "grammar/g69-calc-body-second-result-expression.sysml",
+      "source": "grammar",
+      "rule": "a calculation body ends in at most one result expression; a second bare expression is a second result expression (SysML.xtext:1951 CalculationBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "grammar/g70-name-before-usage-keyword.sysml",
+      "source": "grammar",
+      "rule": "a usage's name follows its kind keyword; a name written ahead of the keyword begins no body item (SysML.xtext:752 AttributeUsage, :598 UsageDeclaration, :516 DefinitionBodyItem).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -947,6 +965,24 @@
       "bucket": "both-reject",
       "oursErrors": 3,
       "pilotErrors": 4
+    },
+    {
+      "path": "grammar/k20-function-body-second-result-expression.kerml",
+      "source": "grammar",
+      "rule": "a function body ends in at most one result expression; a second bare expression is a second result expression (KerML.xtext:933 FunctionBodyPart, KerML 8.3.4.8 Function::result).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "grammar/k21-name-before-feature-keyword.kerml",
+      "source": "grammar",
+      "rule": "a feature's name follows its kind keyword; a name written ahead of the keyword begins no body element (KerML.xtext:538 Feature, :548 FeatureDeclaration, :364 TypeBody).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/cn01-fork-two-incoming.sysml",
@@ -1432,6 +1468,285 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/k43-expr-typed-by-function-states-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "an expression typed by a function that owns a result expression may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k44-expr-referencing-expr-states-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "an expression reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k45-conjugated-feature-without-type.kerml",
+      "source": "semantic",
+      "rule": "a feature must have at least one type, and a feature conjugating a class takes no type from it and owns no implicit subsetting to supply one (KerML 8.3.3.3.4 validateFeatureHasType; pilot validateFeatureHasType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k46-conjugated-structure-not-an-object.kerml",
+      "source": "semantic",
+      "rule": "a classifier must directly or indirectly specialize its kind's default supertype, and a structure conjugating a plain class reaches Base::Anything but not Objects::Object (KerML 8.3.4.3.2 checkStructureSpecialization; pilot validateClassifierDefaultSupertype).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k47-feature-chain-through-alias-to-another-type.kerml",
+      "source": "semantic",
+      "rule": "each chaining feature of a feature chain must be featured within the one before it, and an alias reaching another type's feature is not (KerML 8.3.3.3.4 validateFeatureChainingFeatureConformance; pilot validateFeatureChainingFeatureConformance).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 4,
+      "pilotErrors": 4
+    },
+    {
+      "path": "semantic/k48-annotating-element-annotates-itself.kerml",
+      "source": "semantic",
+      "rule": "an annotation owned by its annotated element must own its annotating element, so an annotating element cannot annotate itself (KerML 8.3.2.3.3 validateAnnotationAnnotatedElementOwnership; pilot validateAnnotationAnnotatedElementOwnership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 9
+    },
+    {
+      "path": "semantic/k49-binding-connector-with-three-ends.kerml",
+      "source": "semantic",
+      "rule": "a binding connector is binary, so its ends must reference exactly two features (KerML 8.3.4.7.2 validateBindingConnectorIsBinary; pilot validateBindingConnectorIsBinary).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k50-inline-cross-feature-also-crosses.kerml",
+      "source": "semantic",
+      "rule": "an end that declares its cross feature inline (`end [m] ...`) cannot also cross another feature (KerML 8.3.3.3 Feature::crossFeature is single-valued; pilot checkFeatureCrossingSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k51-return-parameter-in-classifier.kerml",
+      "source": "semantic",
+      "rule": "a return parameter membership must be owned by a function or expression (KerML 8.3.4.7 validateReturnParameterMembershipOwningType; pilot validateReturnParameterMembershipOwningType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k52-two-conjugators.kerml",
+      "source": "semantic",
+      "rule": "a type may have at most one conjugator (KerML 8.3.3.1 validateTypeAtMostOneConjugator; pilot validateTypeAtMostOneConjugator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k53-boolean-expression-subsets-datatype.kerml",
+      "source": "semantic",
+      "rule": "a boolean expression is a feature, so what it subsets must be a feature, not a data type (KerML 8.3.3.3 Subsetting::subsettedFeature is typed Feature and 8.3.4.8 BooleanExpression is an Expression, hence a Step and a Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'D'` — because that position admits only Features, exactly as for `feature f :\u003e D`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k54-cross-feature-typed-narrower-than-end.kerml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k55-subtype-specific-is-package.kerml",
+      "source": "semantic",
+      "rule": "the specific of a keyword-first specialization must be a type, not a package (KerML 8.3.3.1 Specialization::specific is typed Type; pilot fails to link the Specialization — `Couldn't resolve reference to Type 'Q'` — because that position admits only Types).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k56-subtype-general-is-package.kerml",
+      "source": "semantic",
+      "rule": "the general of a keyword-first specialization must be a type, not a package (KerML 8.3.3.1 Specialization::general is typed Type; pilot fails to link the Specialization — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k57-subclassifier-subclassifier-is-package.kerml",
+      "source": "semantic",
+      "rule": "the subclassifier of a keyword-first subclassification must be a classifier, not a package (KerML 8.3.3.2 Subclassification::subclassifier is typed Classifier; pilot fails to link the Subclassification — `Couldn't resolve reference to Classifier 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k58-subclassifier-superclassifier-is-feature.kerml",
+      "source": "semantic",
+      "rule": "the superclassifier of a keyword-first subclassification must be a classifier, not a feature (KerML 8.3.3.2 Subclassification::superclassifier is typed Classifier and 8.3.4 a Feature is not a Classifier; pilot fails to link the Subclassification — `Couldn't resolve reference to Classifier 'f'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k59-typing-typed-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the typed feature of a keyword-first feature typing must be a feature, not a package (KerML 8.3.4.4 FeatureTyping::typedFeature is typed Feature; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k60-typing-typed-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the typed feature of a keyword-first feature typing must be a feature, not a class (KerML 8.3.4.4 FeatureTyping::typedFeature is typed Feature; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k61-typing-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the type of a keyword-first feature typing must be a type, not a package (KerML 8.3.4.4 FeatureTyping::type is typed Type; pilot fails to link the FeatureTyping — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k62-subset-subsetting-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the subsetting feature of a keyword-first subsetting must be a feature, not a package (KerML 8.3.4.5 Subsetting::subsettingFeature is typed Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k63-subset-subsetted-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the subsetted feature of a keyword-first subsetting must be a feature, not a class (KerML 8.3.4.5 Subsetting::subsettedFeature is typed Feature; pilot fails to link the Subsetting — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k64-redefinition-redefining-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the redefining feature of a keyword-first redefinition must be a feature, not a class (KerML 8.3.4.6 Redefinition::redefiningFeature is typed Feature; pilot fails to link the Redefinition — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 4
+    },
+    {
+      "path": "semantic/k65-redefinition-redefined-feature-is-package.kerml",
+      "source": "semantic",
+      "rule": "the redefined feature of a keyword-first redefinition must be a feature, not a package (KerML 8.3.4.6 Redefinition::redefinedFeature is typed Feature; pilot fails to link the Redefinition — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k66-conjugate-conjugated-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the conjugated type of a keyword-first conjugation must be a type, not a package (KerML 8.3.3.4 Conjugation::conjugatedType is typed Type; pilot fails to link the Conjugation — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k67-conjugate-original-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the original type of a keyword-first conjugation must be a type, not a package (KerML 8.3.3.4 Conjugation::originalType is typed Type; pilot fails to link the Conjugation — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k68-inverse-feature-inverted-is-package.kerml",
+      "source": "semantic",
+      "rule": "the inverted feature of a keyword-first feature inverting must be a feature, not a package (KerML 8.3.4.8 FeatureInverting::featureInverted is typed Feature; pilot fails to link the FeatureInverting — `Couldn't resolve reference to Feature 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k69-inverse-inverting-feature-is-class.kerml",
+      "source": "semantic",
+      "rule": "the inverting feature of a keyword-first feature inverting must be a feature, not a class (KerML 8.3.4.8 FeatureInverting::invertingFeature is typed Feature; pilot fails to link the FeatureInverting — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k70-disjoint-type-disjoined-is-package.kerml",
+      "source": "semantic",
+      "rule": "the disjoined type of a keyword-first disjoining must be a type, not a package (KerML 8.3.3.3 Disjoining::typeDisjoined is typed Type; pilot fails to link the Disjoining — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k71-disjoint-disjoining-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the disjoining type of a keyword-first disjoining must be a type, not a package (KerML 8.3.3.3 Disjoining::disjoiningType is typed Type; pilot fails to link the Disjoining — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k72-featuring-feature-of-type-is-class.kerml",
+      "source": "semantic",
+      "rule": "the featured feature of a type featuring must be a feature, not a class (KerML 8.3.4.3 TypeFeaturing::featureOfType is typed Feature; pilot fails to link the TypeFeaturing — `Couldn't resolve reference to Feature 'C'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k73-featuring-featuring-type-is-package.kerml",
+      "source": "semantic",
+      "rule": "the featuring type of a type featuring must be a type, not a package (KerML 8.3.4.3 TypeFeaturing::featuringType is typed Type; pilot fails to link the TypeFeaturing — `Couldn't resolve reference to Type 'Q'`).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
       "source": "semantic",
       "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
@@ -1891,6 +2206,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/s52-variant-port-composite.sysml",
+      "source": "semantic",
+      "rule": "A port usage whose owning type is not a port definition or port usage must be referential, and a variant has no owning type (SysML 7.12 Ports; pilot validatePortUsageIsReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -1898,6 +2222,126 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s81-guarded-succession-guard-not-boolean.sysml",
+      "source": "semantic",
+      "rule": "the guard of a guarded succession in an action body must be a Boolean expression (SysML v2 8.3.18.8; pilot validateTransitionFeatureMembershipGuardExpression, vacuous at the pin once the library types the guard, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: transition guard must be Boolean, found String"
+      ]
+    },
+    {
+      "path": "semantic/s82-constraint-specialization-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint definition specializing one that owns a result expression may not state a second (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s83-redefined-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a redefining constraint usage inherits the redefined constraint's result expression and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s84-referencing-constraint-usage-states-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a constraint usage reference-subsetting one that owns a result expression inherits it and may not state a second (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s85-viewpoint-inherits-second-result-expression.sysml",
+      "source": "semantic",
+      "rule": "a viewpoint is a requirement and so a constraint, and may not inherit result expressions from two generals (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s86-end-with-direction.sysml",
+      "source": "semantic",
+      "rule": "an end feature cannot have a direction (KerML 8.3.3.3.4 validateFeatureEndNoDirection; pilot validateFeatureEndNoDirection).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/s87-end-derived-or-abstract.sysml",
+      "source": "semantic",
+      "rule": "an end feature cannot be derived, abstract, composite or portion (KerML 8.3.3.3.4 validateFeatureEndNotDerivedAbstractCompositeOrPortion; pilot validateFeatureEndNotDerivedAbstractCompositeOrPortion).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/s88-cross-feature-typed-narrower-than-end.sysml",
+      "source": "semantic",
+      "rule": "a cross feature declared ahead of its end's kind keyword must have the same type as the end, not a subtype of it (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s89-case-def-inherits-two-objectives.sysml",
+      "source": "semantic",
+      "rule": "A case definition inheriting an objective from each of two generals has two objectives (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s90-requirement-def-inherits-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A requirement definition inheriting a subject from each of two generals has two subjects (SysML 7.20 Requirements; pilot validateRequirementDefinitionOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s91-case-references-second-objective.sysml",
+      "source": "semantic",
+      "rule": "A case usage inherits an objective from its definition and another from the case it reference-subsets, so it has two (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s92-requirement-references-second-subject.sysml",
+      "source": "semantic",
+      "rule": "A requirement usage inherits a subject from its definition and another from the requirement it reference-subsets, so it has two (SysML 7.20 Requirements; pilot validateRequirementUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s93-assert-through-owner-of-unnamed-assertion.sysml",
+      "source": "semantic",
+      "rule": "An unnamed assertion derives no member name from the feature it references, so a qualified reference through its owner still reaches the referenced non-constraint (KerML 7.3.4.5 Feature names; SysML 7.19 Constraints; pilot validateAssertConstraintUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 4
     },
     {
       "path": "semantic/send-constructor-non-type.sysml",
@@ -2274,10 +2718,10 @@
       }
     ],
     "totals": {
-      "cases": 236,
-      "bothReject": 228,
+      "cases": 285,
+      "bothReject": 276,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 8,
+      "oursOnlyRejects": 9,
       "bothAccept": 0
     },
     "note": "no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied corpus is byte-identical to the published one and both figures coincide"

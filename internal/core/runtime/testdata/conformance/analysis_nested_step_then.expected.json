@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::pipeline",
+  "outputs": {
+    "total": {"type": "Real", "value": 16.0}
+  }
+}

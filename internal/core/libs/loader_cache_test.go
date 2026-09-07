@@ -343,7 +343,7 @@ func snapshotIndex(idx *symbols.Index) indexView {
 	for _, fqn := range view.fqns {
 		var descs []string
 		for _, sym := range idx.LookupQualified(fqn) {
-			descs = append(descs, describeSymbol(sym, idx, r, model))
+			descs = append(descs, describeSymbol(sym, idx, model))
 		}
 		sort.Strings(descs)
 		view.entries[fqn] = fmt.Sprintf("%v imports=%v", descs, idx.WildcardImportsOf(fqn))
@@ -353,8 +353,8 @@ func snapshotIndex(idx *symbols.Index) indexView {
 
 // describeSymbol renders the state a symbol contributes to name resolution,
 // which its declaration states on every load path.
-func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) string {
-	supers, _ := supersOf(sym, idx, r, model)
+func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, model *semantics.Model) string {
+	supers, _ := supersOf(sym, idx, model)
 	sort.Strings(supers)
 	return fmt.Sprintf("kind=%v short=%q supers=%v alias=%q name=%q",
 		sym.Kind, sym.ShortName, supers, aliasTargetOf(sym.Decl), sym.Name)

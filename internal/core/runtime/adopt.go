@@ -207,13 +207,13 @@ func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
 	return !object
 }
 
-// carriedObject is the object a value denotes or, for an array or vector, was read
-// from: what a carry-over takes along with the value.
+// carriedObject is the object a value denotes or holds (an array's or vector's
+// source, a tensor's reference): what a carry-over takes along with the value.
 func carriedObject(v Value) (int64, bool) {
 	if id, ok := v.Object(); ok {
 		return id, true
 	}
-	id := backingObject(v)
+	id := keptObject(v)
 	return id, id != 0
 }
 
@@ -223,25 +223,68 @@ func (ctx *Context) connectorFeatureValue(s *FeatureValue) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
 
-// walkValue visits a value and everything nested in it.
+// HoldsObject reports whether the value is, or carries, an object of this context:
+// one a reader can inspect, so the value is only meaningful in the context it came from.
+func (ctx *Context) HoldsObject(val Value) bool {
+	found := false
+	ctx.walkValue(val, func(v Value) {
+		if _, ok := carriedObject(v); ok {
+			found = true
+		}
+	})
+	return found
+}
+
+// walkValue visits a value and everything nested in it: the elements of a
+// collection, the frame a vector is over, the frames and placement values a
+// transformation relates.
 func (ctx *Context) walkValue(val Value, visit func(Value)) {
+	ctx.walkValueFrom(val, visit, make(map[*CoordinateFrame]bool))
+}
+
+// walkValueFrom is walkValue past the frames already visited, which a frame's own
+// transformation names again as its target.
+func (ctx *Context) walkValueFrom(val Value, visit func(Value), seen map[*CoordinateFrame]bool) {
 	visit(val)
 	switch val.Kind {
+	case ValVectorQuantity:
+		if frame := val.VectorQuantity().Frame; frame != nil && !seen[frame] {
+			ctx.walkValueFrom(NewCoordinateFrameValue(frame), visit, seen)
+		}
+	case ValCoordinateFrame:
+		frame := val.CoordinateFrame()
+		if seen[frame] {
+			return
+		}
+		seen[frame] = true
+		if frame.Transformation != nil {
+			ctx.walkValueFrom(NewCoordinateTransformationValue(frame.Transformation), visit, seen)
+		}
+	case ValCoordinateTransformation:
+		t := val.CoordinateTransformation()
+		for _, frame := range []*CoordinateFrame{t.Source, t.Target} {
+			if frame != nil && !seen[frame] {
+				ctx.walkValueFrom(NewCoordinateFrameValue(frame), visit, seen)
+			}
+		}
+		for _, held := range t.placementValues() {
+			ctx.walkValueFrom(held, visit, seen)
+		}
 	case ValSequence:
 		if val.Sequence() != nil {
 			for _, elem := range val.Sequence().Elements() {
-				ctx.walkValue(elem, visit)
+				ctx.walkValueFrom(elem, visit, seen)
 			}
 		}
 	case ValSet:
 		if val.Set() != nil {
 			for _, elem := range val.Set().Elements() {
-				ctx.walkValue(elem, visit)
+				ctx.walkValueFrom(elem, visit, seen)
 			}
 		}
 	case ValArray:
 		for _, elem := range val.Array().Elements {
-			ctx.walkValue(elem, visit)
+			ctx.walkValueFrom(elem, visit, seen)
 		}
 	}
 }
@@ -587,11 +630,129 @@ func (a *adoption) planValue(owner string, val Value) error {
 				return
 			}
 		}
+		for _, unit := range unitsOf(v) {
+			if err = a.planUnit(unit); err != nil {
+				return
+			}
+		}
+		switch v.Kind {
+		case ValCoordinateFrame:
+			err = a.planFrame(v.CoordinateFrame())
+		case ValCoordinateTransformation:
+			err = a.planTransformation(v.CoordinateTransformation())
+		}
+		if err != nil {
+			return
+		}
 		if id, ok := carriedObject(v); ok {
 			err = a.planHeld(owner, id)
 		}
 	})
 	return err
+}
+
+// unitsOf is the measurement units a quantity, reference or empty quantity
+// sequence names.
+func unitsOf(v Value) []Unit {
+	switch v.Kind {
+	case ValQuantity:
+		return []Unit{v.Quantity().Unit}
+	case ValMeasurementRef:
+		return []Unit{v.MeasurementRef().Unit}
+	case ValVectorQuantity:
+		return v.VectorQuantity().Units
+	case ValTensorQuantity:
+		return v.TensorQuantity().Units
+	case ValSequence:
+		if unit, ok := v.Sequence().ElementUnit(); ok {
+			return []Unit{unit}
+		}
+	}
+	return nil
+}
+
+// planUnit rebinds every unit declaration a unit product names, and refuses a
+// unit whose reduction the re-analysis changed (its magnitude would read wrong).
+func (a *adoption) planUnit(unit Unit) error {
+	if unit.Product.IsEmpty() {
+		return nil
+	}
+	term := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
+	for _, power := range unit.Product.Powers {
+		what := "the unit " + power.Name + " it is measured in"
+		var reduces semantics.UnitTerm
+		switch {
+		case power.Unit != nil:
+			found, err := a.rebind(power.Unit, what)
+			if err != nil {
+				return err
+			}
+			if reduces, err = a.ctx.model.UnitTermOf(found); err != nil {
+				return &AdoptError{Type: a.ctx.fqnOf(found), Reason: what + " no longer reduces: " + err.Error()}
+			}
+		case power.Reduces != nil:
+			if err := a.planTerm(*power.Reduces); err != nil {
+				return err
+			}
+			reduces = a.rewriteTerm(*power.Reduces)
+		default:
+			return nil
+		}
+		term = term.Times(reduces.Pow(power.Exponent))
+	}
+	if err := a.planTerm(unit.Term); err != nil {
+		return err
+	}
+	if was := a.rewriteTerm(unit.Term); !term.Same(was) {
+		return &AdoptError{Reason: "the unit " + unit.Product.String() + " it is measured in now reduces to " +
+			term.String() + ", not " + was.String()}
+	}
+	return nil
+}
+
+// planTerm rebinds every base unit a reduction is expressed over.
+func (a *adoption) planTerm(term semantics.UnitTerm) error {
+	for _, factor := range term.Factors {
+		if factor.Unit == nil {
+			continue
+		}
+		if _, err := a.rebind(factor.Unit, "the base unit "+factor.Unit.Name+" it reduces to"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rewriteUnit is the unit with every declaration it names rebound, in its
+// product and in its reduction alike.
+func (a *adoption) rewriteUnit(unit Unit) Unit {
+	powers := make([]semantics.UnitPower, len(unit.Product.Powers))
+	for i, power := range unit.Product.Powers {
+		if found, ok := a.rebound[power.Unit]; ok {
+			power.Unit = found
+		}
+		if power.Reduces != nil {
+			reduces := a.rewriteTerm(*power.Reduces)
+			power.Reduces = &reduces
+		}
+		powers[i] = power
+	}
+	unit.Product = semantics.UnitProduct{Powers: powers}
+	unit.Term = a.rewriteTerm(unit.Term)
+	return unit
+}
+
+// rewriteTerm is the reduction with every base unit it names rebound.
+func (a *adoption) rewriteTerm(term semantics.UnitTerm) semantics.UnitTerm {
+	factors := make([]semantics.UnitFactor, len(term.Factors))
+	for i, factor := range term.Factors {
+		if found, ok := a.rebound[factor.Unit]; ok {
+			factor.Unit = found
+		}
+		factors[i] = factor
+	}
+	term.Factors = factors
+	return term
 }
 
 func (a *adoption) planHeld(owner string, id int64) error {
@@ -603,7 +764,8 @@ func (a *adoption) planHeld(owner string, id int64) error {
 }
 
 // rebind maps a symbol of the previous context to the one declaration of the
-// same qualified name and kind here, and records it for the values that name it.
+// same qualified name and kind here — as the scope tree the caller resolves in
+// declares it — and records it for the values that name it.
 func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, error) {
 	if sym == nil {
 		return nil, &AdoptError{Reason: what + " was never resolved"}
@@ -632,6 +794,7 @@ func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, er
 	if found == nil {
 		return nil, &AdoptError{Type: fqn, Reason: what + " is no longer declared"}
 	}
+	found = a.ctx.declaredSymbol(found)
 	a.rebound[sym] = found
 	return found, nil
 }
@@ -668,6 +831,10 @@ func (a *adoption) commit() {
 			}
 			done[fv] = true
 			fv.Feature = plan.featureFor(name, fv)
+			// What fv read, and what read it, did so in the previous analysis: no edge
+			// is kept between the two, and a value derived again here lists itself anew.
+			fv.dependents = nil
+			a.ctx.forgetReads(fv)
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
 			if a.ctx.derivedFeatureValue(fv) {
@@ -757,7 +924,7 @@ func (a *adoption) restartBehaviors() ([]string, error) {
 	// A behavior writes the feature values of its own object and of the objects that
 	// one holds, so the whole carried closure forgets what the discarded run wrote.
 	for _, obj := range carried {
-		obj.forgetBehaviorWrites()
+		obj.forgetBehaviorWrites(a.ctx)
 	}
 	if err := a.ctx.restartClassifierBehaviors(objects); err != nil {
 		a.abandon()
@@ -837,6 +1004,9 @@ func (a *adoption) rewrite(val Value) Value {
 		if val.Sequence() == nil {
 			return val
 		}
+		if unit, ok := val.Sequence().ElementUnit(); ok {
+			return NewEmptySequenceOf(a.rewriteUnit(unit))
+		}
 		seq := NewSequence()
 		for _, elem := range val.Sequence().Elements() {
 			seq.Append(a.rewrite(elem))
@@ -860,6 +1030,33 @@ func (a *adoption) rewrite(val Value) Value {
 		out := NewArrayValue(arr.Dimensions, elements)
 		out.Array().Object = arr.Object
 		return out
+	case ValQuantity:
+		q := *val.Quantity()
+		q.Unit = a.rewriteUnit(q.Unit)
+		return NewQuantityValue(&q)
+	case ValMeasurementRef:
+		return NewMeasurementRefValue(a.rewriteUnit(val.MeasurementRef().Unit))
+	case ValVectorQuantity:
+		vq := val.VectorQuantity()
+		units := make([]Unit, len(vq.Units))
+		for i, unit := range vq.Units {
+			units[i] = a.rewriteUnit(unit)
+		}
+		if vq.Frame != nil {
+			return NewFramedVectorQuantityValue(vq.Num, a.rewriteFrame(vq.Frame, map[*CoordinateFrame]*CoordinateFrame{}))
+		}
+		return NewVectorQuantityValue(vq.Num, units)
+	case ValTensorQuantity:
+		tq := *val.TensorQuantity()
+		tq.Units = make([]Unit, len(tq.Units))
+		for i, unit := range val.TensorQuantity().Units {
+			tq.Units[i] = a.rewriteUnit(unit)
+		}
+		return Value{Kind: ValTensorQuantity, ref: &tq}
+	case ValCoordinateFrame:
+		return NewCoordinateFrameValue(a.rewriteFrame(val.CoordinateFrame(), map[*CoordinateFrame]*CoordinateFrame{}))
+	case ValCoordinateTransformation:
+		return NewCoordinateTransformationValue(a.rewriteTransformation(val.CoordinateTransformation(), map[*CoordinateFrame]*CoordinateFrame{}))
 	default:
 		return val
 	}

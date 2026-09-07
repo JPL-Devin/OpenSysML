@@ -27,10 +27,10 @@ func TestW12DEndCrossFeature(t *testing.T) {
 	if end.CrossFeature.Multiplicity == nil {
 		t.Error("cross feature multiplicity not recorded")
 	}
-	// The bounds stay on the end too: that is where the semantics reads an
-	// association end's multiplicity from.
-	if end.Multiplicity == nil {
-		t.Error("end multiplicity not recorded")
+	// The bounds are the cross feature's alone; the end declares no own
+	// multiplicity (semantics.UsageMultiplicityOf falls back to the cross feature's).
+	if end.Multiplicity != nil {
+		t.Error("cross feature multiplicity copied onto the end")
 	}
 }
 

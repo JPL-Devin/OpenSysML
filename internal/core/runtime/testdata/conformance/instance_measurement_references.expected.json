@@ -1,0 +1,32 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Survey",
+  "slots": {
+    "side": {"type": "Quantity", "value": 3, "unit": "km"},
+    "unit": {"type": "MeasurementRef", "unit": "m"},
+    "sideUnit": {"type": "MeasurementRef", "unit": "km"},
+    "magnitude": {"type": "Integer", "value": 3},
+    "perSecond": {"type": "MeasurementRef", "unit": "m/s"},
+    "perSecondNamed": {"type": "MeasurementRef", "unit": "'m/s'"},
+    "area": {"type": "MeasurementRef", "unit": "m**2"},
+    "areaByPower": {"type": "MeasurementRef", "unit": "m**2"},
+    "areaByCaret": {"type": "MeasurementRef", "unit": "m**2"},
+    "inMetres": {"type": "Quantity", "value": 3000.0, "unit": "m"},
+    "inCentimetres": {"type": "Quantity", "value": 300000.0, "unit": "cm"},
+    "speed": {"type": "Quantity", "value": 7.2, "unit": "'km/h'"},
+    "built": {"type": "Quantity", "value": 2.5, "unit": "km"},
+    "sameUnit": {"type": "Boolean", "value": true},
+    "otherUnit": {"type": "Boolean", "value": false},
+    "sameReduction": {"type": "Boolean", "value": true},
+    "isLengthUnit": {"type": "Boolean", "value": true},
+    "isUnit": {"type": "Boolean", "value": true},
+    "label": {"type": "String", "value": "m/s"},
+    "velocity": {"type": "VectorQuantity", "elements": [
+      {"type": "Quantity", "value": 1.0, "unit": "m"},
+      {"type": "Quantity", "value": 2.0, "unit": "m"},
+      {"type": "Quantity", "value": 3.0, "unit": "m"}
+    ]},
+    "velocityUnit": {"type": "MeasurementRef", "unit": "m"}
+  }
+}

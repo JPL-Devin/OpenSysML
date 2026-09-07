@@ -88,6 +88,37 @@ func TestBuildConnectorEndsDefineNoSymbols(t *testing.T) {
 	}
 }
 
+// A KerML binary connector is named only ahead of `from` (KerML.xtext:836):
+// `connector eng to t;` adds no second `eng`, and `a ::> eng` is the connector's member.
+func TestBuildKerMLBinaryConnectorEndsStayOutOfTheFeaturingType(t *testing.T) {
+	root := parser.New(source.New("t.kerml", []byte(`package P {
+		class T {
+			feature eng; feature t; feature u;
+			connector eng to t;
+			connector a ::> eng to t;
+			connector [0..1] eng to [1..*] u;
+			connector c from eng to t;
+		}
+	}`))).ParseFile()
+	pkg := Build(root).LookupLocalAll("P")[0].Scope
+	typ := pkg.LookupLocalAll("T")[0].Scope
+	for _, name := range []string{"eng", "t", "u", "c"} {
+		if got := len(typ.LookupLocalAll(name)); got != 1 {
+			t.Errorf("T declares %d symbols named %q, want 1", got, name)
+		}
+	}
+	if got := typ.LookupLocalAll("a"); len(got) != 0 {
+		t.Errorf("the end name a leaked into T as %v", got)
+	}
+	var ends []*Symbol
+	for _, child := range typ.Children() {
+		ends = append(ends, child.LookupLocalAll("a")...)
+	}
+	if len(ends) != 1 || ends[0].Kind != SymbolConnectorEnd {
+		t.Fatalf("connector scopes declare %v for the end a, want one connectorEnd", ends)
+	}
+}
+
 // An entry/do/exit action a state declares by name is a feature of that state,
 // as the standard library's StateAction relies on, so it must be a member of
 // the state's scope and not disappear into the parser's entry/do/exit wrapper.
@@ -113,5 +144,51 @@ func TestBuildNamedEntryDoExitActionsAreStateMembers(t *testing.T) {
 		if got := len(state.LookupLocalAll(name)); got != 1 {
 			t.Errorf("StateAction declares %d symbols named %q, want 1", got, name)
 		}
+	}
+}
+
+// A binding's named ends (`bind e1 ::> a = e2 references b;`) are end features
+// of the binding, so they are its members and not the featuring type's; the
+// bare ends and the referenced features declare nothing new (SysML.xtext:1000).
+func TestBuildBindingConnectorEndsAreTheBindingsMembers(t *testing.T) {
+	root := parser.New(source.New("t.sysml", []byte(`package P {
+		part def T {
+			attribute a; attribute b;
+			bind a = b;
+			bind e1 ::> a = e2 references b;
+			binding bb bind [1] e3 ::> a = b;
+		}
+	}`))).ParseFile()
+	pkg := Build(root).LookupLocalAll("P")[0].Scope
+	typ := pkg.LookupLocalAll("T")[0].Scope
+	for _, name := range []string{"a", "b", "bb"} {
+		if got := len(typ.LookupLocalAll(name)); got != 1 {
+			t.Errorf("T declares %d symbols named %q, want 1", got, name)
+		}
+	}
+	for _, name := range []string{"e1", "e2", "e3"} {
+		if got := typ.LookupLocalAll(name); len(got) != 0 {
+			t.Errorf("the end name %s leaked into T as %v", name, got)
+		}
+	}
+	ends := map[string]int{}
+	for _, child := range typ.Children() {
+		for _, name := range []string{"e1", "e2", "e3"} {
+			for _, sym := range child.LookupLocalAll(name) {
+				if sym.Kind != SymbolConnectorEnd {
+					t.Errorf("the end %s is a %v, want a connectorEnd", name, sym.Kind)
+				}
+				ends[name]++
+			}
+		}
+	}
+	for _, name := range []string{"e1", "e2", "e3"} {
+		if ends[name] != 1 {
+			t.Errorf("binding scopes declare %d ends named %s, want 1", ends[name], name)
+		}
+	}
+	bb := typ.LookupLocalAll("bb")[0]
+	if got := bb.Scope.LookupLocalAll("e3"); len(got) != 1 || got[0].Kind != SymbolConnectorEnd {
+		t.Errorf("bb declares %v for its end e3, want one connectorEnd", got)
 	}
 }

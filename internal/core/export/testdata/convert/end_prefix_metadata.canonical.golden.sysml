@@ -7,7 +7,7 @@ package EndPrefixMetadata {
         end #original r1 : Req1;
         end #derive r1_1 : Req1_1;
         end #derive r1_2 : Req1_1;
-        end ref cause : Req1[*];
+        end [*] ref cause : Req1;
         end ref attribute effect : Req1_1[*];
     }
     part context {

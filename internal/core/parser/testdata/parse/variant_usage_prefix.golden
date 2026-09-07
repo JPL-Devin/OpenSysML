@@ -1,0 +1,46 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="PD"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="M"))
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="Q"
+          (Membership visibility="default"
+            (Usage kind="port" name="p1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=PD
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="vp" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+              (Relationship kind="typing" target=PD
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="port" name="a" ref=true direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="port" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="port" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true end=true
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="port" name="d" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="port" name="e" ref=true direction="none" composite=false derived=true ordered=false nonunique=false variant=true
+                  (PrefixMetadata type="M")
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="port" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true snapshot=true
+                  (Relationship kind="typing" target=PD
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="occurrence" name="g" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true timeslice=true))
+              (Membership visibility="default"
+                (Usage kind="part" name="p1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true keyword="variant")))))))))

@@ -84,7 +84,7 @@ int main(void) {
 		if !sc.Scan() {
 			t.Fatalf("output ended after %d of %d values", i, len(values))
 		}
-		if got, want := strings.TrimSpace(sc.Text()), runtime.FormatReal(f); got != want {
+		if got, want := strings.TrimSpace(sc.Text()), semantics.FormatReal(f); got != want {
 			mismatches++
 			if mismatches <= 10 {
 				t.Errorf("%016x: C prints %s, FormatReal %s", math.Float64bits(f), got, want)
@@ -155,8 +155,8 @@ int main(int argc, char **argv) {
 			t.Errorf("%s under %s: %v", text, locale, err)
 			continue
 		}
-		if got := strings.TrimSpace(string(out)); got != runtime.FormatReal(want) {
-			t.Errorf("%s under %s prints %s, want %s", text, locale, got, runtime.FormatReal(want))
+		if got := strings.TrimSpace(string(out)); got != semantics.FormatReal(want) {
+			t.Errorf("%s under %s prints %s, want %s", text, locale, got, semantics.FormatReal(want))
 		}
 	}
 	for _, tc := range []struct {
