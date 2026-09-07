@@ -17,9 +17,9 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 	if ec.model == nil || !commensurabilityRequired(e.Operator) || len(e.Operands) != 2 {
 		return
 	}
-	// A comparison reads an operand stating no measurement (`length > 0`) in the
-	// other's unit, as a binding does; a sum's result must carry one dimension.
-	if comparesOperands(e.Operator) && (statesNoMeasurement(e.Operands[0]) || statesNoMeasurement(e.Operands[1])) {
+	// A bare zero is the null quantity of every dimension, so a comparison reads
+	// it in the other operand's unit (`length > 0`), as evaluation does.
+	if comparesOperands(e.Operator) && (ec.isBareZero(scope, e.Operands[0]) || ec.isBareZero(scope, e.Operands[1])) {
 		return
 	}
 	lhs, ok := ec.model.DimensionOfExpr(scope, e.Operands[0])
@@ -110,6 +110,13 @@ func statesNoMeasurement(element ast.Node) bool {
 		return len(n.Operands) > 0
 	}
 	return false
+}
+
+// isBareZero reports an operand folding to zero and naming no unit: a literal
+// or constant arithmetic such as `1 - 1`.
+func (ec *exprChecker) isBareZero(scope *symbols.Scope, element ast.Node) bool {
+	q, ok := ec.model.EvalQuantity(scope, element)
+	return ok && q.Unit.None() && q.Num.IsNumeric() && q.Num.AsReal() == 0
 }
 
 // commensurabilityRequired reports whether an operator only relates operands of

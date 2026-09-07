@@ -230,7 +230,10 @@ func NegateQuantity(q Quantity) (Quantity, error) {
 // CompareMagnitudes orders two commensurable quantities: -1, 0 or 1. Integer
 // magnitudes over whole scale ratios compare exactly, so neighbours above 2^53
 // stay distinct; otherwise the right one converts to the left unit as a float64.
+// A bare zero is the null quantity of every dimension, so `length > 0` reads it
+// in the other operand's unit.
 func CompareMagnitudes(left, right Quantity) (int, error) {
+	left, right = adoptZeroUnit(left, right)
 	if l, r, ok := exactMagnitudes(left, right); ok {
 		return l.Cmp(r), nil
 	}
@@ -269,6 +272,22 @@ func exactMagnitude(magnitude int64, scale Scale) (*big.Rat, bool) {
 	}
 	m := new(big.Rat).SetInt64(magnitude)
 	return m.Mul(m, num.Quo(num, den)), true
+}
+
+// adoptZeroUnit gives a zero naming no unit the unit of the other operand.
+func adoptZeroUnit(left, right Quantity) (Quantity, Quantity) {
+	switch {
+	case isBareZero(left):
+		left.Unit = right.Unit
+	case isBareZero(right):
+		right.Unit = left.Unit
+	}
+	return left, right
+}
+
+// isBareZero reports a zero magnitude naming no unit.
+func isBareZero(q Quantity) bool {
+	return q.Unit.None() && q.Num.IsNumeric() && q.Num.AsReal() == 0
 }
 
 // CompareQuantities orders two quantities, converting the right one into the

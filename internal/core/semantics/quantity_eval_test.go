@@ -262,6 +262,47 @@ func TestIncommensurableQuantitiesAreTypedErrors(t *testing.T) {
 	}
 }
 
+// TestBareZeroComparesInTheQuantitysUnit: a bare zero is the null quantity of
+// every dimension in a comparison, while a non-zero bare number, a sum with
+// zero and a zero naming another unit stay incommensurable.
+func TestBareZeroComparesInTheQuantitysUnit(t *testing.T) {
+	m, idx := quantityFixture(t)
+	q := func(expr string) semantics.Quantity { return fold(t, m, idx, expr) }
+	holds := []struct {
+		op          ast.OperatorKind
+		left, right string
+		want        bool
+	}{
+		{ast.OpGt, "1 [m]", "0", true},
+		{ast.OpLt, "0", "1 [m]", true},
+		{ast.OpGe, "0 [m]", "0.0", true},
+		{ast.OpLe, "1 [m]", "0", false},
+		{ast.OpEq, "0 [kg]", "0", true},
+		{ast.OpNeq, "-0", "1 [kg]", true},
+	}
+	for _, c := range holds {
+		got, err := semantics.QuantityBinary(c.op, q(c.left), q(c.right))
+		if err != nil || got.Num.Kind != semantics.ValBool || got.Num.Bool != c.want {
+			t.Errorf("%s %v %s = %v, %v; want %v", c.left, c.op, c.right, got.Num, err, c.want)
+		}
+	}
+	fails := []struct {
+		op          ast.OperatorKind
+		left, right string
+	}{
+		{ast.OpGt, "1 [m]", "1"},
+		{ast.OpEq, "1", "1 [m]"},
+		{ast.OpAdd, "1 [m]", "0"},
+		{ast.OpLt, "0 [kg]", "1 [m]"},
+		{ast.OpEq, "0 [m]", "0 [kg]"},
+	}
+	for _, c := range fails {
+		if _, err := semantics.QuantityBinary(c.op, q(c.left), q(c.right)); !errors.Is(err, semantics.ErrIncommensurableUnits) {
+			t.Errorf("%s %v %s: err = %v, want ErrIncommensurableUnits", c.left, c.op, c.right, err)
+		}
+	}
+}
+
 // TestQuantityArithmeticFailures: a zero divisor and an Integer overflow are
 // typed errors, never a silent infinity or wrap-around.
 func TestQuantityArithmeticFailures(t *testing.T) {
