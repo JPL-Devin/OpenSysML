@@ -592,28 +592,36 @@ const suppliedSubjectModel = `
 			subject pair : Ship[2];
 			require constraint { sum(pair.hullMass) < 8000.0 }
 		}
+		requirement def OneOfPairLimit :> PairLimit { subject pair : Ship[1] :>> pair; }
+		requirement def BoundPairLimit {
+			subject pair : Ship[2] = (ship, heavy);
+			require constraint { sum(pair.hullMass) < 8000.0 }
+		}
+		requirement def OneOfBoundPairLimit :> BoundPairLimit { subject pair : Ship[1] :>> pair; }
 		requirement laden : LadenLimit;
 		requirement subLaden : SubLadenLimit;
 		requirement pairLimit : PairLimit;
+		requirement oneOfPair : OneOfPairLimit;
+		requirement boundPair : BoundPairLimit;
+		requirement oneOfBoundPair : OneOfBoundPairLimit;
 		part context {
 			assert satisfy laden by ship;
 			assert satisfy laden by heavy;
 			assert satisfy laden by buoy;
 			assert satisfy subLaden by buoy;
 			assert satisfy pairLimit by ship;
+			assert satisfy oneOfPair by ship;
 		}
 	}
 `
 
-// TestSuppliedSubjectIsHeldToItsDeclaration pins that the object a satisfaction supplies with `by`
-// is held to the subject's declaration as an expression's value is: classified by its type (Tanker's
-// cargo answers), refused as a type mismatch where it cannot be, or as a multiplicity violation
-// where one object is too few, the redefined subject's declaration included.
+// TestSuppliedSubjectIsHeldToItsDeclaration pins that the object a satisfaction supplies with `by` is
+// held to the subject's effective declaration: classified, or refused on type or multiplicity.
 func TestSuppliedSubjectIsHeldToItsDeclaration(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, suppliedSubjectModel))
 	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
-	if len(assertions) != 5 {
-		t.Fatalf("found %d satisfaction assertions, want 5", len(assertions))
+	if len(assertions) != 6 {
+		t.Fatalf("found %d satisfaction assertions, want 6", len(assertions))
 	}
 	want := []struct {
 		err   error
@@ -624,6 +632,7 @@ func TestSuppliedSubjectIsHeldToItsDeclaration(t *testing.T) {
 		{ErrTypeMismatch, []string{"satisfy laden by buoy: subject", "is not a Tanker"}},
 		{ErrTypeMismatch, []string{"satisfy subLaden by buoy: subject", "is not a Tanker"}},
 		{ErrMultiplicityViolation, []string{"satisfy pairLimit by ship: subject", "1 value(s) bound to a feature with multiplicity lower bound 2"}},
+		{nil, nil},
 	}
 	for i, a := range assertions {
 		_, err := ctx.EvaluateSatisfaction(a)
@@ -636,6 +645,111 @@ func TestSuppliedSubjectIsHeldToItsDeclaration(t *testing.T) {
 				t.Errorf("%s: error %q does not say %q", a.Text(), err, part)
 			}
 		}
+	}
+}
+
+// TestInheritedBindingIsHeldToTheRedefiningDeclaration pins that the value an inherited subject
+// binds is held to the declaration redefining it: two Ships satisfy `BoundPairLimit` and are refused
+// by `OneOfBoundPairLimit`, whose `subject pair : Ship[1] :>> pair` supersedes the `[2]`.
+func TestInheritedBindingIsHeldToTheRedefiningDeclaration(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, suppliedSubjectModel))
+	if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, "test::boundPair"), nil); err != nil {
+		t.Fatalf("boundPair: %v, want satisfied", err)
+	}
+	_, err := ctx.EvaluateRequirement(oneSymbol(t, idx, "test::oneOfBoundPair"), nil)
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("oneOfBoundPair: error = %v, want ErrMultiplicityViolation", err)
+	}
+	for _, part := range []string{"requirement oneOfBoundPair: subject binding", "2 value(s) bound to a feature with multiplicity upper bound 1"} {
+		if !strings.Contains(err.Error(), part) {
+			t.Errorf("oneOfBoundPair: error %q does not say %q", err, part)
+		}
+	}
+}
+
+const transactionalBindingModel = `
+	package test {
+		private import ScalarValues::*;
+		part def Ship { attribute hullMass : Real; }
+		part def Tanker :> Ship { attribute cargo : Real = 100.0; }
+		part def Pilot;
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part pilot : Pilot;
+
+		requirement def PilotedLimit {
+			subject t : Tanker;
+			actor pilots : Pilot[2];
+			require constraint { t.hullMass + t.cargo < 2000.0 }
+		}
+		requirement def LadenLimit {
+			subject t : Tanker;
+			require constraint { t.hullMass + t.cargo < 2000.0 }
+		}
+		requirement piloted : PilotedLimit { actor :>> pilots = pilot; }
+		requirement laden : LadenLimit;
+		part context {
+			assert satisfy piloted by ship;
+			assert satisfy laden by ship;
+		}
+		analysis def Check {
+			subject ship : Ship;
+			objective : PilotedLimit { subject = ship; actor :>> pilots = pilot; }
+			return picked : Ship = ship;
+		}
+		analysis check : Check { subject ship = test::ship; }
+	}
+`
+
+// TestFailedBindingLeavesNoClassification pins that member binding is one transaction: a refused
+// actor binding undoes the subject's classification and the object it made; the subject alone holds.
+func TestFailedBindingLeavesNoClassification(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, transactionalBindingModel))
+	tanker, shipUsage, pilotUsage := oneSymbol(t, idx, "test::Tanker"), oneSymbol(t, idx, "test::ship"), oneSymbol(t, idx, "test::pilot")
+	// objectOf is the object last made for usage: each evaluation materializes its own.
+	objectOf := func(usage *symbols.Symbol) *Instance {
+		var latest *Instance
+		for _, inst := range ctx.instances {
+			if inst.Type == usage && (latest == nil || inst.ID > latest.ID) {
+				latest = inst
+			}
+		}
+		return latest
+	}
+	untouched := func(when string) {
+		t.Helper()
+		ship := objectOf(shipUsage)
+		if ship == nil {
+			t.Fatalf("%s: no object for test::ship", when)
+		}
+		if ctx.instanceConforms(ship, tanker) {
+			t.Errorf("%s: the Ship is held as a Tanker (%v)", when, ship.classifiers)
+		}
+		if pilot := objectOf(pilotUsage); pilot != nil {
+			t.Errorf("%s: the Pilot the refused actor binding made is kept (%d)", when, pilot.ID)
+		}
+	}
+
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 2 {
+		t.Fatalf("found %d satisfaction assertions, want 2", len(assertions))
+	}
+	_, err := ctx.EvaluateSatisfaction(assertions[0])
+	if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "actor binding") {
+		t.Fatalf("satisfy piloted by ship: error = %v, want the actor's multiplicity violation", err)
+	}
+	untouched("after the satisfaction")
+
+	verdict := objectiveVerdict(t, ctx, idx, "test::check")
+	if verdict.Status != VerdictUndecided || !strings.Contains(verdict.Detail, "actor binding") {
+		t.Fatalf("check: %s (%s), want undecided on the actor's multiplicity violation", verdict.Status, verdict.Detail)
+	}
+	untouched("after the objective")
+
+	if _, err := ctx.EvaluateSatisfaction(assertions[1]); err != nil {
+		t.Fatalf("satisfy laden by ship: %v, want satisfied", err)
+	}
+	if ship := objectOf(shipUsage); !ctx.instanceConforms(ship, tanker) {
+		t.Errorf("the Ship is not held as a Tanker after the subject alone bound it")
 	}
 }
 

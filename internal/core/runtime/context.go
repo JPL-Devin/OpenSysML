@@ -825,9 +825,10 @@ func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 // one reads it. kind and element name the checked element in messages. A non-nil
 // subject is the object supplied from outside (the `by` of a satisfaction
 // assertion): it binds every subject the members declare, whose own binding is
-// then neither evaluated nor used, held to their declaration as an expression's
-// value is. enclosing are the values bound around the
-// element (a case run's, for its objective), which the binding expressions read.
+// then neither evaluated nor used. Values are held to their member's effective
+// declaration (holdBound) in one transaction, so a refused binding leaves nothing
+// behind. enclosing are the values bound around the element (a case run's, for its
+// objective), which the binding expressions read.
 func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing frame) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
@@ -845,7 +846,15 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		ec.Push(bindings)
 		return ec
 	}
+	superseded := ctx.redefinedAmong(sym, members)
+	hold := func(member scopedMember, what string, value Value) error {
+		if memberSym := memberSymbol(member.scope, member.node); memberSym == nil || superseded[memberSym] {
+			return nil
+		}
+		return ctx.holdBound(sym, member, fmt.Sprintf("%s %s: %s", kind, element, what), value)
+	}
 
+	commit, rollback := ctx.beginJournal()
 	for _, member := range members {
 		var what string
 		var names []string
@@ -857,7 +866,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				names, isSubject = ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
+				what, names, isSubject = "subject", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
 			case ast.UsageActor:
 				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
@@ -866,7 +875,8 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		}
 		if isSubject && subject != nil {
 			value := Value{Kind: ValInstance, Instance: subject.ID}
-			if err := ctx.holdBound(sym, member, fmt.Sprintf("%s %s: subject", kind, element), value); err != nil {
+			if err := hold(member, what, value); err != nil {
+				rollback()
 				return nil, err
 			}
 			for _, name := range names {
@@ -878,6 +888,10 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 			// A redeclaration valuing nothing reads the value the feature it
 			// redefines binds, under its own names too.
 			if value, ok := boundUnder(bindings, names); ok {
+				if err := hold(member, what+" binding", value); err != nil {
+					rollback()
+					return nil, err
+				}
 				for _, name := range names {
 					bindings[name] = value
 				}
@@ -886,16 +900,35 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		}
 		value, err := evalIn(member.scope).Eval(expr)
 		if err != nil {
+			rollback()
 			return nil, fmt.Errorf("%s %s: %s binding evaluation failed: %w", kind, element, what, err)
 		}
-		if err := ctx.holdBound(sym, member, fmt.Sprintf("%s %s: %s binding", kind, element, what), value); err != nil {
+		if err := hold(member, what+" binding", value); err != nil {
+			rollback()
 			return nil, err
 		}
 		for _, name := range names {
 			bindings[name] = value
 		}
 	}
+	commit()
 	return bindings, nil
+}
+
+// redefinedAmong is the set of members of owner another of members redefines: their
+// declarations are superseded by the redefining member's, which holds the value.
+func (ctx *Context) redefinedAmong(owner *symbols.Symbol, members []scopedMember) map[*symbols.Symbol]bool {
+	superseded := make(map[*symbols.Symbol]bool)
+	for _, member := range members {
+		memberSym := memberSymbol(member.scope, member.node)
+		if memberSym == nil {
+			continue
+		}
+		for _, redefined := range ctx.redefinedFeatures(memberSym, owner) {
+			superseded[redefined] = true
+		}
+	}
+	return superseded
 }
 
 // holdBound holds val as the value of a bound member of owner: itself and the features it
