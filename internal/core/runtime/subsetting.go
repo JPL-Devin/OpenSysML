@@ -246,14 +246,15 @@ func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[st
 
 // sharedRedefinitionName returns the name in a group of names of one feature
 // whose feature value the group shares: the first name, in most-specific-first order,
-// whose own declaration writes a value, and otherwise the most specific name.
+// whose own declaration values it — by a value, or by a body valuing the features
+// of the value it inherits — and otherwise the most specific name.
 // Two names valued by one declaration are ErrConflictingRedefinition.
 func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*EffectiveFeature, names []string) (string, error) {
 	valued := ""
 	var valuedBy *symbols.Scope
 	for _, name := range names {
 		feat, ok := byName[name]
-		if !ok || feat.Symbol == nil || ctx.extractDefaultValue(feat.Symbol) == nil {
+		if !ok || feat.Symbol == nil || !ctx.declarationValues(feat) {
 			continue
 		}
 		if valued == "" {
@@ -269,6 +270,13 @@ func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*Ef
 		return valued, nil
 	}
 	return names[0], nil
+}
+
+// declarationValues reports whether a feature's own declaration values it: it
+// writes a value, or its body governs the value it inherits (`datum :>> coordinateFrame
+// { :>> mRefs = (mm, mm, mm); }` over `coordinateFrame default universal…`).
+func (ctx *Context) declarationValues(feat *EffectiveFeature) bool {
+	return ctx.extractDefaultValue(feat.Symbol) != nil || ctx.bodyGovernsInheritedValue(feat)
 }
 
 // redefinedNames returns the names of every feature of owner sym redefines,

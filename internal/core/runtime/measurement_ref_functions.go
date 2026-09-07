@@ -4,16 +4,6 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
-)
-
-// Reasons the calculations over a vector measurement reference or a coordinate
-// frame are not evaluated with: the runtime holds scalar references only.
-const (
-	noVectorMeasurementRef = "a VectorMeasurementReference is a CoordinateFrame, whose mRefs and " +
-		"basisDirections the runtime holds no value of; a scalar quantity is written `num [unit]` or `'['(num, unit)`"
-	noCoordinateFrameValue = "a CoordinateFrame is a library declaration whose origin and basisDirections " +
-		"the runtime holds no value of, so no frame is scaled by a unit"
 )
 
 // measurementRefArg reads a ScalarMeasurementReference (MeasurementUnit) parameter.
@@ -25,13 +15,27 @@ func measurementRefArg(name, param string, val Value) (*MeasurementRef, error) {
 	return val.MeasurementRef(), nil
 }
 
+// scalarReferenceArg admits a ScalarMeasurementReference: a unit, or a scale
+// read as the reference its points are on.
+func scalarReferenceArg(name, param string, val Value) (*MeasurementRef, error) {
+	if val.Kind == ValCoordinateFrame {
+		frame := val.CoordinateFrame()
+		if frame.IsScale() {
+			return &MeasurementRef{Unit: frame.Axes[0]}, nil
+		}
+		return nil, fmt.Errorf("%w: function %s parameter %q requires a ScalarMeasurementReference, got the coordinate frame %s of %d axes",
+			ErrTypeMismatch, name, param, frame, len(frame.Axes))
+	}
+	return measurementRefArg(name, param, val)
+}
+
 // quantityOf is QuantityCalculations::'[': the number `num` in the reference `mRef`.
 func quantityOf(name string, _ *Context, args []Value) (Value, error) {
 	num, err := scalarArg(name, "num", args[0])
 	if err != nil {
 		return Value{}, err
 	}
-	ref, err := measurementRefArg(name, "mRef", args[1])
+	ref, err := scalarReferenceArg(name, "mRef", args[1])
 	if err != nil {
 		return Value{}, err
 	}
@@ -39,17 +43,17 @@ func quantityOf(name string, _ *Context, args []Value) (Value, error) {
 }
 
 // convertQuantity is QuantityCalculations::ConvertQuantity: x expressed in
-// targetMRef, which must be commensurable with x's own reference.
-func convertQuantity(name string, _ *Context, args []Value) (Value, error) {
+// targetMRef, a unit commensurable with x's own reference or a scale placed on one.
+func convertQuantity(name string, ctx *Context, args []Value) (Value, error) {
 	x, err := quantityArg(name, "x", args[0])
 	if err != nil {
 		return Value{}, err
 	}
-	ref, err := measurementRefArg(name, "targetMRef", args[1])
+	target, err := ctx.conversionTarget(name, args[1])
 	if err != nil {
 		return Value{}, err
 	}
-	val, err := quantityResult(semantics.ConvertQuantity(*x, ref.Unit))
+	val, err := quantityResult(ctx.convertToReference(*x, target))
 	return val, functionError(name, err)
 }
 
@@ -79,7 +83,7 @@ func measurementRefArithmetic(op ast.OperatorKind) libraryApply {
 // measurementRefToString is MeasurementRefCalculations::ToString: the symbol
 // the reference is written by, `m` or `km/h`.
 func measurementRefToString(name string, _ *Context, args []Value) (Value, error) {
-	ref, err := measurementRefArg(name, "x", args[0])
+	ref, err := scalarReferenceArg(name, "x", args[0])
 	if err != nil {
 		return Value{}, err
 	}

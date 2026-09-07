@@ -73,7 +73,7 @@ func anythingToString(name string, _ *Context, args []Value) (Value, error) {
 			return NewStringValue("*"), nil
 		}
 		return NewStringValue(semantics.FormatConst(x.Const)), nil
-	case ValQuantity, ValEnumLiteral, ValMeasurementRef:
+	case ValQuantity, ValEnumLiteral, ValMeasurementRef, ValCoordinateFrame, ValCoordinateTransformation:
 		return NewStringValue(FormatValue(x)), nil
 	case ValComplex:
 		return Value{}, fmt.Errorf("%w: %s: no string notation for a Complex value is defined", ErrUnevaluableLibraryFunction, name)

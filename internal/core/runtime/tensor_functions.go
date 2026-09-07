@@ -19,9 +19,9 @@ const (
 	noOuterProductType   = "the declaration `calc def outer { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : VectorQuantityValue[1]; }` " +
 		"returns a VectorQuantityValue, and the outer product of two vectors is a tensor of order two, which no VectorQuantityValue is"
 	noTensorTransformation = "the declaration `calc def transform { in transformation : CoordinateTransformation; in sourceTensor : TensorQuantityValue; " +
-		"return targetTensor : TensorQuantityValue; }` has no body, and a CoordinateTransformation has no representation: the runtime " +
-		"holds a scalar measurement reference but no coordinate frame with an origin and basisDirections, and a tensor quantity " +
-		"carries a unit per component and no source frame"
+		"return targetTensor : TensorQuantityValue; }` has no body, and neither TensorCalculations nor the Kernel says how a " +
+		"CoordinateTransformation acts on a tensor's contravariant and covariant indices: the runtime transforms a vector quantity " +
+		"(VectorCalculations::transform), and a tensor quantity carries a unit per component and no source frame"
 )
 
 // noContractionConvention is the reason a tensor product with the given declaration is not evaluable.
@@ -30,9 +30,6 @@ func noContractionConvention(decl string) string {
 		"the Kernel says which indices contract or how the operands' contravariantOrder and covariantOrder combine, " +
 		"so no product is determined"
 }
-
-// tensorMRefTypeFQN is the type TensorCalculations::'[' declares its mRef parameter by.
-const tensorMRefTypeFQN = "MeasurementReferences::TensorMeasurementReference"
 
 // tensorOperand is a TensorQuantityValue argument of any order as the calculations
 // read it: a scalar quantity is one of order 0, a vector quantity of order 1.

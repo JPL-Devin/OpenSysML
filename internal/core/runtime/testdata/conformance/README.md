@@ -246,6 +246,11 @@ Supported types:
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
 - `MeasurementRef`: the `unit` a measurement reference names, and no `value`
   (`{"type": "MeasurementRef", "unit": "m**2"}`)
+- `CoordinateFrame`: the `text` a coordinate frame or measurement scale prints
+  as, its name over its axes, and no `value`
+  (`{"type": "CoordinateFrame", "text": "spatialCF [m, m, m]"}`)
+- `CoordinateTransformation`: the `text` a transformation prints as, its name
+  over the frames it relates (`{"type": "CoordinateTransformation", "text": "trs (datum → lbcf)"}`)
 - `Complex`: JSON number, the real part, with the imaginary part as `im`
   (`{"type": "Complex", "value": 0.0, "im": 1.0}`)
 - `Sequence`: the `elements` it holds, in order, instead of `value` — for a

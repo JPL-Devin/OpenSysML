@@ -386,6 +386,12 @@ func (t *translator) pinTerm(p Pin, v *Var) (*Term, string, error) {
 	case runtime.ValMeasurementRef:
 		return nil, text, t.pinRefusal(p, v, text,
 			"the term language ranges over numbers, strings and datatype literals, and "+text+" is a measurement reference")
+	case runtime.ValCoordinateFrame:
+		return nil, text, t.pinRefusal(p, v, text,
+			"the term language ranges over numbers, strings and datatype literals, and "+text+" is a coordinate frame")
+	case runtime.ValCoordinateTransformation:
+		return nil, text, t.pinRefusal(p, v, text,
+			"the term language ranges over numbers, strings and datatype literals, and "+text+" is a coordinate transformation")
 	}
 	return nil, text, t.pinRefusal(p, v, text, "a "+p.Value.Kind.String()+" has no literal in the term language")
 }
@@ -529,7 +535,8 @@ func pinText(t *translator, val runtime.Value) string {
 		return t.fqn(val.Variant())
 	case runtime.ValEnumLiteral:
 		return val.LiteralText()
-	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity, runtime.ValTensorQuantity, runtime.ValMeasurementRef:
+	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity, runtime.ValTensorQuantity, runtime.ValMeasurementRef,
+		runtime.ValCoordinateFrame, runtime.ValCoordinateTransformation:
 		return runtime.FormatValue(val)
 	default:
 		return "a " + val.Kind.String()

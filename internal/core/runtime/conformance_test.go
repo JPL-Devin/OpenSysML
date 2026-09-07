@@ -33,6 +33,9 @@ type ExpectedValue struct {
 	Unit string `json:"unit,omitempty"`
 	// Im is the imaginary part of a Complex, whose value is its real part.
 	Im *float64 `json:"im,omitempty"`
+	// Text is how a CoordinateFrame or CoordinateTransformation prints: the
+	// declaration it is over its axes (`spatialCF [m, m, m]`), or the frames it relates.
+	Text string `json:"text,omitempty"`
 	// Elements are the members a Sequence holds, in order, for a case asserting a
 	// multi-valued feature. Set it instead of value. A Vector's are its numbers, a
 	// VectorQuantity's its axes as Quantity values, an Array's or a TensorQuantity's
@@ -1246,6 +1249,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("an enumeration literal is declared by the model, so it cannot be built from a case value")
 	case "MeasurementRef":
 		t.Fatalf("a measurement reference names a unit the model declares, so it cannot be built from a case value")
+	case "CoordinateFrame", "CoordinateTransformation":
+		t.Fatalf("a %s is declared by the model, so it cannot be built from a case value", ev.Type)
 	case "Complex":
 		v, ok := ev.Value.(float64)
 		if !ok || ev.Im == nil {
@@ -1433,9 +1438,46 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		if got := actual.MeasurementRef().Unit.String(); got != expected.Unit {
 			t.Errorf("%s: unit = %q, want %q", name, got, expected.Unit)
 		}
+	case "CoordinateFrame":
+		actual = denotedObjectValue(t, ctx, name, actual)
+		if actual.Kind != ValCoordinateFrame || actual.CoordinateFrame() == nil {
+			t.Errorf("%s: type = %v, want CoordinateFrame", name, actual.Kind)
+			return
+		}
+		if got := actual.CoordinateFrame().String(); got != expected.Text {
+			t.Errorf("%s: frame = %q, want %q", name, got, expected.Text)
+		}
+	case "CoordinateTransformation":
+		actual = denotedObjectValue(t, ctx, name, actual)
+		if actual.Kind != ValCoordinateTransformation || actual.CoordinateTransformation() == nil {
+			t.Errorf("%s: type = %v, want CoordinateTransformation", name, actual.Kind)
+			return
+		}
+		if got := actual.CoordinateTransformation().String(); got != expected.Text {
+			t.Errorf("%s: transformation = %q, want %q", name, got, expected.Text)
+		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
 	}
+}
+
+// denotedObjectValue reads an object a slot holds as an expression naming the
+// slot does: a frame or transformation declaration is the value it declares.
+func denotedObjectValue(t *testing.T, ctx *Context, name string, actual Value) Value {
+	t.Helper()
+	if ctx == nil || actual.Kind != ValInstance {
+		return actual
+	}
+	inst, ok := ctx.Instance(actual.Instance)
+	if !ok {
+		return actual
+	}
+	val, err := ctx.objectValue(inst)
+	if err != nil {
+		t.Errorf("%s: reading the object it holds: %v", name, err)
+		return actual
+	}
+	return val
 }
 
 // validateElements checks the elements of a structured value one by one.

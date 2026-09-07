@@ -296,6 +296,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 		return ec.evalInvocation(n)
 	case *ast.IndexExpr:
 		return ec.evalIndexExpr(n)
+	case *ast.ConstructorExpr:
+		return ec.evalConstructor(n)
 	case *ast.BodyExpr:
 		// A body is a value closed over its environment, applied where it is called.
 		return NewExprValue(n, ec.closure()), nil
@@ -590,6 +592,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.outerFeatureValue(sym); ok {
 					return val, err
 				}
+				// A transformation's target is the frame featuring it, which its
+				// value carries and no object states.
+				if val, ok, err := ec.featuringReferenceValue(sym); ok {
+					return val, err
+				}
 				// A library feature's value comes from the feature seam, not its
 				// declared body: a warm library cache restores symbols without AST.
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
@@ -815,7 +822,7 @@ func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value
 	if err := ec.ctx.classifyHeld(sym, val); err != nil {
 		return Value{}, fmt.Errorf("%s: %w", what, err)
 	}
-	return ec.bindVariationOf(sym, val)
+	return ec.bindVariationOf(sym, ec.ctx.classifiedFrame(sym, val))
 }
 
 // occurrenceReference evaluates a name denoting one object — an occurrence or a
@@ -898,6 +905,13 @@ func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
 		return Value{}, true, err
 	}
 	value, err := ec.ctx.readFeatureValue(fv, name)
+	if err != nil {
+		return value, true, err
+	}
+	// An object the feature holds is read as what it denotes, as a chain reads it.
+	if inst, ok := ec.ctx.instances[value.Instance]; ok && value.Kind == ValInstance {
+		value, err = ec.ctx.objectValue(inst)
+	}
 	return value, true, err
 }
 
@@ -1034,10 +1048,10 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	switch value.Kind {
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
-	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity, ValQuantity, ValMeasurementRef:
-		// An array or vector read from an object keeps that object's members; any
-		// other's own features are answered from the value.
-		if inst, ok := ec.ctx.structuredObject(value); ok {
+	case ValArray, ValVector, ValVectorQuantity, ValTensorQuantity, ValQuantity, ValMeasurementRef, ValCoordinateFrame, ValCoordinateTransformation:
+		// An array or vector read from an object keeps that object's members; a
+		// frame answers its own features from the value, then from its object.
+		if inst, ok := ec.ctx.structuredObject(value); ok && isStructuredValue(&value) {
 			return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
 		}
 		member, ok, err := ec.ctx.structuredFeature(value, parts[0].Text)
@@ -1072,6 +1086,13 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
+	// A frame, scale or transformation object answers its members from the value it is.
+	if ref, isRef, err := ec.ctx.referenceValueOfObject(inst); isRef {
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(ref, parts, from)
+	}
 	// A shaped Array object answers Array's features and their redefinitions from
 	// the value; its other members stay the object's, whatever their names.
 	if arr, isArray, err := ec.ctx.arrayOfObject(inst); isArray {
@@ -1435,6 +1456,10 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		return ctx.structuredValueType(value)
 	case ValMeasurementRef:
 		return ctx.measurementRefValueType(value.MeasurementRef())
+	case ValCoordinateFrame:
+		return ctx.frameValueType(value.CoordinateFrame())
+	case ValCoordinateTransformation:
+		return ctx.transformationValueType(value.CoordinateTransformation())
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1667,6 +1692,10 @@ func arithmeticValues(op ast.OperatorKind, left, right Value, span source.Span) 
 	// A product, quotient or power of measurement references is the unit it composes.
 	if ref, ok := composeMeasurementRefs(op, left, right); ok {
 		return ref, nil
+	}
+	// A coordinate frame times or over a unit is the frame of composed axes.
+	if frame, ok, err := composeFrame(op, left, right); ok {
+		return frame, err
 	}
 
 	// A quantity carries its unit through arithmetic: a sum converts, a product
@@ -2435,6 +2464,10 @@ func valueEqual(a, b Value) bool {
 		return tensorQuantityEqual(a.TensorQuantity(), b.TensorQuantity())
 	case ValMeasurementRef:
 		return a.MeasurementRef().equal(b.MeasurementRef())
+	case ValCoordinateFrame:
+		return a.CoordinateFrame().equal(b.CoordinateFrame())
+	case ValCoordinateTransformation:
+		return a.CoordinateTransformation().equal(b.CoordinateTransformation())
 	default:
 		return false
 	}
@@ -2485,12 +2518,24 @@ func vectorQuantityEqual(a, b *VectorQuantity) bool {
 	if a.Dimension() != b.Dimension() {
 		return false
 	}
+	// Vectors are equal over one mRef only: the same frame, or none for both.
+	if !sameVectorFrame(a, b) {
+		return false
+	}
 	for i := 0; i < a.Dimension(); i++ {
 		if !valueEqual(NewQuantityValue(a.component(i)), NewQuantityValue(b.component(i))) {
 			return false
 		}
 	}
 	return true
+}
+
+// sameVectorFrame holds when both vectors are over one frame or neither is over any.
+func sameVectorFrame(a, b *VectorQuantity) bool {
+	if (a.Frame == nil) != (b.Frame == nil) {
+		return false
+	}
+	return a.Frame == nil || a.Frame.equal(b.Frame)
 }
 
 // sequenceEqual checks structural equality of sequences (element-wise).

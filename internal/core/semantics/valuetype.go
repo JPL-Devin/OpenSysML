@@ -114,7 +114,7 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 			return m.indexConformance(scope, n, want, byUnit)
 		}
 		if !byUnit {
-			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
+			return m.typeConformance(m.quantityValueType(scope, n), want)
 		}
 		return m.quantityConformance(scope, n, want)
 	case *ast.OperatorExpr:
@@ -201,6 +201,9 @@ func (m *Model) ExprResultType(scope *symbols.Scope, node ast.Node) *symbols.Sym
 		}
 		if unit := m.MeasurementRefExprType(scope, n); unit != nil {
 			return unit
+		}
+		if frame := m.CoordinateFrameExprType(scope, n); frame != nil {
+			return frame
 		}
 		return m.libSymbol(operatorResultFQN(n.Operator))
 	case *ast.IndexExpr:
@@ -507,33 +510,43 @@ func (m *Model) implicitBaseParameter(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // quantityConformance judges a magnitude paired with a measurement reference
-// (`5 [s]`), a ScalarQuantityValue. Against a quantity value type it is one of
-// that type when its reference is of the kind the type's `mRef` admits — a
-// DurationValue is written in a DurationUnit — or, when the reference is not a
-// single named one, when its dimension is the type's.
+// (`5 [s]`), a ScalarQuantityValue — or numbers paired with a coordinate frame
+// (`(1, 2, 3) [cf]`, `(1, 2, 3) [cf / s]`), a VectorQuantityValue. Against a
+// quantity value type it is one of that type when its reference is of the kind the
+// type's `mRef` admits — a DurationValue is written in a DurationUnit, a composed
+// frame is judged as `cf / s` is — or, when the reference is not a single named
+// one, when its dimension is the type's.
 func (m *Model) quantityConformance(scope *symbols.Scope, n *ast.IndexExpr, want *symbols.Symbol) Conformance {
-	quantity := m.libSymbol(fqnScalarQuantityValue)
+	quantity := m.quantityValueType(scope, n)
 	if quantity == nil {
 		return conformanceUnknown()
 	}
 	ref := m.measurementReference(scope, n.Index)
+	composed, isComposed := m.composedFrameIndex(scope, n.Index)
 	if !m.Conforms(want, quantity) {
 		c := m.typeConformance(quantity, want)
 		if ref != nil {
 			c.Found = m.describeQuantity(ref)
+		} else if isComposed {
+			c.Found = "a vector quantity in " + UnitExprText(n.Index)
 		}
 		return c
 	}
-	if ref == nil {
+	if ref == nil && !isComposed {
 		return m.dimensionConformance(scope, n, want)
 	}
-	mRef, ok := m.LookupMember(want, memberMRef)
-	if !ok {
-		return conformanceUnknown()
-	}
-	admitted := m.declaredTypes(mRef, map[*symbols.Symbol]bool{})
+	admitted := m.AdmittedMeasurementRefs(want)
 	if len(admitted) == 0 {
 		return conformanceUnknown()
+	}
+	if isComposed {
+		for _, typ := range admitted {
+			if c := m.ComposedFrameConforms(composed, typ); !c.Known || !c.Holds {
+				c.Found = "a vector quantity in " + UnitExprText(n.Index) + ", " + c.Found
+				return c
+			}
+		}
+		return Conformance{Known: true, Holds: true}
 	}
 	holds := true
 	for _, typ := range admitted {
@@ -542,9 +555,64 @@ func (m *Model) quantityConformance(scope *symbols.Scope, n *ast.IndexExpr, want
 	return Conformance{Known: true, Holds: holds, Found: m.describeQuantity(ref)}
 }
 
+// AdmittedMeasurementRefs is what a quantity value type's `mRef` is typed by: the
+// references a quantity of that type may be written in; nil where it declares none.
+func (m *Model) AdmittedMeasurementRefs(typ *symbols.Symbol) []*symbols.Symbol {
+	if m == nil || typ == nil {
+		return nil
+	}
+	mRef, ok := m.LookupMember(typ, memberMRef)
+	if !ok || mRef == nil {
+		return nil
+	}
+	return m.declaredTypes(mRef, map[*symbols.Symbol]bool{})
+}
+
+// FramedQuantityConformance judges numbers written in a coordinate frame, named or
+// composed (`(1, 2, 3) [cf]`, `(1, 2, 3) [cf / s]`), against want; false when the
+// literal's index is not a frame.
+func (m *Model) FramedQuantityConformance(scope *symbols.Scope, n *ast.IndexExpr, want *symbols.Symbol) (Conformance, bool) {
+	if m == nil || n == nil || !n.Bracket || n.Index == nil || want == nil || m.resolver == nil {
+		return conformanceUnknown(), false
+	}
+	if m.quantityValueType(scope, n) != m.libSymbol(fqnVectorQuantityValue) {
+		return conformanceUnknown(), false
+	}
+	if alias, ok := m.resolver.ResolveAliasTarget(want); ok {
+		want = alias
+	}
+	return m.quantityConformance(scope, n, want), true
+}
+
+// quantityValueType is the type a quantity literal has: a VectorQuantityValue
+// over a coordinate frame, named or composed (VectorCalculations::'['), else a
+// ScalarQuantityValue.
+func (m *Model) quantityValueType(scope *symbols.Scope, n *ast.IndexExpr) *symbols.Symbol {
+	if ref := m.measurementReference(scope, n.Index); m.IsVectorReference(ref) {
+		return m.libSymbol(fqnVectorQuantityValue)
+	}
+	if _, ok := m.composedFrameIndex(scope, n.Index); ok {
+		return m.libSymbol(fqnVectorQuantityValue)
+	}
+	return m.libSymbol(fqnScalarQuantityValue)
+}
+
+// composedFrameIndex is the frame an index composes (`(1, 2, 3) [spatialCF / s]`);
+// false for a named reference or a unit expression.
+func (m *Model) composedFrameIndex(scope *symbols.Scope, index ast.Node) (ComposedFrame, bool) {
+	e, ok := index.(*ast.OperatorExpr)
+	if !ok {
+		return ComposedFrame{}, false
+	}
+	return m.composedFrameExpr(scope, e)
+}
+
 // describeQuantity names a quantity by the measurement reference it is written in.
 func (m *Model) describeQuantity(ref *symbols.Symbol) string {
 	found := fmt.Sprintf("a quantity in %s", leafName(ref.Name))
+	if m.IsVectorReference(ref) {
+		found = fmt.Sprintf("a vector quantity in %s", leafName(ref.Name))
+	}
 	if typ := m.nearestDeclaredType(ref); typ != nil {
 		found += fmt.Sprintf(" (a %s)", leafName(typ.Name))
 	}
@@ -572,7 +640,8 @@ func (m *Model) measurementReference(scope *symbols.Scope, unit ast.Node) *symbo
 // function its operands select: comparisons are Boolean, a conditional the
 // Anything its function returns, `%` a number; arithmetic is a quantity when
 // every operand is one (QuantityCalculations; a power when its base is and its
-// exponent a Real), else a number, and `+` over strings a String.
+// exponent a Real), else a number, `+` over strings a String, and `*`/`/` of a
+// coordinate frame by a unit the frame MeasurementRefCalculations compose.
 func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol, byUnit bool) Conformance {
 	switch e.Operator {
 	case ast.OpConditional, ast.OpNullCoalesce:
@@ -604,6 +673,9 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 			return m.typeConformance(m.libSymbol(fqnString), want)
 		}
 		if c, ok := m.MeasurementRefExprConformance(scope, e, want); ok {
+			return c
+		}
+		if c, ok := m.CoordinateFrameExprConformance(scope, e, want); ok {
 			return c
 		}
 		if found, ok := m.nonArithmeticOperand(scope, e); ok {

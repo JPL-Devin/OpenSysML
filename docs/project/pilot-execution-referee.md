@@ -211,14 +211,15 @@ Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evalu
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
 `cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured
 when this record was last updated and are not the current baseline — `go run ./cmd/pilot-exec-diff`
-prints the current ones. State of the 138 committed cases, the original 32, the 62 the
+prints the current ones. State of the 147 committed cases, the original 32, the 62 the
 expression round added, the 10 of `value_classification.cases`, the 3 of `contextual_names.cases`,
 the 14 of `rational_terms.cases`, the 5 the empty-aggregate and subsetting round added to
-`w6d_expr_depth.cases` and the 12 of `tensor_quantities.cases`:
+`w6d_expr_depth.cases` the 12 of `tensor_quantities.cases` and the 9 of
+`coordinate_frames.cases`:
 
 ```
 agree: 69 · kind-only: 1 · order-only: 0 · disagree: 4
-pilot-unevaluated: 48 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
+pilot-unevaluated: 57 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
 nondeterministic: 0
 ```
 
@@ -232,6 +233,17 @@ qualified at the prompt or as an attribute's value — with the unevaluated node
 land in `pilot-unevaluated`. The semantics are therefore self-assessed against the vendored
 declarations, in [spec-compliance.md](spec-compliance.md) (*Structured values*) and
 [omg-issues.md](omg-issues.md#vectorcalculationsouter--a-vectorquantityvalue-return-for-an-order-two-product).
+
+The nine `coordinate_frames.cases` probe a coordinate frame and a measurement scale as
+values, added with the implementation they were meant to referee and could not: the pilot
+answers the Annex A frame `spatialCF` with the unevaluated `AttributeUsage spatialCF`,
+`spatialCF / s` and `velocityCF / s` with `OperatorExpression /`, `(1.0, 2.0, 3.0) [spatialCF]`
+with `OperatorExpression [`, its `mRef` with `AttributeUsage mRef`, `transform(...)` with
+`InvocationExpression transform`, `ConvertQuantity` to and from `SI::'°C_abs'` with
+`InvocationExpression ConvertQuantity` and `Time::UTC` with the usage itself, so all nine land in
+`pilot-unevaluated` and the semantics are self-assessed against the library text
+(`spec-compliance.md`, *Structured values*; the readings the text leaves open are drafted in
+[omg-issues.md](omg-issues.md)).
 
 The fourteen `rational_terms.cases` probe `RationalFunctions::rat`, `numer` and `denom`, added
 with the implementation they were meant to referee and could not: the pilot answers every call

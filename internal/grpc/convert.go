@@ -305,6 +305,9 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 	case runtime.ValTensorQuantity:
 		// No wire arm carries dimensions above one with a unit per component.
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
+	case runtime.ValCoordinateFrame, runtime.ValCoordinateTransformation:
+		// No wire arm carries a frame's axes or a transformation's placement.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: " + val.Kind.String() + " " + runtime.FormatValue(val)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}

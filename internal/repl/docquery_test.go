@@ -301,3 +301,15 @@ func TestRunQueryBindsAMeasurementReference(t *testing.T) {
 	wants(t, run(t, s, `%run-query NamedSubsystems root=SI::m / SI::s pattern="unit"`),
 		"error:", "the measurement reference m/s names no single declaration to bind to a query parameter")
 }
+
+// A measurement scale binds as the declaration it is, so a query traverses from
+// it; its placement binds as the transformation the library declares.
+func TestRunQueryBindsACoordinateFrame(t *testing.T) {
+	s := docQuerySession(t)
+	wants(t, run(t, s, `%run-query NamedSubsystems root=SI::'°C_abs' pattern="unit"`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: SI::'degree celsius (absolute temperature scale)'::unit")
+	wants(t, run(t, s, `%run-query NamedSubsystems root=SI::'°C_abs'.transformation pattern="origin"`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: SI::'degree celsius (absolute temperature scale)'::zeroDegreeCelsiusToKelvinShift::origin")
+}

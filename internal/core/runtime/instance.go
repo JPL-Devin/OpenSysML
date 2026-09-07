@@ -482,6 +482,7 @@ func (ctx *Context) admitted(feat *EffectiveFeature, val Value, how admission) (
 		if err := ctx.classifyHeld(feat.heldBy(), val); err != nil {
 			return Value{}, err
 		}
+		val = ctx.classifiedFrame(feat.Symbol, val)
 	}
 	return val, nil
 }
@@ -772,7 +773,7 @@ func (inst *Instance) materializeIntrinsic(ctx *Context, fv *FeatureValue, name 
 
 // HoldsOnlyContributions reports whether a feature of known multiplicity
 // materializes no object of its own: it is abstract, or a scalar whose lower
-// bound demands none.
+// bound demands none and whose own body describes none.
 func (f *EffectiveFeature) HoldsOnlyContributions() bool {
 	mult := f.Multiplicity
 	if !mult.Lower.Known || !mult.Upper.Known {
@@ -967,13 +968,14 @@ func (ctx *Context) bodyBindsAFeature(feat *EffectiveFeature) bool {
 
 // bindsAFeature reports whether a declaration's body binds a value to a feature of its object,
 // directly or under a nested one that exists whenever it does (not an optional or abstract one).
+// A framing member (`transformation { :>> target = that; }`) binds no field of it.
 func (ctx *Context) bindsAFeature(sym *symbols.Symbol) bool {
 	if sym == nil || sym.Scope == nil {
 		return false
 	}
 	for _, member := range sym.Scope.AllMembers() {
 		usage, ok := member.Decl.(*ast.Usage)
-		if !ok || !holdsRecordField(member) {
+		if !ok || !holdsRecordField(member) || ctx.model.FrameFeature(member) {
 			continue
 		}
 		if usage.Value != nil {

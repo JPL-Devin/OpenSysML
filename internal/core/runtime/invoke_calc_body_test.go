@@ -343,7 +343,7 @@ package test {
 	item def Foo { attribute v; }
 	calc def mk {
 		in n;
-		new Foo(n)
+		Foo.metadata
 	}
 	calc def unbounded {
 		in n;

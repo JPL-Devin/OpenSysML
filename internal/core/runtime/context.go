@@ -46,6 +46,13 @@ type Context struct {
 	// by name; see arrayFeatureSymbols.
 	arrayFeatures map[*symbols.Symbol]string
 
+	// frameFeatures memoizes the declarations of the MeasurementReferences features
+	// a coordinate frame, scale or transformation is read by; see frameFeatureSymbols.
+	frameFeatures map[*symbols.Symbol]string
+	// framesReading holds the frame each object being read is (nil for a
+	// transformation), so `target = that` finds it and a cycle is reported.
+	framesReading map[int64]*CoordinateFrame
+
 	// denotedFeatures memoizes, per type, the name of its feature each declared
 	// feature symbol denotes on an object of that type: itself or a redefinition.
 	denotedFeatures map[*symbols.Symbol]map[*symbols.Symbol]string

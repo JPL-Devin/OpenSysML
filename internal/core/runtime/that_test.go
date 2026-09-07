@@ -55,3 +55,24 @@ func TestThatReadsTheInnermostFeaturingObject(t *testing.T) {
 		t.Errorf("b = %v, want the inner object's a (2.0)", got)
 	}
 }
+
+// `self` names the object itself ([KerML] Base::Anything::self), as the library's
+// `ScalarMeasurementReference::mRefs = self` relies on.
+func TestSelfReadsTheObjectItself(t *testing.T) {
+	const src = `
+	package test {
+		private import Base::Anything;
+		part def P { ref me : Anything = self; }
+		part holder { part p : P; }
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	inst := instantiateNamed(t, ctx, idx, "test::holder")
+	p := fvInstance(t, ctx, inst, "p")
+	fv, err := p.GetFeatureValue(ctx, "me")
+	if err != nil {
+		t.Fatalf("GetFeatureValue me: %v", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValInstance || got.Instance != p.ID {
+		t.Errorf("me = %v, want the object p itself (instance %d)", got, p.ID)
+	}
+}

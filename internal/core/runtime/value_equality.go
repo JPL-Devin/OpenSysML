@@ -73,6 +73,10 @@ func valueKeyFunc(v Value) valueKey {
 		key.colHash = structuredKey(v)
 	case ValMeasurementRef:
 		key.strVal = v.MeasurementRef().key()
+	case ValCoordinateFrame:
+		key.strVal = v.CoordinateFrame().key()
+	case ValCoordinateTransformation:
+		key.strVal = v.CoordinateTransformation().key()
 	}
 	return key
 }

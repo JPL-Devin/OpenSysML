@@ -336,6 +336,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
 	t.Run("measurement_reference_failure_modes", testMeasurementReferenceFailureModes)
 	t.Run("tensor_quantity_failure_modes", testTensorQuantityFailureModes)
+	t.Run("coordinate_frame_failure_modes", testCoordinateFrameFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -1291,8 +1292,8 @@ func testQuantityWriteOfAnotherDimension(t *testing.T) {
 // cannot honestly compute with is a typed error at the write or the call, never a
 // value: a unit of another dimension does not conform, a conversion between
 // dimensions is incommensurable, a number is not a reference, a reference is not
-// a number, a unit is not a scale, and the scales, frames and tensors the library
-// declares have no value.
+// a number, a unit is not a scale, a scale the library places on no other
+// reference converts to none, and the tensors the library declares have no value.
 func testMeasurementReferenceFailureModes(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -1308,9 +1309,15 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 		{"another scale of the same dimension", "ISQ::LengthUnit", "SI::km", nil},
 		{"composed unit into a time scale", "Time::TimeScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
 		{"composed unit into an interval scale", "MeasurementReferences::IntervalScale", "SI::h * SI::s / SI::min", ErrTypeMismatch},
-		{"time scale as a value", "Time::TimeScale", "Time::UTC", ErrUnevaluableLibraryFunction},
-		{"interval scale as a value", "MeasurementReferences::IntervalScale", "SI::'°C_abs'", ErrUnevaluableLibraryFunction},
-		{"conversion to a scale", "ISQ::ThermodynamicTemperatureValue", "QuantityCalculations::ConvertQuantity(300.0 [SI::K], SI::'°C_abs')", ErrUnevaluableLibraryFunction},
+		{"time scale as a value", "Time::TimeScale", "Time::UTC", nil},
+		{"interval scale as a value", "MeasurementReferences::IntervalScale", "SI::'°C_abs'", nil},
+		{"scale as a unit", "MeasurementReferences::IntervalScale", "SI::'°C'", ErrTypeMismatch},
+		{"unit as a scale", "ISQ::LengthUnit", "Time::UTC", ErrTypeMismatch},
+		{"conversion to a scale", "ISQ::ThermodynamicTemperatureValue", "QuantityCalculations::ConvertQuantity(300.0 [SI::K], SI::'°C_abs')", nil},
+		{"conversion from a scale", "ISQ::ThermodynamicTemperatureValue", "QuantityCalculations::ConvertQuantity(26.85 [SI::'°C_abs'], SI::K)", nil},
+		{"conversion to a scale placed on another dimension", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], SI::'°C_abs')", ErrIncommensurableUnits},
+		{"conversion to a scale with no mapping", "ISQ::DurationValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::s], Time::UTC)", ErrUnevaluableLibraryFunction},
+		{"conversion from a scale with no mapping", "ISQ::DurationValue", "QuantityCalculations::ConvertQuantity(3.0 [Time::UTC], SI::s)", ErrUnevaluableLibraryFunction},
 		{"incommensurable conversion", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], SI::s)", ErrIncommensurableUnits},
 		{"conversion to a number", "ISQ::LengthValue", "QuantityCalculations::ConvertQuantity(3.0 [SI::m], 3)", ErrTypeMismatch},
 		{"reference scaled by a number", "ISQ::LengthUnit", "SI::m * 3", ErrTypeMismatch},
@@ -1320,8 +1327,10 @@ func testMeasurementReferenceFailureModes(t *testing.T) {
 		{"unit conversion of a composed unit", "MeasurementReferences::UnitConversion", "(SI::m / SI::s).unitConversion", ErrUnevaluableLibraryFunction},
 		{"unit power factors of a composed unit", "MeasurementReferences::UnitPowerFactor", "(SI::m ** 2).unitPowerFactors", ErrUnevaluableLibraryFunction},
 		{"definitional quantity values of a composed unit", "MeasurementReferences::DefinitionalQuantityValue", "(SI::m / SI::s).definitionalQuantityValues", ErrUnevaluableLibraryFunction},
-		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrUnevaluableLibraryFunction},
-		{"coordinate transformation", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrUnevaluableLibraryFunction},
+		{"vector reference over two units", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), (SI::m, SI::s))", ErrTypeMismatch},
+		{"vector reference over a unit", "Quantities::VectorQuantityValue", "VectorCalculations::'['((1.0, 2.0), SI::m)", ErrTypeMismatch},
+		{"transformation that is a vector", "Quantities::VectorQuantityValue", "VectorCalculations::transform(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((0.0, 1.0)) [SI::m])", ErrTypeMismatch},
+		{"scale scaled by a unit", "MeasurementReferences::CoordinateFrame", "Time::UTC / SI::s", ErrUnevaluableLibraryFunction},
 		{"outer product", "Quantities::TensorQuantityValue", "VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction},
 		{"tensor sum of number sequences", "Quantities::TensorQuantityValue", "TensorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", ErrTypeMismatch},
 		{"tensor product", "Quantities::TensorQuantityValue", "TensorCalculations::tensorTensorMult(VectorFunctions::VectorOf((1.0, 2.0)) [SI::m], VectorFunctions::VectorOf((3.0, 4.0)) [SI::m])", ErrUnevaluableLibraryFunction},
@@ -1420,6 +1429,276 @@ func testTensorQuantityFailureModes(t *testing.T) {
 		})
 	}
 }
+
+// testCoordinateFrameFailureModes: what the runtime cannot honestly compute about
+// a coordinate frame, a scale or a transformation is a typed error naming what is
+// missing or malformed: a frame with no mRefs, a vector with a number per axis
+// short, a transformation applied to a vector in another frame, a subtype of
+// CoordinateTransformation the library gives no shape, a placement whose origin
+// is no vector quantity or whose basis is singular, a translation in an
+// incommensurable unit, a scale placed on two references at odds, and matrices,
+// sequences and placements missing what they declare.
+func testCoordinateFrameFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     string
+		declared string
+		value    string
+		want     error
+		message  string
+	}{
+		{"frame with no mRefs", `attribute wcf : CoordinateFrame;`,
+			"CoordinateFrame", "wcf", ErrNoValue, "coordinate frame wcf states no mRefs; TensorMeasurementReference declares mRefs: ScalarMeasurementReference[1..*], one per axis"},
+		{"frame whose mRefs are not one per axis", `attribute bad : CartesianSpatial3dCoordinateFrame { :>> mRefs = (m, m); }`,
+			"CoordinateFrame", "bad", ErrMultiplicityViolation, "bad.mRefs: multiplicity violation: 2 value(s) bound to a feature with multiplicity lower bound 3"},
+		{"frame whose mRefs are not one per stated dimension", `attribute bad : CoordinateFrame { :>> dimensions = 2; :>> mRefs = (m, m, m); }`,
+			"CoordinateFrame", "bad", ErrMultiplicityViolation, "bad states 3 mRefs for dimensions [2], whose flattenedSize is 2"},
+		{"frame whose dimensions overflow", `attribute bad : CoordinateFrame { :>> dimensions : Positive[2] = (4611686018427387904, 4); :>> mRefs = (m, m, m); }`,
+			"CoordinateFrame", "bad", semantics.ErrArithmeticOverflow, "bad: flattenedSize of dimensions [4611686018427387904, 4] exceeds the Integer range"},
+		{"frame whose mRef is a number", `attribute bad : CoordinateFrame { :>> mRefs = (m, 2); }`,
+			"CoordinateFrame", "bad", ErrTypeMismatch, "mRefs#(2) is an Integer, want a ScalarMeasurementReference"},
+		{"vector short of an axis", ``,
+			"Position3dVector", "(1.0, 2.0) [spatialCF]", ErrMultiplicityViolation, "2 elements over the coordinate frame spatialCF, whose flattenedSize is 3; elements: Number[1..n] with n = mRef.flattenedSize"},
+		{"vector of a number too many", ``,
+			"Position3dVector", "(1.0, 2.0, 3.0, 4.0) [spatialCF]", ErrMultiplicityViolation, "4 elements over the coordinate frame spatialCF, whose flattenedSize is 3"},
+		{"vector of no numbers", ``,
+			"Position3dVector", "(m, m, m) [spatialCF]", ErrNotAQuantity, "want 3 numbers, one per axis"},
+		{"scale composed with a unit", ``,
+			"CoordinateFrame", "Time::UTC * s", ErrUnevaluableLibraryFunction, "UTC is a measurement scale"},
+		{"frame composed with a number", ``,
+			"CoordinateFrame", "spatialCF / 2", ErrTypeMismatch, "operator '/' is not defined for a coordinate frame and an Integer"},
+		{"frame composed with a frame", ``,
+			"CoordinateFrame", "spatialCF * spatialCF", ErrTypeMismatch, "operator '*' is not defined for a coordinate frame and coordinate frame; MeasurementRefCalculations::'CoordinateFrame*' takes a MeasurementUnit"},
+		{"composed frame into a frame of another dimension", ``,
+			"CartesianSpatial3dCoordinateFrame", "spatialCF / s", ErrTypeMismatch, "axis 1 measures in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L"},
+		{"frame into a unit", ``,
+			"LengthUnit", "spatialCF", ErrTypeMismatch, "cannot write the coordinate frame spatialCF [m, m, m], a CartesianSpatial3dCoordinateFrame, to a feature typed by LengthUnit"},
+		{"frame into a scale", ``,
+			"Time::TimeScale", "spatialCF", ErrTypeMismatch, "to a feature typed by TimeScale"},
+		{"vector into the wrong frame's vector type", ``,
+			"ISQSpaceTime::CartesianVelocity3dCoordinateFrame", "spatialCF", ErrTypeMismatch, "a CartesianSpatial3dCoordinateFrame, to a feature typed by CartesianVelocity3dCoordinateFrame"},
+		{"vector over a frame into a vector type admitting another", `attribute velocityCF : CartesianVelocity3dCoordinateFrame = spatialCF / s;`,
+			"CartesianPosition3dVector", "(1.0, 2.0, 3.0) [velocityCF]", ErrTypeMismatch, "cannot write ⟨1.0, 2.0, 3.0⟩ [velocityCF] (a vector quantity over the coordinate frame velocityCF [m/s, m/s, m/s], a CartesianVelocity3dCoordinateFrame) to a feature typed by CartesianPosition3dVector, whose mRef admits CartesianSpatial3dCoordinateFrame"},
+		{"vector over a composed frame into a vector type admitting another", ``,
+			"CartesianPosition3dVector", "(1.0, 2.0, 3.0) [spatialCF / s]", ErrTypeMismatch, "cannot write ⟨1.0, 2.0, 3.0⟩ [spatialCF / s] (a vector quantity over the coordinate frame spatialCF / s [m/s, m/s, m/s], a coordinate frame whose axis 1 measures in dimension L·T^-1, where CartesianSpatial3dCoordinateFrame admits L) to a feature typed by CartesianPosition3dVector, whose mRef admits CartesianSpatial3dCoordinateFrame"},
+		{"transformation applied to a vector in another frame", placementBody,
+			"Position3dVector", "transform(shifted.transformation, (1.0, 2.0, 3.0) [spatialCF])", ErrTypeMismatch, "sourceVector.mRef is spatialCF, not datum, the source of transformation"},
+		{"transformation applied to a vector in a unit", placementBody,
+			"Position3dVector", "transform(shifted.transformation, VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [mm])", ErrTypeMismatch, "written over the unit mm and no coordinate frame"},
+		{"transformation applied to numbers", placementBody,
+			"Position3dVector", "transform(shifted.transformation, (1.0, 2.0, 3.0))", ErrTypeMismatch, `parameter "sourceVector" requires a vector quantity over datum`},
+		{"transformation of no recognized shape", `
+			attribute def Bespoke :> CoordinateTransformation;
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : Bespoke { :>> source = datum; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrUnevaluableLibraryFunction, "transformation is a Bespoke, a CoordinateTransformation of no shape the library gives a meaning"},
+		{"placement whose origin is a string", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = "2024-01-01T00:00:00Z"; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "origin is string, not a vector quantity over datum"},
+		{"placement whose origin is missing", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrNoValue, "states no origin; CoordinateFramePlacement declares origin: VectorQuantityValue[1]"},
+		{"placement whose origin is in another frame", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (1.0, 2.0, 3.0) [spatialCF]; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "origin is a vector quantity in spatialCF, not a vector quantity over datum, its source"},
+		{"placement whose origin has too few components", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = VectorFunctions::VectorOf((1.0, 2.0)) [mm]; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrMultiplicityViolation, "origin has 2 components over datum of 3 axes"},
+		{"placement of a singular basis", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (0.0, 0.0, 0.0) [datum]; :>> basisDirections = ((1.0, 0.0, 0.0) [datum], (2.0, 0.0, 0.0) [datum], (0.0, 0.0, 1.0) [datum]); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", semantics.ErrArithmeticDomain, "basis directions are linearly dependent and span no frame"},
+		{"placement of a zero basis direction", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (0.0, 0.0, 0.0) [datum]; :>> basisDirections = ((0.0, 0.0, 0.0) [datum], (0.0, 1.0, 0.0) [datum], (0.0, 0.0, 1.0) [datum]); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", semantics.ErrArithmeticDomain, "basisDirections#(1) is the zero vector, which points nowhere"},
+		{"placement of too few basis directions", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (0.0, 0.0, 0.0) [datum]; :>> basisDirections = ((1.0, 0.0, 0.0) [datum], (0.0, 1.0, 0.0) [datum]); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrMultiplicityViolation, "states 2 basisDirections over datum of 3 axes; a placement states none or one per axis"},
+		{"placement reorienting axes in different units", `
+			attribute mixed : CoordinateFrame { :>> mRefs = (m, mm, m); }
+			attribute odd : CoordinateFrame { :>> mRefs = (m, mm, m); :>> transformation : CoordinateFramePlacement { :>> source = mixed; :>> origin = (0.0, 0.0, 0.0) [mixed]; :>> basisDirections = ((0.0, 1.0, 0.0) [mixed], (1.0, 0.0, 0.0) [mixed], (0.0, 0.0, 1.0) [mixed]); } }`,
+			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0, 3.0) [mixed])", ErrIncommensurableUnits, "reorients mixed, whose axes m and mm are in different units and cannot mix"},
+		{"translation in an incommensurable unit", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Translation(VectorFunctions::VectorOf((1.0, 0.0, 0.0)) [s])); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrIncommensurableUnits, "elements#(1).translationVector: incommensurable units: cannot express s (second) in mm (0.001·metre)"},
+		{"translation in another frame of the same units", `
+			attribute other : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); }
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Translation((1.0, 0.0, 0.0) [other])); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "translationVector is a vector quantity in other, not a vector quantity over datum, its source"},
+		{"translation in a commensurable unit converts", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Translation(VectorFunctions::VectorOf((1.0, 0.0, 0.0)) [m])); } }`,
+			"Position3dVector", "transform(odd.transformation, (1000.0, 2.0, 3.0) [datum])", nil, ""},
+		{"sequence of no elements", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrNoValue, "states no elements; TranslationRotationSequence declares elements: TranslationOrRotation[1..*]"},
+		{"sequence whose element is a number", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (1, 2); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "want a Translation or a Rotation"},
+		{"rotation about the zero vector", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Rotation((0.0, 0.0, 0.0) [datum], 90 ['°'])); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", semantics.ErrArithmeticDomain, "axisDirection is the zero vector, which points nowhere"},
+		{"rotation by a length", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Rotation((0.0, 0.0, 1.0) [datum], 90 [mm])); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "new Rotation: feature value Rotation.angle: type mismatch: cannot write 90 [mm] (dimension L) to a feature typed by AngularMeasureValue (dimensionless)"},
+		{"rotation by a number", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : TranslationRotationSequence { :>> source = datum; :>> elements = (new Rotation((0.0, 0.0, 1.0) [datum], 90)); } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "new Rotation: feature value Rotation.angle: type mismatch: cannot write 90 (an Integer) to a feature typed by AngularMeasureValue"},
+		{"rotation of a plane frame", `
+			attribute plane : CoordinateFrame { :>> mRefs = (mm, mm); }
+			attribute odd : CoordinateFrame { :>> mRefs = (mm, mm); :>> transformation : TranslationRotationSequence { :>> source = plane; :>> elements = (new Rotation((0.0, 1.0) [plane], 90 ['°'])); } }`,
+			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0) [plane])", ErrUnevaluableLibraryFunction, "rotates about an axis, which a frame of 2 axes has no meaning for"},
+		{"affine matrix of too few elements", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : AffineTransformationMatrix3d { :>> source = datum; :>> rotationMatrix { :>> elements = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0); } :>> translationVector { :>> elements = (0.0, 0.0, 0.0); } } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrMultiplicityViolation, "rotationMatrix.elements: multiplicity violation: 6 value(s) bound to a feature with multiplicity lower bound 9"},
+		{"affine matrix of strings", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : AffineTransformationMatrix3d { :>> source = datum; :>> rotationMatrix { :>> elements = ("a", "b", "c", "d", "e", "f", "g", "h", "i"); } :>> translationVector { :>> elements = (0.0, 0.0, 0.0); } } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, `rotationMatrix.elements: type mismatch: cannot write "a" (string) to a feature typed by Real`},
+		{"affine matrix with no translation", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : AffineTransformationMatrix3d { :>> source = datum; :>> rotationMatrix { :>> elements = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0); } } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrNoValue, "translationVector states no elements"},
+		{"affine matrix over a plane frame", `
+			attribute plane : CoordinateFrame { :>> mRefs = (mm, mm); }
+			attribute odd : CoordinateFrame { :>> mRefs = (mm, mm); :>> transformation : AffineTransformationMatrix3d { :>> source = plane; :>> rotationMatrix { :>> elements = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0); } :>> translationVector { :>> elements = (0.0, 0.0, 0.0); } } }`,
+			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0) [plane])", ErrMultiplicityViolation, "is an AffineTransformationMatrix3d over plane of 2 axes; it asserts source.dimensions == 3"},
+		{"transformation with no source", `
+			attribute lone : NullTransformation { :>> target = datum; }`,
+			"Position3dVector", "transform(lone, (1.0, 2.0, 3.0) [datum])", ErrNoValue, "lone states no source or no target"},
+		{"transformation with no target", `
+			attribute lone : NullTransformation { :>> source = datum; }`,
+			"Position3dVector", "transform(lone, (1.0, 2.0, 3.0) [datum])", ErrNoValue, "lone states no source or no target"},
+		{"transformation between frames of different dimensions", `
+			attribute plane : CoordinateFrame { :>> mRefs = (mm, mm); }
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : NullTransformation { :>> source = plane; } }`,
+			"Quantities::VectorQuantityValue", "transform(odd.transformation, (1.0, 2.0) [plane])", ErrMultiplicityViolation, "relates plane of dimensions [2] (2 axes) to odd of dimensions [3] (3 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
+		{"transformation between frames of one axis but different dimensions", `
+			attribute lineA : CoordinateFrame { :>> dimensions = 1; :>> mRefs = mm; }
+			attribute lineB : CoordinateFrame { :>> dimensions = (); :>> mRefs = mm; :>> transformation : NullTransformation { :>> source = lineA; } }`,
+			"Quantities::VectorQuantityValue", "transform(lineB.transformation, 3.0 [lineA])", ErrMultiplicityViolation, "relates lineA of dimensions [1] (1 axes) to lineB of dimensions [] (1 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
+		{"transformation whose target is another frame", `
+			attribute odd : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); :>> transformation : NullTransformation { :>> source = datum; :>> target = datum; } }`,
+			"Position3dVector", "transform(odd.transformation, (1.0, 2.0, 3.0) [datum])", ErrTypeMismatch, "target is datum, but the transformation is odd's own, whose target it is"},
+		{"scale whose placement and mapping disagree", `
+			attribute def Muddled :> IntervalScale {
+				:>> unit = SI::'°C';
+				private attribute triplePoint : DefinitionalQuantityValue { :>> num = 0.01; :>> definition = "triple point"; }
+				private attribute mapping : QuantityValueMapping { :>> mappedQuantityValue = triplePoint; :>> referenceQuantityValue = K.temperatureOfWaterAtTriplePointInK; }
+				:>> quantityValueMapping = mapping;
+				:>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 300.0 [K]; }
+			}
+			attribute muddled : Muddled;`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(300.0 [K], muddled)", ErrUnevaluableLibraryFunction, "its transformation places zero at 300.0 [K] but its quantityValueMapping places it at 273.15"},
+		{"scale whose mapping maps a quantity, not a definitional value", `
+			attribute def Muddled :> IntervalScale {
+				:>> unit = SI::'°C';
+				private attribute mapping : QuantityValueMapping { :>> mappedQuantityValue = 0.01 [SI::'°C']; :>> referenceQuantityValue = K.temperatureOfWaterAtTriplePointInK; }
+				:>> quantityValueMapping = mapping;
+			}
+			attribute muddled : Muddled;`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(300.0 [K], muddled)", ErrTypeMismatch, "measurement scale muddled: quantityValueMapping.mappedQuantityValue is a quantity in SI::'°C', want a DefinitionalQuantityValue"},
+		{"scale placed on a reference of another dimension", `
+			attribute def Muddled :> IntervalScale { :>> unit = SI::'°C'; :>> transformation : CoordinateFramePlacement { :>> source = m; :>> origin = 1.0 [m]; } }
+			attribute muddled : Muddled;`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(300.0 [K], muddled)", ErrIncommensurableUnits, ""},
+		{"scale whose origin is a string", `
+			attribute def Muddled :> Time::TimeScale { :>> unit = s; :>> transformation : CoordinateFramePlacement { :>> source = Time::UTC; :>> origin = "2024-01-01T00:00:00Z"; } }
+			attribute muddled : Muddled;`,
+			"ISQ::DurationValue", "ConvertQuantity(3.0 [Time::UTC], muddled)", ErrUnevaluableLibraryFunction, "muddled: the origin of its transformation transformation is string, not a quantity on UTC"},
+		{"scale whose one basis direction is the identity in another unit", `
+			attribute shifted : IntervalScale { :>> unit = m; :>> transformation : CoordinateFramePlacement { :>> source = m; :>> origin = 10.0 [m]; :>> basisDirections = 1000.0 [mm]; } }`,
+			"LengthValue", "ConvertQuantity(3.0 [shifted], m)", nil, ""},
+		{"scale whose basis direction scales the axis in another unit", `
+			attribute shifted : IntervalScale { :>> unit = s; :>> transformation : CoordinateFramePlacement { :>> source = s; :>> origin = 10.0 [s]; :>> basisDirections = 1.0 [min]; } }`,
+			"DurationValue", "ConvertQuantity(3.0 [shifted], s)", ErrUnevaluableLibraryFunction, "the basisDirection 1.0 [min] of its transformation transformation is not the identity 1 [s]"},
+		{"scale placed on a frame of two axes", `
+			attribute plane : CoordinateFrame { :>> mRefs = (K, K); }
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = plane; :>> origin = 10.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrMultiplicityViolation, "relates plane of dimensions [2] (2 axes) to shifted of dimensions [] (1 axes); CoordinateTransformation asserts source.dimensions == target.dimensions"},
+		{"scale with two basis directions", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = (1.0 [K], 1.0 [K]); } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrMultiplicityViolation, "states 2 basisDirections over K of one axis"},
+		{"scale whose basis direction is in an incommensurable unit", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = 1.0 [m]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrIncommensurableUnits, "the basisDirection 1.0 [m] of its transformation transformation is not on K, its source"},
+		{"scale whose basis direction is over another frame", `
+			attribute line : CoordinateFrame { :>> mRefs = (K); }
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = (1.0) [line]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrTypeMismatch, "is a vector quantity in line, not a quantity on K, its source"},
+		{"scale whose basis direction scales the axis", `
+			attribute shifted : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = K; :>> origin = 10.0 [K]; :>> basisDirections = 2.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [shifted], K)", ErrUnevaluableLibraryFunction, "is not the identity 1 [K], and the library gives a scale no other basis"},
+		{"scale with no unit", `
+			attribute def Unitless :> IntervalScale;
+			attribute unitless : Unitless;`,
+			"IntervalScale", "unitless", ErrNoValue, "states no unit; MeasurementScale declares unit: MeasurementUnit"},
+		{"scale placed on itself", `
+			attribute loop : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = loop; :>> origin = 1.0 [K]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [loop], K)", ErrCyclicFeatureValue, "coordinate frame loop is defined in terms of itself"},
+		{"scales placed on each other", `
+			attribute a : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = b; :>> origin = 1.0 [b]; } }
+			attribute b : IntervalScale { :>> unit = K; :>> transformation : CoordinateFramePlacement { :>> source = a; :>> origin = 2.0 [a]; } }`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [a], K)", ErrCyclicFeatureValue, "coordinate frame a is defined in terms of itself"},
+		{"scales mapped onto each other", `
+			attribute a : IntervalScale {
+				:>> unit = K;
+				private attribute p : DefinitionalQuantityValue { :>> num = 1; :>> definition = "p"; }
+				private attribute m : QuantityValueMapping { :>> mappedQuantityValue = p; :>> referenceQuantityValue = 2.0 [b]; }
+				:>> quantityValueMapping = m;
+			}
+			attribute b : IntervalScale {
+				:>> unit = K;
+				private attribute p : DefinitionalQuantityValue { :>> num = 1; :>> definition = "p"; }
+				private attribute m : QuantityValueMapping { :>> mappedQuantityValue = p; :>> referenceQuantityValue = 2.0 [a]; }
+				:>> quantityValueMapping = m;
+			}`,
+			"ThermodynamicTemperatureValue", "ConvertQuantity(3.0 [K], a)", ErrCyclicFeatureValue, "coordinate frame a is defined in terms of itself"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					private import ISQ::*;
+					private import SI::*;
+					private import ISQSpaceTime::*;
+					private import MeasurementReferences::*;
+					private import QuantityCalculations::*;
+					private import VectorCalculations::*;
+					part def Holder {
+						attribute spatialCF : CartesianSpatial3dCoordinateFrame { :>> mRefs = (m, m, m); }
+						attribute datum : CartesianSpatial3dCoordinateFrame { :>> mRefs = (mm, mm, mm); }
+						%s
+						attribute value : %s = %s;
+					}
+				}
+			`, tc.body, tc.declared, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+			if sym == nil {
+				t.Fatal("part def Holder not found")
+			}
+			inst, err := ctx.Instantiate(sym)
+			if err != nil {
+				t.Fatalf("Instantiate err = %v", err)
+			}
+			_, err = inst.GetFeatureValue(ctx, "value")
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("value err = %v, want a value", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("value err = %v, want %v", err, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.message) {
+				t.Fatalf("value err = %v, want it to name %q", err, tc.message)
+			}
+		})
+	}
+}
+
+// placementBody declares a frame placed in datum, for the transform failure modes.
+const placementBody = `
+	attribute shifted : CartesianSpatial3dCoordinateFrame {
+		:>> mRefs = (mm, mm, mm);
+		:>> transformation : CoordinateFramePlacement { :>> source = datum; :>> origin = (10.0, 20.0, 30.0) [datum]; }
+	}`
 
 // testExpressionOverAFeatureValueHoldingNoValue: a valueless feature of a value type is
 // read without an error and reports that it holds no value, while an expression

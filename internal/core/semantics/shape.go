@@ -42,7 +42,9 @@ func (m *Model) ShapeFeatures(typ *symbols.Symbol) []ShapeFeature {
 	if cached, ok := m.shapes[typ]; ok {
 		return cached
 	}
-	out := m.shapeFeatures(typ, func(member *symbols.Symbol) bool { return !m.FrameFeature(member) })
+	out := m.shapeFeatures(typ, func(member *symbols.Symbol) bool {
+		return !m.FrameFeature(member) || m.DescribesReference(typ, member)
+	})
 	if m.MemberSourcesStable(typ) && m.computingRedefinedFeatures == 0 {
 		m.shapes[typ] = out
 	}
@@ -232,6 +234,69 @@ func IsValueType(sym *symbols.Symbol) bool {
 	}
 }
 
+// describedReferenceRoots are the value types whose library members describe
+// the value an object of them is: a frame's axes and transformation, a scale's
+// unit and mapping, a transformation's placement. A unit stays a scalar value.
+var describedReferenceRoots = []string{
+	"MeasurementReferences::VectorMeasurementReference",
+	"MeasurementReferences::CoordinateTransformation",
+	"MeasurementReferences::TranslationOrRotation",
+	"MeasurementReferences::QuantityValueMapping",
+	"MeasurementReferences::DefinitionalQuantityValue",
+}
+
+// referenceSelfRoots are the described-reference members that name the featuring
+// frame itself (`transformation { :>> target = that; }`), which the runtime
+// supplies as that frame rather than reads from the object.
+var referenceSelfRoots = map[string]bool{
+	"MeasurementReferences::CoordinateFrame::transformation::target": true,
+}
+
+// IsDescribedReference reports whether objects of typ carry their library
+// members: a coordinate frame, a measurement scale, a coordinate transformation
+// or a definitional value, but not a measurement unit.
+func (m *Model) IsDescribedReference(typ *symbols.Symbol) bool {
+	if m == nil || typ == nil {
+		return false
+	}
+	if unit := m.libSymbol(fqnMeasurementUnit); unit != nil && m.Conforms(typ, unit) {
+		return false
+	}
+	for _, fqn := range describedReferenceRoots {
+		if root := m.libSymbol(fqn); root != nil && m.Conforms(typ, root) {
+			return true
+		}
+	}
+	return false
+}
+
+// DescribesReference reports whether member, a library attribute of a described
+// reference type, is kept in typ's shape although a value type declares it.
+func (m *Model) DescribesReference(typ, member *symbols.Symbol) bool {
+	if member == nil || member.Kind != symbols.SymbolAttributeUsage || IsParameter(member) {
+		return false
+	}
+	// The Kernel Semantic Library (Anything::that) frames a reference as it does
+	// every object; the Collections and domain members describe it.
+	if tier := m.libraryTier(member); tier == symbols.TierKernelSemantic || tier == symbols.TierLibrary {
+		return false
+	}
+	if m.restatesRoot(member, frameRoots) || m.NamesFeaturingReference(member) {
+		return false
+	}
+	// A usage nested in a described reference (a transformation's rotationMatrix)
+	// describes it too.
+	for cur := typ; cur != nil; cur = ownerOf(cur) {
+		if m.IsDescribedReference(cur) {
+			return true
+		}
+		if cur.Kind != symbols.SymbolAttributeUsage {
+			return false
+		}
+	}
+	return false
+}
+
 // FrameFeature reports whether a library-declared member frames the object
 // rather than describing it, so that the shape leaves it out.
 func (m *Model) FrameFeature(sym *symbols.Symbol) bool {
@@ -246,8 +311,28 @@ func (m *Model) FrameFeature(sym *symbols.Symbol) bool {
 	case IsParameter(sym):
 		return true
 	default:
-		return m.restatesFrameRoot(sym)
+		return m.restatesRoot(sym, frameRoots) || m.NamesFeaturingReference(sym)
 	}
+}
+
+// NamesFeaturingReference reports a member restating one of referenceSelfRoots:
+// the frame featuring a transformation, which its value answers rather than its object.
+func (m *Model) NamesFeaturingReference(sym *symbols.Symbol) bool {
+	return m != nil && m.restatesRoot(sym, referenceSelfRoots)
+}
+
+// RestatesFeaturingReference reports whether typ's member for feature is one
+// NamesFeaturingReference accepts: `target` read through a frame's transformation.
+func (m *Model) RestatesFeaturingReference(typ, feature *symbols.Symbol) bool {
+	if m == nil || typ == nil || feature == nil || !IsShapeFeature(feature) {
+		return false
+	}
+	for _, member := range m.MembersOfIncludingRedefined(typ) {
+		if IsShapeFeature(member) && m.restates(member, feature) && m.NamesFeaturingReference(member) {
+			return true
+		}
+	}
+	return false
 }
 
 // HeldByValue reports a member the value of a value-held library type carries itself (`num`,
@@ -305,7 +390,7 @@ func IsParameter(sym *symbols.Symbol) bool {
 // IsSelf reports whether sym is a thing's `self` feature: Base::Anything::self or a
 // feature restating it, such as DataValue::self or a definition's own redefinition.
 func (m *Model) IsSelf(sym *symbols.Symbol) bool {
-	return m != nil && sym != nil && m.restates(sym, namesFQN(fqnAnythingSelf))
+	return m != nil && sym != nil && m.restatesAny(sym, namesFQN(fqnAnythingSelf))
 }
 
 // namesFQN accepts the symbol whose qualified name is fqn.
@@ -313,15 +398,15 @@ func namesFQN(fqn string) func(*symbols.Symbol) bool {
 	return func(sym *symbols.Symbol) bool { return symbols.FQNOf(sym) == fqn }
 }
 
-// restatesFrameRoot reports whether sym redefines or subsets a frame root,
-// directly or through the features those name.
-func (m *Model) restatesFrameRoot(sym *symbols.Symbol) bool {
-	return m.restates(sym, func(sym *symbols.Symbol) bool { return frameRoots[symbols.FQNOf(sym)] })
+// restatesRoot reports whether sym redefines or subsets one of the roots, directly
+// or through the features those name.
+func (m *Model) restatesRoot(sym *symbols.Symbol, roots map[string]bool) bool {
+	return m.restatesAny(sym, func(sym *symbols.Symbol) bool { return roots[symbols.FQNOf(sym)] })
 }
 
-// restates reports whether sym, or a feature it redefines or subsets transitively,
+// restatesAny reports whether sym, or a feature it redefines or subsets transitively,
 // is one the predicate accepts.
-func (m *Model) restates(sym *symbols.Symbol, root func(*symbols.Symbol) bool) bool {
+func (m *Model) restatesAny(sym *symbols.Symbol, root func(*symbols.Symbol) bool) bool {
 	if sym == nil {
 		return false
 	}

@@ -30,6 +30,15 @@ func kindSamples() map[ValueKind][2]Value {
 		return Unit{Text: text, Term: semantics.UnitTerm{Scale: semantics.UnitScale(1), Factors: []semantics.UnitFactor{{Unit: sym, Exponent: 1}}}}
 	}
 	metre, second := baseUnit("m", symA), baseUnit("s", symB)
+	frameOf := func(text string, axes ...Unit) *CoordinateFrame {
+		return &CoordinateFrame{Dimensions: []int64{int64(len(axes))}, Axes: axes, Text: text}
+	}
+	spatial, temporal := frameOf("spatial", metre, metre), frameOf("temporal", second, second)
+	placementOf := func(source, target *CoordinateFrame, origin int64) *CoordinateTransformation {
+		return &CoordinateTransformation{Source: source, Target: target, Placement: &FramePlacement{
+			Origin: NewVectorQuantityValue([]semantics.Value{integerValue(origin).Const, integerValue(0).Const}, source.Axes),
+		}}
+	}
 	return map[ValueKind][2]Value{
 		ValConst:       {integerValue(1), integerValue(2)},
 		ValNull:        {{Kind: ValNull}, {Kind: ValNull}},
@@ -48,10 +57,15 @@ func kindSamples() map[ValueKind][2]Value {
 			NewVectorQuantityValue([]semantics.Value{integerValue(1).Const, integerValue(2).Const}, []Unit{metre, metre}),
 			NewVectorQuantityValue([]semantics.Value{integerValue(1).Const, integerValue(2).Const}, []Unit{second, second}),
 		},
-		ValMeasurementRef: {NewMeasurementRefValue(metre), NewMeasurementRefValue(second)},
 		ValTensorQuantity: {
 			NewTensorQuantityValue([]int64{2, 2}, []semantics.Value{integerValue(1).Const, integerValue(2).Const, integerValue(3).Const, integerValue(4).Const}, []Unit{metre, metre, metre, metre}),
 			NewTensorQuantityValue([]int64{2, 2}, []semantics.Value{integerValue(1).Const, integerValue(2).Const, integerValue(3).Const, integerValue(4).Const}, []Unit{second, second, second, second}),
+		},
+		ValMeasurementRef:  {NewMeasurementRefValue(metre), NewMeasurementRefValue(second)},
+		ValCoordinateFrame: {NewCoordinateFrameValue(spatial), NewCoordinateFrameValue(temporal)},
+		ValCoordinateTransformation: {
+			NewCoordinateTransformationValue(placementOf(spatial, temporal, 1)),
+			NewCoordinateTransformationValue(placementOf(spatial, temporal, 2)),
 		},
 	}
 }

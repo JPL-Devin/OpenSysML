@@ -172,6 +172,10 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return ctx.structuredConforms(scope, *value, declared, how)
 	case ValMeasurementRef:
 		return ctx.measurementRefConforms(value.MeasurementRef(), declared)
+	case ValCoordinateFrame:
+		return ctx.frameConforms(value.CoordinateFrame(), declared)
+	case ValCoordinateTransformation:
+		return ctx.transformationConforms(value.CoordinateTransformation(), declared)
 	}
 	if id, ok := value.Object(); ok {
 		// An object, a selected variant's included, is what its usage is; declared as a
@@ -250,6 +254,11 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 		for i := 0; i < vq.Dimension(); i++ {
 			if ok, refusal, err := ctx.quantityConforms(NewQuantityValue(vq.component(i)), declared); !ok || err != nil {
 				return ok, refusal, err
+			}
+		}
+		if vq.Frame != nil {
+			if ok, refusal := ctx.framedQuantityConforms(value, declared); !ok {
+				return false, refusal, nil
 			}
 		}
 	case ValTensorQuantity:

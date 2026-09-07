@@ -525,3 +525,48 @@ func TestNoDependencyIsRecordedOutsideADerivation(t *testing.T) {
 		t.Fatalf("a derivation frame is still open: %d", len(ctx.deriving))
 	}
 }
+
+// TestWriteOfAVectorOverAnotherFrameRecomputesDerivedValues: a vector of the same
+// components over another coordinate frame is a change to what read it, as its
+// mRef is that frame.
+func TestWriteOfAVectorOverAnotherFrameRecomputesDerivedValues(t *testing.T) {
+	const src = `
+	package test {
+		private import SI::*;
+		private import ISQSpaceTime::*;
+		private import Quantities::*;
+		part def Plate {
+			attribute a : CartesianSpatial3dCoordinateFrame { :>> mRefs = (m, m, m); }
+			attribute b : CartesianSpatial3dCoordinateFrame { :>> mRefs = (m, m, m); }
+			attribute p : VectorQuantityValue default (1.0, 2.0, 3.0) [a];
+			attribute overB : VectorQuantityValue = (1.0, 2.0, 3.0) [b];
+			attribute inA : Boolean = p.mRef == a;
+		}
+		part plate : Plate;
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	plate := instantiateNamed(t, ctx, idx, "test::plate")
+	if !readBool(t, ctx, plate, "inA") {
+		t.Fatal("inA = false before the write, want true")
+	}
+	overB, err := plate.GetFeatureValue(ctx, "overB")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(overB): %v", err)
+	}
+	if err := plate.SetFeatureValue(ctx, "p", overB.HeldValue()); err != nil {
+		t.Fatalf("SetFeatureValue(p, (1.0, 2.0, 3.0) [b]): %v", err)
+	}
+	if inA := plate.FeatureValues["inA"]; inA.Materialized {
+		t.Fatalf("inA is still materialized as %s after p was restated over b", FormatValue(inA.HeldValue()))
+	}
+	if readBool(t, ctx, plate, "inA") {
+		t.Fatal("inA = true after p := (1.0, 2.0, 3.0) [b], want false")
+	}
+	// The same vector over the same frame is no change.
+	if err := plate.SetFeatureValue(ctx, "p", overB.HeldValue()); err != nil {
+		t.Fatalf("SetFeatureValue(p, (1.0, 2.0, 3.0) [b]) again: %v", err)
+	}
+	if inA := plate.FeatureValues["inA"]; !inA.Materialized {
+		t.Fatal("writing p's own value again unmaterialized inA")
+	}
+}

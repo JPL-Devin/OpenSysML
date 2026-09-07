@@ -1158,6 +1158,7 @@ func (s *Session) doFeatures(name string, listing featureListing) ([]string, boo
 	w := &featureValueWalk{
 		ctx:      ctx,
 		onPath:   map[*symbols.Symbol]bool{inst.Type: true},
+		listing:  map[int64]bool{inst.ID: true},
 		maxDepth: listing.depth,
 		budget:   listing.budget,
 		hint:     listing.truncationHint(name),
@@ -1177,13 +1178,16 @@ const (
 	maxFeatureValueLines = 200
 )
 
-// featureValueWalk expands an object graph for %features under three bounds: onPath holds
+// featureValueWalk expands an object graph for %features under four bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
-// detect the cycle), maxDepth, and a line budget shared across the listing.
+// detect the cycle), listing the objects, maxDepth, and a line budget shared across the listing.
 type featureValueWalk struct {
-	ctx      *runtime.Context
-	onPath   map[*symbols.Symbol]bool
+	ctx    *runtime.Context
+	onPath map[*symbols.Symbol]bool
+	// listing holds the objects being expanded above the current one: one that
+	// holds itself (`mRefs = self`) is named on its row, not expanded again.
+	listing  map[int64]bool
 	maxDepth int
 	budget   int
 	// hint is the truncation line's advice on how to see the rest; cut records
@@ -1254,13 +1258,18 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 		// spends only what is left beyond them.
 		reserved := len(features) - i - 1
 		for _, nested := range nestedInstances(w.ctx, fv) {
+			if w.listing[nested.ID] {
+				continue
+			}
 			if w.budget <= reserved {
 				lines = w.truncate(lines, indent+"  ")
 				break
 			}
 			w.budget -= reserved
 			w.onPath[nested.Type] = true
+			w.listing[nested.ID] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
+			delete(w.listing, nested.ID)
 			delete(w.onPath, nested.Type)
 			w.budget += reserved
 		}

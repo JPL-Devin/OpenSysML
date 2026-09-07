@@ -22,16 +22,18 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr           // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
-	ValQuantity       // a magnitude and the measurement unit it is expressed in
-	ValVariant        // the variant selected for a variation, and the object it materializes
-	ValEnumLiteral    // one literal of an enumeration definition, identified by itself
-	ValComplex        // one complex number, its real and imaginary parts together
-	ValArray          // a Collections::Array: its dimensions and its row-major elements
-	ValVector         // a NumericalVectorValue: the numbers of its one dimension
-	ValVectorQuantity // a VectorQuantityValue: a vector with a measurement unit per axis
-	ValMeasurementRef // a ScalarMeasurementReference: a unit by declaration and reduction
-	ValTensorQuantity // a TensorQuantityValue: an array of numbers with a measurement unit per component
+	ValExpr                     // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValQuantity                 // a magnitude and the measurement unit it is expressed in
+	ValVariant                  // the variant selected for a variation, and the object it materializes
+	ValEnumLiteral              // one literal of an enumeration definition, identified by itself
+	ValComplex                  // one complex number, its real and imaginary parts together
+	ValArray                    // a Collections::Array: its dimensions and its row-major elements
+	ValVector                   // a NumericalVectorValue: the numbers of its one dimension
+	ValVectorQuantity           // a VectorQuantityValue: a vector with a measurement unit per axis
+	ValMeasurementRef           // a ScalarMeasurementReference: a unit by declaration and reduction
+	ValTensorQuantity           // a TensorQuantityValue: an array of numbers with a measurement unit per component
+	ValCoordinateFrame          // a VectorMeasurementReference: a frame's axes, or a measurement scale's one
+	ValCoordinateTransformation // a CoordinateTransformation: a placement of one frame in another
 
 	// valueKindCount bounds the kinds; TestEveryValueKindIsDispatched walks them.
 	valueKindCount
@@ -91,6 +93,10 @@ func FormatValue(v Value) string {
 		return v.MeasurementRef().String()
 	case ValTensorQuantity:
 		return v.TensorQuantity().format(semantics.FormatConst)
+	case ValCoordinateFrame:
+		return v.CoordinateFrame().String()
+	case ValCoordinateTransformation:
+		return v.CoordinateTransformation().String()
 	case ValExpr:
 		return "<expression>"
 	default:
@@ -152,6 +158,10 @@ func (k ValueKind) String() string {
 		return "measurement reference"
 	case ValTensorQuantity:
 		return "tensor quantity"
+	case ValCoordinateFrame:
+		return "coordinate frame"
+	case ValCoordinateTransformation:
+		return "coordinate transformation"
 	default:
 		return "invalid"
 	}
@@ -329,6 +339,25 @@ func (v Value) TensorQuantity() *TensorQuantity {
 	}
 	tq, _ := v.ref.(*TensorQuantity)
 	return tq
+}
+
+// CoordinateFrame is the payload of a ValCoordinateFrame; nil for every other kind.
+func (v Value) CoordinateFrame() *CoordinateFrame {
+	if v.Kind != ValCoordinateFrame {
+		return nil
+	}
+	frame, _ := v.ref.(*CoordinateFrame)
+	return frame
+}
+
+// CoordinateTransformation is the payload of a ValCoordinateTransformation; nil
+// for every other kind.
+func (v Value) CoordinateTransformation() *CoordinateTransformation {
+	if v.Kind != ValCoordinateTransformation {
+		return nil
+	}
+	t, _ := v.ref.(*CoordinateTransformation)
+	return t
 }
 
 // Complex is the number a ValComplex is; 0 for every other kind.
