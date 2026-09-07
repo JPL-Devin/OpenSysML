@@ -123,6 +123,8 @@ type calcShape struct {
 	compileState compileState
 	// ineligibleWhy says what kept the body out of the compiled tier.
 	ineligibleWhy string
+	// members indexes the chain's named members by binding name, built on first use.
+	members map[*symbols.Symbol]string
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -496,6 +498,7 @@ type invocationFrame struct {
 	slots    slotFrame
 	bindings map[string]Value
 	aliases  map[string]string
+	owner    *calcShape // the calc invoked, whose members the locals bind
 	host     calcStmtHost
 	env      stmtEnv
 	engine   stmtEngine
@@ -503,7 +506,7 @@ type invocationFrame struct {
 
 // locals is the frame the invocation's parameters and body locals are bound in.
 func (f *invocationFrame) locals() frame {
-	return frame{slots: &f.slots, vars: f.bindings, aliases: f.aliases}
+	return frame{slots: &f.slots, vars: f.bindings, aliases: f.aliases, owner: f.owner}
 }
 
 // maxFreeInvocationFrames bounds the frames kept, so one deep recursion does not
@@ -580,7 +583,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	defer ctx.endActivation(activation)
 
 	frame.slots.reset(shape.ParamNames)
-	frame.aliases = shape.Aliases
+	frame.aliases, frame.owner = shape.Aliases, shape
 	locals := frame.locals()
 	ec := &frame.ec
 	*ec = EvalContext{

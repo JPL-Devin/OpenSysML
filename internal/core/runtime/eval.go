@@ -113,7 +113,7 @@ func (ec *EvalContext) inEnv(env *conditionEnv) *EvalContext {
 	if env == nil {
 		return ec
 	}
-	out := ec.over(ec.scope, []frame{mapFrame(env.bindings)})
+	out := ec.over(ec.scope, []frame{env.bindings})
 	out.features = env.features
 	if env.enclosing {
 		out.resolving = nil
@@ -687,6 +687,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		return Value{}, ec.unresolvedQualifiedName(qn, reading)
 	}
 
+	// A feature of a behavior whose run is on the stack (`MassCase::result` in its
+	// objective or assertion) reads the value that run bound to it.
+	if val, ok := ec.frameFeatureValue(currentSym); ok {
+		return val, nil
+	}
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
 	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
@@ -750,6 +755,25 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		}
 	}
 	return Value{}, ec.resolvedWithoutValue(currentSym, qn)
+}
+
+// frameFeatureValue reads the resolved member from the innermost frame whose owner
+// declares or inherits it, under the name that owner's run binds it by.
+func (ec *EvalContext) frameFeatureValue(sym *symbols.Symbol) (Value, bool) {
+	for i := len(ec.frames) - 1; i >= 0; i-- {
+		f := ec.frames[i]
+		if f.owner == nil {
+			continue
+		}
+		name, ok := f.owner.memberName(ec.ctx, sym)
+		if !ok {
+			continue
+		}
+		if val, ok := f.lookup(name); ok {
+			return val, true
+		}
+	}
+	return Value{}, false
 }
 
 // resolvedWithoutValue reports a name that resolves to sym but reads no value:

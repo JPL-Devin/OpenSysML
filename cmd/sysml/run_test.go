@@ -179,6 +179,9 @@ const analysisModel = `package An {
     analysis pricey : Checked { subject s = dear; }
     analysis def Unbound { subject s : Ship; objective : Affordable; return r : Real = s.cost; }
     analysis unbound : Unbound { subject s = ship; }
+    requirement def CostCap { subject c : Real; require constraint { c < 6.0 } }
+    analysis def Capped { subject s : Ship; objective : CostCap { subject = Capped::result; } s.cost }
+    analysis capped : Capped { subject s = dear; }
 }`
 
 // TestRunAnalysis checks that an analysis case runs outside the prompt: from
@@ -205,6 +208,8 @@ func TestRunAnalysis(t *testing.T) {
 		"✗ An::pricey", "r = 9.0", "objective obj: not satisfied: it.cost < 6.0")
 	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::unbound"), 2,
 		"? An::unbound", "r = 5.0", "objective obj: undecided: objective obj: subject it defaults to the case's result (Cases::Case::obj): type mismatch: 5.0 (a Real) is not a Ship")
+	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::capped"), 1,
+		"✗ An::capped", "result = 9.0", "objective obj: not satisfied: c < 6.0")
 
 	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Priced(0.5)"), 2, "subject is unbound")
 	wantReport(t, check(t, binary, analysisModel, "-analysis", "An::Sum"), 2, "not an analysis case")

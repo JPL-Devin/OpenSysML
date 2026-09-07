@@ -11,6 +11,9 @@ type frame struct {
 	// perf is the action performance vars belongs to, if any, whose flow's nodes
 	// the frame also answers for (action_frame.go).
 	perf *actionFrame
+	// owner is the calc whose parameters, locals and outputs the frame binds, so a
+	// qualified name of one of its members (`MassCase::result`) reads the binding.
+	owner *calcShape
 }
 
 // canonical is the name aliases bind name under: its redefinition's, else its own.
@@ -43,6 +46,11 @@ func aliasRedefined(aliases map[string]string, redefined, name string) map[strin
 // mapFrame is a frame holding vars alone.
 func mapFrame(vars map[string]Value) frame {
 	return frame{vars: vars}
+}
+
+// ownedFrame is a frame holding the values a run of owner bound, by name.
+func ownedFrame(owner *calcShape, vars map[string]Value) frame {
+	return frame{vars: vars, owner: owner}
 }
 
 // lookup finds name in the frame: a slot binding it, else the map.
@@ -96,7 +104,7 @@ func (f frame) each(fn func(name string, value Value)) {
 func (f frame) snapshot() frame {
 	vars := make(map[string]Value, f.width())
 	f.each(func(name string, value Value) { vars[name] = value })
-	return mapFrame(vars)
+	return ownedFrame(f.owner, vars)
 }
 
 // width is the number of names the frame binds.

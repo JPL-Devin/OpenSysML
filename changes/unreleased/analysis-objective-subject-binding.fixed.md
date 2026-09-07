@@ -7,7 +7,16 @@
   outputs. An objective that binds no subject takes the library's default, the case's result
   (`Cases::Case::obj` declares `subject subj default Case::result`); a result of the wrong type is
   `undecided` saying so (`subject s defaults to the case's result (Cases::Case::obj): type
-  mismatch: 1000.0 (a Real) is not a Ship`), and a case returning none says to bind it or return one.
+  mismatch: 1000.0 (a Real) is not a Ship`), one of the wrong multiplicity (one `Ship` for a
+  `Ship[2]` subject) is `undecided` as a multiplicity violation, and a case returning none says to
+  bind it or return one.
+- **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
+  examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as
+  an empty sequence when the case's result was unnamed (a trailing expression or `return : Real`),
+  leaving the objective `undecided: comparison operands must be constants`. A qualified feature the
+  running case declares, or inherits from the library (`Cases::Case::result`), now reads the run's
+  binding for it: in the objective's subject, in an `assert constraint` of the body, and as
+  `inner.result` from the case performing `inner` as a step.
 - **A recursive analysis step reports one line, not one per frame.** An analysis performing itself
   as a nested step, or a `calc def` recursing through its own `calc` usage member, hit the recursion
   limit with a message repeating `node again:` ten thousand times (hundreds of kilobytes). Those

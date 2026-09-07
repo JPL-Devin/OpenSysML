@@ -826,8 +826,8 @@ func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 // subject is the object supplied from outside (the `by` of a satisfaction
 // assertion): it binds every subject the members declare, whose own binding is
 // then neither evaluated nor used. enclosing are the values bound around the
-// element (a case's, for its objective), which the binding expressions read.
-func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing map[string]Value) (map[string]Value, error) {
+// element (a case run's, for its objective), which the binding expressions read.
+func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, members []scopedMember, self *Instance, subject *Instance, enclosing frame) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
 	// The bindings are evaluated as one, so a calc usage two of them read answers
@@ -838,8 +838,8 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		ec := NewEvalContextIn(ctx, memberScope, self)
 		ec.activation = activation
 		ec.features = features
-		if enclosing != nil {
-			ec.Push(enclosing)
+		if enclosing.vars != nil {
+			ec.pushFrame(enclosing)
 		}
 		ec.Push(bindings)
 		return ec
@@ -1023,7 +1023,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	members := ctx.chainMembers(sym, scope)
 
 	// First pass: process subject/actor bindings
-	reqBindings, err := ctx.memberBindings(sym, "requirement", sym.Name, members, subject.instance, nil, nil)
+	reqBindings, err := ctx.memberBindings(sym, "requirement", sym.Name, members, subject.instance, nil, frame{})
 
 	if err != nil {
 		return ctx.checkResultOf(false, subject), err
@@ -1036,7 +1036,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		kind:     "requirement",
 		what:     "require condition",
 		self:     subject.instance,
-		bindings: reqBindings,
+		bindings: mapFrame(reqBindings),
 		negated:  NegatedDecl(sym),
 	}, conds)
 	if err != nil {

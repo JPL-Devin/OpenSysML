@@ -96,7 +96,7 @@ type scopedExpr struct {
 // and the values the checked element binds by name (subject, actors).
 type conditionEnv struct {
 	features map[string]scopedExpr
-	bindings map[string]Value
+	bindings frame
 
 	// enclosing marks the environment around a constraint usage, which its
 	// arguments read: `in v = v` names the outer v, not the parameter it binds.
@@ -411,9 +411,9 @@ type conditionCheck struct {
 	// self is the object a feature name resolves against, nil when unbound.
 	self *Instance
 
-	// bindings are the names the element binds itself (subject, actor); nil
-	// binds nothing.
-	bindings map[string]Value
+	// bindings are the values the element binds by name (subject, actor), and, for a
+	// check within a case run, the run's, owned by the case; the zero frame binds nothing.
+	bindings frame
 
 	// negated inverts the verdict: the element asserts that its required
 	// conditions do not all hold (`assert not …`, Invariant::isNegated).
@@ -810,7 +810,7 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
-func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings frame) (bool, error) {
 	for _, constraint := range cond.Constraints {
 		features, bindings = ctx.constraintScope(features, bindings, constraint)
 	}
@@ -827,8 +827,8 @@ func (ctx *Context) conditionHolds(activation int64, cond Condition, features ma
 		ec := NewEvalContextIn(ctx, cond.Scope, self)
 		ec.activation = activation
 		ec.features = features
-		if bindings != nil {
-			ec.Push(bindings)
+		if bindings.vars != nil {
+			ec.pushFrame(bindings)
 		}
 		result, err := ec.Eval(cond.Expr)
 		if err != nil {
@@ -893,7 +893,7 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // its parameters mask same-named ones (subject and actors included). The
 // arguments binding them (`in v = v`) read the enclosing environment; a default
 // its definition wrote (`in y default = x`) reads the usage's own parameters.
-func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings map[string]Value, constraint *symbols.Symbol) (map[string]scopedExpr, map[string]Value) {
+func (ctx *Context) constraintScope(features map[string]scopedExpr, bindings frame, constraint *symbols.Symbol) (map[string]scopedExpr, frame) {
 	own := ctx.conditionFeatures(constraint)
 	if len(own) == 0 {
 		return features, bindings
@@ -925,9 +925,9 @@ func isArgument(decl *symbols.Symbol) bool {
 }
 
 // unmasked returns bindings without the names features declare.
-func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[string]Value {
+func unmasked(bindings frame, features map[string]scopedExpr) frame {
 	masked := false
-	for name := range bindings {
+	for name := range bindings.vars {
 		if _, ok := features[name]; ok {
 			masked = true
 			break
@@ -936,13 +936,13 @@ func unmasked(bindings map[string]Value, features map[string]scopedExpr) map[str
 	if !masked {
 		return bindings
 	}
-	out := make(map[string]Value, len(bindings))
-	for name, value := range bindings {
+	out := make(map[string]Value, len(bindings.vars))
+	for name, value := range bindings.vars {
 		if _, ok := features[name]; !ok {
 			out[name] = value
 		}
 	}
-	return out
+	return ownedFrame(bindings.owner, out)
 }
 
 // conditionLabel renders a condition as written, so a violation names the

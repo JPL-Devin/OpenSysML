@@ -13,6 +13,7 @@ import (
 const objectiveBindingModel = `
 	package test {
 		private import ScalarValues::*;
+		private import SequenceFunctions::*;
 		part def Ship { attribute hullMass : Real; }
 		part ship : Ship { attribute :>> hullMass = 1000.0; }
 		part heavy : Ship { attribute :>> hullMass = 5000.0; }
@@ -63,8 +64,108 @@ const objectiveBindingModel = `
 			return picked : Ship = inner.picked;
 		}
 		analysis steppedDefault : SteppedDefault { subject ship = heavy; }
+
+		requirement def PairLimit { subject pair : Ship[2]; require constraint { pair->notEmpty() } }
+		requirement def FleetLimit { subject fleet : Ship[1..*]; require constraint { fleet->notEmpty() } }
+		analysis def OneForPair { subject ship : Ship; objective : PairLimit; return picked : Ship = ship; }
+		analysis def TwoForOne { subject ship : Ship; objective : MassLimit; return picked : Ship[2] = (ship, heavy); }
+		analysis def TwoForPair { subject ship : Ship; objective : PairLimit; return picked : Ship[2] = (ship, heavy); }
+		analysis def TwoForFleet { subject ship : Ship; objective : FleetLimit; return picked : Ship[2] = (ship, heavy); }
+		analysis oneForPair : OneForPair { subject ship = test::ship; }
+		analysis twoForOne : TwoForOne { subject ship = test::ship; }
+		analysis twoForPair : TwoForPair { subject ship = test::ship; }
+		analysis twoForFleet : TwoForFleet { subject ship = test::ship; }
 	}
 `
+
+// qualifiedResultModel binds objective subjects and body assertions to a case's
+// unnamed result by qualified name (<Case>::result), the OMG pilot example's form.
+const qualifiedResultModel = `
+	package test {
+		private import ScalarValues::*;
+		part def Ship { attribute hullMass : Real; }
+		part ship : Ship { attribute :>> hullMass = 1000.0; }
+		part heavy : Ship { attribute :>> hullMass = 5000.0; }
+
+		requirement def MassLimit { subject mass : Real; require constraint { mass < 2000.0 } }
+
+		analysis def Qualified {
+			subject vessel : Ship;
+			objective : MassLimit { subject = Qualified::result; }
+			vessel.hullMass
+		}
+		analysis qualified : Qualified { subject vessel = test::ship; }
+		analysis qualifiedHeavy : Qualified { subject vessel = heavy; }
+
+		analysis def Asserting {
+			subject vessel : Ship;
+			assert constraint capped { Asserting::result < 2000.0 }
+			vessel.hullMass
+		}
+		analysis asserting : Asserting { subject vessel = test::ship; }
+		analysis assertingHeavy : Asserting { subject vessel = heavy; }
+
+		analysis def Returned {
+			subject vessel : Ship;
+			objective : MassLimit { subject = Returned::result; }
+			return : Real = vessel.hullMass;
+		}
+		analysis returnedHeavy : Returned { subject vessel = heavy; }
+
+		analysis def Library {
+			subject vessel : Ship;
+			objective : MassLimit { subject = Cases::Case::result; }
+			vessel.hullMass
+		}
+		analysis libraryHeavy : Library { subject vessel = heavy; }
+
+		analysis def Mass { subject vessel : Ship; vessel.hullMass }
+		analysis def Outer {
+			subject vessel : Ship;
+			analysis inner : Mass { subject vessel = vessel; }
+			objective : MassLimit { subject = inner.result; }
+			return total : Real = inner.result * 2.0;
+		}
+		analysis outer : Outer { subject vessel = test::ship; }
+		analysis outerHeavy : Outer { subject vessel = heavy; }
+
+		analysis usageQualified { subject vessel = heavy; objective : MassLimit { subject = usageQualified::result; } vessel.hullMass }
+	}
+`
+
+// TestObjectiveSubjectBindsTheQualifiedResult pins that <Case>::result names the run's
+// unnamed result in an objective binding, a body assertion and a step's inner.result read.
+func TestObjectiveSubjectBindsTheQualifiedResult(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, qualifiedResultModel))
+	for _, tc := range []struct {
+		fqn, kind, output, value string
+		status                   VerdictStatus
+	}{
+		{"test::qualified", "objective", "result", "1000.0", VerdictSatisfied},
+		{"test::qualifiedHeavy", "objective", "result", "5000.0", VerdictNotSatisfied},
+		{"test::asserting", "assertion", "result", "1000.0", VerdictSatisfied},
+		{"test::assertingHeavy", "assertion", "result", "5000.0", VerdictNotSatisfied},
+		{"test::returnedHeavy", "objective", "result", "5000.0", VerdictNotSatisfied},
+		{"test::libraryHeavy", "objective", "result", "5000.0", VerdictNotSatisfied},
+		{"test::usageQualified", "objective", "result", "5000.0", VerdictNotSatisfied},
+		{"test::outer", "objective", "total", "2000.0", VerdictSatisfied},
+		{"test::outerHeavy", "objective", "total", "10000.0", VerdictNotSatisfied},
+	} {
+		result, err := ctx.RunAnalysis(oneSymbol(t, idx, tc.fqn), AnalysisArgs{}, nil, nil)
+		if err != nil {
+			t.Fatalf("RunAnalysis(%s): %v", tc.fqn, err)
+		}
+		if len(result.Outputs) != 1 || result.Outputs[0].Name != tc.output || FormatValue(result.Outputs[0].Value) != tc.value {
+			t.Errorf("%s: outputs = %+v, want %s = %s", tc.fqn, result.Outputs, tc.output, tc.value)
+		}
+		if len(result.Verdicts) != 1 || result.Verdicts[0].Kind != tc.kind || result.Verdicts[0].Status != tc.status {
+			t.Errorf("%s: verdicts = %+v, want the %s %s", tc.fqn, result.Verdicts, tc.kind, tc.status)
+		}
+		if tc.status == VerdictNotSatisfied && !strings.Contains(result.Verdicts[0].Detail, "< 2000.0") {
+			t.Errorf("%s: detail %q does not quote the failed condition", tc.fqn, result.Verdicts[0].Detail)
+		}
+	}
+}
 
 // objectiveVerdict runs the analysis usage fqn and answers its one objective's verdict.
 func objectiveVerdict(t *testing.T, ctx *Context, idx *symbols.Index, fqn string) AnalysisVerdict {
@@ -137,6 +238,31 @@ func TestObjectiveSubjectDefaultsToTheResult(t *testing.T) {
 	}
 }
 
+// TestObjectiveSubjectDefaultHonoursMultiplicity pins that the defaulted result must fit the
+// subject's multiplicity as well as its type: one Ship for a Ship[2] subject is undecided.
+func TestObjectiveSubjectDefaultHonoursMultiplicity(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, objectiveBindingModel))
+	for fqn, want := range map[string]string{
+		"test::oneForPair": "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::twoForOne":  "2 value(s) bound to a feature with multiplicity upper bound 1",
+	} {
+		verdict := objectiveVerdict(t, ctx, idx, fqn)
+		if verdict.Status != VerdictUndecided {
+			t.Fatalf("%s: %s (%s), want undecided", fqn, verdict.Status, verdict.Detail)
+		}
+		for _, part := range []string{"case's result", "Cases::Case::obj", "multiplicity violation", want} {
+			if !strings.Contains(verdict.Detail, part) {
+				t.Errorf("%s: detail %q does not say %q", fqn, verdict.Detail, part)
+			}
+		}
+	}
+	for _, fqn := range []string{"test::twoForPair", "test::twoForFleet"} {
+		if verdict := objectiveVerdict(t, ctx, idx, fqn); verdict.Status != VerdictSatisfied {
+			t.Errorf("%s: %s (%s), want satisfied", fqn, verdict.Status, verdict.Detail)
+		}
+	}
+}
+
 // TestObjectiveBindingFailureIsUndecided pins that a subject binding that cannot be evaluated
 // leaves the objective undecided, naming the binding, while the case's outputs are still reported.
 func TestObjectiveBindingFailureIsUndecided(t *testing.T) {
@@ -197,20 +323,26 @@ func TestObjectiveSubjectBindingOnAnObject(t *testing.T) {
 // mismatched default carries the typed error the requirement engine raises.
 func TestObjectiveBindingKeepsErrorIdentity(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, objectiveBindingModel))
-	sym := oneSymbol(t, idx, "test::unbound")
-	run, err := ctx.calcUsageRun(NewEvalContextIn(ctx, nil, nil), sym)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = run.outputValues(ctx); err != nil {
-		t.Fatal(err)
-	}
-	objectives := ctx.ObjectivesOf(sym, nil)
-	if len(objectives) != 1 {
-		t.Fatalf("%d objectives, want one", len(objectives))
-	}
-	_, err = ctx.objectiveBindings(run, objectives[0].Symbol, objectives[0].Name, run.bindings(ctx))
-	if !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("error = %v, want ErrTypeMismatch", err)
+	for fqn, want := range map[string]error{
+		"test::unbound":    ErrTypeMismatch,
+		"test::oneForPair": ErrMultiplicityViolation,
+		"test::twoForOne":  ErrMultiplicityViolation,
+	} {
+		sym := oneSymbol(t, idx, fqn)
+		run, err := ctx.calcUsageRun(NewEvalContextIn(ctx, nil, nil), sym)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = run.outputValues(ctx); err != nil {
+			t.Fatal(err)
+		}
+		objectives := ctx.ObjectivesOf(sym, nil)
+		if len(objectives) != 1 {
+			t.Fatalf("%s: %d objectives, want one", fqn, len(objectives))
+		}
+		_, err = ctx.objectiveBindings(run, objectives[0].Symbol, objectives[0].Name, run.bindingsFrame(ctx))
+		if !errors.Is(err, want) {
+			t.Errorf("%s: error = %v, want %v", fqn, err, want)
+		}
 	}
 }

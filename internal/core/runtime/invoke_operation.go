@@ -129,7 +129,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 		kind:     "constraint",
 		what:     "assertion",
 		self:     subject.instance,
-		bindings: bindings,
+		bindings: mapFrame(bindings),
 		negated:  NegatedDecl(sym),
 	}, ctx.conditionsOf(sym, ctx.chainMembers(sym, scope)))
 	if errors.Is(err, ErrViolated) {

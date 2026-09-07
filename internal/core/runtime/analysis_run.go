@@ -368,7 +368,7 @@ func (run *calcRun) outputValues(ctx *Context) ([]CalcOutputValue, error) {
 // analysisVerdicts checks the case's objectives and assertions against the
 // values its run bound: its parameters, its locals and its outputs.
 func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *symbols.Scope) []AnalysisVerdict {
-	bindings := run.bindings(ctx)
+	bindings := run.bindingsFrame(ctx)
 	var verdicts []AnalysisVerdict
 	for _, obj := range ctx.ObjectivesOf(sym, scope) {
 		name := obj.Name
@@ -404,16 +404,17 @@ func (ctx *Context) analysisVerdicts(run *calcRun, sym *symbols.Symbol, scope *s
 	return verdicts
 }
 
-// objectiveBindings are the case's bindings plus the subject and actors the objective binds
-// itself, as a requirement's are; a subject left unbound is the case's result (Cases::Case::obj).
-func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name string, caseBindings map[string]Value) (map[string]Value, error) {
+// objectiveBindings are the case run's bindings plus the subject and actors the objective
+// binds itself, as a requirement's are; a subject left unbound is the case's result
+// (Cases::Case::obj). The frame stays the case's, so `Case::result` reads the run's.
+func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name string, caseBindings frame) (frame, error) {
 	members := ctx.chainMembers(obj, obj.OwnerScope)
 	own, err := ctx.memberBindings(obj, "objective", name, members, run.self, nil, caseBindings)
 	if err != nil {
-		return nil, err
+		return frame{}, err
 	}
-	bindings := make(map[string]Value, len(caseBindings)+len(own))
-	for k, v := range caseBindings {
+	bindings := make(map[string]Value, len(caseBindings.vars)+len(own))
+	for k, v := range caseBindings.vars {
 		bindings[k] = v
 	}
 	for k, v := range own {
@@ -421,22 +422,40 @@ func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name st
 	}
 	subject, unbound := ctx.unboundObjectiveSubject(obj, members, own)
 	if subject == nil {
-		return bindings, nil
+		return ownedFrame(caseBindings.owner, bindings), nil
 	}
-	result, ok := run.caseResult(caseBindings)
+	result, ok := run.caseResult(caseBindings.vars)
 	if !ok {
-		return nil, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
+		return frame{}, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
 	}
-	if typ := ctx.extractType(subject); typ != nil {
-		if conforms, _, err := ctx.valueConforms(declScope(obj), &result, typ, admitDeclared); err == nil && !conforms {
-			return nil, fmt.Errorf("objective %s: subject %s defaults to the case's result (Cases::Case::obj): %w: %s (%s) is not a %s",
-				name, subject.Name, ErrTypeMismatch, FormatValue(result), describeValue(result), symbolText(typ))
-		}
+	if err := ctx.checkDefaultSubject(obj, subject, name, result); err != nil {
+		return frame{}, err
 	}
 	for unboundName := range unbound {
 		bindings[unboundName] = result
 	}
-	return bindings, nil
+	return ownedFrame(caseBindings.owner, bindings), nil
+}
+
+// checkDefaultSubject reports a case result the objective's subject cannot hold
+// as its default: more or fewer values than it declares, or one not of its type.
+func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, name string, result Value) error {
+	what := fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
+	decl := ctx.calcMemberDeclFor(obj, subject, subject.Name)
+	if msg := ctx.writeCountRefusal(decl.Target, &result); msg != "" {
+		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
+	}
+	typ := decl.Target.typ
+	if typ == nil {
+		return nil
+	}
+	for _, element := range elementsOf(result) {
+		if conforms, _, err := ctx.valueConforms(declScope(obj), &element, typ, admitDeclared); err == nil && !conforms {
+			return fmt.Errorf("%s: %w: %s (%s) is not a %s",
+				what, ErrTypeMismatch, FormatValue(element), describeValue(element), symbolText(typ))
+		}
+	}
+	return nil
 }
 
 // unboundObjectiveSubject is the objective's subject no binding the model writes supplies,
@@ -530,6 +549,12 @@ func (ctx *Context) analysisVerdict(kind, name string, check conditionCheck, con
 		verdict.Status = VerdictNotSatisfied
 	}
 	return verdict
+}
+
+// bindingsFrame is the run's bindings as a frame the case owns, so a condition
+// naming a feature of the case by qualified name (`MassCase::result`) reads them.
+func (run *calcRun) bindingsFrame(ctx *Context) frame {
+	return ownedFrame(run.shape, run.bindings(ctx))
 }
 
 // bindings are the values a run bound, by name: its parameters and locals, and

@@ -215,8 +215,8 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 // resultOutputName is the name an unnamed result parameter answers to.
 const resultOutputName = "result"
 
-// anonymousResult is the unnamed result a `return` or a trailing result
-// expression produces, which reads under the name `result`.
+// anonymousResult is the unnamed result a `return`, a trailing result expression
+// or a body returning a value produces, which reads under the name `result`.
 func (shape *calcShape) anonymousResult() (calcOutput, bool) {
 	for _, out := range shape.Outputs {
 		if out.IsResult && out.Name == "" {
@@ -225,6 +225,10 @@ func (shape *calcShape) anonymousResult() (calcOutput, bool) {
 	}
 	if shape.ResultExpr != nil {
 		return calcOutput{Name: resultOutputName, Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, true
+	}
+	if shape.resultOutput() == nil && lower.Returns(shape.Steps) {
+		// The body's `return` binds the result, so the run holds it and nothing evaluates it.
+		return calcOutput{Name: resultOutputName, Owner: shape.BodyOwner, IsResult: true}, true
 	}
 	return calcOutput{}, false
 }
@@ -243,6 +247,49 @@ func (ctx *Context) returnsResult(sym *symbols.Symbol) bool {
 	}
 	_, anonymous := shape.anonymousResult()
 	return anonymous
+}
+
+// memberName is the name a run of the calc binds the resolved member sym under: a
+// parameter, output or local its chain declares, or an inherited result parameter
+// (`Case::result`) as the result the calc designates.
+func (shape *calcShape) memberName(ctx *Context, sym *symbols.Symbol) (string, bool) {
+	if shape.members == nil {
+		shape.members = ctx.calcMemberNames(shape)
+	}
+	if name, ok := shape.members[sym]; ok {
+		return name, true
+	}
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.IsResult && ctx.libraryDeclared(sym) {
+		if out := shape.resultOutput(); out != nil && out.Name != "" {
+			return out.Name, true
+		}
+		if _, ok := shape.anonymousResult(); ok {
+			return resultOutputName, true
+		}
+	}
+	return "", false
+}
+
+// calcMemberNames indexes the named members declared along shape's chain by the
+// name the run binds each under, a renamed redeclaration's name included.
+func (ctx *Context) calcMemberNames(shape *calcShape) map[*symbols.Symbol]string {
+	members := make(map[*symbols.Symbol]string)
+	for _, link := range ctx.calcChain(shape.Sym) {
+		for _, member := range declMembers(link.Decl) {
+			var name string
+			if subject, ok := subjectDeclaration(member); ok {
+				name = subject.Name
+			} else if usage, ok := member.(*ast.Usage); ok {
+				name, _ = ast.EffectiveName(usage)
+			}
+			sym := memberSymbol(declScope(link), member)
+			if name == "" || sym == nil {
+				continue
+			}
+			members[sym] = canonical(shape.Aliases, name)
+		}
+	}
+	return members
 }
 
 // resultSegments is the member path reading the unnamed result of a usage.
@@ -572,7 +619,7 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext, args ca
 		ec.trace.RecordCalculationEnter(shape.Kind, shape.Name)
 	}
 
-	env := frame{vars: make(map[string]Value, len(shape.Params)), aliases: shape.Aliases}
+	env := frame{vars: make(map[string]Value, len(shape.Params)), aliases: shape.Aliases, owner: shape}
 	ec.pushFrame(env)
 
 	// A usage declared in a behavior's body is written in that body, so its own
