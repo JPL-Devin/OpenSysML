@@ -1,0 +1,12 @@
+{
+  "libraries": true,
+  "type": "analysis",
+  "evaluate": "test::heavyBySibling",
+  "outputs": {
+    "result": {"type": "Real", "value": 5000.0}
+  },
+  "verdicts": {
+    "obj": "satisfied",
+    "capped": "satisfied"
+  }
+}

@@ -407,9 +407,11 @@ locals, and its steps' outputs — a nested case's (`subject = inner.picked;`) o
 (`subject = weigh.m;`). The case's own result, named or not,
 is readable by its qualified name as the OMG examples write it — `subject = MassCase::result;` in
 the objective, `MassCase::result < limit` in an `assert constraint`, `inner.result` from the case
-performing `inner` as a step. An objective that binds no subject takes the library's default for
-it: the case's result (`Cases::Case::obj` declares `subject subj default Case::result`, SysML v2
-§7.22). So an objective typed by `MassLimit` in a case that `return`s a `Ship` checks the ship
+performing `inner` as a step. The qualifier names whose result it is: `MassCase::result` (or
+`Cases::Case::result`) is the running case's, while a sibling usage's `light::result` is the
+sibling's own run, never the running case's value. An objective that binds no subject takes the
+library's default for it: the case's result (`Cases::Case::obj` declares `subject subj default
+Case::result`, SysML v2 §7.22). So an objective typed by `MassLimit` in a case that `return`s a `Ship` checks the ship
 returned, while in a case that returns a `Real` it is `undecided`, saying so: `subject s defaults
 to the case's result (Cases::Case::obj): type mismatch: 1000.0 (a Real) is not a Ship`. The result
 must also fit the subject's multiplicity: one `Ship` for a `subject pair : Ship[2]` is `undecided`

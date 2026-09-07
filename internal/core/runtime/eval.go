@@ -689,8 +689,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 
 	// A feature of a behavior whose run is on the stack (`MassCase::result` in its
 	// objective or assertion) reads the value that run bound to it.
-	if val, ok := ec.frameFeatureValue(currentSym); ok {
-		return val, nil
+	if qualifier, ok := reading.Part(len(qn.Parts) - 2); ok {
+		if val, ok := ec.frameFeatureValue(qualifier, currentSym); ok {
+			return val, nil
+		}
 	}
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
@@ -757,12 +759,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	return Value{}, ec.resolvedWithoutValue(currentSym, qn)
 }
 
-// frameFeatureValue reads the resolved member from the innermost frame whose owner
-// declares or inherits it, under the name that owner's run binds it by.
-func (ec *EvalContext) frameFeatureValue(sym *symbols.Symbol) (Value, bool) {
+// frameFeatureValue reads the resolved member sym, qualified by qualifier, from the innermost
+// frame whose owner is (or specializes) the qualifier, under the name that owner's run binds it by.
+func (ec *EvalContext) frameFeatureValue(qualifier, sym *symbols.Symbol) (Value, bool) {
 	for i := len(ec.frames) - 1; i >= 0; i-- {
 		f := ec.frames[i]
-		if f.owner == nil {
+		if f.owner == nil || !f.owner.qualifiedBy(ec.ctx, qualifier) {
 			continue
 		}
 		name, ok := f.owner.memberName(ec.ctx, sym)

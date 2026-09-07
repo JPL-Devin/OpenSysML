@@ -270,6 +270,20 @@ func (shape *calcShape) memberName(ctx *Context, sym *symbols.Symbol) (string, b
 	return "", false
 }
 
+// qualifiedBy reports whether a name qualified by qualifier (`MassCase::result`,
+// `Cases::Case::result`) denotes this calc's run: the calc itself or one it specializes.
+func (shape *calcShape) qualifiedBy(ctx *Context, qualifier *symbols.Symbol) bool {
+	if qualifier == shape.Sym {
+		return true
+	}
+	for _, general := range ctx.model.MemberSources(shape.Sym) {
+		if general == qualifier {
+			return true
+		}
+	}
+	return false
+}
+
 // calcMemberNames indexes the named members declared along shape's chain by the
 // name the run binds each under, a renamed redeclaration's name included.
 func (ctx *Context) calcMemberNames(shape *calcShape) map[*symbols.Symbol]string {

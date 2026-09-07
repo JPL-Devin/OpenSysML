@@ -146,6 +146,20 @@ const qualifiedResultModel = `
 		analysis outerHeavy : Outer { subject vessel = heavy; }
 
 		analysis usageQualified { subject vessel = heavy; objective : MassLimit { subject = usageQualified::result; } vessel.hullMass }
+
+		analysis def Other { subject vessel : Ship; vessel.hullMass }
+		analysis def Sibling {
+			subject vessel : Ship;
+			objective : MassLimit { subject = Other::result; }
+			vessel.hullMass
+		}
+		analysis sibling : Sibling { subject vessel = heavy; }
+		analysis light : Mass { subject vessel = test::ship; }
+		analysis siblingUsage : Mass {
+			subject vessel = heavy;
+			objective : MassLimit { subject = light::result; }
+			assert constraint capped { light::result < 2000.0 }
+		}
 	}
 `
 
@@ -179,6 +193,33 @@ func TestObjectiveSubjectBindsTheQualifiedResult(t *testing.T) {
 		}
 		if tc.status == VerdictNotSatisfied && !strings.Contains(result.Verdicts[0].Detail, "< 2000.0") {
 			t.Errorf("%s: detail %q does not quote the failed condition", tc.fqn, result.Verdicts[0].Detail)
+		}
+	}
+}
+
+// TestQualifiedResultNamesItsOwnCase pins that <Case>::result reads the run of that case only:
+// a sibling definition's result is not the running case's, and a sibling usage's is its own run's.
+func TestQualifiedResultNamesItsOwnCase(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, qualifiedResultModel))
+
+	sibling := objectiveVerdict(t, ctx, idx, "test::sibling")
+	if sibling.Status != VerdictUndecided || strings.Contains(sibling.Detail, "< 2000.0") {
+		t.Errorf("Other::result while Sibling runs: %s (%s), want undecided without reading Sibling's result", sibling.Status, sibling.Detail)
+	}
+
+	result, err := ctx.RunAnalysis(oneSymbol(t, idx, "test::siblingUsage"), AnalysisArgs{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Outputs) != 1 || FormatValue(result.Outputs[0].Value) != "5000.0" {
+		t.Errorf("outputs = %+v, want result = 5000.0", result.Outputs)
+	}
+	if len(result.Verdicts) != 2 {
+		t.Fatalf("verdicts = %+v, want the objective's and the assertion's", result.Verdicts)
+	}
+	for _, verdict := range result.Verdicts {
+		if verdict.Status != VerdictSatisfied {
+			t.Errorf("%s %s over light::result: %s (%s), want satisfied (light's 1000.0, not 5000.0)", verdict.Kind, verdict.Name, verdict.Status, verdict.Detail)
 		}
 	}
 }
