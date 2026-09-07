@@ -374,6 +374,11 @@ func FormatTraceValue(v Value) string {
 			return v.Kind.String()
 		}
 		return v.VectorQuantity().format(formatConst)
+	case ValTensorQuantity:
+		if v.TensorQuantity() == nil {
+			return v.Kind.String()
+		}
+		return v.TensorQuantity().format(formatConst)
 	case ValMeasurementRef:
 		if v.MeasurementRef() == nil {
 			return v.Kind.String()
@@ -426,6 +431,8 @@ func TraceLabel(node ast.Node) string {
 		return "null"
 	case *ast.FeatureReference:
 		return "feature " + qualifiedNameToString(n.Name)
+	case *ast.QualifiedName:
+		return "feature " + qualifiedNameToString(n)
 	case *ast.FeatureChainExpr:
 		return "chain " + qualifiedNameToString(n.Member)
 	case *ast.OperatorExpr:

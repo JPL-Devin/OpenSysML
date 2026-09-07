@@ -192,10 +192,10 @@ Note that `not_found` is also the status for an unknown *symbol* on some methods
 which (`model not found:`, `symbol not found:`, `file not found:`), and a client that recovers
 by re-parsing must read it.
 
-## `Value`: fourteen arms, exactly one present
+## `Value`: fifteen arms, exactly one present
 
 Every value the engine returns — an expression result, a feature of an instance, an action
-output, a state-machine context variable — is a `Value`, which is a proto `oneof` of fourteen
+output, a state-machine context variable — is a `Value`, which is a proto `oneof` of fifteen
 arms. In JSON that is **an object with exactly one key**, and the key is the discriminator.
 A decoder therefore does not look for a `kind` field: it looks at which key is present. The
 arms, each captured from `Evaluate` against the model at the end of this section:
@@ -216,9 +216,11 @@ arms, each captured from `Evaluate` against the model at the end of this section
 | `array` | object | `{"result":{"array":{"dimensions":["2","3"],"elements":[{"intValue":"1"},…,{"intValue":"6"}]}}}` | Multi-dimensional array; `elements` are `Value`s in row-major order |
 | `vector` | object | `{"result":{"vector":{"components":[{"realValue":3},{"realValue":4}]}}}` | Numeric vector; each component an `intValue` or `realValue` |
 | `vectorQuantity` | object | `{"result":{"vectorQuantity":{"components":[{"realMagnitude":3,"unit":"m","unitTerm":{…}},…]}}}` | Vector of quantities; one `quantity` body per component |
+| `measurementRef` | object | `{"result":{"measurementRef":{"unit":"m","unitTerm":{…},"unitId":"SI::metre"}}}` | A measurement reference on its own: a unit, its reduction, and the declaration it names |
 
-The last three rows were captured against `conformance/fixtures/structured.sysml` (`S::grid`,
-`S::v`, `S::d`); the rest against the model below, with requests of the form
+The `array`, `vector` and `vectorQuantity` rows were captured against
+`conformance/fixtures/structured.sysml` (`S::grid`, `S::v`, `S::d`), `measurementRef` against
+`conformance/fixtures/measurement_ref.sysml` (`M::u`); the rest against the model below, with requests of the form
 `{"modelHash":"59c4…a654","expression":"<expr>","contextSymbolId":"Rover"}` with `rover.count`,
 `1.0 / 3.0`, `rover.armed`, `"abc"`, `rover.wheel`, `rover.tags`, `null`, `rover.speed`,
 `Mode::idle`, `rover.serial` and `rover.z`, and the model was:
@@ -276,6 +278,9 @@ decode(v):
   vector       → map over v.vector.components: intValue → integer, realValue → double,
                  anything else → an error
   vectorQuantity → map the quantity rule over v.vectorQuantity.components; empty → an error
+  measurementRef → unit := v.measurementRef.unit, id := v.measurementRef.unitId;
+                 require v.measurementRef.unitTerm when either is present, else an error;
+                 require unit or id, else an error; id absent means a composed unit
   anything else → an error: a newer service than this decoder
 ```
 
@@ -421,6 +426,29 @@ every component names the same one. An empty `components` list is an error: a ve
 has at least one component. A component sent without its `unitTerm` is refused by the rule
 under `quantity`.
 
+**`measurementRef`.** A unit on its own — what `SI::m`, `m / s` or a quantity's `.mRef`
+evaluate to — with no magnitude:
+
+```console
+$ … /Evaluate -d '{"modelHash":"5b0f…40d5","expression":"M::u"}'
+{"result":{"measurementRef":{"unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}, "unitId":"SI::metre"}}}
+
+$ … /Evaluate -d '{"modelHash":"5b0f…40d5","expression":"M::speed"}'
+{"result":{"measurementRef":{"unit":"m/s", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}, {"unitId":"SI::second", "exponent":-1}]}}}}
+```
+
+- `unit` and `unitTerm` are the `quantity` arm's, under the same rule: a `unit` that names one
+  is never sent without its reduction, and a client sending one without it is refused.
+- `unitId` is the fully qualified name of the unit *declaration* the reference is — the
+  canonical name, `SI::metre` for `m` and for the alias `SI::m` — and is the identity a client
+  keeps to send the same reference back. It is **absent for a composed unit** (`m / s` above,
+  `km / h`): a unit computed from others names no one declaration, and a client must not
+  fabricate one. A reference sent with a `unitId` is resolved against the model's own
+  declaration, and refused when the id names nothing, names something that is not a unit,
+  or its `unitTerm` disagrees with the declaration's own reduction (see `EvaluateCalc`).
+- A `measurementRef` is not a `quantity` with magnitude one: `ConvertQuantity(q, ref)` takes
+  one, `q * ref` does not.
+
 ### What a client must not do
 
 - **Do not compare enum literals by `name`.** Compare `literalId`.
@@ -437,6 +465,8 @@ under `quantity`.
 - **Do not read an `array` or a `vector` as a `sequence`.** The first has a shape and the
   second a dimension; flattening either into a list loses what the arm exists to carry.
 - **Do not index an `array` before checking `len(elements) == product(dimensions)`.**
+- **Do not invent a `unitId` for a `measurementRef` that has none.** A composed unit names no
+  declaration; send it back as it came, with its `unit` and `unitTerm` only.
 
 ## Three places a failure can be
 
@@ -732,8 +762,24 @@ $ … /EvaluateCalc -d '{"modelHash":"42cc…54b0","symbolId":"S::length","argum
 {"error":"calc argument could not be read: vector component is not a number: component 2", "failureReason":"FAILURE_REASON_EVALUATION"}
 ```
 
-A service without the `structured_values` capability refuses the same argument with the
-`unimplemented` Connect error instead, naming the capability; check `GetServerInfo` first.
+A `measurementRef` argument goes back the same way, and is read against the model's own unit
+declaration when it names one — a named unit without its reduction, or with a reduction that
+is not the declaration's, is the same kind of in-body failure:
+
+```console
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[{"quantity":{"intMagnitude":"3","unit":"km","unitTerm":{"scaleNum":1000,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]}}},{"measurementRef":{"unit":"m","unitTerm":{"scaleNum":1,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]},"unitId":"SI::metre"}}]}'
+{"result":{"quantity":{"realMagnitude":3000, "unit":"m", "unitTerm":{"scaleNum":1, "scaleDen":1, "factors":[{"unitId":"SI::metre", "exponent":1}]}}}}
+
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[…,{"measurementRef":{"unit":"m","unitId":"SI::metre"}}]}'
+{"error":"calc argument could not be read: unit carries no reduction to base units: m", "failureReason":"FAILURE_REASON_EVALUATION"}
+
+$ … /EvaluateCalc -d '{"modelHash":"5b0f…40d5","symbolId":"M::toUnit","arguments":[…,{"measurementRef":{"unit":"m","unitTerm":{"scaleNum":1000,"scaleDen":1,"factors":[{"unitId":"SI::metre","exponent":1}]},"unitId":"SI::metre"}}]}'
+{"error":"calc argument could not be read: unit as written does not reduce to its unit_term: SI::metre reduces to metre, unit_term is 1000·metre", "failureReason":"FAILURE_REASON_EVALUATION"}
+```
+
+A service without the `structured_values` capability refuses a structured argument, and one
+without `measurement_refs` a `measurementRef` argument, with the `unimplemented` Connect
+error instead, naming the capability; check `GetServerInfo` first.
 
 A calc *usage* whose output features are evaluated from its own members (no `arguments`)
 answers them as `outputs`, a list of `{"name":…,"value":<Value>}` in declaration order, in

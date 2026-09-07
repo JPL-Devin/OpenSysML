@@ -86,10 +86,12 @@ const (
 	xEndIndex        = "endIndex"
 	xEndRole         = "endRole"
 	xEndName         = "endName"
-	xEndForm         = "endForm"
-	xEndVerb         = "endVerb"
-	xSourceMember    = "sourceMember"
-	xTargetMember    = "targetMember"
+	// The ReferencesKeyword a named end spells, when it is not `::>`.
+	xEndReferencesKeyword = "endReferencesKeyword"
+	xEndForm              = "endForm"
+	xEndVerb              = "endVerb"
+	xSourceMember         = "sourceMember"
+	xTargetMember         = "targetMember"
 	// The identity properties: whether an element's id came from an explicit
 	// ElementId annotation, and the ProjectRef provenance of a scope root.
 	xDeclaredID = "declaredId"
@@ -109,6 +111,13 @@ const (
 	formFlowTo    = "flowTo"    // flow a to b
 	formThen      = "then"      // then b, whose source end is the member before it
 	formSatisfy   = "satisfy"   // satisfy R by v, whose requirement is written bare
+)
+
+// The two spellings of ReferencesKeyword between a connector end's name and the
+// feature it reference-subsets (KerML.xtext:856).
+const (
+	referencesSymbol = "::>"
+	referencesWord   = "references"
 )
 
 // dtExpression is the datatype of a relationship target that is not a name but
@@ -1181,36 +1190,24 @@ func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
 			continue
 		}
 		slot := fmt.Sprintf("end%d", i)
-		e.bindingEnd(subject, owner, slot, i, "", end.AttachedTarget(), end.Multiplicity)
+		e.endNode(subject, owner, slot, i, "", end.AttachedTarget(), end.Multiplicity)
 		if id, named := end.DeclaredName(); named {
-			e.graph.Add(rdf.ExpressionIRI(subject, slot), e.sysx(xEndName), rdf.String(id.Name))
+			node := rdf.ExpressionIRI(subject, slot)
+			e.graph.Add(node, e.sysx(xEndName), rdf.String(id.Name))
+			if keyword := e.referencesKeyword(end); keyword != referencesSymbol {
+				e.graph.Add(node, e.sysx(xEndReferencesKeyword), rdf.String(keyword))
+			}
 		}
 	}
 	if n.FlowEnds != nil {
-		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
-		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
-		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
-	}
-	// `bind [m] a = [n] b` relates the features it references and its value node.
-	if n.Kind == ast.UsageBinding && len(n.ConnectorEnds) == 0 {
-		index := 0
-		for _, rel := range n.Relationships {
-			if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
-				continue
-			}
-			e.bindingEnd(subject, owner, fmt.Sprintf("end%d", index), index, "", rel.Target, rel.Multiplicity)
-			index++
-		}
-		if n.Value != nil {
-			value := rdf.ExpressionIRI(subject, pValue)
-			e.graph.Add(subject, e.sysx(xRelatedFeature), value)
-			e.endMarks(value, owner, index, "", n.ValueMultiplicity)
-		}
+		e.endNode(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
+		e.endNode(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
+		e.endNode(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
 	}
 }
 
-// bindingEnd emits one end as an expression node, tagged with its position.
-func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
+// endNode emits one end as an expression node, tagged with its position.
+func (e *encoder) endNode(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
 	if target == nil {
 		return
 	}
@@ -1584,9 +1581,6 @@ func headNodes(n *ast.Usage) []ast.Node {
 	add(n.Value)
 	if n.Multiplicity != nil {
 		add(n.Multiplicity)
-	}
-	if n.ValueMultiplicity != nil {
-		add(n.ValueMultiplicity)
 	}
 	if n.CrossFeature != nil {
 		add(n.CrossFeature)

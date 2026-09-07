@@ -380,7 +380,7 @@ func (t *translator) pinTerm(p Pin, v *Var) (*Term, string, error) {
 	case runtime.ValEnumLiteral:
 		term, err := t.pinDatatype(p, v, text, p.Value.Literal())
 		return term, text, err
-	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity:
+	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity, runtime.ValTensorQuantity:
 		return nil, text, t.pinRefusal(p, v, text,
 			"the term language has scalar variables only, and "+text+" is not a scalar")
 	case runtime.ValMeasurementRef:
@@ -529,7 +529,7 @@ func pinText(t *translator, val runtime.Value) string {
 		return t.fqn(val.Variant())
 	case runtime.ValEnumLiteral:
 		return val.LiteralText()
-	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity, runtime.ValMeasurementRef:
+	case runtime.ValArray, runtime.ValVector, runtime.ValVectorQuantity, runtime.ValTensorQuantity, runtime.ValMeasurementRef:
 		return runtime.FormatValue(val)
 	default:
 		return "a " + val.Kind.String()

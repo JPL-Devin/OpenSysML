@@ -146,3 +146,49 @@ func TestBuildNamedEntryDoExitActionsAreStateMembers(t *testing.T) {
 		}
 	}
 }
+
+// A binding's named ends (`bind e1 ::> a = e2 references b;`) are end features
+// of the binding, so they are its members and not the featuring type's; the
+// bare ends and the referenced features declare nothing new (SysML.xtext:1000).
+func TestBuildBindingConnectorEndsAreTheBindingsMembers(t *testing.T) {
+	root := parser.New(source.New("t.sysml", []byte(`package P {
+		part def T {
+			attribute a; attribute b;
+			bind a = b;
+			bind e1 ::> a = e2 references b;
+			binding bb bind [1] e3 ::> a = b;
+		}
+	}`))).ParseFile()
+	pkg := Build(root).LookupLocalAll("P")[0].Scope
+	typ := pkg.LookupLocalAll("T")[0].Scope
+	for _, name := range []string{"a", "b", "bb"} {
+		if got := len(typ.LookupLocalAll(name)); got != 1 {
+			t.Errorf("T declares %d symbols named %q, want 1", got, name)
+		}
+	}
+	for _, name := range []string{"e1", "e2", "e3"} {
+		if got := typ.LookupLocalAll(name); len(got) != 0 {
+			t.Errorf("the end name %s leaked into T as %v", name, got)
+		}
+	}
+	ends := map[string]int{}
+	for _, child := range typ.Children() {
+		for _, name := range []string{"e1", "e2", "e3"} {
+			for _, sym := range child.LookupLocalAll(name) {
+				if sym.Kind != SymbolConnectorEnd {
+					t.Errorf("the end %s is a %v, want a connectorEnd", name, sym.Kind)
+				}
+				ends[name]++
+			}
+		}
+	}
+	for _, name := range []string{"e1", "e2", "e3"} {
+		if ends[name] != 1 {
+			t.Errorf("binding scopes declare %d ends named %s, want 1", ends[name], name)
+		}
+	}
+	bb := typ.LookupLocalAll("bb")[0]
+	if got := bb.Scope.LookupLocalAll("e3"); len(got) != 1 || got[0].Kind != SymbolConnectorEnd {
+		t.Errorf("bb declares %v for its end e3, want one connectorEnd", got)
+	}
+}

@@ -9,8 +9,8 @@ import (
 
 // Value is one evaluated SysML value. It is a sealed sum: the concrete types
 // are Int, Real, Complex, Bool, String, InstanceID, Sequence, Null, Unset,
-// Quantity, EnumLiteral, Array, Vector and VectorQuantity, and a type switch
-// over them is exhaustive.
+// Quantity, EnumLiteral, Array, Vector, VectorQuantity and MeasurementRef, and
+// a type switch over them is exhaustive.
 type Value interface {
 	isValue()
 }
@@ -80,6 +80,21 @@ type UnitFactor struct {
 	UnitID string
 	// Exponent the base unit is raised to.
 	Exponent float64
+}
+
+// MeasurementRef is a measurement unit held as a value by itself, with no
+// magnitude: `SI::m`, `km`, or `m / s` as an operation composed it. It is what
+// a MeasurementUnit-typed attribute or a quantity's mRef evaluates to, and what
+// ConvertQuantity takes as its target.
+type MeasurementRef struct {
+	// Unit as written ("km") or as an operation composed it ("m/s"); empty
+	// for one never written down, described by Term alone.
+	Unit string
+	// Term is what the unit reduces to. Required wherever Unit names a unit.
+	Term *UnitTerm
+	// UnitID is the FQN of the one unit declaration the reference names
+	// ("SI::kilometre"); empty for a unit an operation composed, which names none.
+	UnitID string
 }
 
 // EnumLiteral is one literal of an enumeration definition. A literal is its
@@ -170,6 +185,35 @@ func (vq VectorQuantity) String() string {
 	return out
 }
 
+// String renders the reference as SysML writes the unit: `km`, `m/s`; one
+// never written down renders its reduction.
+func (r MeasurementRef) String() string {
+	if r.Unit != "" || r.Term == nil {
+		return r.Unit
+	}
+	return r.Term.String()
+}
+
+// String renders the reduction over its base units, `1000/3600·SI::m·SI::s^-1`,
+// a scale of one and an exponent of one left implicit; `1` for dimension one.
+func (t UnitTerm) String() string {
+	var parts []string
+	if t.ScaleNum != t.ScaleDen {
+		parts = append(parts, fmt.Sprintf("%g/%g", t.ScaleNum, t.ScaleDen))
+	}
+	for _, f := range t.Factors {
+		if f.Exponent == 1 {
+			parts = append(parts, f.UnitID)
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s^%g", f.UnitID, f.Exponent))
+	}
+	if len(parts) == 0 {
+		return "1"
+	}
+	return strings.Join(parts, "·")
+}
+
 // String is the literal as a reader writes it, the Name the service reported.
 func (e EnumLiteral) String() string {
 	return e.Name
@@ -203,6 +247,7 @@ func (EnumLiteral) isValue()    { /* marker: closed Value set */ }
 func (Array) isValue()          { /* marker: closed Value set */ }
 func (Vector) isValue()         { /* marker: closed Value set */ }
 func (VectorQuantity) isValue() { /* marker: closed Value set */ }
+func (MeasurementRef) isValue() { /* marker: closed Value set */ }
 
 func (Int) isNumber()  { /* marker: closed Number set */ }
 func (Real) isNumber() { /* marker: closed Number set */ }

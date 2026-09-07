@@ -523,18 +523,24 @@ func TestStructuredInputNeedsStructuredValues(t *testing.T) {
 	}
 }
 
-// The wire Value has no measurement-reference arm, so a bare unit crosses as an
-// unsupported null naming it, never as a sequence, a string or a quantity of one.
-func TestMeasurementRefCrossesAsUnsupported(t *testing.T) {
-	metre := runtime.NewMeasurementRefValue(semantics.Unit{
+// The wire Value has no tensor arm, so a tensor quantity crosses as an unsupported
+// null naming it, never flattened to a sequence, an array or one quantity.
+func TestTensorQuantityCrossesAsUnsupported(t *testing.T) {
+	metre := semantics.Unit{
 		Text:    "m",
 		Product: semantics.OpaqueUnitProduct("m", semantics.UnitTerm{Scale: semantics.UnitScale(1)}),
-	})
-	pv := ValueToProto(metre, nil)
-	if pv.GetSequence() != nil || pv.GetQuantity() != nil || pv.GetStringValue() != "" {
-		t.Fatalf("a measurement reference crossed as %T: %v", pv.GetKind(), pv)
 	}
-	if got, want := pv.GetNull(), "unsupported: measurement reference m"; got != want {
-		t.Errorf("ValueToProto(m) = %v, want null %q", pv, want)
+	num := make([]semantics.Value, 4)
+	units := make([]runtime.Unit, 4)
+	for i := range num {
+		num[i] = semantics.Value{Kind: semantics.ValReal, Real: float64(i + 1)}
+		units[i] = metre
+	}
+	pv := ValueToProto(runtime.NewTensorQuantityValue([]int64{2, 2}, num, units), nil)
+	if pv.GetSequence() != nil || pv.GetArray() != nil || pv.GetQuantity() != nil || pv.GetVector() != nil {
+		t.Fatalf("a tensor quantity crossed as %T: %v", pv.GetKind(), pv)
+	}
+	if got, want := pv.GetNull(), "unsupported: tensor quantity Tensor(2, 2)[1.0, 2.0, 3.0, 4.0] [m]"; got != want {
+		t.Errorf("ValueToProto(tensor) = %v, want null %q", pv, want)
 	}
 }

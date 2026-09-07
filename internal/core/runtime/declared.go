@@ -57,7 +57,7 @@ func (r *DeclaredReader) objectOf(sym *symbols.Symbol) (*Instance, error) {
 		r.ctx.abandonInstancesSince(mark)
 		return nil, err
 	}
-	if r.ctx.namesOneObject(sym) {
+	if r.ctx.registersOccurrence(sym) {
 		r.ctx.occurrences[sym] = inst.ID
 	}
 	r.objects[sym] = inst

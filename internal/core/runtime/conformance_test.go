@@ -35,9 +35,10 @@ type ExpectedValue struct {
 	Im *float64 `json:"im,omitempty"`
 	// Elements are the members a Sequence holds, in order, for a case asserting a
 	// multi-valued feature. Set it instead of value. A Vector's are its numbers, a
-	// VectorQuantity's its axes as Quantity values, an Array's its row-major elements.
+	// VectorQuantity's its axes as Quantity values, an Array's or a TensorQuantity's
+	// its row-major elements.
 	Elements []ExpectedValue `json:"elements,omitempty"`
-	// Dimensions are an Array's, in order.
+	// Dimensions are an Array's or a TensorQuantity's, in order.
 	Dimensions []int64 `json:"dimensions,omitempty"`
 	// Error is the text producing this value must fail with, for a feature value whose
 	// contract is a diagnostic. Set it instead of type and value.
@@ -1409,6 +1410,16 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 			t.Errorf("%s: dimensions = %v, want %v", name, got, expected.Dimensions)
 		}
 		validateElements(t, ctx, name, expected.Elements, actual.Array().Elements)
+	case "TensorQuantity":
+		if actual.Kind != ValTensorQuantity || actual.TensorQuantity() == nil {
+			t.Errorf("%s: type = %v, want TensorQuantity", name, actual.Kind)
+			return
+		}
+		tq := actual.TensorQuantity()
+		if got := tq.Dimensions; !slices.Equal(got, expected.Dimensions) {
+			t.Errorf("%s: dimensions = %v, want %v", name, got, expected.Dimensions)
+		}
+		validateElements(t, ctx, name, expected.Elements, tq.components())
 	case "Instance":
 		if actual.Kind != ValInstance {
 			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)

@@ -25,6 +25,7 @@
             "unset_value",
             "complex_values",
             "structured_values",
+            "measurement_refs",
             "apply_edits",
             "strict_conformance",
             "feature_values",

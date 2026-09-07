@@ -277,6 +277,8 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 			return []queryexec.Value{queryexec.ElementValue(decl)}, nil
 		}
 		return nil, fmt.Errorf("the measurement reference %s names no single declaration to bind to a query parameter", runtime.FormatValue(value))
+	case runtime.ValTensorQuantity:
+		return nil, fmt.Errorf("a tensor quantity %s cannot be bound to a query parameter: its components are measured, and a query takes bare scalars or elements", runtime.FormatValue(value))
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}

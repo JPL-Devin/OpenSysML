@@ -95,6 +95,7 @@ switch (value.kind) {
   case "boolean":
   case "string":   value.value;
   case "quantity": value.magnitude; value.unit;
+  case "measurementRef": value.unit; value.unitTerm; value.unitId;  // a bare unit and its reduction
   case "array":    value.dimensions; value.elements;   // row-major SysMLValue[]
   case "vector":   value.components;             // Magnitude[]: int | real, kept apart
   case "vectorQuantity": value.components;       // QuantityValue[], one unit each

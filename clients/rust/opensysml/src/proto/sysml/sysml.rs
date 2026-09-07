@@ -781,7 +781,7 @@ pub struct AttributeInfo {
 /// Value represents a runtime-evaluable value
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Value {
-    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
+    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15")]
     pub kind: ::core::option::Option<value::Kind>,
 }
 /// Nested message and enum types in `Value`.
@@ -825,6 +825,9 @@ pub mod value {
         /// components each with their unit
         #[prost(message, tag="14")]
         VectorQuantity(super::VectorQuantity),
+        /// a unit by itself, no magnitude
+        #[prost(message, tag="15")]
+        MeasurementRef(super::MeasurementRef),
     }
 }
 /// Array is a Collections::Array: its elements flattened in row-major order
@@ -913,6 +916,32 @@ pub mod quantity {
         #[prost(double, tag="2")]
         RealMagnitude(f64),
     }
+}
+/// MeasurementRef is a MeasurementReferences::ScalarMeasurementReference held as
+/// a value: a unit by itself — `SI::m`, `km`, or `m / s` as an operation composed
+/// it — as distinct from a Quantity expressed in one. It carries what the runtime
+/// value carries: the unit as written and what it reduces to, plus the one
+/// declaration it names when it names one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MeasurementRef {
+    /// Unit as written ("km") or as an operation composed it ("m/s"); empty for
+    /// one never written down, described by unit_term alone.
+    #[prost(string, tag="1")]
+    pub unit: ::prost::alloc::string::String,
+    /// What the unit reduces to. Required wherever `unit` names one, as a
+    /// Quantity's is: a named unit sent without its reduction is rejected rather
+    /// than read as dimension one.
+    #[prost(message, optional, tag="2")]
+    pub unit_term: ::core::option::Option<UnitTerm>,
+    /// FQN of the one unit declaration the reference names ("SI::kilometre"), which
+    /// is what tells the declared unit `km` from any other spelling of 1000 metres;
+    /// empty for a unit composed of several ("m/s"), which names no declaration.
+    /// The service always sends it for a named unit. A client may omit it, in
+    /// which case `unit` is read as a Quantity's is; sent, it must name a
+    /// measurement unit of the model that reduces to unit_term and that `unit`
+    /// spells, or the value is rejected.
+    #[prost(string, tag="3")]
+    pub unit_id: ::prost::alloc::string::String,
 }
 /// UnitTerm is a unit reduced to a scale factor over base units: `km/h` reduces
 /// to 1000/3600 over `SI::m` and `SI::s^-1`.
@@ -1005,6 +1034,14 @@ pub struct ServerInfoResponse {
     ///                   as an action input or calc argument; without it, one is
     ///                   refused with UNIMPLEMENTED rather than read as another
     ///                   value.
+    ///    "measurement_refs" - a Value carries a bare measurement reference (a
+    ///                   unit by itself, `SI::m` or `m / s`) as measurement_ref,
+    ///                   unit text, reduction and declaration intact, rather than
+    ///                   reporting it as an unsupported null, and one is accepted
+    ///                   as an action input or calc argument; without it, one is
+    ///                   refused with UNIMPLEMENTED rather than read as another
+    ///                   value. Separate from structured_values, which a client
+    ///                   built before this arm existed may already claim.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
     ///    "document_query" - the RunDocumentQuery RPC runs a named document query

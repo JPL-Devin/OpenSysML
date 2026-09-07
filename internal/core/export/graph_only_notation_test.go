@@ -267,3 +267,47 @@ func TestExpressionBodiesAndChainsFromTheGraphAlone(t *testing.T) {
 		"feature slice redefines xs = (sub as C).xs;",
 		"notEmpty(xs) implies sub.xs->size() > 0 xor false")
 }
+
+// A usage redefining a namesake keeps that target through the graph alone even
+// though the writer puts `redefines causes` after `subsets participant`.
+func TestSelfNamedRedefinitionTargetSurvivesTheGraphAlone(t *testing.T) {
+	src := `package P {
+	abstract occurrence causes[*];
+	occurrence def Link {
+		ref occurrence participant[*];
+	}
+	abstract occurrence def Multicausation :> Link {
+		abstract constant ref occurrence causes[1..*] :>> causes :> participant;
+	}
+}
+`
+	back := notationFromTheGraphAlone(t, "p.sysml", src)
+	wantFragments(t, back, "occurrence causes[1..*] subsets participant redefines causes;")
+}
+
+// An unnamed usage takes its name from the first feature it redefines, so a
+// chain through it reads that name back however many features it redefines.
+func TestNameFromTheFirstOfSeveralRedefinitionsFromTheGraphAlone(t *testing.T) {
+	src := `package NP {
+    item def Disc {
+        attribute innerSpaceDimension;
+    }
+    item def Shell {
+        item faces {
+            attribute innerSpaceDimension;
+        }
+    }
+    item def ConeOrCylinder :> Shell {
+        item :>> faces;
+        item base : Disc :> faces {
+            attribute :>> Disc::innerSpaceDimension, faces::innerSpaceDimension;
+        }
+        attribute dim = base.innerSpaceDimension;
+    }
+}
+`
+	back := notationFromTheGraphAlone(t, "np.sysml", src)
+	wantFragments(t, back,
+		"attribute redefines innerSpaceDimension, faces::innerSpaceDimension;",
+		"attribute dim = base.innerSpaceDimension;")
+}

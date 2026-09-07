@@ -107,6 +107,34 @@ public sealed interface Value {
   }
 
   /**
+   * A measurement unit held as a value by itself, with no magnitude: {@code SI::m}, or {@code m /
+   * s} as an operation composed it.
+   *
+   * <p>Only a service advertising the {@code measurement_refs} capability reports one as itself
+   * rather than as an unsupported {@link NullValue}.
+   *
+   * @param unit the unit as written ({@code "km"}), or empty for one never written down
+   * @param reduction what the unit reduces to, which the service always sends
+   * @param unitId FQN of the one declaration the unit names ({@code "SI::kilometre"}), absent for a
+   *     unit an operation composed
+   */
+  record MeasurementRefValue(String unit, Quantity.UnitTerm reduction, Optional<String> unitId)
+      implements Value {
+    /**
+     * Creates a measurement reference.
+     *
+     * @param unit the unit as written, never {@code null}
+     * @param reduction the unit's reduction to base units, never {@code null}
+     * @param unitId the declaration named, never {@code null}
+     */
+    public MeasurementRefValue {
+      Objects.requireNonNull(unit, "unit");
+      Objects.requireNonNull(reduction, "reduction");
+      Objects.requireNonNull(unitId, "unitId");
+    }
+  }
+
+  /**
    * One literal of an enumeration definition.
    *
    * <p>Only a service advertising the {@code enum_values} capability reports a literal as itself

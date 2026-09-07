@@ -792,10 +792,10 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		}, nil
 	}
 
-	// A compound expression is evaluated in the session's own namespace, which
-	// an empty session does not have.
+	// A compound expression is evaluated in the session's own namespace; an empty
+	// session has none, so only the library answers there.
 	if doc == nil || doc.Scope == nil {
-		return nil, s.errWithoutDeclarations(expr)
+		return s.evalWithoutDeclarations(ctx, expr)
 	}
 
 	// Complex expression with feature refs - inject into session context
@@ -935,6 +935,32 @@ func (s *Session) errWithoutDeclarations(expr string) error {
 	return errors.New(noDeclarationsLoaded)
 }
 
+// evalWithoutDeclarations answers an expression over the library alone in the
+// session's runtime, so an object it reaches is one %features shows.
+func (s *Session) evalWithoutDeclarations(ctx *runtime.Context, expr string) ([]string, error) {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if value == nil {
+		return nil, errors.New(noDeclarationsLoaded)
+	}
+	val, err := ctx.Eval(value)
+	switch {
+	case err == nil:
+		return []string{
+			fmt.Sprintf("✓ %s", expr),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
+		}, nil
+	case !declarationsWouldAnswer(err):
+		return nil, evalError(expr, err, len(exprPrefix))
+	case errors.Is(err, runtime.ErrUnresolvedReference):
+		return nil, fmt.Errorf("%s: %w", noDeclarationsLoaded, err)
+	default:
+		return nil, errors.New(noDeclarationsLoaded)
+	}
+}
+
 // noDeclarationsLoaded is why an empty session cannot answer a name.
 const noDeclarationsLoaded = "no declarations loaded (literals work, but feature references need declarations)"
 
@@ -1018,6 +1044,11 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 		if isLiteralAnswerError(err) {
 			return nil, true, evalError(expr, err, len(exprPrefix))
 		}
+		return nil, false, nil
+	}
+	// An object is one of the session's, where %features can reach it, not of
+	// this throwaway model: the session materializes the declaration itself.
+	if ctx.HoldsObject(val) {
 		return nil, false, nil
 	}
 

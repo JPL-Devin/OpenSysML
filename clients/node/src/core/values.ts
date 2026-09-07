@@ -5,6 +5,7 @@ import { create } from "@bufbuild/protobuf";
 import type {
   Array as ArrayMessage,
   EnumLiteral,
+  MeasurementRef,
   Quantity,
   UnitTerm,
   Value,
@@ -17,6 +18,7 @@ import {
   ComplexSchema,
   EnumLiteralSchema,
   FailureReason,
+  MeasurementRefSchema,
   QuantitySchema,
   UnitFactorSchema,
   UnitTermSchema,
@@ -64,6 +66,18 @@ export interface QuantityValue {
 }
 
 /**
+ * A measurement unit held as a value by itself, with no magnitude: `SI::m`, or
+ * `m / s` as an operation composed it. `unitTerm` is its reduction, which the
+ * service always sends and requires; `unitId` is the FQN of the one declaration
+ * it names (`SI::kilometre`), absent for a unit an operation composed.
+ */
+export interface MeasurementRefValue {
+  unit: string;
+  unitTerm: UnitFactorization;
+  unitId?: string;
+}
+
+/**
  * A multidimensional array: `dimensions` gives the extent of each dimension and
  * `elements` the elements flattened row-major, the last dimension varying
  * fastest. A rank-0 array holds one element; an element may itself be an array.
@@ -88,6 +102,7 @@ export type SysMLValue =
   | { kind: "instance"; id: bigint }
   | { kind: "sequence"; elements: SysMLValue[] }
   | ({ kind: "quantity" } & QuantityValue)
+  | ({ kind: "measurementRef" } & MeasurementRefValue)
   | { kind: "enum"; value: EnumValue }
   | ({ kind: "array" } & ArrayValue)
   | { kind: "vector"; components: Magnitude[] }
@@ -123,8 +138,9 @@ export type SysMLVerdict =
  *
  * @throws {MalformedValueError} for a value that contradicts itself: an array
  *   whose elements do not fill its dimensions, a vector with a component that
- *   is not a number, a vector quantity with no components, or a quantity
- *   (alone or as a component) with no magnitude.
+ *   is not a number, a vector quantity with no components, a quantity
+ *   (alone or as a component) with no magnitude, or a measurement reference
+ *   naming no unit or a unit without its reduction.
  */
 export function decodeValue(value: Value | undefined): SysMLValue {
   if (value === undefined) {
@@ -148,6 +164,8 @@ export function decodeValue(value: Value | undefined): SysMLValue {
       return { kind: "sequence", elements: kind.value.elements.map(decodeValue) };
     case "quantity":
       return { kind: "quantity", ...decodeQuantity(kind.value) };
+    case "measurementRef":
+      return { kind: "measurementRef", ...decodeMeasurementRef(kind.value) };
     case "enumLiteral":
       return { kind: "enum", value: decodeEnumLiteral(kind.value) };
     case "array":
@@ -197,6 +215,10 @@ export function encodeValue(value: SysMLValue): Value {
       });
     case "quantity":
       return create(ValueSchema, { kind: { case: "quantity", value: encodeQuantity(value) } });
+    case "measurementRef":
+      return create(ValueSchema, {
+        kind: { case: "measurementRef", value: encodeMeasurementRef(value) },
+      });
     case "enum":
       return create(ValueSchema, {
         kind: { case: "enumLiteral", value: create(EnumLiteralSchema, value.value) },
@@ -295,6 +317,8 @@ export function formatValue(value: SysMLValue): string {
       const magnitude = formatMagnitude(value.magnitude);
       return value.unit === "" ? magnitude : `${magnitude}[${value.unit}]`;
     }
+    case "measurementRef":
+      return value.unit === "" ? formatUnitTerm(value.unitTerm) : value.unit;
     case "enum":
       return value.value.name;
     case "array":
@@ -353,16 +377,52 @@ function encodeQuantity(quantity: QuantityValue): Quantity {
         ? { case: "intMagnitude", value: quantity.magnitude.value }
         : { case: "realMagnitude", value: quantity.magnitude.value },
     unit: quantity.unit,
-    ...(quantity.unitTerm === undefined
-      ? {}
-      : {
-          unitTerm: create(UnitTermSchema, {
-            scaleNum: quantity.unitTerm.scaleNum,
-            scaleDen: quantity.unitTerm.scaleDen,
-            factors: quantity.unitTerm.factors.map((factor) => create(UnitFactorSchema, factor)),
-          }),
-        }),
+    ...(quantity.unitTerm === undefined ? {} : { unitTerm: encodeUnitTerm(quantity.unitTerm) }),
   });
+}
+
+function decodeMeasurementRef(ref: MeasurementRef): MeasurementRefValue {
+  if (ref.unit === "" && ref.unitId === "" && ref.unitTerm === undefined) {
+    throw new MalformedValueError("a measurement reference names no unit");
+  }
+  if (ref.unitTerm === undefined) {
+    throw new MalformedValueError(
+      `a measurement reference ${ref.unit || ref.unitId} has no reduction to base units`,
+    );
+  }
+  return {
+    unit: ref.unit,
+    unitTerm: decodeUnitTerm(ref.unitTerm),
+    ...(ref.unitId === "" ? {} : { unitId: ref.unitId }),
+  };
+}
+
+function encodeMeasurementRef(ref: MeasurementRefValue): MeasurementRef {
+  return create(MeasurementRefSchema, {
+    unit: ref.unit,
+    unitTerm: encodeUnitTerm(ref.unitTerm),
+    unitId: ref.unitId ?? "",
+  });
+}
+
+function encodeUnitTerm(term: UnitFactorization): UnitTerm {
+  return create(UnitTermSchema, {
+    scaleNum: term.scaleNum,
+    scaleDen: term.scaleDen,
+    factors: term.factors.map((factor) => create(UnitFactorSchema, factor)),
+  });
+}
+
+/** `1000·SI::metre·SI::second^-1`, for a unit that was never written down. */
+function formatUnitTerm(term: UnitFactorization): string {
+  const parts: string[] = [];
+  if (term.scaleNum !== 1 || term.scaleDen !== 1) {
+    parts.push(term.scaleDen === 1 ? `${term.scaleNum}` : `${term.scaleNum}/${term.scaleDen}`);
+  }
+  for (const factor of term.factors) {
+    parts.push(factor.exponent === 1 ? factor.unitId : `${factor.unitId}^${factor.exponent}`);
+  }
+  return parts.length === 0 ? "1" : parts.join("·");
 }
 
 function encodeMagnitude(magnitude: Magnitude): Value {

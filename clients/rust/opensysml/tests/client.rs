@@ -269,6 +269,61 @@ fn an_array_a_vector_and_a_vector_quantity_arrive_whole() {
 }
 
 #[test]
+fn a_bare_measurement_reference_arrives_with_its_reduction_and_declaration() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    assert!(connection.capabilities().has("measurement_refs"));
+    let model = match connection.parse_content(
+        "package M {
+            private import ScalarValues::*;
+            private import Quantities::*;
+            private import MeasurementReferences::*;
+            private import SI::*;
+            attribute q : ISQ::LengthValue = 3 [km];
+            attribute u : MeasurementUnit = m;
+            attribute speed = m / s;
+        }",
+        &Default::default(),
+    ) {
+        Ok(model) => model,
+        Err(error) => panic!("parse failed: {error}"),
+    };
+    let eval = |expr: &str| match model.evaluate(expr, &EvalOptions::default()) {
+        Ok(evaluation) => evaluation.result,
+        Err(error) => panic!("evaluating {expr} failed: {error}"),
+    };
+
+    let Value::MeasurementRef(u) = eval("M::u") else {
+        panic!("M::u should be a measurement reference");
+    };
+    assert_eq!(u.unit, "m");
+    assert_eq!(u.unit_id.as_deref(), Some("SI::metre"));
+    assert_eq!(u.unit_term.factors[0].unit_id, "SI::metre");
+
+    let Value::MeasurementRef(km) = eval("M::q.mRef") else {
+        panic!("M::q.mRef should be a measurement reference");
+    };
+    assert_eq!(km.unit, "km");
+    assert_eq!(km.unit_id.as_deref(), Some("SI::kilometre"));
+    assert_eq!(km.unit_term.scale_num, 1000.0);
+
+    let Value::MeasurementRef(speed) = eval("M::speed") else {
+        panic!("M::speed should be a measurement reference");
+    };
+    assert_eq!(speed.unit_id, None);
+    assert_eq!(
+        speed
+            .unit_term
+            .factors
+            .iter()
+            .map(|factor| (factor.unit_id.as_str(), factor.exponent))
+            .collect::<Vec<_>>(),
+        [("SI::metre", 1.0), ("SI::second", -1.0)]
+    );
+}
+
+#[test]
 fn blocking_calls_work_inside_a_runtime() {
     let Some(connection) = service_or_skip() else {
         return;

@@ -99,6 +99,11 @@ const CapabilityComplexValues = "complex_values"
 // Value.vector_quantity, rather than reporting them as unsupported nulls.
 const CapabilityStructuredValues = "structured_values"
 
+// CapabilityMeasurementRefs names the capability of carrying a bare measurement
+// reference as Value.measurement_ref, rather than reporting it as an
+// unsupported null. Distinct from structured_values, which predates the arm.
+const CapabilityMeasurementRefs = "measurement_refs"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
@@ -108,6 +113,7 @@ var capabilities = []string{
 	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
 	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
 	CapabilityParseSources, CapabilityComplexValues, CapabilityStructuredValues,
+	CapabilityMeasurementRefs,
 }
 
 type capabilityAvailability struct {
@@ -253,7 +259,12 @@ func (s *Service) requireValueCapabilities(pv *pb.Value) error {
 		}
 	}
 	if ValueCarriesStructured(pv) {
-		return s.requireCapability(CapabilityStructuredValues)
+		if err := s.requireCapability(CapabilityStructuredValues); err != nil {
+			return err
+		}
+	}
+	if ValueCarriesMeasurementRef(pv) {
+		return s.requireCapability(CapabilityMeasurementRefs)
 	}
 	return nil
 }

@@ -21,6 +21,7 @@ from opensysml.capabilities import (
     CAPABILITY_DOCUMENT_QUERY,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_FEATURE_VALUES,
+    CAPABILITY_MEASUREMENT_REFS,
     CAPABILITY_QUERY,
     CAPABILITY_RENDER_DOCUMENT,
     CAPABILITY_STRUCTURED_VALUES,
@@ -55,7 +56,14 @@ from opensysml.errors import (
     translate_rpc_errors,
 )
 from opensysml.query import build_query, elements_of
-from opensysml.values import Array, Quantity, Vector, VectorQuantity, value_to_python
+from opensysml.values import (
+    Array,
+    MeasurementRef,
+    Quantity,
+    Vector,
+    VectorQuantity,
+    value_to_python,
+)
 from opensysml.verdict import AnalysisResult, CalcResult, Verdict
 
 
@@ -1144,9 +1152,11 @@ class Connection:
             ExecutionError: If execution fails
             ModelNotFoundError: If the service no longer holds the model
             MissingCapabilityError: If an input holds a ``complex`` and the
-                service predates ``complex_values``, or an :class:`~opensysml.values.Array`,
+                service predates ``complex_values``, an :class:`~opensysml.values.Array`,
                 :class:`~opensysml.values.Vector` or :class:`~opensysml.values.VectorQuantity`
-                and the service predates ``structured_values``; nothing is sent
+                and the service predates ``structured_values``, or a
+                :class:`~opensysml.values.MeasurementRef` and the service predates
+                ``measurement_refs``; nothing is sent
         """
         # Convert Python inputs to protobuf Values
         pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
@@ -1335,8 +1345,10 @@ class Connection:
             ExecutionError: If the calculation could not be evaluated
             MissingCapabilityError: If the service cannot verify, or an
                 argument holds a ``complex`` and the service predates
-                ``complex_values``, or an array, vector or vector quantity and
-                the service predates ``structured_values``; nothing is sent
+                ``complex_values``, an array, vector or vector quantity and
+                the service predates ``structured_values``, or a measurement
+                reference and the service predates ``measurement_refs``; nothing
+                is sent
             ModelNotFoundError: If the service no longer holds the model
         """
         self._require_verification()
@@ -1346,9 +1358,12 @@ class Connection:
             arguments=[self._python_to_value(arg) for arg in (arguments or [])],
         )
         with translate_rpc_errors(
-            unimplemented=self._capability_refusal(
-                (CAPABILITY_VERIFICATION, CAPABILITY_COMPLEX_VALUES, CAPABILITY_STRUCTURED_VALUES)
-            )
+            unimplemented=self._capability_refusal((
+                CAPABILITY_VERIFICATION,
+                CAPABILITY_COMPLEX_VALUES,
+                CAPABILITY_STRUCTURED_VALUES,
+                CAPABILITY_MEASUREMENT_REFS,
+            ))
         ):
             response = self._stub.EvaluateCalc(request)
 
@@ -1495,6 +1510,14 @@ class Connection:
             upgrade_remedy(CAPABILITY_STRUCTURED_VALUES),
         )
 
+    def _require_measurement_refs(self):
+        """Refuse to send a measurement reference a service without ``measurement_refs`` would read as null."""
+        require(
+            self.server_info(),
+            CAPABILITY_MEASUREMENT_REFS,
+            upgrade_remedy(CAPABILITY_MEASUREMENT_REFS),
+        )
+
     def _require_feature_values(self):
         """Refuse instances from a service that populates only the removed `slots` field."""
         require(
@@ -1539,6 +1562,9 @@ class Connection:
             return sysml_pb2.Value(instance_id=py_value.id)
         elif isinstance(py_value, Quantity):
             return sysml_pb2.Value(quantity=py_value.to_pb())
+        elif isinstance(py_value, MeasurementRef):
+            self._require_measurement_refs()
+            return sysml_pb2.Value(measurement_ref=py_value.to_pb())
         elif isinstance(py_value, Array):
             self._require_structured_values()
             return sysml_pb2.Value(array=py_value.to_pb(self._python_to_value))

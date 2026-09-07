@@ -546,14 +546,15 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// Check type conformance
+		// A redefining feature's declared type is added to the redefined one's,
+		// not checked against it (KerML 8.3.3.3.4), so an unrelated type is advisory.
 		usageType := extractUsageType(cc, sym)
 		redefinedType := extractUsageType(cc, redefined)
 
 		if usageType != nil && redefinedType != nil {
 			if !cc.model.Conforms(usageType, redefinedType) {
 				cc.diags = append(cc.diags, Diagnostic{
-					Severity: SeverityError,
+					Severity: SeverityWarning,
 					Span:     rel.Target.Span(),
 					Message: fmt.Sprintf(
 						"%s (typed by %s) redefines %s (typed by %s): types do not conform",

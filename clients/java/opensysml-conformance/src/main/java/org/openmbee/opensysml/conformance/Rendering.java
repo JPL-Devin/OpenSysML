@@ -78,6 +78,13 @@ final class Rendering {
           org.openmbee.opensysml.proto.VectorQuantity.newBuilder();
       vector.components().forEach(component -> components.addComponents(quantity(component)));
       builder.setVectorQuantity(components);
+    } else if (value instanceof Value.MeasurementRefValue ref) {
+      org.openmbee.opensysml.proto.MeasurementRef.Builder reference =
+          org.openmbee.opensysml.proto.MeasurementRef.newBuilder()
+              .setUnit(ref.unit())
+              .setUnitTerm(unitTerm(ref.reduction()));
+      ref.unitId().ifPresent(reference::setUnitId);
+      builder.setMeasurementRef(reference);
     } else {
       throw new IllegalStateException("no rendering for " + value.getClass());
     }
@@ -92,23 +99,20 @@ final class Rendering {
       builder.setRealMagnitude(quantity.magnitude().doubleValue());
     }
     quantity.unit().ifPresent(builder::setUnit);
-    quantity
-        .reduction()
-        .ifPresent(
-            reduction -> {
-              UnitTerm.Builder term =
-                  UnitTerm.newBuilder()
-                      .setScaleNum(reduction.scaleNumerator())
-                      .setScaleDen(reduction.scaleDenominator());
-              for (Quantity.UnitFactor factor : reduction.factors()) {
-                term.addFactors(
-                    UnitFactor.newBuilder()
-                        .setUnitId(factor.unitId())
-                        .setExponent(factor.exponent()));
-              }
-              builder.setUnitTerm(term);
-            });
+    quantity.reduction().ifPresent(reduction -> builder.setUnitTerm(unitTerm(reduction)));
     return builder.build();
+  }
+
+  private static UnitTerm unitTerm(Quantity.UnitTerm reduction) {
+    UnitTerm.Builder term =
+        UnitTerm.newBuilder()
+            .setScaleNum(reduction.scaleNumerator())
+            .setScaleDen(reduction.scaleDenominator());
+    for (Quantity.UnitFactor factor : reduction.factors()) {
+      term.addFactors(
+          UnitFactor.newBuilder().setUnitId(factor.unitId()).setExponent(factor.exponent()));
+    }
+    return term.build();
   }
 
   private static org.openmbee.opensysml.proto.EnumLiteral literal(EnumLiteral literal) {

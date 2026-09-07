@@ -294,5 +294,32 @@ public interface ValueOrBuilder extends
    */
   org.openmbee.opensysml.proto.VectorQuantityOrBuilder getVectorQuantityOrBuilder();
 
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   * @return Whether the measurementRef field is set.
+   */
+  boolean hasMeasurementRef();
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   * @return The measurementRef.
+   */
+  org.openmbee.opensysml.proto.MeasurementRef getMeasurementRef();
+  /**
+   * <pre>
+   * a unit by itself, no magnitude
+   * </pre>
+   *
+   * <code>.sysml.MeasurementRef measurement_ref = 15 [json_name = "measurementRef"];</code>
+   */
+  org.openmbee.opensysml.proto.MeasurementRefOrBuilder getMeasurementRefOrBuilder();
+
   org.openmbee.opensysml.proto.Value.KindCase getKindCase();
 }

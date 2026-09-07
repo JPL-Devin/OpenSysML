@@ -207,13 +207,13 @@ func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
 	return !object
 }
 
-// carriedObject is the object a value denotes or, for an array or vector, was read
-// from: what a carry-over takes along with the value.
+// carriedObject is the object a value denotes or holds (an array's or vector's
+// source, a tensor's reference): what a carry-over takes along with the value.
 func carriedObject(v Value) (int64, bool) {
 	if id, ok := v.Object(); ok {
 		return id, true
 	}
-	id := backingObject(v)
+	id := keptObject(v)
 	return id, id != 0
 }
 
@@ -221,6 +221,18 @@ func carriedObject(v Value) (int64, bool) {
 // ends a new context attaches again rather than keeping what they read before.
 func (ctx *Context) connectorFeatureValue(s *FeatureValue) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
+}
+
+// HoldsObject reports whether the value is, or carries, an object of this context:
+// one a reader can inspect, so the value is only meaningful in the context it came from.
+func (ctx *Context) HoldsObject(val Value) bool {
+	found := false
+	ctx.walkValue(val, func(v Value) {
+		if _, ok := carriedObject(v); ok {
+			found = true
+		}
+	})
+	return found
 }
 
 // walkValue visits a value and everything nested in it.
@@ -609,6 +621,8 @@ func unitsOf(v Value) []Unit {
 		return []Unit{v.MeasurementRef().Unit}
 	case ValVectorQuantity:
 		return v.VectorQuantity().Units
+	case ValTensorQuantity:
+		return v.TensorQuantity().Units
 	case ValSequence:
 		if unit, ok := v.Sequence().ElementUnit(); ok {
 			return []Unit{unit}
@@ -989,6 +1003,13 @@ func (a *adoption) rewrite(val Value) Value {
 			units[i] = a.rewriteUnit(unit)
 		}
 		return NewVectorQuantityValue(vq.Num, units)
+	case ValTensorQuantity:
+		tq := *val.TensorQuantity()
+		tq.Units = make([]Unit, len(tq.Units))
+		for i, unit := range val.TensorQuantity().Units {
+			tq.Units[i] = a.rewriteUnit(unit)
+		}
+		return Value{Kind: ValTensorQuantity, ref: &tq}
 	default:
 		return val
 	}

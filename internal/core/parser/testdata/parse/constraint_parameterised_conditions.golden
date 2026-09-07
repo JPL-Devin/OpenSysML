@@ -48,6 +48,7 @@
               (LiteralBool value=false)))))
       (Membership visibility="default"
         (Usage kind="binding" name="levelIsFull" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="references" target=full
+          (ConnectorEnd target="full"
             (*ast.QualifiedName))
-          (FeatureReference name="level"))))))
+          (ConnectorEnd target="level"
+            (*ast.QualifiedName)))))))

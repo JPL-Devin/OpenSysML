@@ -107,6 +107,7 @@ match value {
     Value::Array(a) => (),             // a.dimensions(), a.elements() row-major, a.get(&[i, j])
     Value::Vector(v) => (),            // v.components: Vec<Magnitude>, Integer and Real apart
     Value::VectorQuantity(q) => (),    // q.components(): one Quantity per component; q.unit() when shared
+    Value::MeasurementRef(m) => (),    // a bare unit: m.unit, m.unit_term, m.unit_id when it names a declaration
     Value::EnumLiteral(l) => (),       // literal_id, enumeration_id, name
     Value::Null => (),                 // evaluated, no value
     Value::Unset => (),                // a materialized feature with no value
