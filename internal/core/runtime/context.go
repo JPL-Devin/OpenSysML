@@ -866,7 +866,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, kind, element string, me
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				what, names, isSubject = "subject", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
+				what, names, expr, isSubject = "subject", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value, true
 			case ast.UsageActor:
 				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}

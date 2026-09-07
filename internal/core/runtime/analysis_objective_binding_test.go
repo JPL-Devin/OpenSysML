@@ -418,6 +418,10 @@ const classifiedSubjectModel = `
 		requirement keywordHeavy : LadenLimit { subject = heavy; }
 		requirement named : LadenLimit { subject t = ship; }
 		requirement disjoint : LadenLimit { subject = buoy; }
+		requirement def DeclaredLaden { subject t : Tanker = ship; require constraint { t.cargo < 200.0 } }
+		requirement declared : DeclaredLaden;
+		requirement def DeclaredDisjoint { subject t : Tanker = buoy; require constraint { true } }
+		requirement declaredDisjoint : DeclaredDisjoint;
 		analysis def Pick {
 			subject s : Ship;
 			objective : LadenLimit;
@@ -458,7 +462,7 @@ func TestBoundSubjectIsClassifiedByItsType(t *testing.T) {
 			t.Errorf("%s: objective %s, want %s (%s)", fqn, verdict.Status, want, verdict.Detail)
 		}
 	}
-	for fqn, want := range map[string]error{"test::keyword": nil, "test::keywordHeavy": ErrViolated, "test::named": nil} {
+	for fqn, want := range map[string]error{"test::keyword": nil, "test::keywordHeavy": ErrViolated, "test::named": nil, "test::declared": nil} {
 		if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil); !errors.Is(err, want) {
 			t.Errorf("%s: error = %v, want %v", fqn, err, want)
 		}
@@ -473,8 +477,10 @@ func TestBoundSubjectIsClassifiedByItsType(t *testing.T) {
 			t.Errorf("detail %q does not say %q", refused.Detail, want)
 		}
 	}
-	if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, "test::disjoint"), nil); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("requirement disjoint: error = %v, want %v", err, ErrTypeMismatch)
+	for _, fqn := range []string{"test::disjoint", "test::declaredDisjoint"} {
+		if _, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("requirement %s: error = %v, want %v", fqn, err, ErrTypeMismatch)
+		}
 	}
 }
 
@@ -505,6 +511,8 @@ const boundSubjectMultiplicityModel = `
 		requirement subOneForPair : SubPairLimit { subject = ship; }
 		requirement twoForOne : OneLimit { subject = (ship, heavy); }
 		requirement noneForOne : OneLimit { subject = (ship, heavy)->select { in s : Ship; s.hullMass > 9000.0 }; }
+		requirement def DeclaredOneForPair { subject pair : Ship[2] = ship; require constraint { true } }
+		requirement declaredOneForPair : DeclaredOneForPair;
 
 		analysis def PickPair {
 			subject s : Ship;
@@ -544,6 +552,7 @@ func TestBoundSubjectHonoursMultiplicity(t *testing.T) {
 		"test::subOneForPair":        "1 value(s) bound to a feature with multiplicity lower bound 2",
 		"test::twoForOne":            "2 value(s) bound to a feature with multiplicity upper bound 1",
 		"test::noneForOne":           "0 value(s) bound to a feature with multiplicity lower bound 1",
+		"test::declaredOneForPair":   "1 value(s) bound to a feature with multiplicity lower bound 2",
 	} {
 		_, err := ctx.EvaluateRequirement(oneSymbol(t, idx, fqn), nil)
 		if !errors.Is(err, ErrMultiplicityViolation) {
