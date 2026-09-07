@@ -13,6 +13,9 @@ const (
 	noCaseRole caseRole = iota
 	subjectRole
 	objectiveRole
+	// actorRole is an actor or stakeholder: a parameter after the subject (SysML v2 §8.3.20
+	// ActorMembership, StakeholderMembership), redefined by position like any parameter.
+	actorRole
 )
 
 // viewRenderingFQN is the library feature every `render` member redefines
@@ -23,7 +26,8 @@ const viewRenderingFQN = "Views::View::viewRendering"
 // `viewRendering` for a view's `render` member, and the same-role features of the owner's
 // generals that sym does not redefine by name: every one for a subject, each general's
 // first for a first objective. An analysis case may state several objectives, and each
-// one redefines the general's effective objective at the same position.
+// one redefines the general's effective objective at the same position. An actor or
+// stakeholder redefines each general's effective actor at its position (KerML §7.4.7.3).
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil || sym.OwnerScope == nil {
 		return nil
@@ -38,6 +42,9 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	owner := sym.OwnerScope.Owner()
 	if owner == nil || !behaviorLike(owner) {
 		return nil
+	}
+	if role == actorRole {
+		return m.positionalActorRedefinitions(owner, sym)
 	}
 	if role == objectiveRole {
 		position := rolePosition(owner, role, sym)
@@ -95,6 +102,95 @@ func isViewRendering(node ast.Node) bool {
 	}
 	usage, ok := node.(*ast.Usage)
 	return ok && usage.Kind == ast.UsageViewRendering
+}
+
+// positionalActorRedefinitions is the effective actor at sym's position in each general of
+// owner; a `:>>` clause of sym's own governs instead, as for any parameter.
+func (m *Model) positionalActorRedefinitions(owner, sym *symbols.Symbol) []*symbols.Symbol {
+	if redefinesExplicitly(sym) {
+		return nil
+	}
+	position := rolePosition(owner, actorRole, sym)
+	if position < 0 {
+		return nil
+	}
+	var out []*symbols.Symbol
+	walk := &actorWalk{visiting: map[*symbols.Symbol]bool{owner: true}, done: map[*symbols.Symbol][]*symbols.Symbol{}}
+	for _, sup := range m.roleSources(owner) {
+		if !behaviorLike(sup) {
+			continue
+		}
+		inherited := m.effectiveActors(sup, walk)
+		if position < len(inherited) && inherited[position] != sym && !slices.Contains(out, inherited[position]) {
+			out = append(out, inherited[position])
+		}
+	}
+	return out
+}
+
+// actorWalk is the state of one effectiveActors query, as objectiveWalk is for objectives.
+type actorWalk struct {
+	visiting map[*symbols.Symbol]bool
+	done     map[*symbols.Symbol][]*symbols.Symbol
+	cuts     int
+}
+
+// effectiveActors lists sym's actor parameters in order: its own, then those its generals
+// present that none of its own redefines by clause or position (KerML §7.4.7.2).
+func (m *Model) effectiveActors(sym *symbols.Symbol, walk *actorWalk) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	if walk.visiting[sym] {
+		walk.cuts++
+		return nil
+	}
+	if done, ok := walk.done[sym]; ok {
+		return done
+	}
+	walk.visiting[sym] = true
+	defer delete(walk.visiting, sym)
+	cuts := walk.cuts
+	owned := ownedRoles(sym, actorRole)
+	out := append([]*symbols.Symbol(nil), owned...)
+	claimed := map[*symbols.Symbol]bool{}
+	for _, o := range owned {
+		claimed[o] = true
+		for target := range m.explicitRedefinitions(o) {
+			claimed[target] = true
+		}
+	}
+	for _, sup := range m.roleSources(sym) {
+		if !behaviorLike(sup) {
+			continue
+		}
+		inherited := m.effectiveActors(sup, walk)
+		for i, o := range owned {
+			if i < len(inherited) && !redefinesExplicitly(o) {
+				claimed[inherited[i]] = true
+			}
+		}
+		for _, f := range inherited {
+			if !claimed[f] {
+				claimed[f] = true
+				out = append(out, f)
+			}
+		}
+	}
+	if walk.cuts == cuts {
+		walk.done[sym] = out
+	}
+	return out
+}
+
+// redefinesExplicitly reports whether sym's declaration carries a `:>>` clause.
+func redefinesExplicitly(sym *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && rel.Kind == ast.RelRedefines {
+			return true
+		}
+	}
+	return false
 }
 
 // roleSources are the cases whose subjects and objectives sym inherits: its generals and
@@ -388,6 +484,8 @@ func roleOfNode(node ast.Node) caseRole {
 			return subjectRole
 		case ast.UsageObjective:
 			return objectiveRole
+		case ast.UsageActor, ast.UsageStakeholder:
+			return actorRole
 		}
 	}
 	return noCaseRole

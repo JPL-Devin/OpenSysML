@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -470,6 +471,91 @@ func TestRolesInheritThroughReferenceSubsetting(t *testing.T) {
 	}
 	if owned, inherited := m.SubjectsOf(nested(t, p.Scope, "rBoth")); len(owned) != 0 || len(inherited) != 2 || inherited[0] != s || inherited[1] != s0 {
 		t.Errorf("SubjectsOf(rBoth) = %v, %v; want [], [s s0]", owned, inherited)
+	}
+}
+
+// An actor or stakeholder redefines the general's effective actor at its position, named
+// alike or not, unless a `:>>` clause governs; a general's own actors come before inherited ones.
+func TestActorsRedefineByPosition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Ship; part def Pilot; part def Tug;
+		requirement def Piloted { subject t : Ship; actor pilots : Pilot[2]; actor escort : Tug; }
+		requirement same : Piloted { actor pilots; actor escort; }
+		requirement renamed : Piloted { actor crew; actor tug; }
+		requirement explicit : Piloted { actor :>> escort; }
+		requirement def Guarded :> Piloted { subject :>> t; actor guard : Ship; }
+		requirement guarded : Guarded { actor a; actor b; actor c; }
+		requirement def Owned { subject t : Ship; stakeholder owner : Pilot; actor driver : Pilot; }
+		requirement owned : Owned { stakeholder o; actor d; }
+		use case def Ride { subject vehicle : Ship; actor driver : Pilot; }
+		use case ride : Ride { actor d; }
+	}`)
+	p := sym(t, root, "P")
+	piloted := nested(t, p.Scope, "Piloted")
+	pilots, escort := nested(t, piloted.Scope, "pilots"), nested(t, piloted.Scope, "escort")
+	pilotDef, shipDef := nested(t, p.Scope, "Pilot"), nested(t, p.Scope, "Ship")
+	guard := nested(t, nested(t, p.Scope, "Guarded").Scope, "guard")
+	ride, ownedDef := nested(t, p.Scope, "Ride"), nested(t, p.Scope, "Owned")
+
+	for _, tc := range []struct {
+		owner, actor string
+		want         []*symbols.Symbol
+	}{
+		{"same", "pilots", []*symbols.Symbol{pilots}},
+		{"same", "escort", []*symbols.Symbol{escort}},
+		{"renamed", "crew", []*symbols.Symbol{pilots}},
+		{"renamed", "tug", []*symbols.Symbol{escort}},
+		{"explicit", "escort", nil},
+		{"Guarded", "guard", []*symbols.Symbol{pilots}},
+		{"guarded", "a", []*symbols.Symbol{guard}},
+		{"guarded", "b", []*symbols.Symbol{escort}},
+		{"guarded", "c", nil},
+		{"owned", "o", []*symbols.Symbol{nested(t, ownedDef.Scope, "owner")}},
+		{"owned", "d", []*symbols.Symbol{nested(t, ownedDef.Scope, "driver")}},
+		{"ride", "d", []*symbols.Symbol{nested(t, ride.Scope, "driver")}},
+	} {
+		actor := nested(t, nested(t, p.Scope, tc.owner).Scope, tc.actor)
+		if got := m.ImplicitRoleRedefinitions(actor); !slices.Equal(got, tc.want) {
+			t.Errorf("ImplicitRoleRedefinitions(%s::%s) = %v, want %v", tc.owner, tc.actor, got, tc.want)
+		}
+	}
+	crew := nested(t, nested(t, p.Scope, "renamed").Scope, "crew")
+	if got := m.AllSupertypes(crew); len(got) < 2 || got[0] != pilots || got[1] != pilotDef {
+		t.Errorf("AllSupertypes(renamed::crew) = %v, want [pilots Pilot ...]", got)
+	}
+	a := nested(t, nested(t, p.Scope, "guarded").Scope, "a")
+	if got := m.AllSupertypes(a); !containsAll(got, guard, shipDef, pilots, pilotDef) {
+		t.Errorf("AllSupertypes(guarded::a) = %v, want guard, Ship, pilots and Pilot among them", got)
+	}
+}
+
+// Actors through a tower of diamonds are read once per case, not once per path.
+func TestActorsThroughLayeredDiamondsAreLinear(t *testing.T) {
+	const layers = 60
+	var b strings.Builder
+	b.WriteString("package P {\n\tpart def A;\n\tuse case def C0 { subject s; actor a0 : A; }\n")
+	for i := 1; i <= layers; i++ {
+		fmt.Fprintf(&b, "\tuse case def L%d :> C%d;\n\tuse case def R%d :> C%d;\n", i, i-1, i, i-1)
+		if i == layers/2 {
+			fmt.Fprintf(&b, "\tuse case def C%d :> L%d, R%d { actor mid; }\n", i, i, i)
+		} else {
+			fmt.Fprintf(&b, "\tuse case def C%d :> L%d, R%d;\n", i, i, i)
+		}
+	}
+	fmt.Fprintf(&b, "\tuse case def Top :> C%d { actor top; }\n}", layers)
+	m, root := buildModel(t, b.String())
+	p := sym(t, root, "P")
+	a0 := nested(t, nested(t, p.Scope, "C0").Scope, "a0")
+	mid := nested(t, nested(t, p.Scope, fmt.Sprintf("C%d", layers/2)).Scope, "mid")
+	top := nested(t, nested(t, p.Scope, "Top").Scope, "top")
+	if got := m.ImplicitRoleRedefinitions(mid); len(got) != 1 || got[0] != a0 {
+		t.Errorf("ImplicitRoleRedefinitions(mid) = %v, want [a0]", got)
+	}
+	if got := m.ImplicitRoleRedefinitions(top); len(got) != 1 || got[0] != mid {
+		t.Errorf("ImplicitRoleRedefinitions(top) = %v, want [mid]", got)
+	}
+	if got := m.AllSupertypes(top); !containsAll(got, mid, a0, nested(t, p.Scope, "A")) {
+		t.Errorf("AllSupertypes(top) = %v, want mid, a0 and A among them", got)
 	}
 }
 
