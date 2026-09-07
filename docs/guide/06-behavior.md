@@ -403,7 +403,8 @@ has.
 An objective typed by a requirement definition binds that definition's `subject` as a requirement
 usage does, in every spelling — `objective : MassLimit { subject = ship; }`, `subject s = ship;`
 or `subject :>> s = ship;` — and the binding may read the case's subject, its `in` parameters and
-locals, and its steps' outputs (`subject = inner.picked;`). The case's own result, named or not,
+locals, and its steps' outputs — a nested case's (`subject = inner.picked;`) or an action's
+(`subject = weigh.m;`). The case's own result, named or not,
 is readable by its qualified name as the OMG examples write it — `subject = MassCase::result;` in
 the objective, `MassCase::result < limit` in an `assert constraint`, `inner.result` from the case
 performing `inner` as a step. An objective that binds no subject takes the library's default for
@@ -412,7 +413,8 @@ it: the case's result (`Cases::Case::obj` declares `subject subj default Case::r
 returned, while in a case that returns a `Real` it is `undecided`, saying so: `subject s defaults
 to the case's result (Cases::Case::obj): type mismatch: 1000.0 (a Real) is not a Ship`. The result
 must also fit the subject's multiplicity: one `Ship` for a `subject pair : Ship[2]` is `undecided`
-as a `multiplicity violation`. A case that returns nothing leaves such a subject unbound, and the
+as a `multiplicity violation` (an objective redeclaring the subject without one, `subject :>> pair;`,
+keeps the `[2]`). A case that returns nothing leaves such a subject unbound, and the
 verdict says to bind it or return a result.
 
 ```sysml

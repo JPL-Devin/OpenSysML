@@ -4,11 +4,13 @@
   objective's own members are now bound the way `-requirement` binds a requirement usage's, so
   `subject = ship;`, `subject s = ship;` and `subject :>> s = ship;` all decide the verdict, in a
   definition, a usage and through a nested analysis step, and the binding may read the case's steps'
-  outputs. An objective that binds no subject takes the library's default, the case's result
+  outputs, a nested case's or an action's (`subject = weigh.m;`), as may an `assert constraint` of
+  the body. An objective that binds no subject takes the library's default, the case's result
   (`Cases::Case::obj` declares `subject subj default Case::result`); a result of the wrong type is
   `undecided` saying so (`subject s defaults to the case's result (Cases::Case::obj): type
   mismatch: 1000.0 (a Real) is not a Ship`), one of the wrong multiplicity (one `Ship` for a
-  `Ship[2]` subject) is `undecided` as a multiplicity violation, and a case returning none says to
+  `Ship[2]` subject) is `undecided` as a multiplicity violation — an objective redeclaring the
+  subject without one (`subject :>> pair;`) keeps the `[2]` — and a case returning none says to
   bind it or return one.
 - **A case's result is readable by its qualified name.** `MassCase::result` — the form the OMG
   examples use, `objective : MassAnalysisObjective { subject = MassAnalysisCase::result; }` — read as

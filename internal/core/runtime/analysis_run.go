@@ -420,28 +420,27 @@ func (ctx *Context) objectiveBindings(run *calcRun, obj *symbols.Symbol, name st
 	for k, v := range own {
 		bindings[k] = v
 	}
-	subject, unbound := ctx.unboundObjectiveSubject(obj, members, own)
+	subject, decl, unbound := ctx.unboundObjectiveSubject(obj, members, own)
 	if subject == nil {
-		return ownedFrame(caseBindings.owner, bindings), nil
+		return caseBindings.withVars(bindings), nil
 	}
 	result, ok := run.caseResult(caseBindings.vars)
 	if !ok {
 		return frame{}, &UnboundSubjectError{Kind: "objective", Element: name, Subject: subject.Name}
 	}
-	if err := ctx.checkDefaultSubject(obj, subject, name, result); err != nil {
+	if err := ctx.checkDefaultSubject(obj, subject, decl, name, result); err != nil {
 		return frame{}, err
 	}
 	for unboundName := range unbound {
 		bindings[unboundName] = result
 	}
-	return ownedFrame(caseBindings.owner, bindings), nil
+	return caseBindings.withVars(bindings), nil
 }
 
 // checkDefaultSubject reports a case result the objective's subject cannot hold
-// as its default: more or fewer values than it declares, or one not of its type.
-func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, name string, result Value) error {
+// as its default: more or fewer values than decl states, or one not of its type.
+func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, decl calcMemberDecl, name string, result Value) error {
 	what := fmt.Sprintf("objective %s: subject %s defaults to the case's result (Cases::Case::obj)", name, subject.Name)
-	decl := ctx.calcMemberDeclFor(obj, subject, subject.Name)
 	if msg := ctx.writeCountRefusal(decl.Target, &result); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
@@ -458,14 +457,15 @@ func (ctx *Context) checkDefaultSubject(obj, subject *symbols.Symbol, name strin
 	return nil
 }
 
-// unboundObjectiveSubject is the objective's subject no binding the model writes supplies,
-// with the names its conditions read it by; nil when every subject is bound.
-func (ctx *Context) unboundObjectiveSubject(obj *symbols.Symbol, members []scopedMember, own map[string]Value) (*symbols.Symbol, map[string]bool) {
+// unboundObjectiveSubject is the objective's subject no binding the model writes supplies, its
+// declaration folded along the chain (a redeclaration keeps what it omits) and its names; nil when bound.
+func (ctx *Context) unboundObjectiveSubject(obj *symbols.Symbol, members []scopedMember, own map[string]Value) (*symbols.Symbol, calcMemberDecl, map[string]bool) {
 	features := ctx.conditionFeatures(obj)
 	var subject *symbols.Symbol
+	var decl calcMemberDecl
 	unbound := make(map[string]bool)
 	for _, member := range members {
-		decl, ok := subjectDeclaration(member.node)
+		declared, ok := subjectDeclaration(member.node)
 		if !ok {
 			continue
 		}
@@ -473,21 +473,22 @@ func (ctx *Context) unboundObjectiveSubject(obj *symbols.Symbol, members []scope
 		if sym == nil {
 			continue
 		}
-		names := ctx.memberNames(obj, member, decl.Name, sym.ShortName)
-		if _, bound := boundUnder(own, names); bound || decl.Value != nil {
-			return nil, nil
+		names := ctx.memberNames(obj, member, declared.Name, sym.ShortName)
+		if _, bound := boundUnder(own, names); bound || declared.Value != nil {
+			return nil, calcMemberDecl{}, nil
 		}
 		for _, n := range names {
 			if feat, ok := features[n]; ok && feat.expr != nil && !ctx.libraryDeclared(feat.decl) {
-				return nil, nil
+				return nil, calcMemberDecl{}, nil
 			}
 			unbound[n] = true
 		}
 		if subject == nil || ctx.extractType(sym) != nil {
 			subject = sym
 		}
+		decl = ctx.calcMemberDeclFor(obj, sym, subject.Name).redeclaring(decl)
 	}
-	return subject, unbound
+	return subject, decl, unbound
 }
 
 // caseResult is the value the run's result parameter holds; false when the case returns none.
@@ -551,10 +552,10 @@ func (ctx *Context) analysisVerdict(kind, name string, check conditionCheck, con
 	return verdict
 }
 
-// bindingsFrame is the run's bindings as a frame the case owns, so a condition
-// naming a feature of the case by qualified name (`MassCase::result`) reads them.
+// bindingsFrame is the run's bindings as a frame the case owns, so a condition reads
+// its features by qualified name (`MassCase::result`) and its steps' pins (`step.out`).
 func (run *calcRun) bindingsFrame(ctx *Context) frame {
-	return ownedFrame(run.shape, run.bindings(ctx))
+	return frame{vars: run.bindings(ctx), perf: run.perf, owner: run.shape}
 }
 
 // bindings are the values a run bound, by name: its parameters and locals, and

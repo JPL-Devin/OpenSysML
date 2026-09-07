@@ -65,6 +65,18 @@ const objectiveBindingModel = `
 		}
 		analysis steppedDefault : SteppedDefault { subject ship = heavy; }
 
+		action def Weigh { in s : Ship; out m : Real = s.hullMass; }
+		requirement def MassCap { subject mass : Real; require constraint { mass < 2000.0 } }
+		analysis def ActionStepped {
+			subject ship : Ship;
+			action weigh : Weigh { in s = ship; }
+			objective : MassCap { subject = weigh.m; }
+			assert constraint light { weigh.m < 2000.0 }
+			return r : Real = weigh.m;
+		}
+		analysis actionStepped : ActionStepped { subject ship = test::ship; }
+		analysis actionSteppedHeavy : ActionStepped { subject ship = heavy; }
+
 		requirement def PairLimit { subject pair : Ship[2]; require constraint { pair->notEmpty() } }
 		requirement def FleetLimit { subject fleet : Ship[1..*]; require constraint { fleet->notEmpty() } }
 		analysis def OneForPair { subject ship : Ship; objective : PairLimit; return picked : Ship = ship; }
@@ -75,6 +87,10 @@ const objectiveBindingModel = `
 		analysis twoForOne : TwoForOne { subject ship = test::ship; }
 		analysis twoForPair : TwoForPair { subject ship = test::ship; }
 		analysis twoForFleet : TwoForFleet { subject ship = test::ship; }
+		analysis def RedeclaredPair { subject ship : Ship; objective : PairLimit { subject :>> pair; } return picked : Ship[2] = (ship, heavy); }
+		analysis def RedeclaredPairOne { subject ship : Ship; objective : PairLimit { subject :>> pair; } return picked : Ship = ship; }
+		analysis redeclaredPair : RedeclaredPair { subject ship = test::ship; }
+		analysis redeclaredPairOne : RedeclaredPairOne { subject ship = test::ship; }
 	}
 `
 
@@ -238,13 +254,38 @@ func TestObjectiveSubjectDefaultsToTheResult(t *testing.T) {
 	}
 }
 
+// TestObjectiveSubjectBindsAnActionStepOutput pins that an objective's subject and a body
+// assertion read a completed action step's output (`weigh.m`) as the case's outputs do.
+func TestObjectiveSubjectBindsAnActionStepOutput(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, objectiveBindingModel))
+	for fqn, want := range map[string]VerdictStatus{
+		"test::actionStepped":      VerdictSatisfied,
+		"test::actionSteppedHeavy": VerdictNotSatisfied,
+	} {
+		result, err := ctx.RunAnalysis(oneSymbol(t, idx, fqn), AnalysisArgs{}, nil, nil)
+		if err != nil {
+			t.Fatalf("RunAnalysis(%s): %v", fqn, err)
+		}
+		if len(result.Verdicts) != 2 {
+			t.Fatalf("%s: verdicts = %+v, want the objective's and the assertion's", fqn, result.Verdicts)
+		}
+		for _, verdict := range result.Verdicts {
+			if verdict.Status != want {
+				t.Errorf("%s: %s %s: %s (%s), want %s", fqn, verdict.Kind, verdict.Name, verdict.Status, verdict.Detail, want)
+			}
+		}
+	}
+}
+
 // TestObjectiveSubjectDefaultHonoursMultiplicity pins that the defaulted result must fit the
-// subject's multiplicity as well as its type: one Ship for a Ship[2] subject is undecided.
+// subject's multiplicity as well as its type: one Ship for a Ship[2] subject is undecided,
+// and a redeclaration stating no multiplicity (`subject :>> pair;`) keeps the Ship[2].
 func TestObjectiveSubjectDefaultHonoursMultiplicity(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, objectiveBindingModel))
 	for fqn, want := range map[string]string{
-		"test::oneForPair": "1 value(s) bound to a feature with multiplicity lower bound 2",
-		"test::twoForOne":  "2 value(s) bound to a feature with multiplicity upper bound 1",
+		"test::oneForPair":        "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::redeclaredPairOne": "1 value(s) bound to a feature with multiplicity lower bound 2",
+		"test::twoForOne":         "2 value(s) bound to a feature with multiplicity upper bound 1",
 	} {
 		verdict := objectiveVerdict(t, ctx, idx, fqn)
 		if verdict.Status != VerdictUndecided {
@@ -256,7 +297,7 @@ func TestObjectiveSubjectDefaultHonoursMultiplicity(t *testing.T) {
 			}
 		}
 	}
-	for _, fqn := range []string{"test::twoForPair", "test::twoForFleet"} {
+	for _, fqn := range []string{"test::twoForPair", "test::twoForFleet", "test::redeclaredPair"} {
 		if verdict := objectiveVerdict(t, ctx, idx, fqn); verdict.Status != VerdictSatisfied {
 			t.Errorf("%s: %s (%s), want satisfied", fqn, verdict.Status, verdict.Detail)
 		}

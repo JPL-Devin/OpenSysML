@@ -53,6 +53,12 @@ func ownedFrame(owner *calcShape, vars map[string]Value) frame {
 	return frame{vars: vars, owner: owner}
 }
 
+// withVars is the frame holding vars in place of its own, still answering for
+// the same run and performance.
+func (f frame) withVars(vars map[string]Value) frame {
+	return frame{vars: vars, aliases: f.aliases, perf: f.perf, owner: f.owner}
+}
+
 // lookup finds name in the frame: a slot binding it, else the map.
 func (f frame) lookup(name string) (Value, bool) {
 	name = canonical(f.aliases, name)

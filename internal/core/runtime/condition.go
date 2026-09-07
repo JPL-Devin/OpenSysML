@@ -942,7 +942,7 @@ func unmasked(bindings frame, features map[string]scopedExpr) frame {
 			out[name] = value
 		}
 	}
-	return ownedFrame(bindings.owner, out)
+	return bindings.withVars(out)
 }
 
 // conditionLabel renders a condition as written, so a violation names the
